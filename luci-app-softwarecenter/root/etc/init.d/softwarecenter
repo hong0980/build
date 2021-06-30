@@ -51,16 +51,14 @@ clean_vhost_config(){
 
 # 网站迭代处理，本函数迭代的配置网站（处理逻辑也许可以更好的优化？）
 handle_website(){
-	local website_enabled autodeploy_enable customdeploy_enabled redis_enabled website_dir website_select port
-
-	config_get_bool website_enabled			$1	website_enabled
-	config_get_bool autodeploy_enable		$1	autodeploy_enable
-	config_get_bool customdeploy_enabled	$1	customdeploy_enabled
-	config_get_bool redis_enabled			$1	redis_enabled
-
-	config_get website_select	$1	website_select
-	config_get website_dir		$1	website_dir
-	config_get port				$1	port
+	
+	website_config="website_enabled autodeploy_enable customdeploy_enabled redis_enabled website_dir website_select port"
+	
+	for pl in $website_config; do
+		local $pl
+		config_get_bool $pl $1 $pl
+		config_get $pl $1 $pl
+	done
 
 	if [ -z "$entware_enable" ]; then
 		echo_time "softwarecenter 没有启动"
@@ -122,26 +120,17 @@ handle_website(){
 start(){
 
 cdg(){
-	local deploy_entware entware_enable deploy_nginx deploy_mysql nginx_enabled mysql_enabled \
-	Partition_disk disk_mount cpu_model user pass swap_enabled swap_size swap_path
 
 	config_load softwarecenter
 
-	config_get_bool deploy_entware	main deploy_entware
-	config_get_bool entware_enable	main entware_enable
-	config_get_bool deploy_nginx	main deploy_nginx
-	config_get_bool deploy_mysql	main deploy_mysql
-	config_get_bool	nginx_enabled	main nginx_enabled
-	config_get_bool mysql_enabled	main mysql_enabled
-	config_get_bool swap_enabled	main swap_enabled
+	get_config="deploy_entware entware_enable deploy_nginx deploy_mysql nginx_enabled mysql_enabled swap_enabled Partition_disk disk_mount cpu_model swap_size swap_path user pass aria2_enable aria2_boot amule_enable amule_boot deluge_enable deluge_boot rutorrent_enable rutorrent_boot"
+	
+	for p in $get_config; do
+		local $p
+		config_get_bool $p main $p
+		config_get $p main $p
+	done
 
-	config_get Partition_disk	main Partition_disk
-	config_get disk_mount		main disk_mount
-	config_get cpu_model		main cpu_model
-	config_get swap_size		main swap_size
-	config_get swap_path		main swap_path
-	config_get user				main user
-	config_get pass				main pass
 	# entware环境
 	source /etc/profile > /dev/null 2>&1
 	if [ $entware_enable ]; then
@@ -185,32 +174,32 @@ cdg(){
 	[ $swap_enabled ] && config_swap_init $swap_size $swap_path || config_swap_del $swap_path
 
 _start(){
-	if [ -z "`pidof $f`" ]; then
-		/opt/etc/init.d/$p start 1> /dev/null
-		sleep 5
-		if [ "`pidof $f`" ]; then
-			echo_time "$f 启动成功"
-		else
-			echo_time "$f 启动失败"
-			[ "`which $f`" ] && echo_time "$f 没有开启" || echo_time "$f 没有安装"
-		fi
-	# else
-		# echo_time "$f  运行中"
+
+if [ -z "`pidof $1`" ]; then
+	/opt/etc/init.d/$p start 1> /dev/null
+	sleep 5
+	if [ "`pidof $1`" ]; then
+		echo_time "$1 启动成功"
+	else
+		echo_time "$1 启动失败"
+		[ -s /opt/etc/init.d/$p 2>/dev/null ] && echo_time "$1 没有开启" || echo_time "$1 没有安装"
 	fi
+# else
+	# echo_time "$f  运行中"
+fi
+
 }
 
 	for p in `ls /opt/etc/init.d`; do
-	[ $p = S81aria2 ] && f=aria2c && _start
-	[ $p = S57amuled ] && f=amuled && _start
-	[ $p = S80deluged ] && f=deluged && _start
-	[ $p = S80lighttpd ] && f=lighttpd && _start
-	[ $p = S85rtorrent ] && f=rtorrent && _start
-	[ $p = S81deluge-web ] && f=deluge-web && _start
-	[ $p = S89qbittorrent ] && f=qbittorrent-nox && _start
-	[ $p = S88transmission ] && f=transmission-daemon && _start
-	# [ $p = S80nginx ] && f=nginx && _start
-	# [ $p = S70mysqld ] && f=mysqld && _start
-	# [ $p = S79php7-fpm ] && f=php-fpm && _start
+		[ $p = S81aria2 ] && [ $aria2_boot -eq "1" ] && _start "aria2c"
+		[ $p = S57amuled ] && [ $amule_boot -eq "1" ] && _start "amuled"
+		[ $p = S80deluged ] && [ $deluge_boot -eq "1" ] && _start "deluged"
+		[ $p = S85rtorrent ] && [ $rutorrent_boot -eq "1" ] && _start "rtorrent"
+		[ $p = S89qbittorrent ] && [ $qb_boot -eq "1" ] && _start "qbittorrent-nox"
+		[ $p = S88transmission ] && [ $tr_boot -eq "1" ] && _start "transmission-daemon"
+		# [ $p = S80nginx ] && f=nginx && _start
+		# [ $p = S70mysqld ] && f=mysqld && _start
+		# [ $p = S79php7-fpm ] && f=php-fpm && _start
 	done
 }
 

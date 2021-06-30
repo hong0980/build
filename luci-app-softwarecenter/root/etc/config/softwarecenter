@@ -1,5 +1,4 @@
 config softwarecenter 'main'
-config ipk
 config website
 	option website_select '0'
 	option autodeploy_enable '1'

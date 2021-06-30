@@ -66,7 +66,7 @@ entware_set(){
 	[ -s /opt/etc/init.d ] || {
 	 echo_time "安装 Entware 出错，请重试！"
 	 exit 1
-	 }
+	}
 
 cat > "/etc/init.d/entware" <<-\ENTWARE
 #!/bin/sh /etc/rc.common
@@ -103,7 +103,7 @@ ENTWARE
 	/etc/init.d/entware enable
 	echo "export PATH=/opt/bin:/opt/sbin:/sbin:/bin:/usr/sbin:/usr/bin:$PATH" >> /etc/profile
 
-	if wget -qcNO- -t 5 http://pkg.entware.net/sources/i18n_glib223.tar.gz && tar xvz -C /opt/usr/share/ > /dev/null; then
+	if wget -qcNO- -t 5 http://pkg.entware.net/sources/i18n_glib223.tar.gz | tar xvz -C /opt/usr/share/ > /dev/null; then
     echo_time "添加 zh_CN.UTF-8"
     /opt/bin/localedef.new -c -f UTF-8 -i zh_CN zh_CN.UTF-8
     sed -i 's/en_US.UTF-8/zh_CN.UTF-8/g' /opt/etc/profile
@@ -149,7 +149,6 @@ remove_soft(){
 		opkg remove --force-depends $ipk > /dev/null 2>&1
 		status
 	done
-
 }
 
 echo_time() {
@@ -208,7 +207,7 @@ config_swap_del(){
 		swapoff /opt/.swap
 		rm -f /opt/.swap
 		echo_time "$1/opt/.swap文件已删除！\n"
-		}
+	}
 }
 
 # 获取通用环境变量
@@ -304,18 +303,20 @@ aria2(){
 }
 
 deluge(){
-if opkg_install deluge-ui-web; then
-	/opt/etc/init.d/S80deluged start > /dev/null 2>&1
-	/opt/etc/init.d/S81deluge-web start > /dev/null 2>&1 
-	sleep 5
-	/opt/etc/init.d/S80deluged stop > /dev/null 2>&1
-	/opt/etc/init.d/S81deluge-web stop > /dev/null 2>&1
-	sed -i 's|root/Down|opt/down|g' /opt/etc/deluge/core.conf
-	sed -i 's|"language.*|"language": "zh_CN",|g' /opt/etc/deluge/web.conf
-	ln -sf /opt/etc/deluge/core.conf /opt/etc/config/deluge.conf
-else
-	echo_time deluge 安装失败，再重试安装！ && exit 1
-fi
+	if opkg_install deluge-ui-web; then
+		/opt/etc/init.d/S80deluged start > /dev/null 2>&1
+		/opt/etc/init.d/S81deluge-web start > /dev/null 2>&1 
+		sleep 5
+		/opt/etc/init.d/S80deluged stop > /dev/null 2>&1
+		/opt/etc/init.d/S81deluge-web stop > /dev/null 2>&1
+		sed -i 's|root/Down|opt/down|g' /opt/etc/deluge/core.conf
+		sed -i 's|"language.*|"language": "zh_CN",|g' /opt/etc/deluge/web.conf
+		ln -sf /opt/etc/deluge/core.conf /opt/etc/config/deluge.conf
+		sed -i '/deluged -l/a\	sleep 5\ndeluge-web -l \/opt\/etc\/deluge\/deluge-web.log -L error -p 888' /opt/etc/init.d/S80deluged
+		sed -i '/killall deluged/a\	sleep 5\nkillall deluge-web' /opt/etc/init.d/S80deluged
+	else
+		echo_time deluge 安装失败，再重试安装！ && exit 1
+	fi
 	/opt/etc/init.d/S80deluged restart > /dev/null 2>&1 && \
 	[ "`pidof deluged`" ] && echo_time deluge 已经运行 || echo_time deluge 没有运行
 	/opt/etc/init.d/S81deluge-web restart > /dev/null 2>&1 && \
@@ -338,10 +339,10 @@ General\Locale=zh
 Downloads\UseIncompleteExtension=true
 Downloads\SavePath=/opt/downloads/
 EOF
-	ln -sf /opt/etc/qBittorrent_entware/config/qBittorrent.conf /opt/etc/config/qBittorrent.conf
-else
-	echo_time qBittorrent 安装失败，再重试安装！ && exit 1
-fi
+		ln -sf /opt/etc/qBittorrent_entware/config/qBittorrent.conf /opt/etc/config/qBittorrent.conf
+	else
+		echo_time qBittorrent 安装失败，再重试安装！ && exit 1
+	fi
 	/opt/etc/init.d/S89qbittorrent restart > /dev/null 2>&1 && \
 	[ -n "`pidof qbittorrent-nox`" ] && echo_time qbittorrent 已经运行 || echo_time qbittorrent 没有运行
 	echo
@@ -570,8 +571,8 @@ directory.default.set = /opt/downloads
 execute = {sh,-c,/opt/bin/php-cgi /opt/share/www/rutorrent/php/initplugins.php $user &}
 EOF
 	fi
-
 	ln -sf /opt/etc/rtorrent/rtorrent.conf /opt/etc/config/rtorrent.conf
+	echo ". /opt/etc/init.d/S80lighttpd start" >> /opt/etc/init.d/S85rtorrent
 	/opt/etc/init.d/S80lighttpd start > /dev/null 2>&1 && \
 	[ -n "`pidof lighttpd`" ] && echo_time lighttpd 已经运行 || echo_time lighttpd 没有运行
 	/opt/etc/init.d/S85rtorrent restart > /dev/null 2>&1 && \
