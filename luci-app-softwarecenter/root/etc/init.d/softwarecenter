@@ -1,9 +1,9 @@
 #!/bin/sh /etc/rc.common
-START=52
-STOP=10
-
 # Copyright (C) 2019 Jianpeng Xiang (1505020109@mail.hnust.edu.cn)
 # This is free software, licensed under the GNU General Public License v3.
+
+START=52
+STOP=10
 
 # 导入函数库
 . /usr/bin/softwarecenter/website_manager.sh
@@ -123,7 +123,7 @@ cdg(){
 
 	config_load softwarecenter
 
-	get_config="deploy_entware entware_enable deploy_nginx deploy_mysql nginx_enabled mysql_enabled swap_enabled Partition_disk disk_mount cpu_model swap_size swap_path user pass aria2_enable aria2_boot amule_enable amule_boot deluge_enable deluge_boot rutorrent_enable rutorrent_boot"
+	get_config="deploy_entware entware_enable deploy_nginx deploy_mysql nginx_enabled mysql_enabled swap_enabled Partition_disk disk_mount cpu_model swap_size swap_path user pass aria2_enable aria2_boot amule_enable amule_boot deluge_enable deluge_boot rutorrent_enable rutorrent_boot qb_enable qb_boot tr_enable tr_boot"
 	
 	for p in $get_config; do
 		local $p
