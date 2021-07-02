@@ -107,7 +107,7 @@ handle_website(){
 
 		fi
 	else
-		echo_time "网站 $website_name 已关闭"
+		# echo_time "网站 $website_name 已关闭"
 		if [ -f /opt/etc/nginx/vhost/$website_name.conf ]; then
 			mv /opt/etc/nginx/vhost/$website_name.conf /opt/etc/nginx/no_use/$website_name.conf
 			/opt/etc/init.d/S80nginx reload > /dev/null 2>&1
@@ -149,7 +149,7 @@ cdg(){
 	if [ $deploy_nginx ]; then
 		[ ! -x /opt/etc/init.d/S80nginx ] && echo_time "开始安装Nginx" && init_nginx
 		if [ $nginx_enabled ]; then
-			[ "`pgrep nginx`" ] || nginx_manage start > /dev/null 2>&1
+			[ "`pidof nginx`" ] || nginx_manage start > /dev/null 2>&1
 			config_foreach handle_website website test
 			clean_vhost_config
 		else
@@ -163,7 +163,7 @@ cdg(){
 	if [ $deploy_mysql ]; then
 		[ ! -x /opt/etc/init.d/S70mysqld ] && echo_time "开始安装MySQL" && init_mysql
 		if [ $mysql_enabled ]; then
-			[ "`pgrep mysqld`" ] || /opt/etc/init.d/S70mysqld start > /dev/null 2>&1
+			[ "`pidof mysqld`" ] || /opt/etc/init.d/S70mysqld start > /dev/null 2>&1
 		else
 			/opt/etc/init.d/S70mysqld stop > /dev/null 2>&1
 		fi
@@ -173,26 +173,26 @@ cdg(){
 
 	[ $swap_enabled ] && config_swap_init $swap_size $swap_path || config_swap_del $swap_path
 
+
 _start(){
 
 if [ -z "`pidof $1`" ]; then
-	/opt/etc/init.d/$p start 1> /dev/null
+	/opt/etc/init.d/$p start > /dev/null 2>&1
 	sleep 5
 	if [ "`pidof $1`" ]; then
 		echo_time "$1 启动成功"
 	else
 		echo_time "$1 启动失败"
-		[ -s /opt/etc/init.d/$p 2>/dev/null ] && echo_time "$1 没有开启" || echo_time "$1 没有安装"
+		# [ -s /opt/etc/init.d/$p 2>/dev/null ] && echo_time "$1 没有开启" || echo_time "$1 没有安装"
 	fi
-# else
-	# echo_time "$f  运行中"
 fi
 
 }
 
-	for p in `ls /opt/etc/init.d`; do
+	for p in `find /opt/etc/init.d/ -perm '-u+x' -name 'S*' | awk -F/ '{print $NF}'`; do
 		[ $p = S81aria2 ] && [ $aria2_boot -eq "1" ] && _start "aria2c"
-		[ $p = S57amuled ] && [ $amule_boot -eq "1" ] && _start "amuled"
+		[ $p = S57amuled ] && [ $amule_boot -eq "1" ] && _start "amuled" && \
+		sleep 10 && /opt/etc/init.d/S57amuled restart > /dev/null 2>&1 &
 		[ $p = S80deluged ] && [ $deluge_boot -eq "1" ] && _start "deluged"
 		[ $p = S85rtorrent ] && [ $rutorrent_boot -eq "1" ] && _start "rtorrent"
 		[ $p = S89qbittorrent ] && [ $qb_boot -eq "1" ] && _start "qbittorrent-nox"

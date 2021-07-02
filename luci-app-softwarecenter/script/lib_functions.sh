@@ -1,6 +1,5 @@
 #!/bin/sh
 #Write for Almquist Shell version: 1.8
-
 # Copyright (C) 2019 Jianpeng Xiang (1505020109@mail.hnust.edu.cn)
 # This is free software, licensed under the GNU General Public License v3.
 
@@ -101,7 +100,7 @@ ENTWARE
 
 	chmod +x /etc/init.d/entware
 	/etc/init.d/entware enable
-	echo "export PATH=/opt/bin:/opt/sbin:/sbin:/bin:/usr/sbin:/usr/bin:$PATH" >> /etc/profile
+	echo "export PATH=/opt/bin:/opt/sbin:$PATH" >> /etc/profile
 
 	if wget -qcNO- -t 5 http://pkg.entware.net/sources/i18n_glib223.tar.gz | tar xvz -C /opt/usr/share/ > /dev/null; then
     echo_time "添加 zh_CN.UTF-8"
@@ -118,9 +117,9 @@ entware_unset(){
 	/etc/init.d/entware disable > /dev/null 2>&1
 	rm /etc/init.d/entware
 	sed -i "/export PATH=\/opt\/bin/d" /etc/profile
-	source /etc/profile > /dev/null 2>&1
+	source /etc/profile >/dev/null 2>&1
 	umount -lf /opt
-	rm -r /opt
+	rm -rf /opt
 }
 
 # 软件包安装 参数: $@:安装列表 说明：本函数将负责安装指定列表的软件到外置存储区，请保证区域指向正常且空间充足
@@ -344,7 +343,7 @@ EOF
 		echo_time qBittorrent 安装失败，再重试安装！ && exit 1
 	fi
 	/opt/etc/init.d/S89qbittorrent restart > /dev/null 2>&1 && \
-	[ -n "`pidof qbittorrent-nox`" ] && echo_time qbittorrent 已经运行 || echo_time qbittorrent 没有运行
+	[ "`pidof qbittorrent-nox`" ] && echo_time qbittorrent 已经运行 || echo_time qbittorrent 没有运行
 	echo
 }
 
@@ -352,10 +351,10 @@ rtorrent(){
 	if opkg_install rtorrent-easy-install; then
 		web_port=1099
 		www_cfg=/opt/etc/lighttpd/conf.d/99-rtorrent-fastcgi-scgi-auth.conf
-		if [ -z "`grep 'server.port' $www_cfg`" ]; then
-			echo "server.port = $web_port" >> $www_cfg
-		else
+		if [ "`grep 'server.port' $www_cfg`" ]; then
 			sed -i "s/^server.port = .*/server.port = $web_port/g" $www_cfg
+		else
+			echo "server.port = $web_port" >> $www_cfg
 		fi
 	else
 		echo_time rtorrent 安装失败，再重试安装！ && exit 1
@@ -572,11 +571,10 @@ execute = {sh,-c,/opt/bin/php-cgi /opt/share/www/rutorrent/php/initplugins.php $
 EOF
 	fi
 	ln -sf /opt/etc/rtorrent/rtorrent.conf /opt/etc/config/rtorrent.conf
-	echo ". /opt/etc/init.d/S80lighttpd start" >> /opt/etc/init.d/S85rtorrent
-	/opt/etc/init.d/S80lighttpd start > /dev/null 2>&1 && \
-	[ -n "`pidof lighttpd`" ] && echo_time lighttpd 已经运行 || echo_time lighttpd 没有运行
+	echo -e '[ $1 = start ] && /opt/etc/init.d/S80lighttpd start > /dev/null 2>&1 &\n[ $1 = stop ] && /opt/etc/init.d/S80lighttpd stop > /dev/null 2>&1 &\n[ $1 = restart ] && /opt/etc/init.d/S80lighttpd restart > /dev/null 2>&1 &' >> /opt/etc/init.d/S85rtorrent
 	/opt/etc/init.d/S85rtorrent restart > /dev/null 2>&1 && \
 	[ -n "`pidof rtorrent`" ] && echo_time rtorrent 已经运行 || echo_time rtorrent 没有运行
+	[ -n "`pidof lighttpd`" ] && echo_time lighttpd 已经运行 || echo_time lighttpd 没有运行
 	echo
 }
 
@@ -592,14 +590,16 @@ transmission(){
 			echo_time "下载 transmission-web-control 出错！" && opkg_install transmission-web-control
 			echo_time "使用 Entware transmission-web-control"
 		fi
+		sed -i '/index.original.html/d' /opt/share/transmission/web/index.html
+		sed -i '/index.original.html/d' /opt/share/transmission/web/index.mobile.html
 		[ -e /opt/etc/init.d/S88transmission-cfp ] && mv /opt/etc/init.d/S88transmission-cfp /opt/etc/init.d/S88transmission
 		sed -i -e 's|/torrent||g;s|root|admin|g;s|.*rpc-password.*|    "rpc-password": "admin",|g' /opt/etc/transmission/settings.json
 		ln -sf /opt/etc/transmission/settings.json /opt/etc/config/transmission.json
 	else
 		echo_time transmission 安装失败，再重试安装！ && exit 1
 	fi
-	/opt/etc/init.d/S88transmission start > /dev/null 2>&1 && \
-	[ -n "`pidof transmission-daemon`" ] && echo_time transmission 已经运行 || echo_time transmission 没有运行
+	/opt/etc/init.d/S88transmission start > /dev/null 2>&1
+	[ "`pidof transmission-daemon`" ] && echo_time transmission 已经运行 || echo_time transmission 没有运行
 	echo
 }
 
