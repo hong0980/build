@@ -89,22 +89,18 @@ handle_website(){
 				install_custom $website_dir $port #检查自定义网站是否正常工作？
 			fi
 		fi
-		if [ "$autodeploy_enable" ]; then
+
+		if [ "$autodeploy_enable" ] && [ "$website_name" = "Nextcloud" ] || [ "$website_name" = "Owncloud" ]; then
 			if [ "$redis_enabled" ]; then
-				if [ -d /opt/wwwroot/$website_name ]; then
-					if [ ! -f /opt/wwwroot/$website_name/redis_enabled ]; then
-						if [ "$website_name" = "Nextcloud" ] || [ "$website_name" = "Owncloud" ]; then
-							/bin/touch /opt/wwwroot/$website_name/redis_enabled
-							redis /opt/wwwroot/$website_name
-						fi
-					fi
+				if [ -d /opt/wwwroot/$website_name ] && [ ! -f /opt/wwwroot/$website_name/redis_enabled ]; then
+					touch /opt/wwwroot/$website_name/redis_enabled
+					redis "/opt/wwwroot/$website_name"
 				fi
 			else
 				rm -rf /opt/wwwroot/$website_name/config/config.php
 				rm -rf /opt/wwwroot/$website_name/redis_enabled
 			fi
-			Port_modification /opt/etc/nginx/vhost/$website_name.conf
-
+			Port_modification "/opt/etc/nginx/vhost/$website_name.conf"
 		fi
 	else
 		# echo_time "网站 $website_name 已关闭"
@@ -174,7 +170,7 @@ cdg(){
 	[ $swap_enabled ] && config_swap_init $swap_size $swap_path || config_swap_del $swap_path
 
 
-_start(){
+start_up(){
 
 if [ -z "`pidof $1`" ]; then
 	/opt/etc/init.d/$p start > /dev/null 2>&1
@@ -183,23 +179,22 @@ if [ -z "`pidof $1`" ]; then
 		echo_time "$1 启动成功"
 	else
 		echo_time "$1 启动失败"
-		# [ -s /opt/etc/init.d/$p 2>/dev/null ] && echo_time "$1 没有开启" || echo_time "$1 没有安装"
 	fi
 fi
 
 }
 
 	for p in `find /opt/etc/init.d/ -perm '-u+x' -name 'S*' | awk -F/ '{print $NF}'`; do
-		[ $p = S81aria2 ] && [ $aria2_boot -eq "1" ] && _start "aria2c"
-		[ $p = S57amuled ] && [ $amule_boot -eq "1" ] && _start "amuled" && \
+		[ $p = S81aria2 ] && [ $aria2_boot ] && start_up "aria2c"
+		[ $p = S57amuled ] && [ $amule_boot ] && start_up "amuled" && \
 		sleep 10 && /opt/etc/init.d/S57amuled restart > /dev/null 2>&1 &
-		[ $p = S80deluged ] && [ $deluge_boot -eq "1" ] && _start "deluged"
-		[ $p = S85rtorrent ] && [ $rutorrent_boot -eq "1" ] && _start "rtorrent"
-		[ $p = S89qbittorrent ] && [ $qb_boot -eq "1" ] && _start "qbittorrent-nox"
-		[ $p = S88transmission ] && [ $tr_boot -eq "1" ] && _start "transmission-daemon"
-		# [ $p = S80nginx ] && f=nginx && _start
-		# [ $p = S70mysqld ] && f=mysqld && _start
-		# [ $p = S79php7-fpm ] && f=php-fpm && _start
+		[ $p = S80deluged ] && [ $deluge_boot ] && start_up "deluged"
+		[ $p = S85rtorrent ] && [ $rutorrent_boot ] && start_up "rtorrent"
+		[ $p = S89qbittorrent ] && [ $qb_boot ] && start_up "qbittorrent-nox"
+		[ $p = S88transmission ] && [ $tr_boot ] && start_up "transmission-daemon"
+		# [ $p = S80nginx ] && f=nginx && start_up
+		# [ $p = S70mysqld ] && f=mysqld && start_up
+		# [ $p = S79php7-fpm ] && f=php-fpm && start_up
 	done
 }
 
@@ -211,5 +206,6 @@ stop(){
 }
 
 restart(){
-	stop;start
+	stop
+	start
 }

@@ -197,6 +197,8 @@ EOF
 
 # 开启 Redis 参数: $1: 安装目录
 redis(){
+
+cp $1/config/config.php $1/config/config.php.bak
 sed -e "/);/d" -i $1/config/config.php
 cat >> "$1/config/config.php" <<-\EOF
 'memcache.locking' => '\OC\Memcache\Redis',
@@ -397,8 +399,6 @@ install_kodexplorer(){
 	# 添加到虚拟主机
 	add_vhost $port $webdir
 	sed -i "s|.*#php-fpm.*|	include /opt/etc/nginx/conf/php-fpm.conf;|g" /opt/etc/nginx/vhost/$webdir.conf
-	sed -i 's/config.php/configg.php/g' /opt/wwwroot/Kodexplorer/index.php
-	cp /opt/wwwroot/Kodexplorer/config/config.php /opt/wwwroot/Kodexplorer/config/configg.php
 	echo_time "浏览器地址栏输入：$localhost:$port 即可访问"
 }
 

@@ -56,7 +56,7 @@ P_G() {
 		f="重启网络"
 		;;
 	5)
-		kill -9 $(busybox ps -w | grep 'cbp_cmd' | grep -v 'grep' | awk '{print $1}') 2>/dev/null
+		kill -9 $(pgrep 'cbp_cmd') 2>/dev/null
 		[ -s /etc/config/cbp_cmd ] && bash /etc/config/cbp_cmd 2>/dev/null &
 		f="自定义命令"
 		;;

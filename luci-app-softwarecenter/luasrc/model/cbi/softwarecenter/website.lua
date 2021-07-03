@@ -1,5 +1,5 @@
 m = Map("softwarecenter",translate("网站管理"),
-translate("在正常运行 Nginx/PHP/MySQL 后再选择要部署的网站<br>可以自动部署PHP探针，phpMyAdmin，可道云，Typecho等"))
+translate("在正常运行 Nginx/PHP/MySQL 后再选择要部署的网站。可以自动部署PHP探针，phpMyAdmin，可道云，Typecho等。"))
 m:section(SimpleSection).template = "softwarecenter/website_status"
 
 s = m:section(TypedSection,"website", translate("网站部署"), 
@@ -10,10 +10,10 @@ s.sortable = false
 s.template = "cbi/tblsection"
 s.rmempty = false
 
-p = s:option(Flag,"website_enabled",
-translate("开启"),translate("选中启用"))
+p = s:option(Flag, "website_enabled",
+translate("开启"), translate("选中启用"))
 
-p = s:option(Flag,"autodeploy_enable",translate("部署网站"),
+p = s:option(Flag, "autodeploy_enable", translate("部署网站"),
 translate("<b style=\"color:red\">(安装后未选会<br>删所有的文件)</b>"))
 
 p = s:option(ListValue,"website_select",
@@ -30,12 +30,12 @@ p:value("8", "Typecho (流畅的轻量级开源博客程序)")
 p:value("9", "Z-Blog (体积小，速度快的PHP博客程序)")
 p:value("10", "DzzOffice (开源办公平台)")
 
-p = s:option(Value,"port",translate("端口设置"),
+p = s:option(Value,"port", translate("访问端口设置"),
 translate("端口自定义优先，如留空自动获取<br>如自定义端口已占用转为自动获取"))
-remarks = s:option(Value, "remarks", translate("备注"))
-remarks.rmempty = false
-remarks.size = 8
 
-p = s:option(Flag,"redis_enabled",translate("启用Redis"))
+-- p = s:option(Flag,"redis_enabled", translate("启用Redis"), translate("Nextcloud<br>Owncloud"))
+
+remarks = s:option(Value, "remarks", translate("备注"))
+remarks.size = 8
 
 return m

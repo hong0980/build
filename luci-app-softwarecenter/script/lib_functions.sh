@@ -311,7 +311,7 @@ deluge(){
 		sed -i 's|root/Down|opt/down|g' /opt/etc/deluge/core.conf
 		sed -i 's|"language.*|"language": "zh_CN",|g' /opt/etc/deluge/web.conf
 		ln -sf /opt/etc/deluge/core.conf /opt/etc/config/deluge.conf
-		sed -i '/deluged -l/a\	sleep 5\ndeluge-web -l \/opt\/etc\/deluge\/deluge-web.log -L error -p 888' /opt/etc/init.d/S80deluged
+		sed -i '/deluged -l/a\	sleep 5\n	deluge-web -l \/opt\/etc\/deluge\/deluge-web.log -L error -p 888' /opt/etc/init.d/S80deluged
 		sed -i '/killall deluged/a\	sleep 5\nkillall deluge-web' /opt/etc/init.d/S80deluged
 	else
 		echo_time deluge 安装失败，再重试安装！ && exit 1
