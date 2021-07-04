@@ -119,7 +119,7 @@ cdg(){
 
 	config_load softwarecenter
 
-	get_config="deploy_entware entware_enable deploy_nginx deploy_mysql nginx_enabled mysql_enabled swap_enabled Partition_disk disk_mount cpu_model swap_size swap_path user pass aria2_enable aria2_boot amule_enable amule_boot deluge_enable deluge_boot rutorrent_enable rutorrent_boot qb_enable qb_boot tr_enable tr_boot"
+	get_config="deploy_entware entware_enable deploy_nginx deploy_mysql nginx_enabled mysql_enabled swap_enabled Partition_disk disk_mount cpu_model swap_size swap_path user pass delaytime"
 	
 	for p in $get_config; do
 		local $p
@@ -184,18 +184,23 @@ fi
 
 }
 
-	for p in `find /opt/etc/init.d/ -perm '-u+x' -name 'S*' | awk -F/ '{print $NF}'`; do
-		[ $p = S81aria2 ] && [ $aria2_boot ] && start_up "aria2c"
-		[ $p = S57amuled ] && [ $amule_boot ] && start_up "amuled" && \
-		sleep 10 && /opt/etc/init.d/S57amuled restart > /dev/null 2>&1 &
-		[ $p = S80deluged ] && [ $deluge_boot ] && start_up "deluged"
-		[ $p = S85rtorrent ] && [ $rutorrent_boot ] && start_up "rtorrent"
-		[ $p = S89qbittorrent ] && [ $qb_boot ] && start_up "qbittorrent-nox"
-		[ $p = S88transmission ] && [ $tr_boot ] && start_up "transmission-daemon"
-		# [ $p = S80nginx ] && f=nginx && start_up
-		# [ $p = S70mysqld ] && f=mysqld && start_up
-		# [ $p = S79php7-fpm ] && f=php-fpm && start_up
-	done
+sleep ${delaytime}
+for p in `awk '/_boot/{print $2}' /etc/config/softwarecenter | cut -d_ -f1`; do
+	if [ "`uci get softwarecenter.main.${p}_boot 2>/dev/null`" ]; then
+		if [ -s /opt/etc/init.d/$p ]; then
+			[ $p = S81aria2 ] && start_up "aria2c"
+			[ $p = S57amuled ] && start_up "amuled" && \
+			sleep 10 && /opt/etc/init.d/S57amuled restart > /dev/null 2>&1 &
+			[ $p = S80deluged ] && start_up "deluged"
+			[ $p = S85rtorrent ] && start_up "rtorrent"
+			[ $p = S89qbittorrent ] && start_up "qbittorrent-nox"
+			[ $p = S88transmission ] && start_up "transmission-daemon"
+		else
+			/usr/bin/softwarecenter/lib_functions.sh $p
+		fi
+	fi
+done
+
 }
 
 cdg >> /tmp/log/softwarecenter.log

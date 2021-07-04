@@ -72,30 +72,32 @@ cat > "/etc/init.d/entware" <<-\ENTWARE
 START=51
 
 get_entware_path(){
-for mount_point in `lsblk -s | awk '/mnt/{print $7}'`; do
-if [ -d "$mount_point/opt/etc" ]; then
-echo "$mount_point"
-break
-fi
-done
+  for mount_point in `lsblk -s | awk '/mnt/{print $7}'`; do
+    if [ -e "$mount_point/opt/etc/init.d/rc.unslung" ]; then
+      echo "$mount_point"
+      break
+    fi
+  done
 }
 
 start(){
-mkdir -p /opt
-ENTWARE_PATH=`uci get softwarecenter.main.disk_mount`
-[ $ENTWARE_PATH ] || ENTWARE_PATH=$(get_entware_path)
-mount -o bind $ENTWARE_PATH/opt /opt
+  [ -d opt ] || mkdir -p /opt
+  entware_path=`get_entware_path`
+  [ $entware_path ] || entware_path=`uci get softwarecenter.main.disk_mount`
+  mount -o bind $entware_path/opt /opt
 }
 
 stop(){
-/opt/etc/init.d/rc.unslung stop
-umount -lf /opt
-rm -r /opt
+  /opt/etc/init.d/rc.unslung stop
+  umount -lf /opt
+  rm -r /opt
 }
 
 restart(){
-stop;start
+  stop
+  start
 }
+
 ENTWARE
 
 	chmod +x /etc/init.d/entware
@@ -606,13 +608,19 @@ transmission(){
 	if [ $1 ]; then
 		log="/tmp/log/softwarecenter.log"
 		case $1 in
-			amule)			amule >> $log;;
-			aria2)			aria2 >> $log;;
-			deluge)			deluge >> $log;;
-			rtorrent)		rtorrent >> $log;;
-			qbittorrent)	qbittorrent >> $log;;
-			transmission)	transmission >> $log;;
-			transmi_2_77)	transmission 277 >> $log;;
+			S57amuled)			amule >> $log;;
+			S81aria2)			aria2 >> $log;;
+			S80deluged)			deluge >> $log;;
+			S85rtorrent)		rtorrent >> $log;;
+			S89qbittorrent)		qbittorrent >> $log;;
+			S88transmission)
+				if [ $# -eq 1 ]; then
+					transmission >> $log
+				else
+					[ $2 = 1 ] && transmission >> $log
+					[ $2 = 2 ] && transmission 277 >> $log
+				fi
+				;;
 			system_check)	system_check >> $log;;
 			opkg_install)	opkg_install >> $log;;
 			install_soft)	install_soft >> $log;;
