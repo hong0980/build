@@ -12,9 +12,9 @@ STOP=10
 website_config_list=""
 
 #本函数负责清理未写入配置的网站
-clean_vhost_config(){
-	local_config_list="`ls /opt/etc/nginx/vhost | cut -d. -f1`"
-	local_no_use_config_list="`ls /opt/etc/nginx/no_use | cut -d. -f1`"
+clean_vhost_config() {
+	local_config_list="$(ls /opt/etc/nginx/vhost | cut -d. -f1)"
+	local_no_use_config_list="$(ls /opt/etc/nginx/no_use | cut -d. -f1)"
 	delete_config_list=""
 
 	# 获取要删除的网站
@@ -44,16 +44,16 @@ clean_vhost_config(){
 	done
 
 	for conf in $delete_config_list; do
-		webdir=`vhost_config_list $conf | awk '{print $1}'`
+		webdir=$(vhost_config_list $conf | awk '{print $1}')
 		delete_website $conf $webdir
 	done
 }
 
 # 网站迭代处理，本函数迭代的配置网站（处理逻辑也许可以更好的优化？）
-handle_website(){
-	
+handle_website() {
+
 	website_config="website_enabled autodeploy_enable customdeploy_enabled redis_enabled website_dir website_select port"
-	
+
 	for pl in $website_config; do
 		local $pl
 		config_get_bool $pl $1 $pl
@@ -68,9 +68,9 @@ handle_website(){
 	# echo "获取网站配置文件名"
 	if [ "$autodeploy_enable" ]; then
 		# 获取网站名称
-		website_name=`website_name_mapping $website_select`
+		website_name=$(website_name_mapping $website_select)
 	elif [ "$customdeploy_enabled" ]; then
-		website_name="`echo $website_dir | awk -F"[/]" '{print $NF}'`"
+		website_name="$(echo $website_dir | awk -F"[/]" '{print $NF}')"
 	else
 		return
 	fi
@@ -80,11 +80,11 @@ handle_website(){
 			echo_time "启用 $website_name"
 			mv /opt/etc/nginx/no_use/$website_name.conf /opt/etc/nginx/vhost/$website_name.conf
 			port_custom /opt/etc/nginx/vhost/$website_name.conf
-			/opt/etc/init.d/S80nginx reload > /dev/null 2>&1
+			/opt/etc/init.d/S80nginx reload >/dev/null 2>&1
 		elif [ ! -f /opt/etc/nginx/vhost/$website_name.conf ]; then
 			if [ "$autodeploy_enable" ]; then
 				install_website $website_select $port && echo_time "$name 安装完成"
-				/opt/etc/init.d/S80nginx reload > /dev/null 2>&1
+				/opt/etc/init.d/S80nginx reload >/dev/null 2>&1
 			elif [ "$customdeploy_enabled" ]; then
 				install_custom $website_dir $port #检查自定义网站是否正常工作？
 			fi
@@ -106,111 +106,111 @@ handle_website(){
 		# echo_time "网站 $website_name 已关闭"
 		if [ -f /opt/etc/nginx/vhost/$website_name.conf ]; then
 			mv /opt/etc/nginx/vhost/$website_name.conf /opt/etc/nginx/no_use/$website_name.conf
-			/opt/etc/init.d/S80nginx reload > /dev/null 2>&1
+			/opt/etc/init.d/S80nginx reload >/dev/null 2>&1
 		fi
 	fi
 
 	website_config_list="$website_config_list $website_name"
 }
 
-start(){
+start() {
 
-cdg(){
+	CDG() {
 
-	config_load softwarecenter
+		config_load softwarecenter
+		get_config="entware_enable deploy_entware deploy_nginx deploy_mysql nginx_enabled mysql_enabled swap_enabled Partition_disk disk_mount cpu_model swap_size swap_path user pass delaytime"
 
-	get_config="deploy_entware entware_enable deploy_nginx deploy_mysql nginx_enabled mysql_enabled swap_enabled Partition_disk disk_mount cpu_model swap_size swap_path user pass delaytime"
-	
-	for p in $get_config; do
-		local $p
-		config_get_bool $p main $p
-		config_get $p main $p
-	done
+		for p in $get_config; do
+			local $p
+			config_get_bool $p main $p
+			config_get $p main $p
+		done
 
-	# entware环境
-	source /etc/profile > /dev/null 2>&1
-	if [ $entware_enable ]; then
-		if [ ! -e /etc/init.d/entware ]; then
-			echo_time "开始部署entware环境\n" && entware_set $disk_mount $cpu_model
-			source /etc/profile > /dev/null 2>&1
-		fi
-	else
-		if [ -x /etc/init.d/entware ]; then
-			echo_time "entware环境已删除\n" && entware_unset
-		fi
-		return
-	fi
-
-	# Nginx
-	if [ $deploy_nginx ]; then
-		[ ! -x /opt/etc/init.d/S80nginx ] && echo_time "开始安装Nginx" && init_nginx
-		if [ $nginx_enabled ]; then
-			[ "`pidof nginx`" ] || nginx_manage start > /dev/null 2>&1
-			config_foreach handle_website website test
-			clean_vhost_config
+		# entware环境
+		source /etc/profile >/dev/null 2>&1
+		if [ $entware_enable ]; then
+			if [ ! -e /etc/init.d/entware ]; then
+				echo_time "开始部署entware环境\n" && entware_set $disk_mount $cpu_model
+				source /etc/profile >/dev/null 2>&1
+			fi
 		else
-			nginx_manage stop > /dev/null 2>&1
+			if [ -x /etc/init.d/entware ]; then
+				echo_time "entware环境已删除\n" && entware_unset
+			fi
+			return
 		fi
-	else
-		[ -x /opt/etc/init.d/S80nginx ] && echo_time "卸载Nginx相关的软件包" && del_nginx
-	fi
 
-	# MySQL
-	if [ $deploy_mysql ]; then
-		[ ! -x /opt/etc/init.d/S70mysqld ] && echo_time "开始安装MySQL" && init_mysql
-		if [ $mysql_enabled ]; then
-			[ "`pidof mysqld`" ] || /opt/etc/init.d/S70mysqld start > /dev/null 2>&1
+		# Nginx
+		if [ $deploy_nginx ]; then
+			[ ! -x /opt/etc/init.d/S80nginx ] && echo_time "开始安装Nginx" && init_nginx
+			if [ $nginx_enabled ]; then
+				[ "$(pidof nginx)" ] || nginx_manage start >/dev/null 2>&1
+				config_foreach handle_website website test
+				clean_vhost_config
+			else
+				nginx_manage stop >/dev/null 2>&1
+			fi
 		else
-			/opt/etc/init.d/S70mysqld stop > /dev/null 2>&1
+			[ -x /opt/etc/init.d/S80nginx ] && echo_time "卸载Nginx相关的软件包" && del_nginx
 		fi
-	else
-		[ -x /opt/etc/init.d/S70mysqld ] && echo_time "卸载MySQL相关的软件包" && del_mysql
-	fi
 
-	[ $swap_enabled ] && config_swap_init $swap_size $swap_path || config_swap_del $swap_path
+		# MySQL
+		if [ $deploy_mysql ]; then
+			[ ! -x /opt/etc/init.d/S70mysqld ] && echo_time "开始安装MySQL" && init_mysql
+			if [ $mysql_enabled ]; then
+				[ "$(pidof mysqld)" ] || /opt/etc/init.d/S70mysqld start >/dev/null 2>&1
+			else
+				/opt/etc/init.d/S70mysqld stop >/dev/null 2>&1
+			fi
+		else
+			[ -x /opt/etc/init.d/S70mysqld ] && echo_time "卸载MySQL相关的软件包" && del_mysql
+		fi
 
+		[ $ ] && config_swap_init $swap_size $swap_path || config_swap_del $swap_path
 
-start_up(){
+		start_up() {
 
-if [ -z "`pidof $1`" ]; then
-	/opt/etc/init.d/$p start > /dev/null 2>&1
-	sleep 5
-	if [ "`pidof $1`" ]; then
-		echo_time "$1 启动成功"
-	else
-		echo_time "$1 启动失败"
-	fi
-fi
+			if ! pidof $1; then
+				/opt/etc/init.d/$p start >/dev/null 2>&1
+				sleep 5
+				if pidof $1; then
+					echo_time "$1 启动成功"
+				else
+					echo_time "$1 启动失败"
+				fi
+			# else
+				# echo_time $1 已经启动！
+			fi
 
+		}
+
+		sleep $delaytime
+		for p in $(awk '/_boot/{print $2}' /etc/config/softwarecenter | cut -d_ -f1); do
+			if [ "$(uci get softwarecenter.main.${p}_boot 2>/dev/null)" ]; then
+				if [ -s /opt/etc/init.d/$p ]; then
+					[ $p = S81aria2 ] && start_up "aria2c"
+					[ $p = S57amuled ] && start_up "amuled" && \
+					sleep 10 && /opt/etc/init.d/S57amuled restart >/dev/null 2>&1 &
+					[ $p = S80deluged ] && start_up "deluged"
+					[ $p = S85rtorrent ] && start_up "rtorrent"
+					[ $p = S89qbittorrent ] && start_up "qbittorrent-nox"
+					[ $p = S88transmission ] && start_up "transmission-daemon"
+				else
+					/usr/bin/softwarecenter/lib_functions.sh $p
+				fi
+			fi
+		done
+
+	}
+
+	CDG >>/tmp/log/softwarecenter.log
 }
 
-sleep ${delaytime}
-for p in `awk '/_boot/{print $2}' /etc/config/softwarecenter | cut -d_ -f1`; do
-	if [ "`uci get softwarecenter.main.${p}_boot 2>/dev/null`" ]; then
-		if [ -s /opt/etc/init.d/$p ]; then
-			[ $p = S81aria2 ] && start_up "aria2c"
-			[ $p = S57amuled ] && start_up "amuled" && \
-			sleep 10 && /opt/etc/init.d/S57amuled restart > /dev/null 2>&1 &
-			[ $p = S80deluged ] && start_up "deluged"
-			[ $p = S85rtorrent ] && start_up "rtorrent"
-			[ $p = S89qbittorrent ] && start_up "qbittorrent-nox"
-			[ $p = S88transmission ] && start_up "transmission-daemon"
-		else
-			/usr/bin/softwarecenter/lib_functions.sh $p
-		fi
-	fi
-done
-
-}
-
-cdg >> /tmp/log/softwarecenter.log
-}
-
-stop(){
+stop() {
 	:
 }
 
-restart(){
+restart() {
 	stop
 	start
 }

@@ -26,7 +26,7 @@ local am_state=(luci.sys.call("ps 2>/dev/null | grep amuleweb 2>/dev/null | grep
 
 if nixio.fs.access("/opt/etc/init.d/S57amuled") then
 	if am_state then
-		p = s:option(Button, "aac", translate(" "))
+		p = s:option(Button, "aaa", translate(" "))
 		p.inputtitle = translate("重启 aMule")
 		p.inputstyle = "reload"
 		p.forcewrite = true
@@ -36,7 +36,7 @@ if nixio.fs.access("/opt/etc/init.d/S57amuled") then
 		end
 		p:depends("S57amuled_enable", 1)
 
-		p = s:option(Button, "aad", translate(" "))
+		p = s:option(Button, "aab", translate(" "))
 		p.inputtitle = translate("关闭 aMule")
 		p.inputstyle = "reset"
 		p.forcewrite = true
@@ -47,7 +47,7 @@ if nixio.fs.access("/opt/etc/init.d/S57amuled") then
 		p.description = translate("WebUI默认端口为 4711，密码: admin<br><b>当前状态</b>：" .. op_webui .. "4711')\"/>")
 		p:depends("S57amuled_enable", 1)
 	else
-		p = s:option(Button, "aaa", translate(" "))
+		p = s:option(Button, "aac", translate(" "))
 		p.inputtitle = translate("运行 aMule")
 		p.inputstyle = "apply"
 		p.forcewrite = true
@@ -59,7 +59,7 @@ if nixio.fs.access("/opt/etc/init.d/S57amuled") then
 		p:depends("S57amuled_enable", 1)
 	end
 else
-	p = s:option(Button, "aab", translate("安装"))
+	p = s:option(Button, "aad", translate("安装"))
 	p.inputtitle = translate("开始安装")
 	p.inputstyle = "apply"
 	p.forcewrite = true
@@ -159,7 +159,7 @@ if nixio.fs.access("/opt/etc/init.d/S80deluged") then
 		p.description = translate("WebUI默认端口为 888，密码: deluge<br><b>当前状态</b>：" .. op_webui .. "888')\"/>")
 		p:depends("S80deluged_enable", 1)
 	else
-		p = s:option(Button, "acd", translate(" "))
+		p = s:option(Button, "acc", translate(" "))
 		p.inputtitle = translate("运行 Deluge")
 		p.inputstyle = "apply"
 		p.forcewrite = true
@@ -171,7 +171,7 @@ if nixio.fs.access("/opt/etc/init.d/S80deluged") then
 		p:depends("S80deluged_enable", 1)
 	end
 else
-	p = s:option(Button, "acc", translate("安装"))
+	p = s:option(Button, "acd", translate("安装"))
 	p.inputtitle = translate("开始安装")
 	p.inputstyle = "apply"
 	p.forcewrite = true
@@ -215,7 +215,7 @@ if nixio.fs.access("/opt/etc/init.d/S89qbittorrent") then
 		p.description = translate("WebUI默认端口为 9080，用启名: admin，密码: adminadmin<br><b>当前状态</b>：" .. op_webui .. "9080')\"/>")
 		p:depends("S89qbittorrent_enable", 1)
 	else
-		p = s:option(Button, "add", translate(" "))
+		p = s:option(Button, "adc", translate(" "))
 		p.inputtitle = translate("运行 qBittorrent")
 		p.inputstyle = "apply"
 		p.forcewrite = true
@@ -227,7 +227,7 @@ if nixio.fs.access("/opt/etc/init.d/S89qbittorrent") then
 		p:depends("S89qbittorrent_enable", 1)
 	end
 else
-	p = s:option(Button, "adc", translate("安装"))
+	p = s:option(Button, "add", translate("安装"))
 	p.inputtitle = translate("开始安装")
 	p.inputstyle = "apply"
 	p.forcewrite = true
@@ -271,7 +271,7 @@ if nixio.fs.access("/opt/etc/init.d/S85rtorrent") then
 		p.description = translate(("WebUI默认端口为 1099，Rutorrent替换为") .. [[<a href="https://github.com/Novik/ruTorrent"target="_blank">]] .. " Novik </a>的稳定插件版<br><b>当前状态</b>：" .. op_webui .. "1099/rutorrent')\"/>")
 		p:depends("S85rtorrent_enable", 1)
 	else
-		p = s:option(Button, "aed", translate(" "))
+		p = s:option(Button, "aec", translate(" "))
 		p.inputtitle = translate("运行 rTorrent")
 		p.inputstyle = "apply"
 		p.forcewrite = true
@@ -283,7 +283,7 @@ if nixio.fs.access("/opt/etc/init.d/S85rtorrent") then
 		p:depends("S85rtorrent_enable", 1)
 	end
 else
-	p = s:option(Button, "aec", translate("安装"))
+	p = s:option(Button, "aed", translate("安装"))
 	p.inputtitle = translate("开始安装")
 	p.inputstyle = "apply"
 	p.forcewrite = true
@@ -327,7 +327,7 @@ if nixio.fs.access("/opt/etc/init.d/S88transmission") then
 		p.description = translate("WebUI默认端口为 9091，用启名: admin，密码: admin<br><b>当前状态</b>：" .. op_webui .. "9091')\"/>")
 		p:depends("S88transmission_enable", 1)
 	else
-		p = s:option(Button, "afe", translate(" "))
+		p = s:option(Button, "afc", translate(" "))
 		p.inputtitle = translate("运行 Transmission")
 		p.inputstyle = "apply"
 		p.forcewrite = true
@@ -339,7 +339,7 @@ if nixio.fs.access("/opt/etc/init.d/S88transmission") then
 		p:depends("S88transmission_enable", 1)
 	end
 else
-	p = s:option(Button, "afc", translate("安装 3.00"))
+	p = s:option(Button, "afd", translate("安装 3.00"))
 	p.inputtitle = translate("开始安装")
 	p.inputstyle = "apply"
 	p.forcewrite = true
@@ -349,7 +349,7 @@ else
 	end
 	p:depends("S88transmission_enable", 1)
 
-	p = s:option(Button, "afd", translate("安装2.77plus"))
+	p = s:option(Button, "afe", translate("安装2.77plus"))
 	p.inputtitle = translate("开始安装")
 	p.inputstyle = "apply"
 	p.forcewrite = true
