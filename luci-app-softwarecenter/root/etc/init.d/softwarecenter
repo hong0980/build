@@ -166,7 +166,7 @@ start() {
 			[ -x /opt/etc/init.d/S70mysqld ] && echo_time "卸载MySQL相关的软件包" && del_mysql
 		fi
 
-		[ $ ] && config_swap_init $swap_size $swap_path || config_swap_del $swap_path
+		[ $swap_enabled ] && config_swap_init $swap_size $swap_path || config_swap_del $swap_path
 
 		start_up() {
 

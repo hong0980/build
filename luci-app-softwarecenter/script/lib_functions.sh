@@ -3,8 +3,6 @@
 # Copyright (C) 2019 Jianpeng Xiang (1505020109@mail.hnust.edu.cn)
 # This is free software, licensed under the GNU General Public License v3.
 
-pkglist_base="wget unzip e2fsprogs ca-certificates"
-
 status() {
 	local p=$?
 	# echo -en "\\033[40G[ "
@@ -32,18 +30,9 @@ entware_set() {
 	[ "$1" ] && USB_PATH="$1" || { echo_time "未选择安装路径！" && exit 1; }
 	[ "$2" ] || { echo_time "未选择CPU架构！" && exit 1; }
 	system_check $USB_PATH
-	echo_time "安装基本软件" && install_soft "$pkglist_base"
+	echo_time "安装基本软件" && install_soft "wget unzip e2fsprogs ca-certificates"
 	make_dir "$USB_PATH/opt" "/opt"
 	mount -o bind $USB_PATH/opt /opt
-
-	Kernel_V=$(expr substr $(uname -r) 1 3)
-	if [ "$2" = "mips" ]; then
-		if [ $Kernel_V = "2.6" ]; then
-			INST_URL=http://pkg.entware.net/binaries/mipsel/installer/installer.sh
-		else
-			INST_URL=http://bin.entware.net/mipselsf-k3.4/installer/generic.sh
-		fi
-	fi
 
 	case $2 in
 	x86_64) INST_URL=http://bin.entware.net/x64-k3.2/installer/generic.sh ;;
@@ -51,6 +40,13 @@ entware_set() {
 	armv5*) INST_URL=http://bin.entware.net/armv5sf-k3.2/installer/generic.sh ;;
 	aarch64) INST_URL=http://bin.entware.net/aarch64-k3.10/installer/generic.sh ;;
 	armv7l) INST_URL=http://bin.entware.net/armv7sf-k${Kernel_V}/installer/generic.sh ;;
+	mips)
+		if [ $Kernel_V = "2.6" ]; then
+			INST_URL=http://pkg.entware.net/binaries/mipsel/installer/installer.sh
+		else
+			INST_URL=http://bin.entware.net/mipselsf-k3.4/installer/generic.sh
+		fi
+		;;
 	esac
 
 	if [ $INST_URL ]; then
@@ -60,7 +56,7 @@ entware_set() {
 		exit 1
 	fi
 
-	[ -s /opt/etc/init.d ] || {
+	[ -s /opt/etc/init.d/rc.unslung ] || {
 		echo_time "安装 Entware 出错，请重试！"
 		exit 1
 	}
@@ -227,7 +223,6 @@ check_available_size() {
 }
 
 opkg_install() {
-	[ ! -x /etc/init.d/entware ] && echo_time "安装应用前应先部署或开启Entware" && exit 1
 	source /etc/profile >/dev/null 2>&1 && echo_time "更新软件源中" && opkg update >/dev/null 2>&1
 	make_dir /opt/etc/config /opt/downloads >/dev/null 2>&1
 	for i in $@; do
@@ -292,7 +287,6 @@ aria2() {
 			sed -i 's|\#!/usr.*|\#!/bin/sh|g' *.sh
 		then
 			chmod +x *.sh && sh ./tracker.sh >/dev/null 2>&1
-			[ $? = 0 ] && echo_time "BT 服务器地址下载成功！" || echo_time "BT 服务器地址下载失败！"
 			ln -sf $Pro/aria2.conf /opt/etc/config/aria2.conf
 			rm /opt/etc/aria2.conf
 		fi
@@ -306,8 +300,8 @@ aria2() {
 
 deluge() {
 	if opkg_install deluge-ui-web; then
-		/opt/etc/init.d/S80deluged start >/dev/null 2>&1
-		/opt/etc/init.d/S81deluge-web start >/dev/null 2>&1
+		/opt/etc/init.d/S80deluged restart >/dev/null 2>&1
+		/opt/etc/init.d/S81deluge-web restart >/dev/null 2>&1
 		sleep 5
 		/opt/etc/init.d/S80deluged stop >/dev/null 2>&1
 		/opt/etc/init.d/S81deluge-web stop >/dev/null 2>&1
@@ -577,6 +571,7 @@ EOF
 	echo -e '[ $1 = start ] && /opt/etc/init.d/S80lighttpd start > /dev/null 2>&1 &\n[ $1 = stop ] && /opt/etc/init.d/S80lighttpd stop > /dev/null 2>&1 &\n[ $1 = restart ] && /opt/etc/init.d/S80lighttpd restart > /dev/null 2>&1 &' >>/opt/etc/init.d/S85rtorrent
 	/opt/etc/init.d/S85rtorrent restart >/dev/null 2>&1 && \
 	[ -n "$(pidof rtorrent)" ] && echo_time rtorrent 已经运行 || echo_time rtorrent 没有运行
+	/opt/etc/init.d/S80lighttpd restart >/dev/null 2>&1 && \
 	[ -n "$(pidof lighttpd)" ] && echo_time lighttpd 已经运行 || echo_time lighttpd 没有运行
 	echo
 }

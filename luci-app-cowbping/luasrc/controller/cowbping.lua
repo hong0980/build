@@ -6,7 +6,7 @@ function index()
 	-- if relaymode then
 		-- entry({"admin", "network", "cowbping"}, alias("admin", "network", "cowbping","cowbping"), _("无线中继"), 20).dependent = true
 	-- else
-		entry({"admin", "network", "cowbping"}, alias("admin", "network", "cowbping","cowbping"), _("网络检测"), 60).dependent = true
+		entry({"admin", "network", "cowbping"}, alias("admin", "network", "cowbping","cowbping"), _("网络检测"), 66).dependent = true
 	-- end
 	entry({"admin", "network", "cowbping", "cowbping"}, cbi("cowbping/cowbping"),_("设置"), 10).leaf = true
 	entry({"admin", "network", "cowbping", "cowblog"}, form("cowbping/cowblog"),_("日志"), 20).leaf = true
