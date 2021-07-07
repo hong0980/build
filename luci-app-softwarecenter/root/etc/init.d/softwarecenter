@@ -142,7 +142,7 @@ start() {
 
 		# Nginx
 		if [ $deploy_nginx ]; then
-			[ ! -x /opt/etc/init.d/S80nginx ] && echo_time "开始安装Nginx" && init_nginx
+			[ ! -x /opt/etc/init.d/S80nginx ] && echo_time "开始安装Nginx\n" && init_nginx
 			if [ $nginx_enabled ]; then
 				[ "$(pidof nginx)" ] || nginx_manage start >/dev/null 2>&1
 				config_foreach handle_website website test
@@ -156,7 +156,7 @@ start() {
 
 		# MySQL
 		if [ $deploy_mysql ]; then
-			[ ! -x /opt/etc/init.d/S70mysqld ] && echo_time "开始安装MySQL" && init_mysql
+			[ ! -x /opt/etc/init.d/S70mysqld ] && echo_time "开始安装MySQL\n" && init_mysql
 			if [ $mysql_enabled ]; then
 				[ "$(pidof mysqld)" ] || /opt/etc/init.d/S70mysqld start >/dev/null 2>&1
 			else
@@ -181,10 +181,9 @@ start() {
 			# else
 				# echo_time $1 已经启动！
 			fi
-
 		}
 
-		sleep $delaytime
+		# sleep $delaytime
 		for p in $(awk '/_boot/{print $2}' /etc/config/softwarecenter | cut -d_ -f1); do
 			if [ "$(uci get softwarecenter.main.${p}_boot 2>/dev/null)" ]; then
 				if [ -s /opt/etc/init.d/$p ]; then

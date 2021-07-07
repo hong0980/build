@@ -11,9 +11,9 @@ s.template = "cbi/tblsection"
 s.rmempty = false
 
 p = s:option(Flag, "website_enabled",
-translate("开启"), translate("选中启用"))
+translate("启用"))
 
-p = s:option(Flag, "autodeploy_enable", translate("部署网站"),
+p = s:option(Flag, "autodeploy_enable", translate("部署/删除"),
 translate("<b style=\"color:red\">(安装后未选会<br>删所有的文件)</b>"))
 
 p = s:option(ListValue,"website_select",
