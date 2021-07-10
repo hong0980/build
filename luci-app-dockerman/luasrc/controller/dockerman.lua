@@ -10,11 +10,11 @@ module("luci.controller.dockerman",package.seeall)
 
 function index()
 	entry({"admin", "services", "docker"},
-		alias("admin", "services", "docker", "config"),
+		alias("admin", "services", "docker", "overview"),
 		_("Docker"),
 		40).acl_depends = { "luci-app-dockerman" }
 
-	entry({"admin", "services", "docker", "config"},cbi("dockerman/configuration"),_("Configuration"), 8).leaf=true
+	entry({"admin", "services", "docker", "config"}, cbi("dockerman/configuration"), _("Configuration"), 2).leaf=true
 	
 	-- local uci = (require "luci.model.uci").cursor()
 	-- if uci:get_bool("dockerd", "dockerman", "remote_endpoint") then
@@ -34,7 +34,7 @@ function index()
 	-- 	return
 	-- end
 
-	entry({"admin", "services", "docker", "overview"},form("dockerman/overview"),_("Overview"), 2).leaf=true
+	entry({"admin", "services", "docker", "overview"}, form("dockerman/overview"), _("Overview"), 1).leaf=true
 	entry({"admin", "services", "docker", "containers"}, form("dockerman/containers"), _("Containers"), 3).leaf=true
 	entry({"admin", "services", "docker", "images"}, form("dockerman/images"), _("Images"), 4).leaf=true
 	entry({"admin", "services", "docker", "networks"}, form("dockerman/networks"), _("Networks"), 5).leaf=true
@@ -48,10 +48,10 @@ function index()
 	entry({"admin", "services", "docker", "container_stats"}, call("action_get_container_stats")).leaf=true
 	entry({"admin", "services", "docker", "container_get_archive"}, call("download_archive")).leaf=true
 	entry({"admin", "services", "docker", "container_put_archive"}, call("upload_archive")).leaf=true
-	entry({"admin", "services", "docker","container_list_file"},call("list_file")).leaf=true
-	entry({"admin", "services", "docker","container_remove_file"},call("remove_file")).leaf=true
-	entry({"admin", "services", "docker","container_rename_file"},call("rename_file")).leaf=true
-	entry({"admin", "services", "docker","container_export"},call("export_container")).leaf=true
+	entry({"admin", "services", "docker", "container_list_file"}, call("list_file")).leaf=true
+	entry({"admin", "services", "docker", "container_remove_file"}, call("remove_file")).leaf=true
+	entry({"admin", "services", "docker", "container_rename_file"}, call("rename_file")).leaf=true
+	entry({"admin", "services", "docker", "container_export"}, call("export_container")).leaf=true
 	entry({"admin", "services", "docker", "images_save"}, call("save_images")).leaf=true
 	entry({"admin", "services", "docker", "images_load"}, call("load_images")).leaf=true
 	entry({"admin", "services", "docker", "images_import"}, call("import_images")).leaf=true
