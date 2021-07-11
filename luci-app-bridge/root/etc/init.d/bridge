@@ -8,90 +8,78 @@ run_bridge() {
 	config_get ipaddr $1 ipaddr
 	config_get netmask $1 netmask
 	config_get network $1 network
+	config_get ignore $1 ignore
+	config_get masq $1 masq
+	config_get firewall $1 firewall
+	config_get fullcone $1 fullcone
+	config_get syn_flood $1 syn_flood
 
-	ipv6=$(uci get network.globals.ula_prefix)
-	if=$(cat /etc/config/network | wc -l)
-
-	if [ "$enabled" = "1" ]; then
-
-		#防止重复配置
-		a=$(uci get network.bridge.ifname | sed 's/ /\n/g' | wc -l)
-		b=$(uci get network.bridge.ipaddr)
-		c=$(uci get network.bridge.netmask)
-		d=$(uci get network.bridge.gateway)
-		e=$(ls /sys/class/net | grep "eth" | wc -l)
-
-		if [ "$a" = "$network" ] || [ "$a" = "$e" ] && [ "$network" = "" ] || [ "$a" = "$network" ]; then
-			f=yes
+	if [ "$enabled" -eq "1" ]; then
+		#模拟输入
+		if [ "$network" = "0" ] || [ "$network" = "" ]; then
+			eth=$(ls /sys/class/net | grep "eth" | tr '\n' ' ' | sed 's/[ ]*$//g')
 		else
-			f=no
+			eth=$(ETH $network | tr '\n' ' ' | sed 's/[ ]*$//g')
 		fi
 
-		if [ "$b" = "$ipaddr" ] && [ "$c" = "$netmask" ] && [ "$d" = "$gateway" ] && [ "$f" = "yes" ]; then
-			break
+		#写入network网络接口
+		uci set network.lan.ipaddr=$ipaddr
+		uci set network.lan.netmask=$netmask
+		uci set network.lan.gateway=$gateway
+		uci set network.lan.dns=$gateway
+		uci set network.lan.ifname="$eth"
+		uci commit network
+
+		#写入dhcp
+		if [ "$ignore" -eq "1" ]; then
+			uci set dhcp.lan.ignore=$ignore
+			uci -q delete dhcp.lan.start
+			uci -q delete dhcp.lan.limit
+			uci -q delete dhcp.lan.leasetime
+			uci commit dhcp
 		else
-			#模拟输入
-			if [ "$network" = "0" ] || [ "$network" = "" ]; then
-				eth=$(ls /sys/class/net | grep "eth" | tr '\n' ' ' | sed 's/[ ]*$//g')
-			else
-				eth=$(ETH $network | tr '\n' ' ' | sed 's/[ ]*$//g')
-			fi
-			#备份配置
-			if [ ! -f "/etc/bridge/firewall" ]; then
-				mkdir /etc/bridge
-				cp /etc/config/network /etc/bridge/network
-				cp /etc/config/firewall /etc/bridge/firewall
-			fi
-
-			#清空配置
-			cat /dev/null >/etc/config/network
-			cat /dev/null >/etc/config/firewall
-
-			#写入network网络接口
-			uci set network.loopback=interface
-			uci set network.loopback.ifname=lo
-			uci set network.loopback.proto=static
-			uci set network.loopback.ipaddr=127.0.0.1
-			uci set network.loopback.netmask=255.0.0.0
-			uci set network.globals=globals
-			uci set network.globals.ula_prefix=$ipv6
-			uci set network.bridge=interface
-			uci set network.bridge.type='bridge'
-			uci set network.bridge.ifname="$eth"
-			uci set network.bridge.proto='static'
-			uci set network.bridge.ipaddr=$ipaddr
-			uci set network.bridge.netmask=$netmask
-			uci set network.bridge.gateway=$gateway
-			uci set network.bridge.dns=$gateway
-			uci set network.bridge.force_link='0'
-			uci commit network
-
-			#写入firewall防火墙
-			uci add firewall zone
-			uci set firewall.@zone[0].input=ACCEPT
-			uci set firewall.@zone[0].output=ACCEPT
-			uci set firewall.@zone[0].forward=ACCEPT
-			uci set firewall.@zone[0].conntrack=1
-			uci set firewall.@zone[0].mtu_fix=1
-			uci set firewall.@zone[0].name=bridge
-			uci set firewall.@zone[0].network=bridge
-			uci commit firewall
-
-			#重启网络与防火墙
-			/etc/init.d/network restart 2>/dev/null &
-			/etc/init.d/firewall restart 2>/dev/null &
+			uci set dhcp.lan.ignore=0
+			uci set dhcp.lan.start=100
+			uci set dhcp.lan.limit=150
+			uci set dhcp.lan.leasetime=12h
+			uci commit dhcp
 		fi
+
+		#写入firewall防火墙
+		[ -z "$(grep eth0 /etc/firewall.user)" ] && echo 'iptables -t nat -I POSTROUTING -o eth0 -j MASQUERADE' >>/etc/firewall.user
+		[ "$masq" ] && uci set firewall.@zone[0].masq='1' || uci set firewall.@zone[0].masq='0'
+		[ "$fullcone" ] && uci set firewall.@defaults[0].fullcone='0' || uci set firewall.@defaults[0].fullcone='1'
+		[ "$syn_flood" ] && uci set firewall.@defaults[0].syn_flood='0' || uci set firewall.@defaults[0].syn_flood='1'
+		uci set firewall.@zone[0].name=bridge
+		uci commit firewall
+
+		#重启网络与防火墙
+		/etc/init.d/network restart 2>/dev/null &
+		/etc/init.d/firewall restart 2>/dev/null &
 	else
-		#恢复配置&删除备份
-		if [ -f "/etc/bridge/firewall" ]; then
-			cp /etc/bridge/network /etc/config/network
-			cp /etc/bridge/firewall /etc/config/firewall
-			rm -rf /etc/bridge
+		#恢复firewall
+		uci set firewall.@zone[0].masq='0'
+		uci set firewall.@zone[0].name=lan
+		uci set firewall.@defaults[0].fullcone='1'
+		uci set firewall.@defaults[0].syn_flood='1'
+		sed -i '/eth0/d' /etc/firewall.user
 
-			#重启网络与防火墙
-			/etc/init.d/network restart 2>/dev/null &
-			/etc/init.d/firewall restart 2>/dev/null &
-		fi
+		#恢复dhcp
+		uci set dhcp.lan.ignore=0
+		uci set dhcp.lan.start=100
+		uci set dhcp.lan.limit=150
+		uci set dhcp.lan.leasetime=12h
+		uci commit dhcp
+
+		#恢复network
+		uci delete network.lan.gateway
+		uci delete network.lan.dns
+		uci set network.lan.ifname=eth0
+		uci commit network
+
+		#重启网络与防火墙
+		/etc/init.d/network restart 2>/dev/null &
+		/etc/init.d/firewall restart 2>/dev/null &
 	fi
 }
 
@@ -105,8 +93,6 @@ ETH() {
 }
 
 start() {
-	if [ "$(uci get bridge.bridge.enabled 2>/dev/null)" == 1 -o -s /etc/bridge/firewall ]; then
-		config_load bridge
-		config_foreach run_bridge bridge
-	fi
+	config_load bridge
+	config_foreach run_bridge bridge
 }

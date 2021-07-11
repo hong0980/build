@@ -170,10 +170,10 @@ start() {
 
 		start_up() {
 
-			if ! pidof $1; then
+			if ! pidof $1 >/dev/null 2>&1; then
 				/opt/etc/init.d/$p start >/dev/null 2>&1
 				sleep 5
-				if pidof $1; then
+				if pidof $1 >/dev/null 2>&1; then
 					echo_time "$1 启动成功"
 				else
 					echo_time "$1 启动失败"

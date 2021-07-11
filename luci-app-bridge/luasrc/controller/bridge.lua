@@ -5,7 +5,7 @@ function index()
 		return
 	end
 	local page
-	page = entry({"admin", "network", "bridge"}, cbi("bridge"), _("Transparent bridge"), 60)
+	page = entry({"admin", "network", "bridge"}, cbi("bridge"), _("旁路由"), 60)
 	page.dependent = true
 	entry({"admin","network","bridge","status"}, call("act_status")).leaf=true
 end
