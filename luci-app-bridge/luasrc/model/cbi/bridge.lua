@@ -4,6 +4,7 @@ translate("<font color=\"green\">Let the routing become a transparent bridge dev
 m:section(SimpleSection).template  = "bridge/bridge_status"
 
 s = m:section(TypedSection, "bridge")
+s.addremove = false
 s.anonymous=true
 
 o = s:option(Flag, "enabled", translate("开启旁路由"))
@@ -11,27 +12,36 @@ o.rmempty=false
 
 o = s:option(Value, "ipaddr", translate("网桥IP"), translate("主路由同一个网段没有冲突的IP地址"))
 o.default = "192.168.2.150"
+o.anonymous=false
 
 o = s:option(Value, "gateway", translate("网关IP"), translate("主路由IP地址"))
 o.default = "192.168.2.1"
+o.anonymous=false
 
 o = s:option(Value, "netmask", translate("Netmask"))
 o.default = "255.255.255.0"
-o.rmempty=false
+o.anonymous=false
 
 o = s:option(Value, "network", translate("网口数量"), translate("软路由物理网口数量，留空则自动获取"))
-o.anonymous=true
+o.anonymous=false
 
-o = s:option(Flag, "ignore", translate("关闭DHCP"), translate("关闭LAN的自动获取IP服务"))
-o.rmempty=false
+ignore = s:option(Flag, "ignore", translate("DHCP设置"), translate("关闭LAN的自动获取IP服务"))
+ignore.rmempty=true
 
-o = s:option(Flag, "firewall", translate("防火墙设置"))
-o.rmempty=false
-o = s:option(Flag, "fullcone", translate("SYN-flood"), translate("关闭防火墙ISYN-flood防御服务"))
-o:depends("firewall", 1)
-o = s:option(Flag, "syn_flood", translate("FullCone-NAT"), translate("关闭防火墙IFullCone-NAT服务"))
-o:depends("firewall", 1)
-o = s:option(Flag, "masq", translate("IP动态伪装"), translate("开启防火墙IP动态伪装IP服务"))
-o:depends("firewall", 1)
+force = s:option(Flag, "force", translate("强制DHCP"), translate("即使检测到另一台服务器，也要强制使用此网络上的 DHCP。"))
+force.rmempty=true
+force:depends("ignore", false)
+
+firewall = s:option(Flag, "firewall", translate("防火墙设置"))
+firewall.rmempty=true
+fullcone = s:option(Flag, "fullcone", translate("SYN-flood"), translate("关闭防火墙ISYN-flood防御服务"))
+fullcone.rmempty=true
+fullcone:depends("firewall", true)
+syn_flood = s:option(Flag, "syn_flood", translate("FullCone-NAT"), translate("关闭防火墙IFullCone-NAT服务"))
+syn_flood.rmempty=true
+syn_flood:depends("firewall", true)
+masq = s:option(Flag, "masq", translate("IP动态伪装"), translate("开启防火墙IP动态伪装IP服务"))
+masq.rmempty=true
+masq:depends("firewall", true)
 
 return m

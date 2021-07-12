@@ -3,13 +3,14 @@
 START=99
 
 run_bridge() {
+	config_get masq $1 masq
+	config_get force $1 force
+	config_get ignore $1 ignore
+	config_get ipaddr $1 ipaddr
 	config_get enabled $1 enabled
 	config_get gateway $1 gateway
-	config_get ipaddr $1 ipaddr
 	config_get netmask $1 netmask
 	config_get network $1 network
-	config_get ignore $1 ignore
-	config_get masq $1 masq
 	config_get firewall $1 firewall
 	config_get fullcone $1 fullcone
 	config_get syn_flood $1 syn_flood
@@ -38,12 +39,13 @@ run_bridge() {
 			uci -q delete dhcp.lan.leasetime
 			uci commit dhcp
 		else
-			uci set dhcp.lan.ignore=0
-			uci set dhcp.lan.start=100
-			uci set dhcp.lan.limit=150
-			uci set dhcp.lan.leasetime=12h
+			uci set dhcp.lan.ignore='0'
+			uci set dhcp.lan.start='100'
+			uci set dhcp.lan.limit='150'
+			uci set dhcp.lan.leasetime='12h'
 			uci commit dhcp
 		fi
+		[ $force ] && uci set dhcp.lan.force=1 || uci set dhcp.lan.force='0'
 
 		#写入firewall防火墙
 		[ -z "$(grep eth0 /etc/firewall.user)" ] && echo 'iptables -t nat -I POSTROUTING -o eth0 -j MASQUERADE' >>/etc/firewall.user
@@ -65,16 +67,17 @@ run_bridge() {
 		sed -i '/eth0/d' /etc/firewall.user
 
 		#恢复dhcp
-		uci set dhcp.lan.ignore=0
-		uci set dhcp.lan.start=100
-		uci set dhcp.lan.limit=150
-		uci set dhcp.lan.leasetime=12h
+		uci set dhcp.lan.ignore='0'
+		uci set dhcp.lan.start='100'
+		uci set dhcp.lan.limit='150'
+		uci set dhcp.lan.leasetime='12h'
+		uci set dhcp.lan.force='0'
 		uci commit dhcp
 
 		#恢复network
 		uci delete network.lan.gateway
 		uci delete network.lan.dns
-		uci set network.lan.ifname=eth0
+		uci set network.lan.ifname='eth0'
 		uci commit network
 
 		#重启网络与防火墙
