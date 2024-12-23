@@ -2,7 +2,7 @@
 LuCI - Lua Configuration Interface
 Copyright 2019 lisaac <https://github.com/lisaac/luci-app-dockerman>
 ]]--
-
+local util  = require "luci.util"
 local docker = require "luci.model.docker"
 -- local uci = (require "luci.model.uci").cursor()
 
@@ -71,7 +71,7 @@ function action_get_system_df()
 end
 
 function scandir(id, directory)
-	local cmd_docker = luci.util.exec("command -v docker"):match("^.+docker") or nil
+	local cmd_docker = util.exec("command -v docker"):match("^.+docker") or nil
 	if not cmd_docker or cmd_docker:match("^%s+$") then
 		return
 	end
@@ -88,20 +88,19 @@ function scandir(id, directory)
 		return
 	end
 	local i, t = 0, {}
-	local lfs = require "luci.fs"
-	local pfile = luci.util.execi('%s -H "%s" exec "%s" ls -Ah --full-time --group-directories-first "%s" | egrep -v "^total"' %{cmd_docker, hosts, id, directory})
+	local pfile = util.execi('%s -H "%s" exec "%s" ls -Ah --full-time --group-directories-first "%s" | egrep -v "^total"' %{cmd_docker, hosts, id, directory})
 	for fileinfo in pfile do
 		i = i + 1
 		-- local dirname = fileinfo:match("%s([^%s]+)$")
 		-- if fileinfo:sub(1, 2) == 'dr' and dirname ~= 'proc' then
-		-- 		local dirname = fileinfo:match("%s([^%s]+)$")
-		-- 		local filepath = ('/%s/%s' %{directory, dirname}):gsub("/+", "/")
-		-- 		local du_dir = luci.util.execi('%s -H "%s" exec "%s" du -sh %s' %{cmd_docker, hosts, id, filepath})
-		-- 		for sizeinfo in du_dir do
-		-- 				sizeinfo = sizeinfo:match("(%S+)")
-		-- 				fileinfo = fileinfo:gsub("(%s+%S+%s+%S+%s+%S+%s+)(%S+)(%s+.+)$", "%1" .. sizeinfo .. "%3")
-		-- 				t[i] = fileinfo
-		-- 		end
+		-- 	local dirname = fileinfo:match("%s([^%s]+)$")
+		-- 	local filepath = ('/%s/%s' %{directory, dirname}):gsub("/+", "/")
+		-- 	local du_dir = util.execi('%s -H "%s" exec "%s" du -sh %s' %{cmd_docker, hosts, id, filepath})
+		-- 	for sizeinfo in du_dir do
+		-- 		sizeinfo = sizeinfo:match("(%S+)")
+		-- 		fileinfo = fileinfo:gsub("(%s+%S+%s+%S+%s+%S+%s+)(%S+)(%s+.+)$", "%1" .. sizeinfo .. "%3")
+		-- 		t[i] = fileinfo
+		-- 	end
 		-- else
 			t[i] = fileinfo
 		-- end
@@ -113,15 +112,10 @@ function list_response(id, path, success)
 	luci.http.prepare_content("application/json")
 	local result
 	if success then
-			local rv = scandir(id, path)
-			result = {
-					ec = 0,
-					data = rv
-			}
+		local rv = scandir(id, path)
+		result = { ec = 0, data = rv }
 	else
-			result = {
-					ec = 1
-			}
+		result = { ec = 1 }
 	end
 	luci.http.write_json(result)
 end
@@ -134,7 +128,7 @@ end
 function rename_file(id)
 	local filepath = luci.http.formvalue("filepath")
 	local newpath = luci.http.formvalue("newpath")
-	local cmd_docker = luci.util.exec("command -v docker"):match("^.+docker") or nil
+	local cmd_docker = util.exec("command -v docker"):match("^.+docker") or nil
 	if not cmd_docker or cmd_docker:match("^%s+$") then
 		return
 	end
@@ -150,7 +144,7 @@ function rename_file(id)
 	else
 		return
 	end
-	local success = luci.util.exec('%s -H "%s" exec "%s" mv "%s" "%s"' %{cmd_docker, hosts, id, filepath, newpath})
+	local success = util.exec('%s -H "%s" exec "%s" mv "%s" "%s"' %{cmd_docker, hosts, id, filepath, newpath})
 	list_response(nixio.fs.dirname(filepath), success)
 end
 
@@ -203,7 +197,7 @@ local MIME_TYPES = {
 function remove_file(id)
 	local path = luci.http.formvalue("path")
 	local isdir = luci.http.formvalue("isdir")
-	local cmd_docker = luci.util.exec("command -v docker"):match("^.+docker") or nil
+	local cmd_docker = util.exec("command -v docker"):match("^.+docker") or nil
 	if not cmd_docker or cmd_docker:match("^%s+$") then
 		return
 	end 
@@ -222,7 +216,7 @@ function remove_file(id)
 	path = path:gsub("<>", "/"):gsub(" ", "\ ")
 	local success
 	if isdir then
-			success = luci.util.exec('%s -H "%s" exec %s rm -r "%s"' %{cmd_docker, hosts, id, path})
+			success = util.exec('%s -H "%s" exec %s rm -r "%s"' %{cmd_docker, hosts, id, path})
 	else
 			success = os.remove(path)
 	end
@@ -410,13 +404,13 @@ function export_container(id)
 end
 
 function open_file(id, path, filename)
-	local cmd_docker = luci.util.exec("command -v docker"):match("^.+docker") or nil
+	local cmd_docker = util.exec("command -v docker"):match("^.+docker") or nil
 	if not cmd_docker or cmd_docker:match("^%s+$") then
 		return
 	end
 	path = path:find("->") and path:match("->%s(.*)$") or path
 	path = path:gsub("<>", "/"):gsub(" ", "\ "):gsub("/+", "/")
-	local dir_path = (luci.util.exec('%s inspect -f "{{.GraphDriver.Data.MergedDir}}" %s' %{cmd_docker, id})):gsub("\n", "")
+	local dir_path = (util.exec('%s inspect -f "{{.GraphDriver.Data.MergedDir}}" %s' %{cmd_docker, id})):gsub("\n", "")
 	local ext = filename:match("%.(%w+)$")
 	local TYPES = MIME_TYPES[ext and ext:lower()] or "text/plain; charset=UTF-8"
 	luci.http.prepare_content(TYPES)
