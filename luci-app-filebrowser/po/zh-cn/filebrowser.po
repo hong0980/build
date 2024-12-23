@@ -270,3 +270,6 @@ msgstr "打开"
 
 msgid "wrap"
 msgstr "换行"
+
+msgid "NAS"
+msgstr "网络存储"
