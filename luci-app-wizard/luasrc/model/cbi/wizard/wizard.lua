@@ -198,4 +198,8 @@ ip_tables.default = "iptables -t nat -I POSTROUTING -o eth0 -j MASQUERADE"
 ip_tables.anonymous = false
 ip_tables:depends("omasq", true)
 
+if luci.http.formvalue("cbi.apply") then
+    sys.exec("sleep 2 && /etc/init.d/wizard start &")
+end
+
 return m

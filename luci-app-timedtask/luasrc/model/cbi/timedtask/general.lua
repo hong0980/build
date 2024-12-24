@@ -87,4 +87,8 @@ btn.inputstyle = "apply"
 btn.disabled   = false
 btn.template   = "timedtask/action_run"
 
+if luci.http.formvalue("cbi.apply") then
+    sys.exec("sleep 2 && /etc/init.d/timedtask start &")
+end
+
 return m

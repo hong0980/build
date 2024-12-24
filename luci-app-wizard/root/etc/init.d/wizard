@@ -203,9 +203,9 @@ start() {
 }
 
 restart() {
-    XRELOAD=1 start
+    start
 }
 
 boot() {
-    XBOOT=1 start
+    exit 0;
 }
