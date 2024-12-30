@@ -1,10 +1,10 @@
 local sys = require "luci.sys"
 local uci = require "luci.model.uci".cursor()
 local wizard = uci:get_all("wizard", "default")
+local network_wan = uci:get_all("network", "wan")
 
-if wizard.wan_proto == nil then
+if wizard.wan_proto ~= network_wan.proto then
     local network_lan = uci:get_all("network", "lan")
-    local network_wan = uci:get_all("network", "wan")
     uci:set('wizard', 'default', 'ipv6', network_wan.ipv6)
     uci:set('wizard', 'default', 'lan_dns', network_wan.dns)
     uci:set('wizard', 'default', 'wan_proto', network_wan.proto)
