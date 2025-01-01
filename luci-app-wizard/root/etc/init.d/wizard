@@ -1,7 +1,6 @@
 #!/bin/sh /etc/rc.common
 
 START=99
-START=80
 USE_PROCD=1
 
 uci_res_type() {
@@ -43,8 +42,8 @@ add_wizard() {
             uci_remove dhcp lan dhcpv6
             uci_remove dhcp lan ra_slaac
             uci_remove dhcp lan ra_flags
-            uci_remove dhcp lan max_preferred_lifetime
             uci_remove dhcp lan max_valid_lifetime
+            uci_remove dhcp lan max_preferred_lifetime
             uci_remove network lan dns
             for x in $lan_dns; do
                 uci_add_list network lan dns "$x"
@@ -86,7 +85,6 @@ add_wizard() {
                 uci_add network interface lan
                 uci_set network lan type bridge
                 uci_set network lan proto static
-                uci_set network lan ipaddr "$lan_ipaddr"
                 uci_set network lan ifname "$lan_ifname"
                 uci_set network lan device "$lan_device"
                 uci_set network lan gateway "$lan_gateway"
@@ -134,6 +132,11 @@ add_wizard() {
         #     }
         # ;;
     esac
+
+    if [ "$lan_ipaddr" != "$(uci_get network lan ipaddr)" ]; then
+        uci_set network lan ipaddr "$lan_ipaddr"
+    fi
+
     test -s /etc/config/wireless && {
         wifi_setup_radio() {
             local radio=$1
