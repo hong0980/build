@@ -76,7 +76,7 @@ ipv6 = s:option(ListValue, 'ipv6', translate('Enable IPv6 negotiation'))
 ipv6:value("0", translate("disable"))
 ipv6:value("1", translate("Manual"))
 ipv6:value("auto", translate("Automatic"))
-ipv6.default = "0"
+ipv6.default = "auto"
 ipv6:depends('wan_proto', 'pppoe')
 
 siderouter = s:option(Flag, "enable_siderouter", translate("旁路由设置"))
@@ -140,7 +140,7 @@ dns:value("218.30.118.6", translate("DNS派：218.30.118.6"))
 dns:value("180.76.76.76", translate("百度DNS：180.76.76.76"))
 dns:value("114.114.114.114", translate("114DNS：114.114.114.114"))
 dns:value("114.114.115.115", translate("114DNS：114.114.115.115"))
-dns.default = ""
+dns.default = "223.5.5.5"
 dns.anonymous = false
 dns.datatype = "ip4addr"
 -- dns.cast = "string"
