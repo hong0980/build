@@ -2,6 +2,7 @@ module("luci.controller.tinynote", package.seeall)
 local util = require "luci.util"
 
 function index()
+    entry({"admin", "nas"}, firstchild(), "NAS", 50).dependent = false
     entry({ "admin", "nas", "tinynote" }, firstchild(), _("TinyNote"), 1).dependent = false
     entry({ "admin", "nas", "tinynote", "tinynote" }, cbi("tinynote/tinynote"), _("TinyNote"), 1).leaf = true
     entry({ "admin", "nas", "tinynote", "codetools" }, form("tinynote/codetools"), _("代码工具"), 2).leaf = true
