@@ -1176,3 +1176,21 @@ msgstr "所有者"
 
 msgid "Back to previous"
 msgstr "返回上一页"
+
+msgid "Action Status Tempfile Path"
+msgstr "操作状态临时文件的路径"
+
+msgid "Where you want to save the docker status file"
+msgstr "您想保存 Docker 状态文件的路径"
+
+msgid "Enable Debug"
+msgstr "启用调试模式"
+
+msgid "For debug, It shows all docker API actions of luci-app-dockerman in Debug Tempfile Path"
+msgstr "调试时，所有 luci-app-dockerman 的 Docker API 操作将记录在调试临时文件路径中"
+
+msgid "Debug Tempfile Path"
+msgstr "调试临时文件路径"
+
+msgid "Where you want to save the debug tempfile"
+msgstr "您想保存调试临时文件的路径"

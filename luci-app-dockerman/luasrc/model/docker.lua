@@ -3,20 +3,21 @@ LuCI - Lua Configuration Interface
 Copyright 2019 lisaac <https://github.com/lisaac/luci-app-dockerman>
 ]]--
 
-local docker = require "luci.docker"
 local fs = require "nixio.fs"
-local uci = (require "luci.model.uci").cursor()
-
+local docker = require "luci.docker"
+local uci = require "luci.model.uci".cursor()
+local con = uci:get_all("dockerd", "dockerman")
+local remote = con.remote_endpoint == '1'
 local _docker = {}
-_docker.options = {}
 
 --pull image and return iamge id
 local update_image = function(self, image_name)
 	local json_stringify = luci.jsonc and luci.jsonc.stringify
-	_docker:append_status("Images: " .. "pulling" .. " " .. image_name .. "...\n")
+	_docker:append_status("Images: pulling %s...\n" %image_name)
 	local res = self.images:create({query = {fromImage=image_name}}, _docker.pull_image_show_status_cb)
 
-	if res and res.code and res.code == 200 and (#res.body > 0 and not res.body[#res.body].error and res.body[#res.body].status and (res.body[#res.body].status == "Status: Downloaded newer image for ".. image_name)) then
+	if res and res.code and res.code == 200
+		   and (#res.body > 0 and not res.body[#res.body].error and res.body[#res.body].status and (res.body[#res.body].status == "Status: Downloaded newer image for %s" %image_name)) then
 		_docker:append_status("done\n")
 	else
 		res.body.message = res.body[#res.body] and res.body[#res.body].error or (res.body.message or res.message)
@@ -27,17 +28,9 @@ local update_image = function(self, image_name)
 end
 
 local table_equal = function(t1, t2)
-	if not t1 then
-		return true
-	end
-
-	if not t2 then
-		return false
-	end
-
-	if #t1 ~= #t2 then
-		return false
-	end
+	if not t1 then return true end
+	if not t2 then return false end
+	if #t1 ~= #t2 then return false end
 
 	for i, v in ipairs(t1) do
 		if t1[i] ~= t2[i] then
@@ -49,20 +42,15 @@ local table_equal = function(t1, t2)
 end
 
 local table_subtract = function(t1, t2)
-	if not t1 or next(t1) == nil then
-		return nil
-	end
-
-	if not t2 or next(t2) == nil then
-		return t1
-	end
+	if not t1 or next(t1) == nil then return nil end
+	if not t2 or next(t2) == nil then return t1 end
 
 	local res = {}
 	for _, v1 in ipairs(t1) do
 		local found = false
 		for _, v2 in ipairs(t2) do
 			if v1 == v2 then
-				found= true
+				found = true
 				break
 			end
 		end
@@ -75,13 +63,8 @@ local table_subtract = function(t1, t2)
 end
 
 local map_subtract = function(t1, t2)
-	if not t1 or next(t1) == nil then
-		return nil
-	end
-
-	if not t2 or next(t2) == nil then
-		return t1
-	end
+	if not t1 or next(t1) == nil then return nil end
+	if not t2 or next(t2) == nil then return t1 end
 
 	local res = {}
 	for k1, v1 in pairs(t1) do
@@ -93,9 +76,7 @@ local map_subtract = function(t1, t2)
 			end
 		end
 
-		if not found then
-			res[k1] = v1
-		end
+		if not found then res[k1] = v1 end
 	end
 
 	return next(res) ~= nil and res or nil
@@ -152,13 +133,11 @@ local get_config = function(container_config, image_config)
 	if old_host_config.PortBindings and next(old_host_config.PortBindings) ~= nil then
 		config.ExposedPorts = {}
 		for p, v in pairs(old_host_config.PortBindings) do
-			config.ExposedPorts[p] = { HostPort=v[1] and v[1].HostPort }
+			config.ExposedPorts[p] = {HostPort=v[1] and v[1].HostPort}
 		end
 	end
 
-	local network_setting = {}
-	local multi_network = false
-	local extra_network = {}
+	local network_setting, extra_network, multi_network = {}, {}, false
 
 	for k, v in pairs(old_network_setting) do
 		if multi_network then
@@ -219,8 +198,8 @@ local upgrade = function(self, request)
 	end
 
 	local t = os.date("%Y%m%d%H%M%S")
-	_docker:append_status("Container: rename" .. " " .. container_name .. " to ".. container_name .. "_old_".. t .. "...")
-	res = self.containers:rename({name = container_name, query = { name = container_name .. "_old_" ..t }})
+	_docker:append_status("Container: rename %s to %s_old_%s..." %{container_name, container_name, t})
+	res = self.containers:rename({name = container_name, query = {name = "%s_old_%s" %{container_name, t}}})
 	if res and res.code and res.code < 300 then
 		_docker:append_status("done\n")
 	else
@@ -231,7 +210,7 @@ local upgrade = function(self, request)
 	local create_body, extra_network = get_config(container_info.body, image_config)
 
 	-- create new container
-	_docker:append_status("Container: Create" .. " " .. container_name .. "...")
+	_docker:append_status("Container: Create %s..." %container_name)
 	create_body = _docker.clear_empty_tables(create_body)
 	res = self.containers:create({name = container_name, body = create_body})
 	if res and res.code and res.code > 300 then
@@ -241,7 +220,7 @@ local upgrade = function(self, request)
 
 	-- extra networks need to network connect action
 	for k, v in pairs(extra_network) do
-		_docker:append_status("Networks: Connect" .. " " .. container_name .. "...")
+		_docker:append_status("Networks: Connect %s..." %{container_name})
 		res = self.networks:connect({id = k, body = {Container = container_name, EndpointConfig = v}})
 		if res and res.code and res.code > 300 then
 			return res
@@ -249,15 +228,15 @@ local upgrade = function(self, request)
 		_docker:append_status("done\n")
 	end
 
-	_docker:append_status("Container: " .. "Stop" .. " " .. container_name .. "_old_".. t .. "...")
-	res = self.containers:stop({name = container_name .. "_old_" ..t })
+	_docker:append_status("Container: Stop %s_old_%s..." %{container_name, t})
+	res = self.containers:stop({name = "%s_old_%s" %{container_name, t}})
 	if res and res.code and res.code < 305 then
 		_docker:append_status("done\n")
 	else
 		return res
 	end
 
-	_docker:append_status("Container: " .. "Start" .. " " .. container_name .. "...")
+	_docker:append_status("Container: Start %s..." %container_name)
 	res = self.containers:start({name = container_name})
 	if res and res.code and res.code < 305 then
 		_docker:append_status("done\n")
@@ -282,32 +261,13 @@ local duplicate_config = function (self, request)
 end
 
 _docker.new = function()
-	local host = nil
-	local port = nil
-	local socket_path = nil
-	local debug_path = nil
-
-	if uci:get_bool("dockerd", "dockerman", "remote_endpoint") then
-		host = uci:get("dockerd", "dockerman", "remote_host") or nil
-		port = uci:get("dockerd", "dockerman", "remote_port") or nil
-	else
-		socket_path = uci:get("dockerd", "dockerman", "socket_path") or "/var/run/docker.sock"
-	end
-
-	local debug = uci:get_bool("dockerd", "dockerman", "debug")
-	if debug then
-		debug_path = uci:get("dockerd", "dockerman", "debug_path") or "/tmp/.docker_debug"
-	end
-
-	local status_path = uci:get("dockerd", "dockerman", "status_path") or "/tmp/.docker_action_status"
-
 	_docker.options = {
-		host = host,
-		port = port,
-		socket_path = socket_path,
-		debug = debug,
-		debug_path = debug_path,
-		status_path = status_path
+		debug = con.debug == '1',
+		host = remote and con.remote_host or nil,
+		port = remote and con.remote_port or nil,
+		status_path = con.status_path or "/tmp/.docker_action_status",
+		socket_path = not remote and con.socket_path or "/var/run/docker.sock",
+		debug_path = con.debug == '1' and con.debug_path or "/tmp/.docker_debug"
 	}
 
 	local _new = docker.new(_docker.options)
@@ -317,31 +277,29 @@ _docker.new = function()
 	return _new
 end
 
-_docker.options.status_path = uci:get("dockerd", "dockerman", "status_path") or "/tmp/.docker_action_status"
+_docker.options = {
+	status_path = con.status_path or "/tmp/.docker_action_status"
+}
 
-_docker.append_status=function(self,val)
-	if not val then
-		return
-	end
-	local file_docker_action_status=io.open(self.options.status_path, "a+")
+_docker.append_status = function(self,val)
+	if not val then return end
+	local file_docker_action_status = io.open(self.options.status_path, "a+")
 	file_docker_action_status:write(val)
 	file_docker_action_status:close()
 end
 
-_docker.write_status=function(self,val)
-	if not val then
-		return
-	end
-	local file_docker_action_status=io.open(self.options.status_path, "w+")
+_docker.write_status = function(self,val)
+	if not val then return end
+	local file_docker_action_status = io.open(self.options.status_path, "w+")
 	file_docker_action_status:write(val)
 	file_docker_action_status:close()
 end
 
-_docker.read_status=function(self)
+_docker.read_status = function(self)
 	return fs.readfile(self.options.status_path)
 end
 
-_docker.clear_status=function(self)
+_docker.clear_status = function(self)
 	fs.remove(self.options.status_path)
 end
 
@@ -413,13 +371,11 @@ _docker.create_macvlan_interface = function(name, device, gateway, subnet)
 		return
 	end
 
-	if uci:get_bool("dockerd", "dockerman", "remote_endpoint") then
-		return
-	end
+	if remote then return end
 
 	local ip = require "luci.ip"
-	local if_name = "docker_"..name
-	local dev_name = "macvlan_"..name
+	local if_name = "docker_" .. name
+	local dev_name = "macvlan_" .. name
 	local net_mask = tostring(ip.new(subnet):mask())
 	local lan_interfaces
 
@@ -455,8 +411,7 @@ _docker.create_macvlan_interface = function(name, device, gateway, subnet)
 
 	uci:commit("firewall")
 	uci:commit("network")
-
-	os.execute("ifup " .. if_name)
+	os.execute("ifup %s" %if_name)
 end
 
 _docker.remove_macvlan_interface = function(name)
@@ -464,12 +419,10 @@ _docker.remove_macvlan_interface = function(name)
 		return
 	end
 
-	if uci:get_bool("dockerd", "dockerman", "remote_endpoint") then
-		return
-	end
+	if remote then return end
 
-	local if_name = "docker_"..name
-	local dev_name = "macvlan_"..name
+	local if_name = "docker_" .. name
+	local dev_name = "macvlan_" .. name
 	uci:foreach("firewall", "zone", function(s)
 		if s.name == "lan" then
 			local interfaces
@@ -488,8 +441,7 @@ _docker.remove_macvlan_interface = function(name)
 	uci:delete("network", if_name)
 	uci:commit("network")
 	uci:commit("firewall")
-
-	os.execute("ip link del " .. if_name)
+	os.execute("ip link del %s" %if_name)
 end
 
 _docker.byte_format = function (byte)
@@ -499,7 +451,7 @@ _docker.byte_format = function (byte)
 		if byte > 1024 and i < 5 then
 			byte = byte / 1024
 		else
-			return string.format("%.2f %s", byte, suff[i])
+			return ("%.2f %s" %{byte, suff[i]})
 		end
 	end
 end

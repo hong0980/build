@@ -4,51 +4,26 @@ Copyright 2019 lisaac <https://github.com/lisaac/luci-app-dockerman>
 ]]--
 
 local docker = require "luci.model.docker"
-
-local m, s, o
-
 local dk = docker.new()
-
 local cmd_line = table.concat(arg, '/')
-local images, networks
-local create_body = {}
+local m, s, o, images, networks, lost_state
+local create_body, default_config = {}, {}
 
 if dk:_ping().code ~= 200 then
-	lost_state = true
-	images = {}
-	networks = {}
+	images, networks, lost_state = {}, {}, true
 else
-	images = dk.images:list().body
-	networks = dk.networks:list().body
+	images, networks = dk.images:list().body, dk.networks:list().body
 end
 
 local is_quot_complete = function(str)
-	local num = 0, w
-	require "math"
+	if not str then return true end
 
-	if not str then
-		return true
+	local function check_quotes(pattern)
+		local _, count = str:gsub(pattern, "")
+		return count % 2 == 0
 	end
 
-	local num = 0, w
-	for w in str:gmatch("\"") do
-		num = num + 1
-	end
-
-	if math.fmod(num, 2) ~= 0 then
-		return false
-	end
-
-	num = 0
-	for w in str:gmatch("\'") do
-		num = num + 1
-	end
-
-	if math.fmod(num, 2) ~= 0 then
-		return false
-	end
-
-	return true
+	return check_quotes('"') and check_quotes("'")
 end
 
 function contains(list, x)
@@ -61,272 +36,139 @@ function contains(list, x)
 end
 
 local resolve_cli = function(cmd_line)
-	local config = {
-		advance = 1
-	}
-
+	local config = {advance = 1}
 	local key_no_val = {
-		't',
-		'd',
-		'i',
-		'tty',
-		'rm',
-		'read_only',
-		'interactive',
-		'init',
-		'help',
-		'detach',
-		'privileged',
-		'P',
-		'publish_all',
+		'P', 'd', 'detach', 'h', 'help', 'i', 'init', 'interactive',
+		'privileged', 'publish_all', 'read_only', 'rm', 't', 'tty'
 	}
 
 	local key_with_val = {
-		'sysctl',
-		'add_host',
-		'a',
-		'attach',
-		'blkio_weight_device',
-		'cap_add',
-		'cap_drop',
-		'device',
-		'device_cgroup_rule',
-		'device_read_bps',
-		'device_read_iops',
-		'device_write_bps',
-		'device_write_iops',
-		'dns',
-		'dns_option',
-		'dns_search',
-		'e',
-		'env',
-		'env_file',
-		'expose',
-		'group_add',
-		'l',
-		'label',
-		'label_file',
-		'link',
-		'link_local_ip',
-		'log_driver',
-		'log_opt',
-		'network_alias',
-		'p',
-		'publish',
-		'security_opt',
-		'storage_opt',
-		'tmpfs',
-		'v',
-		'volume',
-		'volumes_from',
-		'blkio_weight',
-		'cgroup_parent',
-		'cidfile',
-		'cpu_period',
-		'cpu_quota',
-		'cpu_rt_period',
-		'cpu_rt_runtime',
-		'c',
-		'cpu_shares',
-		'cpus',
-		'cpuset_cpus',
-		'cpuset_mems',
-		'detach_keys',
-		'disable_content_trust',
-		'domainname',
-		'entrypoint',
-		'gpus',
-		'health_cmd',
-		'health_interval',
-		'health_retries',
-		'health_start_period',
-		'health_timeout',
-		'h',
-		'hostname',
-		'ip',
-		'ip6',
-		'ipc',
-		'isolation',
-		'kernel_memory',
-		'mac_address',
-		'm',
-		'memory',
-		'memory_reservation',
-		'memory_swap',
-		'memory_swappiness',
-		'mount',
-		'name',
-		'network',
-		'no_healthcheck',
-		'oom_kill_disable',
-		'oom_score_adj',
-		'pid',
-		'pids_limit',
-		'restart',
-		'runtime',
-		'shm_size',
-		'sig_proxy',
-		'stop_signal',
-		'stop_timeout',
-		'ulimit',
-		'u',
-		'user',
-		'userns',
-		'uts',
-		'volume_driver',
-		'w',
-		'workdir'
+		'a', 'add_host', 'attach', 'blkio_weight', 'blkio_weight_device',
+		'c', 'cap_add', 'cap_drop', 'cgroup_parent', 'cidfile', 'cpu_period',
+		'cpu_quota', 'cpu_rt_period', 'cpu_rt_runtime', 'cpu_shares', 'cpus',
+		'cpuset_cpus', 'cpuset_mems', 'd', 'detach_keys', 'device',
+		'device_cgroup_rule', 'device_read_bps', 'device_read_iops',
+		'device_write_bps', 'device_write_iops', 'disable_content_trust', 'dns',
+		'dns_option', 'dns_search', 'domainname', 'e', 'entrypoint', 'env',
+		'env_file', 'expose', 'gpus', 'group_add', 'h', 'health_cmd',
+		'health_interval', 'health_retries', 'health_start_period', 'health_timeout',
+		'hostname', 'ip', 'ip6', 'ipc', 'isolation', 'kernel_memory', 'l', 'label',
+		'label_file', 'link', 'link_local_ip', 'log_driver', 'log_opt',
+		'mac_address', 'm', 'memory', 'memory_reservation', 'memory_swap',
+		'memory_swappiness', 'mount', 'name', 'network', 'network_alias',
+		'no_healthcheck', 'oom_kill_disable', 'oom_score_adj', 'p', 'pid',
+		'pids_limit', 'publish', 'restart', 'runtime', 'security_opt', 'shm_size',
+		'sig_proxy', 'stop_signal', 'stop_timeout', 'storage_opt', 'sysctl', 'tmpfs',
+		'u', 'ulimit', 'user', 'userns', 'uts', 'v', 'volume', 'volume_driver',
+		'volumes_from', 'w', 'workdir'
 	}
 
 	local key_abb = {
-		net='network',
-		a='attach',
-		c='cpu-shares',
-		d='detach',
-		e='env',
-		h='hostname',
-		i='interactive',
-		l='label',
-		m='memory',
-		p='publish',
-		P='publish_all',
-		t='tty',
-		u='user',
-		v='volume',
-		w='workdir'
+		P = 'publish_all',
+		a = 'attach',
+		c = 'cpu-shares',
+		d = 'detach',
+		e = 'env',
+		h = 'hostname',
+		i = 'interactive',
+		l = 'label',
+		m = 'memory',
+		net = 'network',
+		p = 'publish',
+		t = 'tty',
+		u = 'user',
+		v = 'volume',
+		w = 'workdir'
 	}
 
 	local key_with_list = {
-		'sysctl',
-		'add_host',
-		'a',
-		'attach',
-		'blkio_weight_device',
-		'cap_add',
-		'cap_drop',
-		'device',
-		'device_cgroup_rule',
-		'device_read_bps',
-		'device_read_iops',
-		'device_write_bps',
-		'device_write_iops',
-		'dns',
-		'dns_optiondns_search',
-		'e',
-		'env',
-		'env_file',
-		'expose',
-		'group_add',
-		'l',
-		'label',
-		'label_file',
-		'link',
-		'link_local_ip',
-		'log_opt',
-		'network_alias',
-		'p',
-		'publish',
-		'security_opt',
-		'storage_opt',
-		'tmpfs',
-		'v',
-		'volume',
-		'volumes_from',
+		'a', 'add_host', 'attach', 'blkio_weight_device', 'cap_add', 'cap_drop',
+		'device', 'device_cgroup_rule', 'device_read_bps', 'device_read_iops',
+		'device_write_bps', 'device_write_iops', 'dns', 'dns_optiondns_search', 'e',
+		'env', 'env_file', 'expose', 'group_add', 'l', 'label', 'label_file', 'link',
+		'link_local_ip', 'log_opt', 'network_alias', 'p', 'publish', 'security_opt',
+		'storage_opt', 'sysctl', 'tmpfs', 'v', 'volume', 'volumes_from'
 	}
 
-	local key = nil
-	local _key = nil
-	local val = nil
-	local is_cmd = false
+	local key, _key, val, is_cmd = nil, nil, nil, false
 
 	cmd_line = cmd_line:match("^DOCKERCLI%s+(.+)")
 	for w in cmd_line:gmatch("[^%s]+") do
 		if w =='\\' then
 		elseif not key and not _key and not is_cmd then
-			--key=val
-			key, val = w:match("^%-%-([%lP%-]-)=(.+)")
-			if not key then
-				--key val
-				key = w:match("^%-%-([%lP%-]+)")
-				if not key then
-					-- -v val
-					key = w:match("^%-([%lP%-]+)")
-					if key then
-						-- for -dit
-						if key:match("i") or key:match("t") or key:match("d") then
-							if key:match("i") then
-								config[key_abb["i"]] = true
-								key:gsub("i", "")
-							end
-							if key:match("t") then
-								config[key_abb["t"]] = true
-								key:gsub("t", "")
-							end
-							if key:match("d") then
-								config[key_abb["d"]] = true
-								key:gsub("d", "")
-							end
-							if key:match("P") then
-								config[key_abb["P"]] = true
-								key:gsub("P", "")
-							end
-							if key == "" then
-								key = nil
+			local prefix, param = w:match("^(%-%-?)([^=]*)")
+			if prefix then
+				local explicit_val
+				param, explicit_val = param:match("^([^=]*)=?(.*)")
+				local raw_key = param and param:gsub("-", "_") or nil
+				local is_long_flag = #prefix == 2  -- 是否是长参数
+				if is_long_flag then
+					key = key_abb[raw_key] or raw_key
+					val = explicit_val ~= "" and explicit_val or nil
+				else
+					if #param == 1 then
+						key = key_abb[param] or param
+						val = explicit_val ~= "" and explicit_val or nil
+					else
+						for c in param:gmatch(".") do
+							local mapped_key = key_abb[c]
+							if mapped_key and contains(key_no_val, mapped_key) then
+								config[mapped_key] = true
 							end
 						end
 					end
 				end
-			end
-			if key then
-				key = key:gsub("-","_")
-				key = key_abb[key] or key
-				if contains(key_no_val, key) then
-					config[key] = true
-					val = nil
-					key = nil
-				elseif contains(key_with_val, key) then
-					-- if key == "cap_add" then config.privileged = true end
-				else
-					key = nil
-					val = nil
+				if key then
+					if contains(key_no_val, key) then
+						config[key] = true
+						key = nil
+					elseif not contains(key_with_val, key) then
+						key = nil
+						val = nil
+					end
 				end
 			else
 				config.image = w
-				key = nil
-				val = nil
 				is_cmd = true
 			end
 		elseif (key or _key) and not is_cmd then
 			if key == "mount" then
-				-- we need resolve mount options here
-				-- type=bind,source=/source,target=/app
-				local _type = w:match("^type=([^,]+),") or "bind"
-				local source =  (_type ~= "tmpfs") and (w:match("source=([^,]+),") or  w:match("src=([^,]+),")) or ""
-				local target =  w:match(",target=([^,]+)") or  w:match(",dst=([^,]+)") or w:match(",destination=([^,]+)") or ""
-				local ro = w:match(",readonly") and "ro" or nil
+				-- 参数解析统一处理
+				local params = {}
+				for k, v in w:gmatch("([^,]+)=([^,]+)") do
+					params[k] = v
+				end
+				for k in w:gmatch(",([^=,]+)") do  -- 捕获无值参数如readonly
+					params[k] = true
+				end
+
+				local mount_type = params.type or "bind"
+				local source = (mount_type ~= "tmpfs") and (params.source or params.src) or nil
+				local target = params.target or params.dst or params.destination
+				local ro = params.readonly and "ro" or nil
 
 				if source and target then
-					if _type ~= "tmpfs" then
-						local bind_propagation = (_type == "bind") and w:match(",bind%-propagation=([^,]+)") or nil
-						val = source..":"..target .. ((ro or bind_propagation) and (":" .. (ro and ro or "") .. (((ro and bind_propagation) and "," or "") .. (bind_propagation and bind_propagation or ""))or ""))
+					if mount_type ~= "tmpfs" then
+						-- bind类型处理
+						local bind_prop = params["bind-propagation"]
+						local options = table.concat({ro, bind_prop}, ","):gsub("^,*,", "")
+						val = ("%s:%s%s" %{source, target, (#options > 0 and ":"..options or "")})
 					else
-						local tmpfs_mode = w:match(",tmpfs%-mode=([^,]+)") or nil
-						local tmpfs_size = w:match(",tmpfs%-size=([^,]+)") or nil
-						key = "tmpfs"
-						val = target .. ((tmpfs_mode or tmpfs_size) and (":" .. (tmpfs_mode and ("mode=" .. tmpfs_mode) or "") .. ((tmpfs_mode and tmpfs_size) and "," or "") .. (tmpfs_size and ("size=".. tmpfs_size) or "")) or "")
-						if not config[key] then
-							config[key] = {}
-						end
-						table.insert( config[key], val )
-						key = nil
-						val = nil
+						-- tmpfs类型处理
+						local tmpfs_opts = {}
+						if params["tmpfs-mode"] then table.insert(tmpfs_opts, "mode="..params["tmpfs-mode"]) end
+						if params["tmpfs-size"] then table.insert(tmpfs_opts, "size="..params["tmpfs-size"]) end
+						val = target .. (#tmpfs_opts > 0 and ":"..table.concat(tmpfs_opts, ",") or "")
+						config.tmpfs = config.tmpfs or {}
+						table.insert(config.tmpfs, val)
+						key, val = nil, nil
 					end
 				end
 			else
 				val = w
 			end
 		elseif is_cmd then
-			config["command"] = (config["command"] and (config["command"] .. " " )or "")  .. w
+			config["command"] = (config["command"] and (config["command"] .. " " ) or "")  .. w
 		end
 		if (key or _key) and val then
 			key = _key or key
@@ -362,8 +204,6 @@ local resolve_cli = function(cmd_line)
 	return config
 end
 
-local default_config = {}
-
 if cmd_line and cmd_line:match("^DOCKERCLI.+") then
 	default_config = resolve_cli(cmd_line)
 elseif cmd_line and cmd_line:match("^duplicate/[^/]+$") then
@@ -372,7 +212,7 @@ elseif cmd_line and cmd_line:match("^duplicate/[^/]+$") then
 	if not create_body.HostConfig then
 		create_body.HostConfig = {}
 	end
-	
+
 	if next(create_body) ~= nil then
 		default_config.name = nil
 		default_config.image = create_body.Image
@@ -395,14 +235,14 @@ elseif cmd_line and cmd_line:match("^duplicate/[^/]+$") then
 		if create_body.HostConfig.Sysctls and type(create_body.HostConfig.Sysctls) == "table" then
 			default_config.sysctl = {}
 			for k, v in pairs(create_body.HostConfig.Sysctls) do
-				table.insert( default_config.sysctl, k.."="..v )
+				table.insert( default_config.sysctl, k .. "=" .. v)
 			end
 		end
 		if create_body.HostConfig.LogConfig then
 			if create_body.HostConfig.LogConfig.Config and type(create_body.HostConfig.LogConfig.Config) == "table" then
 				default_config.log_opt = {}
 				for k, v in pairs(create_body.HostConfig.LogConfig.Config) do
-					table.insert( default_config.log_opt, k.."="..v )
+					table.insert( default_config.log_opt, k .. "=" .. v)
 				end
 			end
 			default_config.log_driver = create_body.HostConfig.LogConfig.Type or nil
@@ -412,7 +252,7 @@ elseif cmd_line and cmd_line:match("^duplicate/[^/]+$") then
 			default_config.publish = {}
 			for k, v in pairs(create_body.HostConfig.PortBindings) do
 				for x, y in ipairs(v) do
-					table.insert( default_config.publish, y.HostPort..":"..k:match("^(%d+)/.+").."/"..k:match("^%d+/(.+)") )
+					table.insert( default_config.publish, y.HostPort .. ":" .. k:match("^(%d+)/.+") .. "/" ..k:match("^%d+/(.+)") )
 				end
 			end
 		end
@@ -428,14 +268,14 @@ elseif cmd_line and cmd_line:match("^duplicate/[^/]+$") then
 		if create_body.HostConfig.Devices and type(create_body.HostConfig.Devices) == "table" then
 			default_config.device = {}
 			for _, v in ipairs(create_body.HostConfig.Devices) do
-				table.insert( default_config.device, v.PathOnHost..":"..v.PathInContainer..(v.CgroupPermissions ~= "" and (":" .. v.CgroupPermissions) or "") )
+				table.insert( default_config.device, v.PathOnHost .. ":" .. v.PathInContainer .. (v.CgroupPermissions ~= "" and (":" .. v.CgroupPermissions) or "") )
 			end
 		end
 
 		if create_body.HostConfig.Tmpfs and type(create_body.HostConfig.Tmpfs) == "table" then
 			default_config.tmpfs = {}
 			for k, v in pairs(create_body.HostConfig.Tmpfs) do
-				table.insert( default_config.tmpfs, k .. (v~="" and ":" or "")..v )
+				table.insert( default_config.tmpfs, k .. (v ~= "" and ":" or "") .. v)
 			end
 		end
 	end
@@ -667,7 +507,7 @@ o.rmempty = true
 o:depends("advance", 1)
 o.default = default_config.log_opt or nil
 
-for _, v in ipairs (networks) do
+for _, v in ipairs(networks) do
 	if v.Name then
 		local parent = v.Options and v.Options.parent or nil
 		local ip = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Subnet or nil
@@ -686,9 +526,7 @@ for _, v in ipairs (networks) do
 end
 
 m.handle = function(self, state, data)
-	if state ~= FORM_VALID then
-		return
-	end
+	if state ~= FORM_VALID then return end
 
 	local tmp
 	local name = data.name or ("luci_" .. os.date("%Y%m%d%H%M%S"))
@@ -721,11 +559,11 @@ m.handle = function(self, state, data)
 		end
 	end
 
-	local log_opt = {}
+	local portbindings, exposedports, tmpfs, device, log_opt, command = {}, {}, {}, {}, {}, {}
 	tmp = data.log_opt
 	if type(tmp) == "table" then
 		for i, v in ipairs(tmp) do
-			local k,v1 = v:match("(.-)=(.+)")
+			local k, v1 = v:match("(.-)=(.+)")
 			if k and v1 then
 				log_opt[k]=v1
 			end
@@ -740,10 +578,6 @@ m.handle = function(self, state, data)
 	local cpus = data.cpus or nil
 	local blkio_weight = data.blkio_weight or nil
 
-	local portbindings = {}
-	local exposedports = {}
-
-	local tmpfs = {}
 	tmp = data.tmpfs
 	if type(tmp) == "table" then
 		for i, v in ipairs(tmp)do
@@ -755,7 +589,6 @@ m.handle = function(self, state, data)
 		end
 	end
 
-	local device = {}
 	tmp = data.device
 	if type(tmp) == "table" then
 		for i, v in ipairs(tmp) do
@@ -798,7 +631,6 @@ m.handle = function(self, state, data)
 
 	local link = data.link
 	tmp = data.command
-	local command = {}
 	if tmp ~= nil then
 		for v in string.gmatch(tmp, "[^%s]+") do
 			command[#command+1] = v
@@ -853,25 +685,22 @@ m.handle = function(self, state, data)
 				if k == network and v.IPAMConfig and v.IPAMConfig.IPv4Address then
 					v.IPAMConfig.IPv4Address = ip
 				else
-					create_body.NetworkingConfig.EndpointsConfig = { [network] = { IPAMConfig = { IPv4Address = ip } } }
+					create_body.NetworkingConfig.EndpointsConfig = {[network] = {IPAMConfig = { IPv4Address = ip}}}
 				end
 				break
 			end
 		else
-			create_body.NetworkingConfig = { EndpointsConfig = { [network] = { IPAMConfig = { IPv4Address = ip } } } }
+			create_body.NetworkingConfig = {EndpointsConfig = {[network] = {IPAMConfig = {IPv4Address = ip}}}}
 		end
 	elseif not create_body.NetworkingConfig then
 		create_body.NetworkingConfig = nil
 	end
 
 	create_body["HostConfig"]["Tmpfs"] = tmpfs
+	create_body["HostConfig"]["CapAdd"] = cap_add
 	create_body["HostConfig"]["Devices"] = device
 	create_body["HostConfig"]["Sysctls"] = sysctl
-	create_body["HostConfig"]["CapAdd"] = cap_add
-	create_body["HostConfig"]["LogConfig"] = {
-		Config = log_opt,
-		Type = log_driver
-	}
+	create_body["HostConfig"]["LogConfig"] = {Config = log_opt, Type = log_driver}
 
 	if network == "bridge" then
 		create_body["HostConfig"]["Links"] = link
@@ -879,13 +708,18 @@ m.handle = function(self, state, data)
 
 	local pull_image = function(image)
 		local json_stringify = luci.jsonc and luci.jsonc.stringify
-		docker:append_status("Images: " .. "pulling" .. " " .. image .. "...\n")
-		local res = dk.images:create({query = {fromImage=image}}, docker.pull_image_show_status_cb)
-		if res and res.code and res.code == 200 and (res.body[#res.body] and not res.body[#res.body].error and res.body[#res.body].status and (res.body[#res.body].status == "Status: Downloaded newer image for ".. image or res.body[#res.body].status == "Status: Image is up to date for ".. image)) then
+		docker:append_status("Images: pulling %s...\n" %image)
+		local res = dk.images:create({query = {fromImage = image}}, docker.pull_image_show_status_cb)
+		if res and res.code and res.code == 200
+			   and (res.body[#res.body]
+				and res.body[#res.body].status
+				and not res.body[#res.body].error
+				and (res.body[#res.body].status == "Status: Downloaded newer image for ".. image or res.body[#res.body].status == "Status: Image is up to date for ".. image)) then
 			docker:append_status("done\n")
 		else
 			res.code = (res.code == 200) and 500 or res.code
-			docker:append_status("code:" .. res.code.." ".. (res.body[#res.body] and res.body[#res.body].error or (res.body.message or res.message)).. "\n")
+			local message = res.body[#res.body] and res.body[#res.body].error or (res.body.message or res.message)
+			docker:append_status("code:%s %s\n" %{res.code, message})
 			luci.http.redirect(luci.dispatcher.build_url("admin/services/docker/newcontainer"))
 		end
 	end
@@ -894,28 +728,26 @@ m.handle = function(self, state, data)
 	local exist_image = false
 
 	if image then
-		for _, v in ipairs (images) do
+		for _, v in ipairs(images) do
 			if v.RepoTags and v.RepoTags[1] == image then
 				exist_image = true
 				break
 			end
 		end
-		if not exist_image then
-			pull_image(image)
-		elseif data._force_pull == 1 then
+		if not exist_image or data._force_pull == 1 then
 			pull_image(image)
 		end
 	end
 
 	create_body = docker.clear_empty_tables(create_body)
 
-	docker:append_status("Container: " .. "create" .. " " .. name .. "...")
+	docker:append_status("Container: create %s..." %name)
 	local res = dk.containers:create({name = name, body = create_body})
 	if res and res.code and res.code == 201 then
 		docker:clear_status()
 		luci.http.redirect(luci.dispatcher.build_url("admin/services/docker/containers"))
 	else
-		docker:append_status("code:" .. res.code.." ".. (res.body.message and res.body.message or res.message))
+		docker:append_status("code: %s %s" %{res.code, (res.body.message and res.body.message or res.message)})
 		luci.http.redirect(luci.dispatcher.build_url("admin/services/docker/newcontainer"))
 	end
 end

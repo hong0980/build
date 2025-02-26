@@ -5,11 +5,9 @@ Copyright 2019 lisaac <https://github.com/lisaac/luci-app-dockerman>
 
 local http = require "luci.http"
 local docker = require "luci.model.docker"
-
-local m, s, o
-local images, networks, containers, res, lost_state
-local urlencode = luci.http.protocol and luci.http.protocol.urlencode or luci.util.urlencode
 local dk = docker.new()
+local m, s, o, images, networks, containers, res, lost_state
+local urlencode = luci.http.protocol and luci.http.protocol.urlencode or luci.util.urlencode
 
 if dk:_ping().code ~= 200 then
 	lost_state = true
@@ -24,11 +22,7 @@ else
 		networks = res.body
 	end
 
-	res = dk.containers:list({
-		query = {
-			all = true
-		}
-	})
+	res = dk.containers:list({query = {all = true}})
 	if res and res.code and res.code < 300 then
 		containers = res.body
 	end
@@ -43,7 +37,7 @@ function get_containers()
 	for i, v in ipairs(containers) do
 		local index = (10^12 - v.Created) .. "_id_" .. v.Id
 
-		data[index]={}
+		data[index] = {}
 		data[index]["_selected"] = 0
 		data[index]["_id"] = v.Id:sub(1,12)
 		-- data[index]["name"] = v.Names[1]:sub(2)
@@ -76,22 +70,35 @@ function get_containers()
 			for _,v2 in ipairs(v.Ports) do
 				-- display ipv4 only
 				if ip.new(v2.IP or "0.0.0.0"):is4() then
-					data[index]["_ports"] = (data[index]["_ports"] and (data[index]["_ports"] .. ", ") or "")
-					.. ((v2.PublicPort and v2.Type and v2.Type == "tcp") and ('<a href="javascript:void(0);" onclick="window.open((window.location.origin.match(/^(.+):\\d+$/) && window.location.origin.match(/^(.+):\\d+$/)[1] || window.location.origin) + \':\' + '.. v2.PublicPort ..', \'_blank\');">') or "")
-					.. (v2.PublicPort and (v2.PublicPort .. ":") or "")  .. (v2.PrivatePort and (v2.PrivatePort .."/") or "") .. (v2.Type and v2.Type or "")
-					.. ((v2.PublicPort and v2.Type and v2.Type == "tcp")and "</a>" or "")
+					data[index]["_ports"] = string.format(
+					    "%s%s%s%s%s%s",
+					    data[index]["_ports"] and (data[index]["_ports"] .. ", ") or "",
+					    v2.PublicPort and v2.Type == "tcp" and string.format(
+					        '<a href="javascript:void(0);" onclick="window.open((window.location.origin.match(/^(.+):\\d+$/) && window.location.origin.match(/^(.+):\\d+$/)[1] || window.location.origin) + \':\' + \'%s\' , \'_blank\');">',
+					        v2.PublicPort
+					    ) or "",
+					    v2.PublicPort and (v2.PublicPort .. ":") or "",
+					    v2.PrivatePort and (v2.PrivatePort .. "/") or "",
+					    v2.Type or "",
+					    v2.PublicPort and v2.Type == "tcp" and "</a>" or ""
+					)
 				end
 			end
 		end
 
-		for ii,iv in ipairs(images) do
+		for ii, iv in ipairs(images) do
 			if iv.Id == v.ImageID then
 				data[index]["_image"] = iv.RepoTags and iv.RepoTags[1] or (next(iv.RepoDigests) and (iv.RepoDigests[1]:gsub("(.-)@.+", "%1") .. ":&lt;none&gt;")) or ""
 			end
 		end
-		data[index]["_id_name"] = '<a href='..luci.dispatcher.build_url("admin/services/docker/container/"..v.Id)..'  class="dockerman_link" title="'..translate("Container detail")..'">'.. data[index]["_name"] .. "<br><font color='#9f9f9f'>ID: " ..	data[index]["_id"]
-		.. "</font></a><br>Image: " .. (data[index]["_image"] or "&lt;none&gt;") 
-		.. "<br><font color='#9f9f9f' class='container_size_".. v.Id .."'></font>"
+		data[index]["_id_name"] = string.format(
+		    '<a href="%s" class="dockerman_link" title="%s">%s</a><br><font color="#9f9f9f">ID: %s</font><br>Image: %s<br><font color="#9f9f9f" class="container_size_%s"></font>',
+		    luci.dispatcher.build_url("admin/services/docker/container/" .. v.Id), translate("Container detail"),
+		    data[index]["_name"],
+		    data[index]["_id"],
+		    data[index]["_image"] or "&lt;none&gt;",
+		    v.Id
+		)
 
 		if type(v.Mounts) == "table" and next(v.Mounts) then
 			for _, v2 in pairs(v.Mounts) do
@@ -103,17 +110,26 @@ function get_containers()
 						if v_sorce_d and #v_sorce_d > 12 then
 							v_sorce = v_sorce .. "/" .. v_sorce_d:sub(1,8) .. ".."
 						else
-							v_sorce = v_sorce .."/".. v_sorce_d
+							v_sorce = v_sorce .. "/" .. v_sorce_d
 						end
 					end
 					for v_dest_d in v2["Destination"]:gmatch('[^/]+') do
 						if v_dest_d and #v_dest_d > 12 then
 							v_dest = v_dest .. "/" .. v_dest_d:sub(1,8) .. ".."
 						else
-							v_dest = v_dest .."/".. v_dest_d
+							v_dest = v_dest .. "/" .. v_dest_d
 						end
 					end
-					data[index]["_mounts"] = (data[index]["_mounts"] and (data[index]["_mounts"] .. "<br>") or "") .. '<span title="'.. v2.Source.. "￫" .. v2.Destination .. '" ><a href="'..luci.dispatcher.build_url("admin/services/docker/container/"..v.Id)..'/file?path='..v2["Destination"]..'">' .. v_sorce .. "￫" .. v_dest..'</a></span>'
+					data[index]["_mounts"] = string.format(
+					    "%s<span title='%s￫%s'><a href='%s/file?path=%s'>%s￫%s</a></span>",
+					    data[index]["_mounts"] and (data[index]["_mounts"] .. "<br>") or "",
+					    v2.Source,
+					    v2.Destination,
+					    luci.dispatcher.build_url("admin/services/docker/container/" .. v.Id),
+					    v2["Destination"],
+					    v_sorce,
+					    v_dest
+					)
 				end
 			end
 		end
@@ -208,9 +224,7 @@ local start_stop_remove = function(m, cmd)
 			end
 		end
 
-		if success then
-			docker:clear_status()
-		end
+		if success then docker:clear_status() end
 
 		luci.http.redirect(luci.dispatcher.build_url("admin/services/docker/containers"))
 	end
@@ -237,7 +251,7 @@ o.inputtitle = translate("Start")
 o.inputstyle = "apply"
 o.forcewrite = true
 o.write = function(self, section)
-	start_stop_remove(m,"start")
+	start_stop_remove(m, "start")
 end
 o.disable = lost_state
 
@@ -247,7 +261,7 @@ o.inputtitle = translate("Restart")
 o.inputstyle = "reload"
 o.forcewrite = true
 o.write = function(self, section)
-	start_stop_remove(m,"restart")
+	start_stop_remove(m, "restart")
 end
 o.disable = lost_state
 
@@ -257,7 +271,7 @@ o.inputtitle = translate("Stop")
 o.inputstyle = "reset"
 o.forcewrite = true
 o.write = function(self, section)
-	start_stop_remove(m,"stop")
+	start_stop_remove(m, "stop")
 end
 o.disable = lost_state
 
@@ -267,7 +281,7 @@ o.inputtitle = translate("Kill")
 o.inputstyle = "reset"
 o.forcewrite = true
 o.write = function(self, section)
-	start_stop_remove(m,"kill")
+	start_stop_remove(m, "kill")
 end
 o.disable = lost_state
 

@@ -5,7 +5,6 @@ Copyright 2021 lisaac <lisaac.cn@gmail.com>
 ]]--
 
 local uci = (require "luci.model.uci").cursor()
-
 local m, s, o
 
 m = Map("dockerd",
@@ -14,7 +13,6 @@ m = Map("dockerd",
 
 if nixio.fs.access("/usr/bin/dockerd") and not m.uci:get_bool("dockerd", "dockerman", "remote_endpoint")  then
 	s = m:section(NamedSection, "globals", "section", translate("Docker Daemon settings"))
-
 	o = s:option(Flag, "auto_start", translate("Auto start"))
 	o.rmempty = false
 	o.write = function(self, section, value)
@@ -41,6 +39,7 @@ if nixio.fs.access("/usr/bin/dockerd") and not m.uci:get_bool("dockerd", "docker
 	o = s:option(DynamicList, "registry_mirrors",
 		translate("Registry Mirrors"),
 		translate("It replaces the daemon registry mirrors with a new set of registry mirrors"))
+	o:value("https://docker.m.daocloud.io", "https://docker.m.daocloud.io")
 	o:value("https://hub-mirror.c.163.com", "https://hub-mirror.c.163.com")
 	o:value("https://registry.docker-cn.com", "https://registry.docker-cn.com")
 	o:value("https://docker.mirrors.ustc.edu.cn", "https://docker.mirrors.ustc.edu.cn")
@@ -78,7 +77,10 @@ o.rmempty = false
 o.validate = function(self, value, sid)
 	local res = luci.http.formvaluetable("cbid.dockerd")
 	if res["dockerman.remote_endpoint"] == "1" then
-	 if res["dockerman.remote_port"] and res["dockerman.remote_port"] ~= "" and res["dockerman.remote_host"] and res["dockerman.remote_host"] ~= "" then
+	 if res["dockerman.remote_port"]
+	 	and res["dockerman.remote_port"] ~= ""
+	 	and res["dockerman.remote_host"]
+	 	and res["dockerman.remote_host"] ~= "" then
 			return 1
 		else
 			return nil, translate("Please input the PORT or HOST IP of remote docker instance!")
@@ -110,11 +112,11 @@ o.placeholder = "2375"
 o.datatype = "port"
 o:depends("remote_endpoint", 1)
 
--- o = s:taboption("dockerman", Value, "status_path", translate("Action Status Tempfile Path"), translate("Where you want to save the docker status file"))
--- o = s:taboption("dockerman", Flag, "debug", translate("Enable Debug"), translate("For debug, It shows all docker API actions of luci-app-dockerman in Debug Tempfile Path"))
--- o.enabled="true"
--- o.disabled="false"
--- o = s:taboption("dockerman", Value, "debug_path", translate("Debug Tempfile Path"), translate("Where you want to save the debug tempfile"))
+o = s:taboption("dockerman", Value, "status_path", translate("Action Status Tempfile Path"), translate("Where you want to save the docker status file"))
+o = s:taboption("dockerman", Flag, "debug", translate("Enable Debug"), translate("For debug, It shows all docker API actions of luci-app-dockerman in Debug Tempfile Path"))
+o.enabled="true"
+o.disabled="false"
+o = s:taboption("dockerman", Value, "debug_path", translate("Debug Tempfile Path"), translate("Where you want to save the debug tempfile"))
 
 if nixio.fs.access("/usr/bin/dockerd") and not m.uci:get_bool("dockerd", "dockerman", "remote_endpoint")  then
 	o = s:taboption("ac", DynamicList, "ac_allowed_interface", translate("Allowed access interfaces"), translate("Which interface(s) can access containers under the bridge network, fill-in Interface Name"))

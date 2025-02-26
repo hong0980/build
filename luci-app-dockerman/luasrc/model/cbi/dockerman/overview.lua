@@ -4,14 +4,10 @@ Copyright 2019 lisaac <https://github.com/lisaac/luci-app-dockerman>
 ]]--
 
 local docker = require "luci.model.docker"
-local uci = (require "luci.model.uci").cursor()
-
 local m, s, o, lost_state
 local dk = docker.new()
 
-if dk:_ping().code ~= 200 then
-	lost_state = true
-end
+if dk:_ping().code ~= 200 then lost_state = true end
 
 m = SimpleForm("dockerd", translate("Docker - Overview"),
 	translate("An overview with the relevant data is displayed here with which the LuCI docker client is connected.") ..
@@ -19,45 +15,45 @@ m = SimpleForm("dockerd", translate("Docker - Overview"),
 m.submit=false
 m.reset=false
 
-local docker_info_table = {}
--- docker_info_table['0OperatingSystem'] = {_key=translate("Operating System"),_value='-'}
--- docker_info_table['1Architecture'] = {_key=translate("Architecture"),_value='-'}
--- docker_info_table['2KernelVersion'] = {_key=translate("Kernel Version"),_value='-'}
-docker_info_table['3ServerVersion'] = {_key=translate("Docker Version"),_value='-'}
-docker_info_table['4ApiVersion'] = {_key=translate("Api Version"),_value='-'}
-docker_info_table['5NCPU'] = {_key=translate("CPUs"),_value='-'}
-docker_info_table['6MemTotal'] = {_key=translate("Total Memory"),_value='-'}
-docker_info_table['7DockerRootDir'] = {_key=translate("Docker Root Dir"),_value='-'}
-docker_info_table['8IndexServerAddress'] = {_key=translate("Index Server Address"),_value='-'}
-docker_info_table['9RegistryMirrors'] = {_key=translate("Registry Mirrors"),_value='-'}
+local docker_info_table = {
+	-- ['0OperatingSystem'] = {_key = translate("Operating System"), _value = '-'},
+	-- ['1Architecture'] = {_key = translate("Architecture"), _value = '-'},
+	-- ['2KernelVersion'] = {_key = translate("Kernel Version"), _value = '-'},
+	['3ServerVersion'] = {_key = translate("Docker Version"), _value = '-'},
+	['4ApiVersion'] = {_key = translate("Api Version"), _value = '-'},
+	['5NCPU'] = {_key = translate("CPUs"), _value = '-'},
+	['6MemTotal'] = {_key = translate("Total Memory"), _value = '-'},
+	['7DockerRootDir'] = {_key = translate("Docker Root Dir"), _value = '-'},
+	['8IndexServerAddress'] = {_key = translate("Index Server Address"), _value = '-'},
+	['9RegistryMirrors'] = {_key = translate("Registry Mirrors"), _value = '-'}
+}
+local start = nixio.fs.access("/usr/bin/dockerd") and
+			  luci.model.uci.cursor():get("dockerd", "dockerman", "remote_endpoint") == "0"
 
-if nixio.fs.access("/usr/bin/dockerd") and not uci:get_bool("dockerd", "dockerman", "remote_endpoint") then
+if start then
 	s = m:section(SimpleSection)
 	s.template = "dockerman/apply_widget"
-	s.err=docker:read_status()
-	s.err=s.err and s.err:gsub("\n","<br>"):gsub(" ","&nbsp;")
+	s.err = docker:read_status()
+	s.err = s.err and s.err:gsub("\n","<br>"):gsub(" ","&nbsp;")
 	if s.err then
 		docker:clear_status()
 	end
 	s = m:section(Table,{{}})
-	s.notitle=true
-	s.rowcolors=false
+	s.notitle = true
+	s.rowcolors = false
 	s.template = "cbi/nullsection"
 
 	o = s:option(Button, "_start")
 	o.template = "dockerman/cbi/inlinebutton"
-	o.inputtitle = lost_state and translate("Start") or translate("Stop")
+	o.inputtitle = translate(lost_state and "Start" or "Stop")
 	o.inputstyle = lost_state and "add" or "remove"
 	o.forcewrite = true
 	o.write = function(self, section)
 		docker:clear_status()
-
 		if lost_state then
 			docker:append_status(translate("Docker daemon: starting"))
-			luci.util.exec("/etc/init.d/dockerd start")
-			luci.util.exec("sleep 5")
+			luci.util.exec("/etc/init.d/dockerd start && sleep 5")
 			luci.util.exec("/etc/init.d/dockerman start")
-
 		else
 			docker:append_status(translate("Docker daemon: stopping"))
 			luci.util.exec("/etc/init.d/dockerd stop")
@@ -74,8 +70,7 @@ if nixio.fs.access("/usr/bin/dockerd") and not uci:get_bool("dockerd", "dockerma
 	o.write = function(self, section)
 		docker:clear_status()
 		docker:append_status(translate("Docker daemon: restarting"))
-		luci.util.exec("/etc/init.d/dockerd restart")
-		luci.util.exec("sleep 5")
+		luci.util.exec("/etc/init.d/dockerd restart && sleep 5")
 		luci.util.exec("/etc/init.d/dockerman start")
 		docker:clear_status()
 		luci.http.redirect(luci.dispatcher.build_url("admin/services/docker/overview"))
@@ -88,7 +83,6 @@ s:option(DummyValue, "_value")
 
 s = m:section(SimpleSection)
 s.template = "dockerman/overview"
-
 s.containers_running = '-'
 s.images_used = '-'
 s.containers_total = '-'
@@ -96,14 +90,13 @@ s.images_total = '-'
 s.networks_total = '-'
 s.volumes_total = '-'
 
--- local socket = luci.model.uci.cursor():get("dockerd", "dockerman", "socket_path")
 if not lost_state then
-	local containers_list = dk.containers:list({query = {all=true}}).body
-	local images_list = dk.images:list().body
-	local vol = dk.volumes:list()
-	local volumes_list = vol and vol.body and vol.body.Volumes or {}
-	local networks_list = dk.networks:list().body or {}
-	local docker_info = dk:info()
+	local vol             = dk.volumes:list()
+	local docker_info     = dk:info()
+	local images_list     = dk.images:list().body
+	local networks_list   = dk.networks:list().body or {}
+	local volumes_list    = vol and vol.body and vol.body.Volumes or {}
+	local containers_list = dk.containers:list({query = {all = true}}).body
 
 	-- docker_info_table['0OperatingSystem']._value = docker_info.body.OperatingSystem
 	-- docker_info_table['1Architecture']._value = docker_info.body.Architecture
@@ -115,7 +108,7 @@ if not lost_state then
 	if docker_info.body.DockerRootDir then
 		local statvfs = nixio.fs.statvfs(docker_info.body.DockerRootDir)
 		local size = statvfs and (statvfs.bavail * statvfs.bsize) or 0
-		docker_info_table['7DockerRootDir']._value = docker_info.body.DockerRootDir .. " (" .. tostring(docker.byte_format(size)) .. " " .. translate("Available") .. ")"
+		docker_info_table['7DockerRootDir']._value = "%s (%s %s)" %{docker_info.body.DockerRootDir, tostring(docker.byte_format(size)), translate("Available")}
 	end
 
 	docker_info_table['8IndexServerAddress']._value = docker_info.body.IndexServerAddress
