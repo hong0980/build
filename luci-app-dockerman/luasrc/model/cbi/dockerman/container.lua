@@ -20,7 +20,7 @@ else
 end
 
 local is_empty = function(var)
-    return var ~= nil and var ~= ""
+	return var ~= nil and var ~= ""
 end
 
 local get_env = function(d)
@@ -61,7 +61,7 @@ local get_mounts = function(d)
 					v_sorce = v_sorce .."/".. v_sorce_d
 				end
 			end
-			data = (data and (data .. "<br>") or "") .. v_sorce .. ":" .. v["Destination"] .. mode
+			data = (data and (data .. "<br>") or "") ..  "%s:%s%s" %{v_sorce, v["Destination"], mode}
 		end
 	end
 
@@ -85,7 +85,7 @@ local get_ports = function(d)
 
 	if d.HostConfig and d.HostConfig.PortBindings then
 		for inter, out in pairs(d.HostConfig.PortBindings) do
-			data = (data and (data .. "<br>") or "") .. out[1]["HostPort"] .. ":" .. inter
+			data = (data and (data .. "<br>") or "") .. "%s:%s" %{out[1]["HostPort"], inter}
 		end
 	end
 
@@ -121,7 +121,7 @@ local get_tmpfs = function(d)
 
 	if d.HostConfig and d.HostConfig.Tmpfs then
 		for k, v in pairs(d.HostConfig.Tmpfs) do
-			data = (data and (data .. "<br>") or "") .. k .. (is_empty(v) and ":" or "") .. v
+			data = (data and (data .. "<br>") or "") .. "%s%s%s" %{k, (is_empty(v) and ":" or ""), v}
 		end
 	end
 
@@ -145,7 +145,7 @@ local get_sysctl = function(d)
 
 	if d.HostConfig and d.HostConfig.Sysctls then
 		for k, v in pairs(d.HostConfig.Sysctls) do
-			data = (data and (data .. "<br>") or "") .. k .. ":" .. v
+			data = (data and (data .. "<br>") or "") .. "%s:%s" %{k, v}
 		end
 	end
 
@@ -393,7 +393,7 @@ if action == "info" then
 		for k, v in pairs(info_networks) do
 			table_info["14network" .. k] = {
 				_key = translate("Network"),
-				_value = k.. (is_empty(v) and (" | " .. v) or ""),
+				_value = k .. (is_empty(v) and (" | " .. v) or ""),
 				_button = translate("Disconnect")
 			}
 			list_networks[k] = nil
@@ -552,7 +552,7 @@ if action == "info" then
 		end
 
 		if res and res.code > 300 then
-			docker:append_status("code:" .. res.code .." " .. (res.body.message and res.body.message or res.message))
+			docker:append_status("code:%s %s" %{res.code, (res.body.message and res.body.message or res.message)})
 		else
 			docker:clear_status()
 		end
@@ -597,7 +597,7 @@ elseif action == "resources" then
 			if memory and memory ~= 0 then
 				_, _, n, unit = memory:find("([%d%.]+)([%l%u]+)")
 				if n then
-					unit = unit and unit:sub(1,1):upper() or "B"
+					unit = unit and unit:sub(1, 1):upper() or "B"
 					if  unit == "M" then
 						memory = tonumber(n) * 1024 * 1024
 					elseif unit == "G" then
@@ -620,7 +620,7 @@ elseif action == "resources" then
 			docker:write_status("Containers: update %s..." %container_id)
 			local res = dk.containers:update({id = container_id, body = request_body})
 			if res and res.code >= 300 then
-				docker:append_status("code:" .. res.code .. " " .. (res.body.message and res.body.message or res.message))
+				docker:append_status("code:%s %s" %{res.code, (res.body.message and res.body.message or res.message)})
 			else
 				docker:clear_status()
 			end
@@ -660,8 +660,8 @@ elseif action == "logs" then
 elseif action == "console" then
 	m.submit = false
 	m.reset  = false
-	local cmd_docker = util.exec("command -v docker"):match("^.+docker") or nil
 	local cmd_ttyd = util.exec("command -v ttyd"):match("^.+ttyd") or nil
+	local cmd_docker = util.exec("command -v docker"):match("^.+docker") or nil
 
 	if cmd_docker and cmd_ttyd and lost_state then
 		local cmd = "/bin/sh"
@@ -671,8 +671,8 @@ elseif action == "console" then
 
 		o = s:option(Value, "command", translate("Command"))
 		o:value("/bin/sh", "/bin/sh")
-		o:value("/bin/ash", "/bin/ash")
 		o:value("/bin/bash", "/bin/bash")
+		o:value("/bin/ash", "/bin/ash")
 		o.default = "/bin/sh"
 		o.forcewrite = true
 		o.write = function(self, section, value)

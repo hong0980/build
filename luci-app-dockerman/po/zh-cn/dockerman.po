@@ -1194,3 +1194,12 @@ msgstr "调试临时文件路径"
 
 msgid "Where you want to save the debug tempfile"
 msgstr "您想保存调试临时文件的路径"
+
+msgid "Running time"
+msgstr "运行时间"
+
+msgid "Open the container time"
+msgstr "打开容器"
+
+msgid "Open the file list"
+msgstr "打开文件列表"

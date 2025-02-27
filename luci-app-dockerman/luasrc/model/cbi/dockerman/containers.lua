@@ -35,17 +35,25 @@ function get_containers()
 	end
 
 	for i, v in ipairs(containers) do
-		local index = (10^12 - v.Created) .. "_id_" .. v.Id
+		local index =  "%s_id_%s" %{(10^12 - v.Created), v.Id}
 
 		data[index] = {}
 		data[index]["_selected"] = 0
 		data[index]["_id"] = v.Id:sub(1,12)
-		-- data[index]["name"] = v.Names[1]:sub(2)
 		data[index]["_status"] = v.Status
 
 		if v.Status:find("^Up") then
-			data[index]["_name"] = "<font color='green'>"..v.Names[1]:sub(2).."</font>"
-			data[index]["_status"] = "<a href='"..luci.dispatcher.build_url("admin/services/docker/container/"..v.Id).."/stats'><font color='green'>".. data[index]["_status"] .. "</font>" .. "<br><font color='#9f9f9f' class='container_cpu_status'></font><br><font color='#9f9f9f' class='container_mem_status'></font><br><font color='#9f9f9f' class='container_network_status'></font></a>"
+			data[index]["_name"] = "<font color='green'>%s</font>" %{v.Names[1]:sub(2)}
+			data[index]["_status"] = [[<a href='%s' title="%s"><font color='green'>%s</font></a><br>
+									<font color='#9f9f9f' class='container_cpu_status'></font><br>
+									<font color='#9f9f9f' class='container_mem_status'></font><br>
+									<font color='#9f9f9f' class='container_network_status'></font>
+									]] %
+			{
+				luci.dispatcher.build_url("admin/services/docker/container/%s/stats" %{v.Id}),
+				translate("Running time"),
+				data[index]["_status"],
+			}
 		else
 			data[index]["_name"] = "<font color='red'>"..v.Names[1]:sub(2).."</font>"
 			data[index]["_status"] = '<font class="container_not_running" color="red">'.. data[index]["_status"] .. "</font>"
@@ -67,21 +75,23 @@ function get_containers()
 		if v.Ports and next(v.Ports) ~= nil then
 			data[index]["_ports"] = nil
 			local ip = require "luci.ip"
-			for _,v2 in ipairs(v.Ports) do
-				-- display ipv4 only
-				if ip.new(v2.IP or "0.0.0.0"):is4() then
-					data[index]["_ports"] = string.format(
-					    "%s%s%s%s%s%s",
-					    data[index]["_ports"] and (data[index]["_ports"] .. ", ") or "",
-					    v2.PublicPort and v2.Type == "tcp" and string.format(
-					        '<a href="javascript:void(0);" onclick="window.open((window.location.origin.match(/^(.+):\\d+$/) && window.location.origin.match(/^(.+):\\d+$/)[1] || window.location.origin) + \':\' + \'%s\' , \'_blank\');">',
-					        v2.PublicPort
-					    ) or "",
-					    v2.PublicPort and (v2.PublicPort .. ":") or "",
-					    v2.PrivatePort and (v2.PrivatePort .. "/") or "",
-					    v2.Type or "",
-					    v2.PublicPort and v2.Type == "tcp" and "</a>" or ""
-					)
+
+			for _, v2 in ipairs(v.Ports) do
+				local ip_obj = ip.new(v2.IP or "0.0.0.0")
+				if ip_obj:is4() then
+					local link = ''
+
+					if v2.PublicPort and v2.Type == "tcp" then
+						link = '<a href="javascript:void(0);" title=\'%s\' onclick="window.open((window.location.origin.match(/^(.+):\\d+$/) && window.location.origin.match(/^(.+):\\d+$/)[1] || window.location.origin) + \':\' + \'%s\' , \'_blank\');">' %{translate("Open the container"), v2.PublicPort}
+					end
+
+					data[index]["_ports"] = (data[index]["_ports"] or "") .. "%s%s%s%s%s" %{
+						link,
+						v2.PublicPort and (v2.PublicPort .. ":") or "",
+						v2.PrivatePort and (v2.PrivatePort .. "/") or "",
+						v2.Type or "",
+						link and "</a>" or ""
+					}
 				end
 			end
 		end
@@ -91,14 +101,19 @@ function get_containers()
 				data[index]["_image"] = iv.RepoTags and iv.RepoTags[1] or (next(iv.RepoDigests) and (iv.RepoDigests[1]:gsub("(.-)@.+", "%1") .. ":&lt;none&gt;")) or ""
 			end
 		end
-		data[index]["_id_name"] = string.format(
-		    '<a href="%s" class="dockerman_link" title="%s">%s</a><br><font color="#9f9f9f">ID: %s</font><br>Image: %s<br><font color="#9f9f9f" class="container_size_%s"></font>',
-		    luci.dispatcher.build_url("admin/services/docker/container/" .. v.Id), translate("Container detail"),
-		    data[index]["_name"],
-		    data[index]["_id"],
-		    data[index]["_image"] or "&lt;none&gt;",
-		    v.Id
-		)
+		data[index]["_id_name"] = [[<a href="%s" class="dockerman_link" title="%s">%s</a><br>
+									<font color="#9f9f9f">ID: %s</font><br>
+									Image: %s<br>
+									<font color="#9f9f9f" class="container_size_%s"></font>
+									]] %
+			{
+				luci.dispatcher.build_url("admin/services/docker/container/%s" %v.Id),
+				translate("Container detail"),
+				data[index]["_name"],
+				data[index]["_id"],
+				data[index]["_image"] or "&lt;none&gt;",
+				v.Id
+			}
 
 		if type(v.Mounts) == "table" and next(v.Mounts) then
 			for _, v2 in pairs(v.Mounts) do
@@ -121,14 +136,13 @@ function get_containers()
 						end
 					end
 					data[index]["_mounts"] = string.format(
-					    "%s<span title='%s￫%s'><a href='%s/file?path=%s'>%s￫%s</a></span>",
-					    data[index]["_mounts"] and (data[index]["_mounts"] .. "<br>") or "",
-					    v2.Source,
-					    v2.Destination,
-					    luci.dispatcher.build_url("admin/services/docker/container/" .. v.Id),
-					    v2["Destination"],
-					    v_sorce,
-					    v_dest
+						"%s<span title='%s'><a href='%s/file?path=%s'>%s￫%s</a></span>",
+						data[index]["_mounts"] and (data[index]["_mounts"] .. "<br>") or "",
+						translate("Open the file list"),
+						luci.dispatcher.build_url("admin/services/docker/container/%s" %v.Id),
+						v2["Destination"],
+						v_sorce,
+						v_dest
 					)
 				end
 			end
@@ -202,9 +216,7 @@ o.width="15%"
 
 local start_stop_remove = function(m, cmd)
 	local container_selected = {}
-	-- 遍历table中sectionid
 	for k in pairs(container_list) do
-		 -- 得到选中项的名字
 		if container_list[k]._selected == 1 then
 			container_selected[#container_selected + 1] = container_list[k]["_id"]
 		end
@@ -214,11 +226,11 @@ local start_stop_remove = function(m, cmd)
 
 		docker:clear_status()
 		for _, cont in ipairs(container_selected) do
-			docker:append_status("Containers: " .. cmd .. " " .. cont .. "...")
+			docker:append_status("Containers: %s %s..." %{cmd, cont})
 			local res = dk.containers[cmd](dk, {id = cont})
 			if res and res.code and res.code >= 300 then
 				success = false
-				docker:append_status("code:" .. res.code.." ".. (res.body.message and res.body.message or res.message).. "\n")
+				docker:append_status("code:%s %s\n" %{res.code, (res.body.message and res.body.message or res.message)})
 			else
 				docker:append_status("done\n")
 			end
