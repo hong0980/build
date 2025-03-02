@@ -27,7 +27,7 @@ local is_quot_complete = function(str)
 end
 
 function contains(list, x)
-	for _, v in pairs(list) do
+	for _, v in ipairs(list) do
 		if v == x then
 			return true
 		end
@@ -94,7 +94,7 @@ local resolve_cli = function(cmd_line)
 
 	cmd_line = cmd_line:match("^DOCKERCLI%s+(.+)")
 	for w in cmd_line:gmatch("[^%s]+") do
-		if w =='\\' then
+		if w == '\\' then
 		elseif not key and not _key and not is_cmd then
 			local prefix, param = w:match("^(%-%-?)([^=]*)")
 			if prefix then
@@ -152,13 +152,13 @@ local resolve_cli = function(cmd_line)
 						-- bind类型处理
 						local bind_prop = params["bind-propagation"]
 						local options = table.concat({ro, bind_prop}, ","):gsub("^,*,", "")
-						val = ("%s:%s%s" %{source, target, (#options > 0 and ":"..options or "")})
+						val = ("%s:%s%s" %{source, target, (#options > 0 and ":" .. options or "")})
 					else
 						-- tmpfs类型处理
 						local tmpfs_opts = {}
-						if params["tmpfs-mode"] then table.insert(tmpfs_opts, "mode="..params["tmpfs-mode"]) end
-						if params["tmpfs-size"] then table.insert(tmpfs_opts, "size="..params["tmpfs-size"]) end
-						val = target .. (#tmpfs_opts > 0 and ":"..table.concat(tmpfs_opts, ",") or "")
+						if params["tmpfs-mode"] then table.insert(tmpfs_opts, "mode=" .. params["tmpfs-mode"]) end
+						if params["tmpfs-size"] then table.insert(tmpfs_opts, "size=" .. params["tmpfs-size"]) end
+						val = target .. (#tmpfs_opts > 0 and ":" ..  table.concat(tmpfs_opts, ",") or "")
 						config.tmpfs = config.tmpfs or {}
 						table.insert(config.tmpfs, val)
 						key, val = nil, nil
@@ -235,14 +235,14 @@ elseif cmd_line and cmd_line:match("^duplicate/[^/]+$") then
 		if create_body.HostConfig.Sysctls and type(create_body.HostConfig.Sysctls) == "table" then
 			default_config.sysctl = {}
 			for k, v in pairs(create_body.HostConfig.Sysctls) do
-				table.insert( default_config.sysctl, k .. "=" .. v)
+				table.insert(default_config.sysctl, k .. "= " .. v)
 			end
 		end
 		if create_body.HostConfig.LogConfig then
 			if create_body.HostConfig.LogConfig.Config and type(create_body.HostConfig.LogConfig.Config) == "table" then
 				default_config.log_opt = {}
 				for k, v in pairs(create_body.HostConfig.LogConfig.Config) do
-					table.insert( default_config.log_opt, k .. "=" .. v)
+					table.insert(default_config.log_opt, k .. "=" .. v)
 				end
 			end
 			default_config.log_driver = create_body.HostConfig.LogConfig.Type or nil
@@ -252,7 +252,7 @@ elseif cmd_line and cmd_line:match("^duplicate/[^/]+$") then
 			default_config.publish = {}
 			for k, v in pairs(create_body.HostConfig.PortBindings) do
 				for x, y in ipairs(v) do
-					table.insert( default_config.publish, y.HostPort .. ":" .. k:match("^(%d+)/.+") .. "/" ..k:match("^%d+/(.+)") )
+					table.insert(default_config.publish, y.HostPort .. ":" .. k:match("^(%d+)/.+") .. "/" .. k:match("^%d+/(.+)"))
 				end
 			end
 		end
@@ -268,14 +268,14 @@ elseif cmd_line and cmd_line:match("^duplicate/[^/]+$") then
 		if create_body.HostConfig.Devices and type(create_body.HostConfig.Devices) == "table" then
 			default_config.device = {}
 			for _, v in ipairs(create_body.HostConfig.Devices) do
-				table.insert( default_config.device, v.PathOnHost .. ":" .. v.PathInContainer .. (v.CgroupPermissions ~= "" and (":" .. v.CgroupPermissions) or "") )
+				table.insert(default_config.device, v.PathOnHost .. ":" .. v.PathInContainer .. (v.CgroupPermissions ~= "" and (":" .. v.CgroupPermissions) or ""))
 			end
 		end
 
 		if create_body.HostConfig.Tmpfs and type(create_body.HostConfig.Tmpfs) == "table" then
 			default_config.tmpfs = {}
 			for k, v in pairs(create_body.HostConfig.Tmpfs) do
-				table.insert( default_config.tmpfs, k .. (v ~= "" and ":" or "") .. v)
+				table.insert(default_config.tmpfs, k .. (v ~= "" and ":" or "") .. v)
 			end
 		end
 	end
@@ -284,14 +284,14 @@ end
 m = SimpleForm("docker", translate("Docker - Containers"))
 m.redirect = luci.dispatcher.build_url("admin", "services", "docker", "containers")
 if lost_state then
-	m.submit=false
-	m.reset=false
+	m.submit = false
+	m.reset = false
 end
 
 s = m:section(SimpleSection)
 s.template = "dockerman/apply_widget"
-s.err=docker:read_status()
-s.err=s.err and s.err:gsub("\n","<br>"):gsub(" ","&nbsp;")
+s.err = docker:read_status()
+s.err = s.err and s.err:gsub("\n","<br>"):gsub(" ","&nbsp;")
 if s.err then
 	docker:clear_status()
 end
@@ -304,7 +304,7 @@ o = s:option(DummyValue,"cmd_line", translate("Resolve CLI"))
 o.rawhtml  = true
 o.template = "dockerman/newcontainer_resolve"
 
-o = s:option(Value, "name", translate("Container Name"))
+o = s:option(Value, "name", translate("Container Name") .. translate(" (--name)"))
 o.rmempty = true
 o.default = default_config.name or nil
 
@@ -323,7 +323,7 @@ o.default = default_config.tty and 1 or 0
 o = s:option(Value, "image", translate("Docker Image"))
 o.rmempty = true
 o.default = default_config.image or nil
-for _, v in ipairs (images) do
+for _, v in ipairs(images) do
 	if v.RepoTags then
 		o:value(v.RepoTags[1], v.RepoTags[1])
 	end
@@ -341,20 +341,29 @@ o.disabled = 0
 o.enabled = 1
 o.default = default_config.privileged and 1 or 0
 
-o = s:option(ListValue, "restart", translate("Restart Policy"))
+o = s:option(ListValue, "restart", translate("Restart Policy (--restart)"))
 o.rmempty = true
-o:value("no", "No")
-o:value("unless-stopped", "Unless stopped")
-o:value("always", "Always")
-o:value("on-failure", "On failure")
-o.default = default_config.restart or "unless-stopped"
+o.forcewrite = true
+o:value("no", translate("Restart Policy: Do not restart"))
+o:value("unless-stopped", translate("Restart Policy: Unless stopped"))
+o:value("always", translate("Restart Policy: Always"))
+o:value("on-failure", translate("Restart Policy: On failure"))
+o.default = (default_config.restart and default_config.restart:gsub(":%d+", "")) or "unless-stopped"
+
+local max_retries = s:option(Value, "max_retries",
+	translate("Max Retries"),
+	translate("Maximum retry attempts when restart policy is 'on-failure'")
+)
+max_retries.datatype = "uinteger"
+max_retries:depends('restart', "on-failure")
+max_retries.default = (default_config.restart and tonumber(default_config.restart:match(':(%d+)$'))) or 0
 
 local d_network = s:option(ListValue, "network", translate("Networks"))
 d_network.rmempty = true
 d_network.default = default_config.network or "bridge"
 
 local d_ip = s:option(Value, "ip", translate("IPv4 Address"))
-d_ip.datatype="ip4addr"
+d_ip.datatype = "ip4addr"
 d_ip:depends("network", "nil")
 d_ip.default = default_config.ip or nil
 
@@ -397,6 +406,24 @@ d_publish.placeholder = "2200:22/tcp"
 d_publish.rmempty = true
 d_publish.default = default_config.publish or nil
 
+for _, v in ipairs(networks) do
+	if v.Name then
+		local parent = v.Options and v.Options.parent or nil
+		local ip = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Subnet or nil
+		ipv6 = v.IPAM and v.IPAM.Config and v.IPAM.Config[2] and v.IPAM.Config[2].Subnet or nil
+		local network_name = v.Name .. " | " .. v.Driver  .. (parent and (" | " .. parent) or "") .. (ip and (" | " .. ip) or "").. (ipv6 and (" | " .. ipv6) or "")
+		d_network:value(v.Name, network_name)
+
+		if v.Name ~= "none" and v.Name ~= "bridge" and v.Name ~= "host" then
+			d_ip:depends("network", v.Name)
+		end
+
+		if v.Driver == "bridge" then
+			d_publish:depends("network", v.Name)
+		end
+	end
+end
+
 o = s:option(Value, "command", translate("Run command"))
 o.placeholder = "/bin/sh init.sh"
 o.rmempty = true
@@ -409,7 +436,7 @@ o.enabled = 1
 o.default = default_config.advance or 0
 
 o = s:option(Value, "hostname",
-	translate("Host Name"),
+	translate("Host Name") .. translate(" (--hostname)"),
 	translate("The hostname to use for the container"))
 o.rmempty = true
 o.default = default_config.hostname or nil
@@ -457,25 +484,25 @@ o:depends("advance", 1)
 o.default = default_config.cap_add or nil
 
 o = s:option(Value, "cpus",
-	translate("CPUs"),
+	translate("CPUs") .. translate(" (--cpus)"),
 	translate("Number of CPUs. Number is a fractional number. 0.000 means no limit"))
 o.placeholder = "1.5"
 o.rmempty = true
 o:depends("advance", 1)
-o.datatype="ufloat"
+o.datatype = "ufloat"
 o.default = default_config.cpus or nil
 
 o = s:option(Value, "cpu_shares",
-	translate("CPU Shares Weight"),
+	translate("CPU Shares Weight") .. translate(" (--cpu-shares)"),
 	translate("CPU shares relative weight, if 0 is set, the system will ignore the value and use the default of 1024"))
 o.placeholder = "1024"
 o.rmempty = true
 o:depends("advance", 1)
-o.datatype="uinteger"
+o.datatype = "uinteger"
 o.default = default_config.cpu_shares or nil
 
 o = s:option(Value, "memory",
-	translate("Memory"),
+	translate("Memory") .. translate(" (-m, --memory)"),
 	translate("Memory limit (format: <number>[<unit>]). Number is a positive integer. Unit can be one of b, k, m, or g. Minimum is 4M"))
 o.placeholder = "128m"
 o.rmempty = true
@@ -483,16 +510,16 @@ o:depends("advance", 1)
 o.default = default_config.memory or nil
 
 o = s:option(Value, "blkio_weight",
-	translate("Block IO Weight"),
+	translate("Block IO Weight") .. translate(" (--blkio-weight)"),
 	translate("Block IO weight (relative weight) accepts a weight value between 10 and 1000"))
 o.placeholder = "500"
 o.rmempty = true
 o:depends("advance", 1)
-o.datatype="uinteger"
+o.datatype = "uinteger"
 o.default = default_config.blkio_weight or nil
 
 o = s:option(Value, "log_driver",
-	translate("Logging driver"),
+	translate("Logging driver") .. translate(" (--log-driver)"),
 	translate("The logging driver for the container"))
 o.placeholder = "json-file"
 o.rmempty = true
@@ -500,72 +527,49 @@ o:depends("advance", 1)
 o.default = default_config.log_driver or nil
 
 o = s:option(DynamicList, "log_opt",
-	translate("Log driver options"),
+	translate("Log driver options") .. translate(" (--log-opt)"),
 	translate("The logging configuration for this container"))
-o.placeholder = "max-size=1m"
+o.placeholder = "max-size=1m max-file=3"
 o.rmempty = true
 o:depends("advance", 1)
 o.default = default_config.log_opt or nil
-
-for _, v in ipairs(networks) do
-	if v.Name then
-		local parent = v.Options and v.Options.parent or nil
-		local ip = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Subnet or nil
-		ipv6 =  v.IPAM and v.IPAM.Config and v.IPAM.Config[2] and v.IPAM.Config[2].Subnet or nil
-		local network_name = v.Name .. " | " .. v.Driver  .. (parent and (" | " .. parent) or "") .. (ip and (" | " .. ip) or "").. (ipv6 and (" | " .. ipv6) or "")
-		d_network:value(v.Name, network_name)
-
-		if v.Name ~= "none" and v.Name ~= "bridge" and v.Name ~= "host" then
-			d_ip:depends("network", v.Name)
-		end
-
-		if v.Driver == "bridge" then
-			d_publish:depends("network", v.Name)
-		end
-	end
-end
 
 m.handle = function(self, state, data)
 	if state ~= FORM_VALID then return end
 
 	local tmp
-	local name = data.name or ("luci_" .. os.date("%Y%m%d%H%M%S"))
-	local hostname = data.hostname
-	local tty = type(data.tty) == "number" and (data.tty == 1 and true or false) or default_config.tty or false
-	local publish_all = type(data.publish_all) == "number" and (data.publish_all == 1 and true or false) or default_config.publish_all or false
-	local interactive = type(data.interactive) == "number" and (data.interactive == 1 and true or false) or default_config.interactive or false
-	local image = data.image
-	local user = data.user
-
-	if image and not image:match(".-:.+") then
-		image = image .. ":latest"
-	end
-
-	local privileged = type(data.privileged) == "number" and (data.privileged == 1 and true or false) or default_config.privileged or false
-	local restart = data.restart
 	local env = data.env
 	local dns = data.dns
+	local user = data.user
+	local restart = data.restart
 	local cap_add = data.cap_add
-	local sysctl = {}
+	local hostname = data.hostname
 	local log_driver = data.log_driver
+	local name = data.name or ("luci_" .. os.date("%Y%m%d%H%M%S"))
+	local image = data.image and (data.image:match(".-:.+") or data.image .. ":latest")
+	local tty = (type(data.tty) == "number" and data.tty == 1) or default_config.tty or false
+	local portbindings, exposedports, tmpfs, device, log_opt, command, sysctl = {}, {}, {}, {}, {}, {}, {}
+	local privileged = (type(data.privileged) == "number" and data.privileged == 1) or default_config.privileged or false
+	local publish_all = (type(data.publish_all) == "number" and data.publish_all == 1) or default_config.publish_all or false
+	local interactive = (type(data.interactive) == "number" and data.interactive == 1) or default_config.interactive or false
 
 	tmp = data.sysctl
 	if type(tmp) == "table" then
 		for i, v in ipairs(tmp) do
 			local k,v1 = v:match("(.-)=(.+)")
 			if k and v1 then
-				sysctl[k]=v1
+				sysctl[k] = v1
 			end
 		end
 	end
 
-	local portbindings, exposedports, tmpfs, device, log_opt, command = {}, {}, {}, {}, {}, {}
 	tmp = data.log_opt
 	if type(tmp) == "table" then
-		for i, v in ipairs(tmp) do
+		for _, v in ipairs(tmp) do
 			local k, v1 = v:match("(.-)=(.+)")
+
 			if k and v1 then
-				log_opt[k]=v1
+				log_opt[k] = v1
 			end
 		end
 	end
@@ -573,83 +577,67 @@ m.handle = function(self, state, data)
 	local network = data.network
 	local ip = (network ~= "bridge" and network ~= "host" and network ~= "none") and data.ip or nil
 	local volume = data.volume
+	local cpus = data.cpus or nil
 	local memory = data.memory or nil
 	local cpu_shares = data.cpu_shares or nil
-	local cpus = data.cpus or nil
 	local blkio_weight = data.blkio_weight or nil
 
 	tmp = data.tmpfs
 	if type(tmp) == "table" then
-		for i, v in ipairs(tmp)do
-			local k= v:match("([^:]+)")
+		for _, v in ipairs(tmp) do
+			local k = v:match("([^:]+)")
 			local v1 = v:match(".-:([^:]+)") or ""
+
 			if k then
-				tmpfs[k]=v1
+				tmpfs[k] = v1
 			end
 		end
 	end
 
 	tmp = data.device
 	if type(tmp) == "table" then
-		for i, v in ipairs(tmp) do
+		for _, v in ipairs(tmp) do
 			local t = {}
-			local _,_, h, c, p = v:find("(.-):(.-):(.+)")
-			if h and c then
-				t['PathOnHost'] = h
-				t['PathInContainer'] = c
-				t['CgroupPermissions'] = p or "rwm"
-			else
-				local _,_, h, c = v:find("(.-):(.+)")
-				if h and c then
-					t['PathOnHost'] = h
-					t['PathInContainer'] = c
-					t['CgroupPermissions'] = "rwm"
-				else
-					t['PathOnHost'] = v
-					t['PathInContainer'] = v
-					t['CgroupPermissions'] = "rwm"
-				end
+			local h, c, p = v:match("(.-):(.-):(.+)")
+
+			if not (h and c) then
+				h, c = v:match("(.-):(.+)")
 			end
 
-			if next(t) ~= nil then
-				table.insert( device, t )
-			end
+			t['PathOnHost'] = h or v
+			t['PathInContainer'] = c or v
+			t['CgroupPermissions'] = p or "rwm"
+
+			device[#device + 1] = t
 		end
 	end
 
 	tmp = data.publish or {}
-	for i, v in ipairs(tmp) do
-		for v1 ,v2 in string.gmatch(v, "(%d+):([^%s]+)") do
-			local _,_,p= v2:find("^%d+/(%w+)")
-			if p == nil then
-				v2=v2..'/tcp'
+	for _, v in ipairs(tmp) do
+		for port, proto in string.gmatch(v, "(%d+):([^%s]+)") do
+			if not proto:match("^%d+/%w+") then
+				proto = proto .. '/tcp'
 			end
-			portbindings[v2] = {{HostPort=v1}}
-			exposedports[v2] = {HostPort=v1}
+
+			portbindings[proto] = {{HostPort = port}}
+			exposedports[proto] = {HostPort = port}
 		end
 	end
 
 	local link = data.link
 	tmp = data.command
-	if tmp ~= nil then
+	if tmp then
 		for v in string.gmatch(tmp, "[^%s]+") do
-			command[#command+1] = v
+			command[#command + 1] = v
 		end
 	end
 
 	if memory and memory ~= 0 then
-		_,_,n,unit = memory:find("([%d%.]+)([%l%u]+)")
+		local n, unit = memory:match("([%d%.]+)([%l%u]+)")
 		if n then
-			unit = unit and unit:sub(1,1):upper() or "B"
-			if  unit == "M" then
-				memory = tonumber(n) * 1024 * 1024
-			elseif unit == "G" then
-				memory = tonumber(n) * 1024 * 1024 * 1024
-			elseif unit == "K" then
-				memory = tonumber(n) * 1024
-			else
-				memory = tonumber(n)
-			end
+			unit = unit and unit:sub(1, 1):upper() or "B"
+			local unit_factors = { B = 1, K = 1024, M = 1024^2, G = 1024^3 }
+			memory = tonumber(n) * (unit_factors[unit] or 1)
 		end
 	end
 
@@ -664,7 +652,8 @@ m.handle = function(self, state, data)
 	create_body.HostConfig = create_body.HostConfig or {}
 	create_body.HostConfig.Dns = dns
 	create_body.HostConfig.Binds = volume
-	create_body.HostConfig.RestartPolicy = { Name = restart, MaximumRetryCount = 0 }
+	create_body.HostConfig.RestartPolicy = {Name = restart, MaximumRetryCount = tonumber(data.max_retries) or 0}
+
 	create_body.HostConfig.Privileged = privileged and true or false
 	create_body.HostConfig.PortBindings = portbindings
 	create_body.HostConfig.Memory = memory and tonumber(memory)
@@ -681,11 +670,11 @@ m.handle = function(self, state, data)
 
 	if ip then
 		if create_body.NetworkingConfig and create_body.NetworkingConfig.EndpointsConfig and type(create_body.NetworkingConfig.EndpointsConfig) == "table" then
-			for k, v in pairs (create_body.NetworkingConfig.EndpointsConfig) do
+			for k, v in pairs(create_body.NetworkingConfig.EndpointsConfig) do
 				if k == network and v.IPAMConfig and v.IPAMConfig.IPv4Address then
 					v.IPAMConfig.IPv4Address = ip
 				else
-					create_body.NetworkingConfig.EndpointsConfig = {[network] = {IPAMConfig = { IPv4Address = ip}}}
+					create_body.NetworkingConfig.EndpointsConfig = {[network] = {IPAMConfig = {IPv4Address = ip}}}
 				end
 				break
 			end

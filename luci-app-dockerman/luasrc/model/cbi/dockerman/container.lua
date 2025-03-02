@@ -315,17 +315,10 @@ if action == "info" then
 		},
 	}
 
-	if lost_state then
-		table_info["06start"] = {
-			_key = translate("Start Time"),
-			_value = container_info.State and container_info.State.StartedAt or "-"
-		}
-	else
-		table_info["06start"] = {
-			_key = translate("Finish Time"),
-			_value = container_info.State and container_info.State.FinishedAt or "-"
-		}
-	end
+	table_info["06start"] = {
+		_key = translate("Finish Time"),
+		_value = container_info.State and (lost_state and container_info.State.StartedAt or container_info.State.FinishedAt) or "-"
+	}
 
 	table_info["07healthy"] = {
 		_key = translate("Healthy"),
@@ -379,7 +372,7 @@ if action == "info" then
 
 	info_networks = get_networks(container_info)
 	list_networks = {}
-	for _, v in ipairs (networks) do
+	for _, v in ipairs(networks) do
 		if v and v.Name then
 			local parent = v.Options and v.Options.parent or nil
 			local ip = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Subnet or nil
@@ -402,7 +395,8 @@ if action == "info" then
 
 	table_info["15connect"] = {
 		_key = translate("Connect Network"),
-		_value = list_networks, _opts = "",
+		_opts = "",
+		_value = list_networks,
 		_button = translate("Connect")
 	}
 

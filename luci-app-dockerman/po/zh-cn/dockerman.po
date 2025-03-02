@@ -1135,18 +1135,6 @@ msgstr "Docker 守护进程：停止"
 msgid "Docker daemon: restarting"
 msgstr "Docker 守护进程：重新启动中"
 
-msgid "No"
-msgstr "开机不重启"
-
-msgid "Unless stopped"
-msgstr "除非停下来"
-
-msgid "Always"
-msgstr "开机启动"
-
-msgid "On failure"
-msgstr "失败时"
-
 msgid "Tmpfs"
 msgstr "临时文件系统"
 
@@ -1198,8 +1186,23 @@ msgstr "您想保存调试临时文件的路径"
 msgid "Running time"
 msgstr "运行时间"
 
-msgid "Open the container time"
+msgid "Open the container"
 msgstr "打开容器"
 
 msgid "Open the file list"
 msgstr "打开文件列表"
+
+msgid "Restart Policy (--restart)"
+msgstr "重启策略 (--restart)"
+
+msgid "Restart Policy: Do not restart"
+msgstr "重启策略：不重启"
+
+msgid "Restart Policy: Unless stopped"
+msgstr "重启策略：除非手动停止"
+
+msgid "Restart Policy: Always"
+msgstr "重启策略：始终重启"
+
+msgid "Restart Policy: On failure"
+msgstr "重启策略：仅在失败时重启"
