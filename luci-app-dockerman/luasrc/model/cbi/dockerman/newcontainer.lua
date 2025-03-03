@@ -66,7 +66,7 @@ local resolve_cli = function(cmd_line)
 	local key_abb = {
 		P = 'publish_all',
 		a = 'attach',
-		c = 'cpu-shares',
+		c = 'cpu_shares',
 		d = 'detach',
 		e = 'env',
 		h = 'hostname',
@@ -84,7 +84,7 @@ local resolve_cli = function(cmd_line)
 	local key_with_list = {
 		'a', 'add_host', 'attach', 'blkio_weight_device', 'cap_add', 'cap_drop',
 		'device', 'device_cgroup_rule', 'device_read_bps', 'device_read_iops',
-		'device_write_bps', 'device_write_iops', 'dns', 'dns_optiondns_search', 'e',
+		'device_write_bps', 'device_write_iops', 'dns', 'dns_option', 'dns_search', 'e',
 		'env', 'env_file', 'expose', 'group_add', 'l', 'label', 'label_file', 'link',
 		'link_local_ip', 'log_opt', 'network_alias', 'p', 'publish', 'security_opt',
 		'storage_opt', 'sysctl', 'tmpfs', 'v', 'volume', 'volumes_from'
@@ -168,7 +168,7 @@ local resolve_cli = function(cmd_line)
 				val = w
 			end
 		elseif is_cmd then
-			config["command"] = (config["command"] and (config["command"] .. " " ) or "")  .. w
+			config.command = (config.command and (config.command .. " " ) or "")  .. w
 		end
 		if (key or _key) and val then
 			key = _key or key
@@ -308,13 +308,19 @@ o = s:option(Value, "name", translate("Container Name") .. translate(" (--name)"
 o.rmempty = true
 o.default = default_config.name or nil
 
-o = s:option(Flag, "interactive", translate("Interactive (-i)"))
+o = s:option(Flag, "interactive",
+	translate("Interactive Mode (-i)"),
+	translate("Keep STDIN open even if not attached")
+)
 o.rmempty = true
-o.disabled = 0
 o.enabled = 1
+o.disabled = 0
 o.default = default_config.interactive and 1 or 0
 
-o = s:option(Flag, "tty", translate("TTY (-t)"))
+o = s:option(Flag, "tty",
+	translate("Allocate Pseudo-TTY (-t)"),
+	translate("Allocate a pseudo-TTY for console interaction")
+)
 o.rmempty = true
 o.disabled = 0
 o.enabled = 1
@@ -335,7 +341,10 @@ o.disabled = 0
 o.enabled = 1
 o.default = 0
 
-o = s:option(Flag, "privileged", translate("Privileged"))
+o = s:option(Flag, "privileged",
+	translate("Privileged Mode (--privileged)"),
+	translate("Grant extended privileges to container (full host device access)<br>")
+)
 o.rmempty = true
 o.disabled = 0
 o.enabled = 1
@@ -344,19 +353,19 @@ o.default = default_config.privileged and 1 or 0
 o = s:option(ListValue, "restart", translate("Restart Policy (--restart)"))
 o.rmempty = true
 o.forcewrite = true
-o:value("no", translate("Restart Policy: Do not restart"))
-o:value("unless-stopped", translate("Restart Policy: Unless stopped"))
-o:value("always", translate("Restart Policy: Always"))
-o:value("on-failure", translate("Restart Policy: On failure"))
-o.default = (default_config.restart and default_config.restart:gsub(":%d+", "")) or "unless-stopped"
+o:value("no", translate("Do not restart"))
+o:value("unless-stopped", translate("Unless stopped"))
+o:value("always", translate("Always"))
+o:value("on-failure", translate("On failure"))
+o.default = (default_config.restart and default_config.restart:match("([%w%-]+):")) or "unless-stopped"
 
-local max_retries = s:option(Value, "max_retries",
+o = s:option(Value, "max_retries",
 	translate("Max Retries"),
-	translate("Maximum retry attempts when restart policy is 'on-failure'")
+	translate("Specify maximum retries when using 'on-failure' restart policy")
 )
-max_retries.datatype = "uinteger"
-max_retries:depends('restart', "on-failure")
-max_retries.default = (default_config.restart and tonumber(default_config.restart:match(':(%d+)$'))) or 0
+o.datatype = "uinteger"
+o:depends('restart', "on-failure")
+o.default = (default_config.restart and tonumber(default_config.restart:match(':(%d+)$'))) or 0
 
 local d_network = s:option(ListValue, "network", translate("Networks"))
 d_network.rmempty = true
@@ -541,6 +550,7 @@ m.handle = function(self, state, data)
 	local env = data.env
 	local dns = data.dns
 	local user = data.user
+	local link = data.link
 	local restart = data.restart
 	local cap_add = data.cap_add
 	local hostname = data.hostname
@@ -604,9 +614,9 @@ m.handle = function(self, state, data)
 				h, c = v:match("(.-):(.+)")
 			end
 
-			t['PathOnHost'] = h or v
-			t['PathInContainer'] = c or v
-			t['CgroupPermissions'] = p or "rwm"
+			t.PathOnHost = h or v
+			t.PathInContainer = c or v
+			t.CgroupPermissions = p or "rwm"
 
 			device[#device + 1] = t
 		end
@@ -614,7 +624,7 @@ m.handle = function(self, state, data)
 
 	tmp = data.publish or {}
 	for _, v in ipairs(tmp) do
-		for port, proto in string.gmatch(v, "(%d+):([^%s]+)") do
+		for port, proto in v:gmatch("(%d+):([^%s]+)") do
 			if not proto:match("^%d+/%w+") then
 				proto = proto .. '/tcp'
 			end
@@ -624,10 +634,9 @@ m.handle = function(self, state, data)
 		end
 	end
 
-	local link = data.link
 	tmp = data.command
 	if tmp then
-		for v in string.gmatch(tmp, "[^%s]+") do
+		for v in tmp:gmatch("[^%s]+") do
 			command[#command + 1] = v
 		end
 	end
@@ -641,26 +650,26 @@ m.handle = function(self, state, data)
 		end
 	end
 
-	create_body.Hostname = network ~= "host" and (hostname or name) or nil
-	create_body.Tty = tty and true or false
-	create_body.OpenStdin = interactive and true or false
+	create_body.Env = env
 	create_body.User = user
 	create_body.Cmd = command
-	create_body.Env = env
 	create_body.Image = image
 	create_body.ExposedPorts = exposedports
+	create_body.Tty = tty and true or false
+	create_body.Hostname = network ~= "host" and (hostname or name) or nil
+	create_body.OpenStdin = interactive and true or false
+
 	create_body.HostConfig = create_body.HostConfig or {}
 	create_body.HostConfig.Dns = dns
 	create_body.HostConfig.Binds = volume
-	create_body.HostConfig.RestartPolicy = {Name = restart, MaximumRetryCount = tonumber(data.max_retries) or 0}
-
 	create_body.HostConfig.Privileged = privileged and true or false
 	create_body.HostConfig.PortBindings = portbindings
+	create_body.HostConfig.PublishAllPorts = publish_all
 	create_body.HostConfig.Memory = memory and tonumber(memory)
 	create_body.HostConfig.CpuShares = cpu_shares and tonumber(cpu_shares)
 	create_body.HostConfig.NanoCPUs = cpus and tonumber(cpus) * 10 ^ 9
 	create_body.HostConfig.BlkioWeight = blkio_weight and tonumber(blkio_weight)
-	create_body.HostConfig.PublishAllPorts = publish_all
+	create_body.HostConfig.RestartPolicy = {Name = restart, MaximumRetryCount = tonumber(data.max_retries) or 0}
 
 	if create_body.HostConfig.NetworkMode ~= network then
 		create_body.NetworkingConfig = nil
@@ -685,11 +694,11 @@ m.handle = function(self, state, data)
 		create_body.NetworkingConfig = nil
 	end
 
-	create_body["HostConfig"]["Tmpfs"] = tmpfs
-	create_body["HostConfig"]["CapAdd"] = cap_add
-	create_body["HostConfig"]["Devices"] = device
-	create_body["HostConfig"]["Sysctls"] = sysctl
-	create_body["HostConfig"]["LogConfig"] = {Config = log_opt, Type = log_driver}
+	create_body.HostConfig.Tmpfs = tmpfs
+	create_body.HostConfig.CapAdd = cap_add
+	create_body.HostConfig.Devices = device
+	create_body.HostConfig.Sysctls = sysctl
+	create_body.HostConfig.LogConfig = {Config = log_opt, Type = log_driver}
 
 	if network == "bridge" then
 		create_body["HostConfig"]["Links"] = link

@@ -513,10 +513,6 @@ msgstr "入口网络是以群模式提供路由网格的网络"
 msgid "Inspect"
 msgstr "检查"
 
-#: applications/luci-app-dockerman/luasrc/model/cbi/dockerman/newcontainer.lua:477
-msgid "Interactive (-i)"
-msgstr "交互（-i）"
-
 #: applications/luci-app-dockerman/luasrc/model/cbi/dockerman/newnetwork.lua:86
 msgid "Internal"
 msgstr "内部"
@@ -733,10 +729,6 @@ msgstr "允许访问的端口"
 #: applications/luci-app-dockerman/luasrc/model/cbi/dockerman/newnetwork.lua:62
 msgid "Private (Prevent communication between MAC VLANs)"
 msgstr "专用（阻止 MAC VLAN 之间的通信）"
-
-#: applications/luci-app-dockerman/luasrc/model/cbi/dockerman/newcontainer.lua:504
-msgid "Privileged"
-msgstr "特权模式"
 
 #: applications/luci-app-dockerman/luasrc/model/cbi/dockerman/newcontainer.lua:561
 msgid "Publish container's port(s) to the host"
@@ -1192,17 +1184,42 @@ msgstr "打开容器"
 msgid "Open the file list"
 msgstr "打开文件列表"
 
+msgid "Max Retries"
+msgstr "最大重试次数"
+
+msgid "Specify maximum retries when using 'on-failure' restart policy"
+msgstr "当重启策略为 '仅在失败时重启' 时，指定最大重试次数"
+
 msgid "Restart Policy (--restart)"
 msgstr "重启策略 (--restart)"
 
-msgid "Restart Policy: Do not restart"
-msgstr "重启策略：不重启"
+msgid "Do not restart"
+msgstr "不重启"
 
-msgid "Restart Policy: Unless stopped"
-msgstr "重启策略：除非手动停止"
+msgid "Unless stopped"
+msgstr "除非手动停止"
 
-msgid "Restart Policy: Always"
-msgstr "重启策略：始终重启"
+msgid "Always"
+msgstr "始终重启"
 
-msgid "Restart Policy: On failure"
-msgstr "重启策略：仅在失败时重启"
+msgid "On failure"
+msgstr "仅在失败时重启"
+
+msgid "Interactive Mode (-i)"
+msgstr "交互模式 (-i)"
+
+msgid "Keep STDIN open even if not attached"
+msgstr "即使未连接也保持 STDIN 打开"
+
+msgid "Allocate Pseudo-TTY (-t)"
+msgstr "分配伪终端 (-t)"
+
+msgid "Allocate a pseudo-TTY for console interaction"
+msgstr "为控制台交互分配伪终端"
+
+msgid "Privileged Mode (--privileged)"
+msgstr "特权模式 (--privileged)"
+
+msgid "Grant extended privileges to container (full host device access)<br>"
+msgstr "授予容器扩展权限（完全访问宿主机设备）<br>"
+

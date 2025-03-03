@@ -7,8 +7,7 @@ local util  = require "luci.util"
 local docker = require "luci.model.docker"
 local dk = docker.new()
 local m, s, o, images, networks, container_info, res, lost_state
-local container_id = arg[1]
-local action = arg[2] or "info"
+local container_id, action = arg[1], arg[2] or "info"
 
 if not container_id then return end
 
@@ -69,7 +68,7 @@ local get_mounts = function(d)
 end
 
 local get_networks = function(d)
-	local data={}
+	local data = {}
 
 	if d.NetworkSettings and d.NetworkSettings.Networks and type(d.NetworkSettings.Networks) == "table" then
 		for k, v in pairs(d.NetworkSettings.Networks) do
@@ -96,7 +95,7 @@ local get_device = function(d)
 	local data
 
 	if d.HostConfig and d.HostConfig.Devices then
-		for _,v in ipairs(d.HostConfig.Devices) do
+		for _, v in ipairs(d.HostConfig.Devices) do
 			data = (data and (data .. "<br>") or "") .. v["PathOnHost"] .. ":" .. v["PathInContainer"] .. (is_empty(v["CgroupPermissions"]) and (":" .. v["CgroupPermissions"]) or "")
 		end
 	end
@@ -195,12 +194,12 @@ m.redirect = luci.dispatcher.build_url("admin/services/docker/containers")
 s = m:section(SimpleSection)
 s.template = "dockerman/apply_widget"
 s.err = docker:read_status()
-s.err = s.err and s.err:gsub("\n","<br>"):gsub(" ","&nbsp;")
+s.err = s.err and s.err:gsub("\n", "<br>"):gsub(" ", "&nbsp;")
 if s.err then
 	docker:clear_status()
 end
 
-s = m:section(Table,{{}})
+s = m:section(Table, {{}})
 s.notitle = true
 s.rowcolors = false
 s.template = "cbi/nullsection"
@@ -249,7 +248,7 @@ o.inputtitle = translate("Export")
 o.inputstyle = "apply"
 o.forcewrite = true
 o.write = function(self, section)
-  luci.http.redirect(luci.dispatcher.build_url("admin/services/docker/container_export/%s" %container_id))
+	luci.http.redirect(luci.dispatcher.build_url("admin/services/docker/container_export/%s" %container_id))
 end
 
 o = s:option(Button, "_upgrade")
@@ -313,66 +312,64 @@ if action == "info" then
 			_key = translate("Created"),
 			_value = container_info.Created or "-"
 		},
+		["06start"] = {
+			_key = translate("Finish Time"),
+			_value = container_info.State and (lost_state and container_info.State.StartedAt or container_info.State.FinishedAt) or "-"
+		},
+		["07healthy"] = {
+			_key = translate("Healthy"),
+			_value = container_info.State and container_info.State.Health and container_info.State.Health.Status or "-"
+		},
+		["08restart"] = {
+			_key = translate("Restart Policy"),
+			_value = container_info.HostConfig and container_info.HostConfig.RestartPolicy and container_info.HostConfig.RestartPolicy.Name or "-",
+			_button = translate("Update")
+		},
+		-- ["081user"] = {
+		-- 	_key = translate("User"),
+		-- 	_value = container_info.Config and (is_empty(container_info.Config.User) and container_info.Config.User or "-") or "-"
+		-- },
+		["09mount"] = {
+			_key = translate("Mount/Volume"),
+			_value = get_mounts(container_info) or "-"
+		},
+		["10cmd"] = {
+			_key = translate("Command"),
+			_value = get_command(container_info) or "-"
+		},
+		["11env"] = {
+			_key = translate("Env"),
+			_value = get_env(container_info) or "-"
+		},
+		["12ports"] = {
+			_key = translate("Ports"),
+			_value = get_ports(container_info) or "-"
+		},
+		["13links"] = {
+			_key = translate("Links"),
+			_value = get_links(container_info) or "-"
+		},
+		["14device"] = {
+			_key = translate("Device"),
+			_value = get_device(container_info) or "-"
+		},
+		["15tmpfs"] = {
+			_key = translate("Tmpfs"),
+			_value = get_tmpfs(container_info) or "-"
+		},
+		["16dns"] = {
+			_key = translate("DNS"),
+			_value = get_dns(container_info) or "-"
+		},
+		["17sysctl"] = {
+			_key = translate("Sysctl"),
+			_value = get_sysctl(container_info) or "-"
+		}
 	}
 
-	table_info["06start"] = {
-		_key = translate("Finish Time"),
-		_value = container_info.State and (lost_state and container_info.State.StartedAt or container_info.State.FinishedAt) or "-"
-	}
-
-	table_info["07healthy"] = {
-		_key = translate("Healthy"),
-		_value = container_info.State and container_info.State.Health and container_info.State.Health.Status or "-"
-	}
-	table_info["08restart"] = {
-		_key = translate("Restart Policy"),
-		_value = container_info.HostConfig and container_info.HostConfig.RestartPolicy and container_info.HostConfig.RestartPolicy.Name or "-",
-		_button=translate("Update")
-	}
-	table_info["081user"] = {
-		_key = translate("User"),
-		_value = container_info.Config and (is_empty(container_info.Config.User) and container_info.Config.User or "-") or "-"
-	}
-	table_info["09mount"] = {
-		_key = translate("Mount/Volume"),
-		_value = get_mounts(container_info) or "-"
-	}
-	table_info["10cmd"] = {
-		_key = translate("Command"),
-		_value = get_command(container_info) or "-"
-	}
-	table_info["11env"] = {
-		_key = translate("Env"),
-		_value = get_env(container_info) or "-"
-	}
-	table_info["12ports"] = {
-		_key = translate("Ports"),
-		_value = get_ports(container_info) or "-"
-	}
-	table_info["13links"] = {
-		_key = translate("Links"),
-		_value = get_links(container_info) or "-"
-	}
-	table_info["14device"] = {
-		_key = translate("Device"),
-		_value = get_device(container_info) or "-"
-	}
-	table_info["15tmpfs"] = {
-		_key = translate("Tmpfs"),
-		_value = get_tmpfs(container_info) or "-"
-	}
-	table_info["16dns"] = {
-		_key = translate("DNS"),
-		_value = get_dns(container_info) or "-"
-	}
-	table_info["17sysctl"] = {
-		_key = translate("Sysctl"),
-		_value = get_sysctl(container_info) or "-"
-	}
-
-	info_networks = get_networks(container_info)
 	list_networks = {}
-	for _, v in ipairs(networks) do
+	info_networks = get_networks(container_info)
+	for _, v in pairs(networks) do
 		if v and v.Name then
 			local parent = v.Options and v.Options.parent or nil
 			local ip = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Subnet or nil
@@ -382,7 +379,7 @@ if action == "info" then
 		end
 	end
 
-	if type(info_networks)== "table" then
+	if type(info_networks) == "table" then
 		for k, v in pairs(info_networks) do
 			table_info["14network" .. k] = {
 				_key = translate("Network"),
@@ -400,7 +397,7 @@ if action == "info" then
 		_button = translate("Connect")
 	}
 
-	s = m:section(Table,table_info)
+	s = m:section(Table, table_info)
 	s.nodescr = true
 	s.formvalue = function(self, section)
 		return table_info
@@ -412,41 +409,35 @@ if action == "info" then
 	o = s:option(ListValue, "_value")
 	o.render = function(self, section, scope)
 		if table_info[section]._key == translate("Name") then
-			self:reset_values()
 			self.template = "cbi/value"
 			self.size = 30
 			self.keylist = {}
 			self.vallist = {}
-			self.default = table_info[section]._value
 			Value.render(self, section, scope)
 		elseif table_info[section]._key == translate("Restart Policy") then
 			self.template = "cbi/lvalue"
-			self:reset_values()
 			self.size = nil
-			self:value("no", "No")
-			self:value("unless-stopped", "Unless stopped")
-			self:value("always", "Always")
-			self:value("on-failure", "On failure")
-			self.default = table_info[section]._value
+			self:value("no", translate("No"))
+			self:value("unless-stopped", translate("Unless stopped"))
+			self:value("always", translate("Always"))
+			self:value("on-failure", translate("On failure"))
 			ListValue.render(self, section, scope)
 		elseif table_info[section]._key == translate("Connect Network") then
 			self.template = "cbi/lvalue"
-			self:reset_values()
 			self.size = nil
-			for k,v in pairs(list_networks) do
-					if k ~= "host" then
-					self:value(k,v)
+			for k, v in pairs(list_networks) do
+				if k ~= "host" then
+					self:value(k, v)
 				end
 			end
-			self.default = table_info[section]._value
 			ListValue.render(self, section, scope)
 		else
-			self:reset_values()
 			self.rawhtml = true
 			self.template = "cbi/dvalue"
-			self.default = table_info[section]._value
 			DummyValue.render(self, section, scope)
 		end
+		self:reset_values()
+		self.default = table_info[section]._value
 	end
 	o.forcewrite = true
 	o.write = function(self, section, value)
@@ -466,11 +457,11 @@ if action == "info" then
 	end
 	o.render = function(self, section, scope)
 		if table_info[section]._key == translate("Connect Network") then
-			self.template = "cbi/value"
 			self.keylist = {}
 			self.vallist = {}
-			self.placeholder = "10.1.1.254"
 			self.datatype = "ip4addr"
+			self.template = "cbi/value"
+			self.placeholder = "10.1.1.254"
 			self.default = table_info[section]._opts
 			Value.render(self, section, scope)
 		else
@@ -486,12 +477,12 @@ if action == "info" then
 	o.render = function(self, section, scope)
 		if table_info[section]._button and table_info[section]._value ~= nil then
 			self.inputtitle = table_info[section]._button
-			self.template = "cbi/button"
 			self.inputstyle = "edit"
+			self.template = "cbi/button"
 			Button.render(self, section, scope)
 		else
-			self.template = "cbi/dvalue"
 			self.default = ""
+			self.template = "cbi/dvalue"
 			DummyValue.render(self, section, scope)
 		end
 	end
@@ -503,27 +494,18 @@ if action == "info" then
 		if section == "01name" then
 			docker:append_status("Containers: rename %s..." %container_id)
 			local new_name = table_info[section]._value
-			res = dk.containers:rename({
-				id = container_id,
-				query = {name = new_name}
-			})
+			res = dk.containers:rename({id = container_id, query = {name = new_name}})
 		elseif section == "08restart" then
 			docker:append_status("Containers: update %s..." %container_id)
 			local new_restart = table_info[section]._value
-			res = dk.containers:update({
-				id = container_id,
-				body = {RestartPolicy = {Name = new_restart}}
-			})
+			res = dk.containers:update({id = container_id, body = {RestartPolicy = {Name = new_restart}}})
 		elseif table_info[section]._key == translate("Network") then
 			local _, _, leave_network
 
 			_, _, leave_network = table_info[section]._value:find("(.-) | .+")
 			leave_network = leave_network or table_info[section]._value
 			docker:append_status("Network: disconnect %s%s..." %{leave_network, container_id})
-			res = dk.networks:disconnect({
-				name = leave_network,
-				body = {Container = container_id}
-			})
+			res = dk.networks:disconnect({name = leave_network, body = {Container = container_id}})
 		elseif section == "15connect" then
 			local connect_network = table_info[section]._value
 			local network_opiton
@@ -538,10 +520,7 @@ if action == "info" then
 			docker:append_status("Network: connect %s%s..." %{connect_network, container_id})
 			res = dk.networks:connect({
 				name = connect_network,
-				body = {
-					Container = container_id,
-					EndpointConfig = network_opiton
-				}
+				body = {Container = container_id, EndpointConfig = network_opiton}
 			})
 		end
 
@@ -589,26 +568,25 @@ elseif action == "resources" then
 		if state == FORM_VALID then
 			local memory = data.memory
 			if memory and memory ~= 0 then
-				_, _, n, unit = memory:find("([%d%.]+)([%l%u]+)")
+				local n, unit = memory:match("(%d+%.?%d*)([MmGgKk]?B?)")
 				if n then
-					unit = unit and unit:sub(1, 1):upper() or "B"
-					if  unit == "M" then
-						memory = tonumber(n) * 1024 * 1024
-					elseif unit == "G" then
-						memory = tonumber(n) * 1024 * 1024 * 1024
-					elseif unit == "K" then
-						memory = tonumber(n) * 1024
-					else
-						memory = tonumber(n)
-					end
+					local unit_map = {
+						MB = 1024 * 1024,
+						GB = 1024 * 1024 * 1024,
+						KB = 1024,
+						B = 1
+					}
+
+					local multiplier = unit_map[unit and unit:upper():sub(1, 2) or "B"] or 1
+					memory = tonumber(n) * multiplier
 				end
 			end
 
 			request_body = {
-				BlkioWeight = tonumber(data.blkioweight),
-				NanoCPUs = tonumber(data.cpus)*10^9,
 				Memory = tonumber(memory),
-				CpuShares = tonumber(data.cpushares)
+				NanoCPUs = tonumber(data.cpus)*10^9,
+				CpuShares = tonumber(data.cpushares),
+				BlkioWeight = tonumber(data.blkioweight)
 			}
 
 			docker:write_status("Containers: update %s..." %container_id)
@@ -741,14 +719,8 @@ elseif action == "stats" then
 		s.container_id = container_id
 		s.template = "dockerman/container_stats"
 		table_stats = {
-			cpu = {
-				key = translate("CPU Useage"),
-				value = '-'
-			},
-			memory = {
-				key = translate("Memory Useage"),
-				value = '-'
-			}
+			cpu = {key = translate("CPU Useage"), value = '-'},
+			memory = {key = translate("Memory Useage"), value = '-'}
 		}
 
 		container_top = response.body
