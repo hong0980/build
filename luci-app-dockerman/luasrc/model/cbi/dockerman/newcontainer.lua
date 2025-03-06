@@ -543,6 +543,14 @@ o.rmempty = true
 o:depends("advance", 1)
 o.default = default_config.log_opt or nil
 
+-- 是否只查看最后一次启动的日志
+-- o = s:option(Flag, "log_last_start",
+-- 	translate("Show logs since last start"),
+-- 	translate("Enable to limit container logs to the last start time"))
+-- o.rmempty = true
+-- o:depends("advance", 1)
+-- o.default = 0 -- 默认关闭
+
 m.handle = function(self, state, data)
 	if state ~= FORM_VALID then return end
 

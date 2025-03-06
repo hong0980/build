@@ -19,13 +19,13 @@ add_ports() {
 	for id in $ids; do
 		id=$(docker ps --filter "ID=$id" --quiet)
 		[ -z "$id" ] && {
-			 echo "Docker containner not running"; 
-			 return 1;
+			 echo "Docker containner not running"
+			 return 1
 		}
 		ports=$(docker ps --filter "ID=$id" --format "{{.Ports}}")
 		# echo "$ports"
 		for port in $ports; do
-				echo "$port" | grep -qE "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}:.*$" || continue;
+				echo "$port" | grep -qE "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}:.*$" || continue
 				[ "${port: -1}" == "," ] && port="${port:0:-1}"
 				local protocol=""
 				[ "${port%tcp}" != "$port" ] && protocol="/tcp"
