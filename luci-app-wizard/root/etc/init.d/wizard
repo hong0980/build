@@ -11,11 +11,6 @@ wizard_uci_set(){
     uci_set wizard default "$1" "$2"
 }
 
-uci_commit_config() {
-    uci changes "$1" | grep -q . && uci commit "$1" || return 1
-    return 0
-}
-
 add_wizard() {
     wan_device=$(uci_get bk_network wan device "")
     wan_ifname=$(uci_get bk_network wan ifname "")
@@ -98,8 +93,8 @@ add_wizard() {
             fi
 
             wizard_uci_set lan_gateway_old "$lan_gateway"
-            uci_commit_config dhcp
-            uci_commit_config firewall
+            uci_commit dhcp
+            uci_commit firewall
             /etc/init.d/firewall reload &
         ;;
         # static)
@@ -159,7 +154,7 @@ add_wizard() {
                 for radio in radio0 radio1 radio2 radio3; do
                     wifi_setup_radio "$radio"
                 done
-                uci_commit_config wireless
+                uci_commit wireless
             }
             wizard_uci_set wifi_key_old "$wifi_key"
             wizard_uci_set wifi_ssid_old "$wifi_ssid"
@@ -188,15 +183,23 @@ add_wizard() {
     #     uci -q delete network.wan6
     #     test uci_get network lan gateway || uci_set network lan ifname "$eth"
     # fi
-    uci_commit_config wizard
-    uci_commit_config network && /etc/init.d/network restart &
-    uci_commit_config dhcp && /etc/init.d/dnsmasq reload &
-    uci_commit_config firewall && /etc/init.d/firewall reload &
+
+    uci_commit wizard
+    uci_commit dhcp
+    uci_commit firewall
+    uci_commit network
 }
 
 start_service() {
     config_load 'wizard'
     config_foreach add_wizard 'wizard'
+
+    (
+        /etc/init.d/network restart
+        /etc/init.d/firewall reload
+        /etc/init.d/dnsmasq reload
+    )&
+
 }
 
 service_triggers() {
