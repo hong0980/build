@@ -705,29 +705,34 @@ elseif action == "stats" then
 	local response = dk.containers:top({id = container_id, query = {ps_args = "-aux"}})
 	local container_top
 
-	if response.code == 200 then
-		container_top = response.body
-	else
-		response = dk.containers:top({id = container_id})
+	if response.code ~= 409 then
+		if response.code ~= 200 then
+			response = dk.containers:top({id = container_id})
+		end
+
+		if response.code ~= 200 then
+			response = dk.containers:top({id = container_id, query = {ps_args = "-ww"}})
+		end
+
 		if response.code == 200 then
 			container_top = response.body
 		end
-	end
 
-	if type(container_top) == "table" then
-		s = m:section(SimpleSection)
-		s.container_id = container_id
-		s.template = "dockerman/container_stats"
-		table_stats = {
-			cpu = {key = translate("CPU Useage"), value = '-'},
+		local table_stats = {
+			cpu = {key = translate("CPU Useage"), value='-'},
 			memory = {key = translate("Memory Useage"), value = '-'}
 		}
-
-		container_top = response.body
 		s = m:section(Table, table_stats, translate("Stats"))
 		s:option(DummyValue, "key", translate("Stats")).width = "33%"
 		s:option(DummyValue, "value")
-		top_section = m:section(Table, container_top.Processes, translate("TOP"))
+
+		s = m:section(SimpleSection)
+		s.container_id = container_id
+		s.template = "dockerman/container_stats"
+	end
+
+	if type(container_top) == "table" then
+		local top_section = m:section(Table, container_top.Processes, translate("TOP"))
 		for i, v in ipairs(container_top.Titles) do
 			top_section:option(DummyValue, i, translate(v))
 		end

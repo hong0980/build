@@ -133,7 +133,7 @@ local get_config = function(container_config, image_config)
 	if old_host_config.PortBindings and next(old_host_config.PortBindings) ~= nil then
 		config.ExposedPorts = {}
 		for p, v in pairs(old_host_config.PortBindings) do
-			config.ExposedPorts[p] = {HostPort=v[1] and v[1].HostPort}
+			config.ExposedPorts[p] = {HostPort = v[1] and v[1].HostPort}
 		end
 	end
 
@@ -281,14 +281,14 @@ _docker.options = {
 	status_path = con.status_path or "/tmp/.docker_action_status"
 }
 
-_docker.append_status = function(self,val)
+_docker.append_status = function(self, val)
 	if not val then return end
 	local file_docker_action_status = io.open(self.options.status_path, "a+")
 	file_docker_action_status:write(val)
 	file_docker_action_status:close()
 end
 
-_docker.write_status = function(self,val)
+_docker.write_status = function(self, val)
 	if not val then return end
 	local file_docker_action_status = io.open(self.options.status_path, "w+")
 	file_docker_action_status:write(val)
@@ -309,7 +309,7 @@ local status_cb = function(res, source, handler)
 		local chunk = source()
 		if chunk then
 			--standard output to res.body
-			table.insert(res.body, chunk)
+			res.body[#res.body + 1] = chunk
 			handler(chunk)
 		else
 			return
@@ -354,9 +354,9 @@ _docker.import_image_show_status_cb = function(res, source)
 		if type(step) == "table" then
 			local buf = _docker:read_status()
 			local num = 0
-			local str = '\t' .. (step.status and step.status or "") .. (step.progress and (" " .. step.progress) or "").."\n"
+			local str = '\t' .. (step.status and step.status or "") .. (step.progress and (" " .. step.progress) or "") .. "\n"
 			if step.status then
-				buf, num = buf:gsub("\t"..step.status .. " .-\n", str)
+				buf, num = buf:gsub("\t" .. step.status .. " .-\n", str)
 			end
 			if num == 0 then
 				buf = buf .. str
@@ -411,7 +411,7 @@ _docker.create_macvlan_interface = function(name, device, gateway, subnet)
 
 	uci:commit("firewall")
 	uci:commit("network")
-	os.execute("ifup %s" %if_name)
+	luci.util.exec("ifup %s" %if_name)
 end
 
 _docker.remove_macvlan_interface = function(name)
@@ -441,7 +441,7 @@ _docker.remove_macvlan_interface = function(name)
 	uci:delete("network", if_name)
 	uci:commit("network")
 	uci:commit("firewall")
-	os.execute("ip link del %s" %if_name)
+	luci.util.exec("ip link del %s" %if_name)
 end
 
 _docker.byte_format = function (byte)

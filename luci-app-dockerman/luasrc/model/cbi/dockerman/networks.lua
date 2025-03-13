@@ -24,7 +24,7 @@ local get_networks = function ()
 	for i, v in ipairs(networks) do
 		local index = v.Created .. v.Id
 
-		data[index]={}
+		data[index] = {}
 		data[index]["_selected"] = 0
 		data[index]["_name"] = v.Name
 		data[index]["_driver"] = v.Driver
@@ -82,7 +82,7 @@ o = s:option(DummyValue, "_gateway", translate("Gateway"))
 s = m:section(SimpleSection)
 s.template = "dockerman/apply_widget"
 s.err = docker:read_status()
-s.err = s.err and s.err:gsub("\n","<br>"):gsub(" ","&nbsp;")
+s.err = s.err and s.err:gsub("\n","<br>"):gsub(" ", "&#160;")
 if s.err then docker:clear_status() end
 
 s = m:section(Table,{{}})

@@ -291,7 +291,7 @@ end
 s = m:section(SimpleSection)
 s.template = "dockerman/apply_widget"
 s.err = docker:read_status()
-s.err = s.err and s.err:gsub("\n","<br>"):gsub(" ","&nbsp;")
+s.err = s.err and s.err:gsub("\n", "<br>"):gsub(" ", "&nbsp;")
 if s.err then
 	docker:clear_status()
 end
@@ -416,21 +416,26 @@ d_publish.rmempty = true
 d_publish.default = default_config.publish or nil
 
 for _, v in ipairs(networks) do
-	if v.Name then
-		local parent = v.Options and v.Options.parent or nil
-		local ip = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Subnet or nil
-		ipv6 = v.IPAM and v.IPAM.Config and v.IPAM.Config[2] and v.IPAM.Config[2].Subnet or nil
-		local network_name = v.Name .. " | " .. v.Driver  .. (parent and (" | " .. parent) or "") .. (ip and (" | " .. ip) or "").. (ipv6 and (" | " .. ipv6) or "")
-		d_network:value(v.Name, network_name)
+    if v.Name then
+        local parent = v.Options and v.Options.parent
+        local ip = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Subnet
+        local ipv6 = v.IPAM and v.IPAM.Config and v.IPAM.Config[2] and v.IPAM.Config[2].Subnet
 
-		if v.Name ~= "none" and v.Name ~= "bridge" and v.Name ~= "host" then
-			d_ip:depends("network", v.Name)
-		end
+        local network_name = v.Name .. " | " .. v.Driver
+        if parent then network_name = network_name .. " | " .. parent end
+        if ip then network_name = network_name .. " | " .. ip end
+        if ipv6 then network_name = network_name .. " | " .. ipv6 end
 
-		if v.Driver == "bridge" then
-			d_publish:depends("network", v.Name)
-		end
-	end
+        d_network:value(v.Name, network_name)
+
+        if v.Name ~= "none" and v.Name ~= "bridge" and v.Name ~= "host" then
+            d_ip:depends("network", v.Name)
+        end
+
+        if v.Driver == "bridge" then
+            d_publish:depends("network", v.Name)
+        end
+    end
 end
 
 o = s:option(Value, "command", translate("Run command"))
@@ -631,14 +636,16 @@ m.handle = function(self, state, data)
 	end
 
 	tmp = data.publish or {}
-	for _, v in ipairs(tmp) do
-		for port, proto in v:gmatch("(%d+):([^%s]+)") do
-			if not proto:match("^%d+/%w+") then
-				proto = proto .. '/tcp'
-			end
+	if type(tmp) == "table" then
+		for _, v in ipairs(tmp) do
+			for port, proto in v:gmatch("(%d+):([^%s]+)") do
+				if not proto:match("^%d+/%w+") then
+					proto = proto .. '/tcp'
+				end
 
-			portbindings[proto] = {{HostPort = port}}
-			exposedports[proto] = {HostPort = port}
+				portbindings[proto] = {{HostPort = port}}
+				exposedports[proto] = {HostPort = port}
+			end
 		end
 	end
 
@@ -709,7 +716,7 @@ m.handle = function(self, state, data)
 	create_body.HostConfig.LogConfig = {Config = log_opt, Type = log_driver}
 
 	if network == "bridge" then
-		create_body["HostConfig"]["Links"] = link
+		create_body.HostConfig.Links = link
 	end
 
 	local pull_image = function(image)
@@ -720,7 +727,7 @@ m.handle = function(self, state, data)
 			   and (res.body[#res.body]
 				and res.body[#res.body].status
 				and not res.body[#res.body].error
-				and (res.body[#res.body].status == "Status: Downloaded newer image for ".. image or res.body[#res.body].status == "Status: Image is up to date for ".. image)) then
+				and (res.body[#res.body].status == "Status: Downloaded newer image for " .. image or res.body[#res.body].status == "Status: Image is up to date for " .. image)) then
 			docker:append_status("done\n")
 		else
 			res.code = (res.code == 200) and 500 or res.code
@@ -744,6 +751,21 @@ m.handle = function(self, state, data)
 			pull_image(image)
 		end
 	end
+
+	-- local uci = require "luci.model.uci".cursor()
+	-- local redirect_section = uci:add("firewall", "redirect")
+
+	-- uci:set("firewall", redirect_section, "name", name)
+	-- uci:set("firewall", redirect_section, "src", "wan")         -- 源区域（WAN）
+	-- uci:set("firewall", redirect_section, "dest", "lan")        -- 目标区域（LAN）
+	-- uci:set("firewall", redirect_section, "proto", "tcp")       -- 协议类型
+	-- uci:set("firewall", redirect_section, "dest_ip", data.ip)  -- 目标主机 IP（如 192.168.1.100）
+	-- uci:set("firewall", redirect_section, "src_dport", data.publish[1]:match("^(%d+):"))  -- 源端口（如 80）
+	-- uci:set("firewall", redirect_section, "dest_port", data.publish[1]:match(":(%d+)"))  -- 目标端口（如 8080）
+
+	-- -- 提交配置并重启防火墙
+	-- uci:commit("firewall")
+	-- luci.util.exec("/etc/init.d/firewall restart")
 
 	create_body = docker.clear_empty_tables(create_body)
 

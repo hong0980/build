@@ -113,7 +113,7 @@ if not lost_state then
 
 	docker_info_table['8IndexServerAddress']._value = docker_info.body.IndexServerAddress
 	if docker_info.body.RegistryConfig and docker_info.body.RegistryConfig.Mirrors then
-		for i, v in ipairs(docker_info.body.RegistryConfig.Mirrors) do
+		for i, v in ipairs(docker_info.body.RegistryConfig.Mirrors or {}) do
 			docker_info_table['9RegistryMirrors']._value = docker_info_table['9RegistryMirrors']._value == "-" and v or (docker_info_table['9RegistryMirrors']._value .. ", " .. v)
 		end
 	end

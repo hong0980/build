@@ -143,13 +143,13 @@ m.handle = function(self, state, data)
 		local options, aux_address = {}, {}
 
 		for i,v in ipairs(tmp) do
-			_, _, k1, v1 = v:find("(.-)=(.+)")
+			k1, v1 = v:match("(.-)=(.+)")
 			aux_address[k1] = v1
 		end
 
 		tmp = data.options or {}
 		for i, v in ipairs(tmp) do
-			_, _, k1, v1 = v:find("(.-)=(.+)")
+			k1, v1 = v:match("(.-)=(.+)")
 			options[k1] = v1
 		end
 
@@ -162,7 +162,7 @@ m.handle = function(self, state, data)
 		}
 
 		if subnet or gateway or ip_range then
-			create_body["IPAM"]["Config"] = {{
+			create_body.IPAM.Config = {{
 				Subnet = subnet,
 				Gateway = gateway,
 				IPRange = ip_range,
@@ -172,31 +172,31 @@ m.handle = function(self, state, data)
 		end
 
 		if driver == "macvlan" then
-			create_body["Options"] = {
+			create_body.Options = {
 				macvlan_mode = data.macvlan_mode,
 				parent = data.parent
 			}
 		elseif driver == "ipvlan" then
-			create_body["Options"] = {ipvlan_mode = data.ipvlan_mode}
+			create_body.Options = {ipvlan_mode = data.ipvlan_mode}
 		elseif driver == "overlay" then
-			create_body["Ingress"] = data.ingerss == 1 and true or false
+			create_body.Ingress = data.ingerss == 1 and true or false
 		end
 
-		if ipv6 and data.subnet6 and data.subnet6 then
-			if type(create_body["IPAM"]["Config"]) ~= "table" then
-				create_body["IPAM"]["Config"] = {}
+		if ipv6 and data.subnet6 then
+			if type(create_body.IPAM.Config) ~= "table" then
+				create_body.IPAM.Config = {}
 			end
-			local index = #create_body["IPAM"]["Config"]
-			create_body["IPAM"]["Config"][index+1] = {
+			local index = #create_body.IPAM.Config
+			create_body.IPAM.Config[index+1] = {
 				Subnet = data.subnet6,
 				Gateway = data.gateway6
 			}
 		end
 
 		if next(options) ~= nil then
-			create_body["Options"] = create_body["Options"] or {}
+			create_body.Options = create_body.Options or {}
 			for k, v in pairs(options) do
-				create_body["Options"][k] = v
+				create_body.Options[k] = v
 			end
 		end
 
@@ -212,12 +212,7 @@ m.handle = function(self, state, data)
 			if driver == "macvlan" and data.op_macvlan ~= 0 then
 				local config = res and res.code == 200 and res.body.IPAM and res.body.IPAM.Config and res.body.IPAM.Config[1]
 				if config and config.Gateway and config.Subnet then
-					docker.create_macvlan_interface(
-						data.name,
-						data.parent,
-						config.Gateway,
-						config.Subnet
-					)
+					docker.create_macvlan_interface(data.name, data.parent, config.Gateway, config.Subnet)
 				end
 			end
 

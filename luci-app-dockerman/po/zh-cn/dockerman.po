@@ -1223,3 +1223,5 @@ msgstr "特权模式 (--privileged)"
 msgid "Grant extended privileges to container (full host device access)<br>"
 msgstr "授予容器扩展权限（完全访问宿主机设备）<br>"
 
+msgid "TOP"
+msgstr "进程信息"
