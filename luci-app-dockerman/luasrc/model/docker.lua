@@ -10,9 +10,7 @@ local con = uci:get_all("dockerd", "dockerman")
 local remote = con.remote_endpoint == '1'
 local _docker = {}
 
---pull image and return iamge id
 local update_image = function(self, image_name)
-	local json_stringify = luci.jsonc and luci.jsonc.stringify
 	_docker:append_status("Images: pulling %s...\n" %image_name)
 	local res = self.images:create({query = {fromImage=image_name}}, _docker.pull_image_show_status_cb)
 
@@ -71,7 +69,7 @@ local map_subtract = function(t1, t2)
 		local found = false
 		for k2, v2 in ipairs(t2) do
 			if k1 == k2 and luci.util.serialize_data(v1) == luci.util.serialize_data(v2) then
-				found= true
+				found = true
 				break
 			end
 		end
@@ -80,25 +78,6 @@ local map_subtract = function(t1, t2)
 	end
 
 	return next(res) ~= nil and res or nil
-end
-
-_docker.clear_empty_tables = function ( t )
-	local k, v
-
-	if next(t) == nil then
-		t = nil
-	else
-		for k, v in pairs(t) do
-			if type(v) == 'table' then
-				t[k] = _docker.clear_empty_tables(v)
-				if t[k] and next(t[k]) == nil then
-					t[k] = nil
-				end
-			end
-		end
-	end
-
-	return t
 end
 
 local get_config = function(container_config, image_config)
@@ -209,7 +188,6 @@ local upgrade = function(self, request)
 	local image_config = self.images:inspect({id = old_image_id}).body.Config
 	local create_body, extra_network = get_config(container_info.body, image_config)
 
-	-- create new container
 	_docker:append_status("Container: Create %s..." %container_name)
 	create_body = _docker.clear_empty_tables(create_body)
 	res = self.containers:create({name = container_name, body = create_body})
@@ -218,7 +196,6 @@ local upgrade = function(self, request)
 	end
 	_docker:append_status("done\n")
 
-	-- extra networks need to network connect action
 	for k, v in pairs(extra_network) do
 		_docker:append_status("Networks: Connect %s..." %{container_name})
 		res = self.networks:connect({id = k, body = {Container = container_name, EndpointConfig = v}})
@@ -258,6 +235,16 @@ local duplicate_config = function (self, request)
 	local image_config = self.images:inspect({id = old_image_id}).body.Config
 
 	return get_config(container_info.body, image_config)
+end
+
+local status_cb = function(res, source, handler)
+	res.body = res.body or {}
+	while true do
+		local chunk = source()
+		if not chunk then return end
+		res.body[#res.body + 1] = chunk
+		handler(chunk)
+	end
 end
 
 _docker.new = function()
@@ -300,41 +287,33 @@ _docker.read_status = function(self)
 end
 
 _docker.clear_status = function(self)
-	fs.remove(self.options.status_path)
+	return fs.remove(self.options.status_path)
 end
 
-local status_cb = function(res, source, handler)
-	res.body = res.body or {}
-	while true do
-		local chunk = source()
-		if chunk then
-			--standard output to res.body
-			res.body[#res.body + 1] = chunk
-			handler(chunk)
-		else
-			return
+_docker.clear_empty_tables = function(t)
+	if type(t) ~= 'table' then return t end
+
+	for k, v in pairs(t) do
+		if type(v) == 'table' then
+			t[k] = _docker.clear_empty_tables(v)
+			if not next(t[k]) then
+				t[k] = nil
+			end
 		end
 	end
+
+	return next(t) and t or nil
 end
 
---{"status":"Pulling from library\/debian","id":"latest"}
---{"status":"Pulling fs layer","progressDetail":[],"id":"50e431f79093"}
---{"status":"Downloading","progressDetail":{"total":50381971,"current":2029978},"id":"50e431f79093","progress":"[==>                                                ]   2.03MB\/50.38MB"}
---{"status":"Download complete","progressDetail":[],"id":"50e431f79093"}
---{"status":"Extracting","progressDetail":{"total":50381971,"current":17301504},"id":"50e431f79093","progress":"[=================>                                 ]   17.3MB\/50.38MB"}
---{"status":"Pull complete","progressDetail":[],"id":"50e431f79093"}
---{"status":"Digest: sha256:a63d0b2ecbd723da612abf0a8bdb594ee78f18f691d7dc652ac305a490c9b71a"}
---{"status":"Status: Downloaded newer image for debian:latest"}
 _docker.pull_image_show_status_cb = function(res, source)
 	return status_cb(res, source, function(chunk)
-		local json_parse = luci.jsonc.parse
-		local step = json_parse(chunk)
+		local step = luci.jsonc.parse(chunk)
 		if type(step) == "table" then
 			local buf = _docker:read_status()
 			local num = 0
-			local str = '\t' .. (step.id and (step.id .. ": ") or "") .. (step.status and step.status or "")  .. (step.progress and (" " .. step.progress) or "").."\n"
+			local str = '\t' .. (step.id and (step.id .. ": ") or "") .. (step.status and step.status or "") .. (step.progress and (" " .. step.progress) or "") .. "\n"
 			if step.id then
-				buf, num = buf:gsub("\t"..step.id .. ": .-\n", str)
+				buf, num = buf:gsub("\t" .. step.id .. ": .-\n", str)
 			end
 			if num == 0 then
 				buf = buf .. str
@@ -344,13 +323,9 @@ _docker.pull_image_show_status_cb = function(res, source)
 	end)
 end
 
---{"status":"Downloading from https://downloads.openwrt.org/releases/19.07.0/targets/x86/64/openwrt-19.07.0-x86-64-generic-rootfs.tar.gz"}
---{"status":"Importing","progressDetail":{"current":1572391,"total":3821714},"progress":"[====================\u003e                              ]  1.572MB/3.822MB"}
---{"status":"sha256:d5304b58e2d8cc0a2fd640c05cec1bd4d1229a604ac0dd2909f13b2b47a29285"}
 _docker.import_image_show_status_cb = function(res, source)
 	return status_cb(res, source, function(chunk)
-		local json_parse = luci.jsonc.parse
-		local step = json_parse(chunk)
+		local step = luci.jsonc.parse(chunk)
 		if type(step) == "table" then
 			local buf = _docker:read_status()
 			local num = 0
@@ -367,11 +342,9 @@ _docker.import_image_show_status_cb = function(res, source)
 end
 
 _docker.create_macvlan_interface = function(name, device, gateway, subnet)
-	if not fs.access("/etc/config/network") or not fs.access("/etc/config/firewall") then
+	if not fs.access("/etc/config/network") or not fs.access("/etc/config/firewall") or remote then
 		return
 	end
-
-	if remote then return end
 
 	local ip = require "luci.ip"
 	local if_name = "docker_" .. name
@@ -379,7 +352,6 @@ _docker.create_macvlan_interface = function(name, device, gateway, subnet)
 	local net_mask = tostring(ip.new(subnet):mask())
 	local lan_interfaces
 
-	-- add macvlan device
 	uci:delete("network", dev_name)
 	uci:set("network", dev_name, "device")
 	uci:set("network", dev_name, "name", dev_name)
@@ -387,7 +359,6 @@ _docker.create_macvlan_interface = function(name, device, gateway, subnet)
 	uci:set("network", dev_name, "type", "macvlan")
 	uci:set("network", dev_name, "mode", "bridge")
 
-	-- add macvlan interface
 	uci:delete("network", if_name)
 	uci:set("network", if_name, "interface")
 	uci:set("network", if_name, "proto", "static")
@@ -415,11 +386,9 @@ _docker.create_macvlan_interface = function(name, device, gateway, subnet)
 end
 
 _docker.remove_macvlan_interface = function(name)
-	if not fs.access("/etc/config/network") or not fs.access("/etc/config/firewall") then
+	if not fs.access("/etc/config/network") or not fs.access("/etc/config/firewall") or remote then
 		return
 	end
-
-	if remote then return end
 
 	local if_name = "docker_" .. name
 	local dev_name = "macvlan_" .. name

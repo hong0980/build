@@ -614,11 +614,9 @@ elseif action == "inspect" then
 	m.submit = false
 	m.reset  = false
 elseif action == "logs" then
-	local logs = ""
-	local query = {stdout = 1, stderr = 1, tail = 1000}
-
 	s = m:section(SimpleSection)
-	logs = dk.containers:logs({id = container_id, query = query})
+	local query = {stdout = 1, stderr = 1, tail = 200}
+	local logs = dk.containers:logs({id = container_id, query = query})
 	if logs.code == 200 then
 		s.syslog = logs.body
 	else
