@@ -6,7 +6,7 @@ Copyright 2019 lisaac <https://github.com/lisaac/luci-app-dockerman>
 local docker = require "luci.model.docker"
 local dk = docker.new()
 local cmd_line = table.concat(arg, '/')
-local m, s, o, images, networks, lost_state
+local m, s, o, images, networks, lost_state, gateway
 local create_body, default_config = {}, {}
 
 if dk:_ping().code ~= 200 then
@@ -416,26 +416,29 @@ d_publish.rmempty = true
 d_publish.default = default_config.publish or nil
 
 for _, v in ipairs(networks) do
-    if v.Name then
-        local parent = v.Options and v.Options.parent
-        local ip = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Subnet
-        local ipv6 = v.IPAM and v.IPAM.Config and v.IPAM.Config[2] and v.IPAM.Config[2].Subnet
+	if v.Name then
+		local parent = v.Options and v.Options.parent
+		local ip = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Subnet
+		local ipv6 = v.IPAM and v.IPAM.Config and v.IPAM.Config[2] and v.IPAM.Config[2].Subnet
 
-        local network_name = v.Name .. " | " .. v.Driver
-        if parent then network_name = network_name .. " | " .. parent end
-        if ip then network_name = network_name .. " | " .. ip end
-        if ipv6 then network_name = network_name .. " | " .. ipv6 end
+		local network_name = v.Name .. " | " .. v.Driver
+		if parent then network_name = network_name .. " | " .. parent end
+		if ip then
+			gateway = v.IPAM.Config[1].Gateway
+			network_name = network_name .. " | " .. ip
+		end
+		if ipv6 then network_name = network_name .. " | " .. ipv6 end
 
-        d_network:value(v.Name, network_name)
+		d_network:value(v.Name, network_name)
 
-        if v.Name ~= "none" and v.Name ~= "bridge" and v.Name ~= "host" then
-            d_ip:depends("network", v.Name)
-        end
+		if v.Name ~= "none" and v.Name ~= "bridge" and v.Name ~= "host" then
+			d_ip:depends("network", v.Name)
+		end
 
-        if v.Driver == "bridge" then
-            d_publish:depends("network", v.Name)
-        end
-    end
+		if v.Driver == "bridge" then
+			d_publish:depends("network", v.Name)
+		end
+	end
 end
 
 o = s:option(Value, "command", translate("Run command"))
@@ -759,9 +762,9 @@ m.handle = function(self, state, data)
 	uci:set("firewall", "@redirect[0]", "src", "wan")
 	uci:set("firewall", "@redirect[0]", "dest", "lan")
 	uci:set("firewall", "@redirect[0]", "proto", "tcp")
-	-- uci:set("firewall", "@redirect[0]", "dest_ip", data.ip)
-	-- uci:set("firewall", "@redirect[0]", "src_dport", data.publish[1]:match("^(%d+):"))
-	-- uci:set("firewall", "@redirect[0]", "dest_port", data.publish[1]:match(":(%d+)"))
+	uci:set("firewall", "@redirect[0]", "dest_ip", gateway)
+	uci:set("firewall", "@redirect[0]", "src_dport", data.publish[1]:match("^(%d+):"))
+	uci:set("firewall", "@redirect[0]", "dest_port", data.publish[1]:match(":(%d+)"))
 	uci:delete("firewall", "@redirect[0]", "enabled")
 	uci:commit("firewall")
 	luci.util.exec("/etc/init.d/firewall restart")

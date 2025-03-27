@@ -7,28 +7,28 @@ config_load 'dockerd'
 # config_get daemon_ea "dockerman" daemon_ea
 _DOCKERD=/etc/init.d/dockerd
 
-docker_running(){
-	docker version > /dev/null 2>&1
-	return $?
-}
-
 _info(){
 	logger -t dockerman "$*"
+	echo "$*"
 }
 
 add_ports(){
-	[ $# -eq 0 ] && return
-	$($_DOCKERD running) && docker_running || return 1
-	for id in $@; do
-		id=$(docker ps --filter "ID=$id" --quiet)
-		[ -z "$id" ] && {
-			_info "Docker containner not running"
+	if [ $# -eq 0 ] || ! $_DOCKERD running; then
+		_info "add_ports: No containers running or dockerd not running"
+		return 1
+	fi
+
+	for id in "$@"; do
+		local cid=$(docker ps -q --filter "id=$id")
+		if [ -z "$cid" ]; then
+			_info "Docker container not running"
 			return 1
-		}
-		ports=$(docker ps --filter "ID=$id" --format "{{.Ports}}")
-		for port in $ports; do
-			port=$(echo "$port" | grep -E "^[0-9]{1,3}(\.[0-9]{1,3}){3}:[0-9]+->[0-9]+/(tcp|udp)" | sed -En 's/.*->([0-9]+\/[a-z]+).*/\1/p')
-			[ x"$port" != 'x' ] && uci_add_list 'dockerd' 'dockerman' 'ac_allowed_ports' "${port}"
+		fi
+
+		docker inspect -f '{{range $p, $conf := .NetworkSettings.Ports}}{{$p}} {{end}}' "$cid" | \
+		while read -r ports; do
+			uci_add_list 'dockerd' 'dockerman' 'ac_allowed_ports' "${ports}"
+			_info "Added port ${ports} for container $cid"
 		done
 	done
 	uci_commit dockerd
@@ -36,14 +36,13 @@ add_ports(){
 
 convert(){
 	_convert(){
-		_id=$1
-		_id=$(docker ps --all --filter "ID=$_id" --quiet)
-		if [ -z "$_id" ]; then
+		local cid=$(docker ps -q --filter "id=$1")
+		if [ -z "$cid" ]; then
 			uci_remove_list 'dockerd' 'dockerman' 'ac_allowed_container' "$1"
 			return
 		fi
-		if /etc/init.d/dockerman add_ports "$_id"; then
-			uci_remove_list 'dockerd' 'dockerman' 'ac_allowed_container' "$_id"
+		if /etc/init.d/dockerman add_ports "$cid"; then
+			uci_remove_list 'dockerd' 'dockerman' 'ac_allowed_container' "$cid"
 		fi
 	}
 	config_list_foreach 'dockerman' 'ac_allowed_container' _convert
@@ -51,50 +50,50 @@ convert(){
 }
 
 iptables_append(){
-	# Wait for a maximum of 10 second per command, retrying every millisecond
-	local iptables_wait_args="--wait 10 --wait-interval 1000"
-	if ! iptables ${iptables_wait_args} --check $@ 2>/dev/null; then
-		iptables ${iptables_wait_args} -A $@ 2>/dev/null
+	local iptables_wait_args="--wait 10"
+	if ! iptables ${iptables_wait_args} --check "$@" 2>/dev/null; then
+		iptables ${iptables_wait_args} -A "$@" 2>/dev/null
 	fi
 }
 
 init_dockerman_chain(){
-	iptables -N DOCKER-MAN >/dev/null 2>&1
-	iptables -F DOCKER-MAN >/dev/null 2>&1
-	iptables -D DOCKER-USER -j DOCKER-MAN >/dev/null 2>&1
-	iptables -I DOCKER-USER -j DOCKER-MAN >/dev/null 2>&1
+	iptables -N DOCKER-MAN >/dev/null 2>&1 # 新建 DOCKER-MAN 链
+	iptables -F DOCKER-MAN >/dev/null 2>&1 # 清空 DOCKER-MAN 链
+	iptables -D DOCKER-USER -j DOCKER-MAN >/dev/null 2>&1 # 删除 DOCKER-USER 链中的 DOCKER-MAN 链引用
+	iptables -I DOCKER-USER -j DOCKER-MAN >/dev/null 2>&1 # 将 DOCKER-MAN 链插入 DOCKER-USER 链
+	_info "Initialized DOCKER-MAN iptables chain"  # 记录日志
 }
 
 delete_dockerman_chain(){
-	iptables -D DOCKER-USER -j DOCKER-MAN >/dev/null 2>&1
-	iptables -F DOCKER-MAN >/dev/null 2>&1
-	iptables -X DOCKER-MAN >/dev/null 2>&1
-}
-
-add_allowed_interface(){
-	iptables_append DOCKER-MAN -i $1 -o docker0 -j RETURN
+	iptables -D DOCKER-USER -j DOCKER-MAN >/dev/null 2>&1 # 删除 DOCKER-USER 链中的 DOCKER-MAN 链引用
+	iptables -F DOCKER-MAN >/dev/null 2>&1 # 清空 DOCKER-MAN 链
+	iptables -X DOCKER-MAN >/dev/null 2>&1 # 删除 DOCKER-MAN 链
+	_info "Deleted DOCKER-MAN iptables chain"  # 记录日志
 }
 
 add_allowed_ports(){
-	case $1 in
+	case "$1" in
 		*"/tcp"|*"/udp")
-			iptables_append DOCKER-MAN -p "${1#*/}" -m conntrack --ctorigdstport "${1%/*}" \
-			--ctdir ORIGINAL -j RETURN >/dev/null 2>&1
+			iptables_append DOCKER-MAN -p "${1#*/}" -m conntrack \
+			--ctorigdstport "${1%/*}" --ctdir ORIGINAL -j RETURN >/dev/null 2>&1
+			;;
 	esac
 }
 
+add_allowed_interface(){
+	iptables_append DOCKER-MAN -i "$1" -o docker0 -j RETURN
+}
+
 handle_allowed_interface(){
-	config_list_foreach "dockerman" "ac_allowed_ports" add_allowed_ports
-	config_list_foreach "dockerman" "ac_allowed_interface" add_allowed_interface
+	config_list_foreach dockerman "ac_allowed_ports" add_allowed_ports
+	config_list_foreach dockerman "ac_allowed_interface" add_allowed_interface
 	iptables_append DOCKER-MAN -m conntrack --ctstate ESTABLISHED,RELATED -o docker0 -j RETURN >/dev/null 2>&1
 	iptables_append DOCKER-MAN -m conntrack --ctstate NEW,INVALID -o docker0 -j DROP >/dev/null 2>&1
 	iptables_append DOCKER-MAN -j RETURN >/dev/null 2>&1
 }
 
 start_service(){
-	[ -x "$_DOCKERD" ] && $($_DOCKERD enabled) || return 0
 	delete_dockerman_chain
-	$($_DOCKERD running) && docker_running || return 0
 	init_dockerman_chain
 	handle_allowed_interface
 }
