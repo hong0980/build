@@ -12,47 +12,41 @@ docker_running(){
 	return $?
 }
 
-add_ports() {
+_info(){
+	logger -t dockerman "$*"
+}
+
+add_ports(){
 	[ $# -eq 0 ] && return
 	$($_DOCKERD running) && docker_running || return 1
-	ids=$@
-	for id in $ids; do
+	for id in $@; do
 		id=$(docker ps --filter "ID=$id" --quiet)
 		[ -z "$id" ] && {
-			 echo "Docker containner not running"
-			 return 1
+			_info "Docker containner not running"
+			return 1
 		}
 		ports=$(docker ps --filter "ID=$id" --format "{{.Ports}}")
-		# echo "$ports"
 		for port in $ports; do
-				echo "$port" | grep -qE "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}:.*$" || continue
-				[ "${port: -1}" == "," ] && port="${port:0:-1}"
-				local protocol=""
-				[ "${port%tcp}" != "$port" ] && protocol="/tcp"
-				[ "${port%udp}" != "$port" ] && protocol="/udp"
-				[ "$protocol" == "" ] && continue
-				port="${port%%->*}"
-				port="${port##*:}"
-				uci_add_list dockerd dockerman ac_allowed_ports "${port}${protocol}"
+			port=$(echo "$port" | grep -E "^[0-9]{1,3}(\.[0-9]{1,3}){3}:[0-9]+->[0-9]+/(tcp|udp)" | sed -En 's/.*->([0-9]+\/[a-z]+).*/\1/p')
+			[ x"$port" != 'x' ] && uci_add_list 'dockerd' 'dockerman' 'ac_allowed_ports' "${port}"
 		done
 	done
 	uci_commit dockerd
 }
 
-
-convert() {
-	_convert() {
+convert(){
+	_convert(){
 		_id=$1
 		_id=$(docker ps --all --filter "ID=$_id" --quiet)
 		if [ -z "$_id" ]; then
-			uci_remove_list dockerd dockerman ac_allowed_container "$1"
+			uci_remove_list 'dockerd' 'dockerman' 'ac_allowed_container' "$1"
 			return
 		fi
 		if /etc/init.d/dockerman add_ports "$_id"; then
-			uci_remove_list dockerd dockerman ac_allowed_container "$_id"
+			uci_remove_list 'dockerd' 'dockerman' 'ac_allowed_container' "$_id"
 		fi
 	}
-	config_list_foreach dockerman ac_allowed_container _convert
+	config_list_foreach 'dockerman' 'ac_allowed_container' _convert
 	uci_commit dockerd
 }
 
@@ -82,19 +76,15 @@ add_allowed_interface(){
 }
 
 add_allowed_ports(){
-	port=$1
-	if [ "${port%/tcp}" != "$port" ]; then
-		iptables_append DOCKER-MAN -p tcp -m conntrack --ctorigdstport ${port%/tcp} --ctdir ORIGINAL -j RETURN
-	elif [ "${port%/udp}" != "$port" ]; then
-		iptables_append DOCKER-MAN -p udp -m conntrack --ctorigdstport ${port%/udp} --ctdir ORIGINAL -j RETURN
-	fi
-}
-
-handle_allowed_ports(){
-	config_list_foreach "dockerman" "ac_allowed_ports" add_allowed_ports
+	case $1 in
+		*"/tcp"|*"/udp")
+			iptables_append DOCKER-MAN -p "${1#*/}" -m conntrack --ctorigdstport "${1%/*}" \
+			--ctdir ORIGINAL -j RETURN >/dev/null 2>&1
+	esac
 }
 
 handle_allowed_interface(){
+	config_list_foreach "dockerman" "ac_allowed_ports" add_allowed_ports
 	config_list_foreach "dockerman" "ac_allowed_interface" add_allowed_interface
 	iptables_append DOCKER-MAN -m conntrack --ctstate ESTABLISHED,RELATED -o docker0 -j RETURN >/dev/null 2>&1
 	iptables_append DOCKER-MAN -m conntrack --ctstate NEW,INVALID -o docker0 -j DROP >/dev/null 2>&1
@@ -106,7 +96,6 @@ start_service(){
 	delete_dockerman_chain
 	$($_DOCKERD running) && docker_running || return 0
 	init_dockerman_chain
-	handle_allowed_ports
 	handle_allowed_interface
 }
 
@@ -114,15 +103,15 @@ stop_service(){
 	delete_dockerman_chain
 }
 
-service_triggers() {
+service_triggers(){
 	procd_add_reload_trigger 'dockerd'
 }
 
-reload_service() {
+reload_service(){
 	start
 }
 
-boot() {
+boot(){
 	sleep 5s
 	start
 }

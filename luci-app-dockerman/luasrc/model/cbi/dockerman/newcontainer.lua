@@ -752,20 +752,19 @@ m.handle = function(self, state, data)
 		end
 	end
 
-	-- local uci = require "luci.model.uci".cursor()
-	-- local redirect_section = uci:add("firewall", "redirect")
-
-	-- uci:set("firewall", redirect_section, "name", name)
-	-- uci:set("firewall", redirect_section, "src", "wan")         -- 源区域（WAN）
-	-- uci:set("firewall", redirect_section, "dest", "lan")        -- 目标区域（LAN）
-	-- uci:set("firewall", redirect_section, "proto", "tcp")       -- 协议类型
-	-- uci:set("firewall", redirect_section, "dest_ip", data.ip)  -- 目标主机 IP（如 192.168.1.100）
-	-- uci:set("firewall", redirect_section, "src_dport", data.publish[1]:match("^(%d+):"))  -- 源端口（如 80）
-	-- uci:set("firewall", redirect_section, "dest_port", data.publish[1]:match(":(%d+)"))  -- 目标端口（如 8080）
-
-	-- -- 提交配置并重启防火墙
-	-- uci:commit("firewall")
-	-- luci.util.exec("/etc/init.d/firewall restart")
+	local uci = require "luci.model.uci".cursor()
+	uci:add("firewall", "redirect")
+	uci:set("firewall", "@redirect[0]", "name", "docker")
+	uci:set("firewall", "@redirect[0]", "target", "DNAT")
+	uci:set("firewall", "@redirect[0]", "src", "wan")
+	uci:set("firewall", "@redirect[0]", "dest", "lan")
+	uci:set("firewall", "@redirect[0]", "proto", "tcp")
+	-- uci:set("firewall", "@redirect[0]", "dest_ip", data.ip)
+	-- uci:set("firewall", "@redirect[0]", "src_dport", data.publish[1]:match("^(%d+):"))
+	-- uci:set("firewall", "@redirect[0]", "dest_port", data.publish[1]:match(":(%d+)"))
+	uci:delete("firewall", "@redirect[0]", "enabled")
+	uci:commit("firewall")
+	luci.util.exec("/etc/init.d/firewall restart")
 
 	create_body = docker.clear_empty_tables(create_body)
 
