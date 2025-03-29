@@ -176,14 +176,12 @@ local start_stop_remove = function(m, cmd)
 	end
 end
 
-local c_color
+local c_color = 'red'
 if container_info.State.Status == 'running' then
 	c_color = 'green'
 	lost_state = true
 elseif container_info.State.Status == 'restarting' then
 	c_color = 'yellow'
-else
-	c_color = 'red'
 end
 
 m = SimpleForm("docker",

@@ -6,12 +6,13 @@ Copyright 2021 lisaac <lisaac.cn@gmail.com>
 
 local uci = (require "luci.model.uci").cursor()
 local m, s, o
+local remote_endpoint_boot = uci:get("dockerd", "dockerman", "remote_endpoint") == "0"
 
 m = Map("dockerd",
 	translate("Docker - Configuration"),
 	translate("DockerMan is a simple docker manager client for LuCI"))
 
-if nixio.fs.access("/usr/bin/dockerd") and not m.uci:get_bool("dockerd", "dockerman", "remote_endpoint")  then
+if remote_endpoint_boot then
 	s = m:section(NamedSection, "globals", "section", translate("Docker Daemon settings"))
 	o = s:option(Flag, "auto_start", translate("Auto start"))
 	o.rmempty = false
@@ -21,12 +22,23 @@ if nixio.fs.access("/usr/bin/dockerd") and not m.uci:get_bool("dockerd", "docker
 		else
 			luci.util.exec("/etc/init.d/dockerd disable")
 		end
-		m.uci:set("dockerd", "globals", "auto_start", value)
+		uci:set("dockerd", "globals", "auto_start", value)
 	end
 
 	o = s:option(Value, "data_root",
 		translate("Docker Root Dir"))
 	o.placeholder = "/opt/docker/"
+	o:depends("remote_endpoint", 0)
+
+	o = s:option(Flag, "iptables",
+		translate("Enable"),
+		translate("Use iptables to configure network isolation and routing"))
+	o.default = 1
+	o:depends("remote_endpoint", 0)
+
+	o = s:option(Flag, "ip6tables",
+		translate("Enable"),
+		translate("Use ip6tables to configure network isolation and routing"))
 	o:depends("remote_endpoint", 0)
 
 	o = s:option(Value, "bip",
@@ -36,6 +48,11 @@ if nixio.fs.access("/usr/bin/dockerd") and not m.uci:get_bool("dockerd", "docker
 	o.datatype = "ipaddr"
 	o:depends("remote_endpoint", 0)
 
+	o = s:option(Value, "ip",
+		translate("Specify IP"),
+		translate("Docker will use the given IP address instead of automatically assigning one"))
+	o:depends("remote_endpoint", 0)
+
 	o = s:option(DynamicList, "registry_mirrors",
 		translate("Registry Mirrors"),
 		translate("It replaces the daemon registry mirrors with a new set of registry mirrors"))
@@ -43,14 +60,14 @@ if nixio.fs.access("/usr/bin/dockerd") and not m.uci:get_bool("dockerd", "docker
 	o:value("https://hub-mirror.c.163.com", "https://hub-mirror.c.163.com")
 	o:value("https://registry.docker-cn.com", "https://registry.docker-cn.com")
 	o:value("https://docker.mirrors.ustc.edu.cn", "https://docker.mirrors.ustc.edu.cn")
+	o.default = "https://docker.m.daocloud.io"
 	o:depends("remote_endpoint", 0)
-	o.forcewrite = true
 
 	o = s:option(ListValue, "log_level",
 		translate("Log Level"),
 		translate('Set the logging level'))
 	o:value("debug", translate("Debug"))
-	o:value("", translate("Info")) -- This is the default debug level from the deamon is optin is not set
+	o:value("", translate("Info"))
 	o:value("warn", translate("Warning"))
 	o:value("error", translate("Error"))
 	o:value("fatal", translate("Fatal"))
@@ -112,19 +129,37 @@ o.placeholder = "2375"
 o.datatype = "port"
 o:depends("remote_endpoint", 1)
 
-o = s:taboption("dockerman", Value, "status_path", translate("Action Status Tempfile Path"), translate("Where you want to save the docker status file"))
-o = s:taboption("dockerman", Flag, "debug", translate("Enable Debug"), translate("For debug, It shows all docker API actions of luci-app-dockerman in Debug Tempfile Path"))
+o = s:taboption("dockerman", Value, "status_path",
+	translate("Action Status Tempfile Path"),
+	translate("Where you want to save the docker status file"))
+
+o = s:taboption("dockerman", Flag, "debug",
+	translate("Enable Debug"),
+	translate("For debug, It shows all docker API actions of luci-app-dockerman in Debug Tempfile Path"))
 o.enabled="true"
 o.disabled="false"
-o = s:taboption("dockerman", Value, "debug_path", translate("Debug Tempfile Path"), translate("Where you want to save the debug tempfile"))
 
-if nixio.fs.access("/usr/bin/dockerd") and not m.uci:get_bool("dockerd", "dockerman", "remote_endpoint")  then
-	o = s:taboption("ac", DynamicList, "ac_allowed_interface", translate("Allowed access interfaces"), translate("Which interface(s) can access containers under the bridge network, fill-in Interface Name"))
-	local interfaces = luci.sys and luci.sys.net and luci.sys.net.devices() or {}
+o = s:taboption("dockerman", Value, "debug_path",
+	translate("Debug Tempfile Path"),
+	translate("Where you want to save the debug tempfile"))
+
+-- 是否只查看最后一次启动的日志
+-- o = s:taboption("dockerman", Flag, "log_last_start",
+-- 	translate("Enable"),
+-- 	translate("Enable to limit container logs to the last start time"))
+-- o.rmempty = true
+
+if remote_endpoint_boot then
+	o = s:taboption("ac", DynamicList, "ac_allowed_interface",
+		translate("Allowed access interfaces"),
+		translate("Which interface(s) can access containers under the bridge network, fill-in Interface Name"))
+	local interfaces = luci.sys.net.devices() or {}
 	for i, v in ipairs(interfaces) do
 		o:value(v, v)
 	end
-	o = s:taboption("ac", DynamicList, "ac_allowed_ports", translate("Ports allowed to be accessed"), translate("Which Port(s) can be accessed, it's not restricted by the Allowed Access interfaces configuration. Use this configuration with caution!"))
+	o = s:taboption("ac", DynamicList, "ac_allowed_ports",
+		translate("Ports allowed to be accessed"),
+		translate("Which Port(s) can be accessed, it's not restricted by the Allowed Access interfaces configuration. Use this configuration with caution!"))
 	o.placeholder = "8080/tcp"
 	local docker = require "luci.model.docker"
 	local containers, res, lost_state
@@ -139,13 +174,12 @@ if nixio.fs.access("/usr/bin/dockerd") and not m.uci:get_bool("dockerd", "docker
 		end
 	end
 
-	-- allowed_container.placeholder = "container name_or_id"
 	if containers then
 		for i, v in ipairs(containers) do
-			if	v.State == "running" and v.Ports then
+			if v.State == "running" and v.Ports then
 				for _, port in ipairs(v.Ports) do
-					if port.PublicPort and port.IP and not string.find(port.IP,":")  then
-						o:value(port.PublicPort.."/"..port.Type, v.Names[1]:sub(2) .. " | " .. port.PublicPort .. " | " .. port.Type)
+					if port.PublicPort and port.IP and not string.find(port.IP, ":") then
+						o:value(port.PublicPort .. "/" .. port.Type, v.Names[1]:sub(2) .. " | " .. port.PublicPort .. " | " .. port.Type)
 					end
 				end
 			end

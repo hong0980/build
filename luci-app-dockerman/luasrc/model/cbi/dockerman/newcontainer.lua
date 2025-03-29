@@ -551,14 +551,6 @@ o.rmempty = true
 o:depends("advance", 1)
 o.default = default_config.log_opt or nil
 
--- 是否只查看最后一次启动的日志
--- o = s:option(Flag, "log_last_start",
--- 	translate("Show logs since last start"),
--- 	translate("Enable to limit container logs to the last start time"))
--- o.rmempty = true
--- o:depends("advance", 1)
--- o.default = 0 -- 默认关闭
-
 m.handle = function(self, state, data)
 	if state ~= FORM_VALID then return end
 
@@ -757,15 +749,15 @@ m.handle = function(self, state, data)
 
 	local uci = require "luci.model.uci".cursor()
 	uci:add("firewall", "redirect")
-	uci:set("firewall", "@redirect[0]", "name", "docker")
-	uci:set("firewall", "@redirect[0]", "target", "DNAT")
-	uci:set("firewall", "@redirect[0]", "src", "wan")
-	uci:set("firewall", "@redirect[0]", "dest", "lan")
-	uci:set("firewall", "@redirect[0]", "proto", "tcp")
-	uci:set("firewall", "@redirect[0]", "dest_ip", gateway)
-	uci:set("firewall", "@redirect[0]", "src_dport", data.publish[1]:match("^(%d+):"))
-	uci:set("firewall", "@redirect[0]", "dest_port", data.publish[1]:match(":(%d+)"))
-	uci:delete("firewall", "@redirect[0]", "enabled")
+	uci:set("firewall", "@redirect[-1]", "name", "docker")
+	uci:set("firewall", "@redirect[-1]", "target", "DNAT")
+	uci:set("firewall", "@redirect[-1]", "src", "wan")
+	uci:set("firewall", "@redirect[-1]", "dest", "lan")
+	uci:set("firewall", "@redirect[-1]", "proto", "tcp")
+	uci:set("firewall", "@redirect[-1]", "dest_ip", gateway)
+	uci:set("firewall", "@redirect[-1]", "src_dport", data.publish[1]:match("^(%d+):"))
+	uci:set("firewall", "@redirect[-1]", "dest_port", data.publish[1]:match(":(%d+)"))
+	uci:delete("firewall", "@redirect[-1]", "enabled")
 	uci:commit("firewall")
 	luci.util.exec("/etc/init.d/firewall restart")
 

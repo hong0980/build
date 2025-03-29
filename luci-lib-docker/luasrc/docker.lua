@@ -30,35 +30,35 @@ local chunksource = function(sock, buffer)
 		count = tonumber(count, 16)
 		if not count then
 			return nil, -1, "invalid encoding"
-		elseif count == 0 then -- finial
+		elseif count == 0 then
 			return nil
-		elseif count <= #buffer - endp then -- data >= count
+		elseif count <= #buffer - endp then
 			output = buffer:sub(endp + 1, endp + count)
-			if count == #buffer - endp then -- [data]
+			if count == #buffer - endp then
 				buffer = buffer:sub(endp + count + 1)
-				count, code = sock:recvall(2) --read \r\n
+				count, code = sock:recvall(2)
 				if not count then
 					return nil, code
 				end
-			elseif count + 1 == #buffer - endp then  -- [data]\r
+			elseif count + 1 == #buffer - endp then
 				buffer = buffer:sub(endp + count + 2)
-				count, code = sock:recvall(1) --read \n
+				count, code = sock:recvall(1)
 				if not count then
 					return nil, code
 				end
-			else -- [data]\r\n[count]\r\n[data]...
-				buffer = buffer:sub(endp + count + 3) -- cut buffer
+			else
+				buffer = buffer:sub(endp + count + 3)
 			end
 			return output
-		else -- data < count
+		else
 			output = buffer:sub(endp + 1, endp + count)
 			buffer = buffer:sub(endp + count + 1)
-			local remain, code = sock:recvall(count - #output) --need read remaining
+			local remain, code = sock:recvall(count - #output)
 			if not remain then
 				return nil, code
 			end
 			output = output .. remain
-			count, code = sock:recvall(2) --read \r\n
+			count, code = sock:recvall(2)
 			if not count then
 				return nil, code
 			end
@@ -127,7 +127,7 @@ local send_http_socket = function(options, docker_socket, req_header, req_body, 
 						 or req_body
 			docker_socket:send(data)
 			if options.debug then
-				io.popen("echo '%s' >> %s" %{data, options.debug_path})
+				luci.util.exec("echo '%s' >> %s" %{data, options.debug_path})
 			end
 		end
 	end
@@ -164,7 +164,7 @@ local send_http_socket = function(options, docker_socket, req_header, req_body, 
 		end
 		line = linesrc()
 	end
-	-- handle response body
+
 	local body_buffer = linesrc(true)
 	response.body = {}
 	if type(callback) ~= "function" then
@@ -234,7 +234,7 @@ local function gen_header(options, http_method, api_group, api_action, name_or_i
 	end
 
 	header = header .. "\r\n"
-	if options.debug then io.popen("echo '%s' >> %s" %{header, options.debug_path}) end
+	if options.debug then luci.util.exec("echo '%s' >> %s" %{header, options.debug_path}) end
 	return header
 end
 

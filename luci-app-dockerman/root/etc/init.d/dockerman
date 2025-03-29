@@ -50,7 +50,7 @@ convert(){
 }
 
 iptables_append(){
-	local iptables_wait_args="--wait 10"
+	local iptables_wait_args="--wait 10 --wait-interval 1000"
 	if ! iptables ${iptables_wait_args} --check "$@" 2>/dev/null; then
 		iptables ${iptables_wait_args} -A "$@" 2>/dev/null
 	fi

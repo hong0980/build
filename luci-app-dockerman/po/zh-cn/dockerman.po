@@ -1225,3 +1225,15 @@ msgstr "授予容器扩展权限（完全访问宿主机设备）<br>"
 
 msgid "TOP"
 msgstr "进程信息"
+
+msgstr "Use iptables to configure network isolation and routing"
+msgid "使用 iptables 来配置网络隔离和路由"
+
+msgstr "Use ip6tables to configure network isolation and routing"
+msgid "使用 ip6tables 来配置网络隔离和路由"
+
+msgstr "Specify IP"
+msgid "指定 IP"
+
+msgstr "Docker will use the given IP address instead of automatically assigning one"
+msgid "Docker 将使用给定的 IP 地址，而不是自动分配"
