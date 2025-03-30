@@ -6,7 +6,7 @@ Copyright 2019 lisaac <https://github.com/lisaac/luci-app-dockerman>
 local http = require "luci.http"
 local docker = require "luci.model.docker"
 local dk = docker.new()
-local m, s, o, images, networks, containers, res, lost_state
+local m, s, o, images, networks, containers, res, lost_state, gateway, src_dport, dest_port
 local urlencode = luci.http.protocol and luci.http.protocol.urlencode or luci.util.urlencode
 
 if dk:_ping().code ~= 200 then
@@ -61,7 +61,7 @@ function get_containers()
 
 		if (type(v.NetworkSettings) == "table" and type(v.NetworkSettings.Networks) == "table") then
 			for networkname, netconfig in pairs(v.NetworkSettings.Networks) do
-				data[index]["_network"] = (data[index]["_network"] ~= nil and (data[index]["_network"] .." | ") or "").. networkname .. (netconfig.IPAddress ~= "" and (": " .. netconfig.IPAddress) or "")
+				data[index]["_network"] = (data[index]["_network"] ~= nil and (data[index]["_network"] .. " | ") or "") .. networkname .. (netconfig.IPAddress ~= "" and (": " .. netconfig.IPAddress) or "")
 			end
 		end
 
@@ -92,6 +92,7 @@ function get_containers()
 						v2.Type or "",
 						link and "</a>" or ""
 					}
+					src_dport, dest_port = v2.PublicPort, v2.PrivatePort
 				end
 			end
 		end
@@ -306,5 +307,28 @@ o.write = function(self, section)
 	start_stop_remove(m, "remove")
 end
 o.disable = lost_state
+
+if not lost_state then
+	for i, v in pairs(networks) do
+		gateway = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Gateway or nil
+	end
+end
+
+local uci = require "luci.model.uci".cursor()
+local redirect = uci:get("firewall", "@redirect[-1]")
+if not redirect then
+	uci:add("firewall", "redirect")
+	uci:set("firewall", "@redirect[-1]", "name", "docker")
+	uci:set("firewall", "@redirect[-1]", "target", "DNAT")
+	uci:set("firewall", "@redirect[-1]", "src", "wan")
+	uci:set("firewall", "@redirect[-1]", "dest", "lan")
+	uci:set("firewall", "@redirect[-1]", "proto", "tcp")
+	uci:set("firewall", "@redirect[-1]", "dest_ip", gateway)
+	uci:set("firewall", "@redirect[-1]", "src_dport", src_dport)
+	uci:set("firewall", "@redirect[-1]", "dest_port", dest_port)
+	uci:delete("firewall", "@redirect[-1]", "enabled")
+	uci:commit("firewall")
+	luci.util.exec("/etc/init.d/firewall restart")
+end
 
 return m

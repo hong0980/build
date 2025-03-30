@@ -371,7 +371,7 @@ if action == "info" then
 		if v and v.Name then
 			local parent = v.Options and v.Options.parent or nil
 			local ip = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Subnet or nil
-			ipv6 =  v.IPAM and v.IPAM.Config and v.IPAM.Config[2] and v.IPAM.Config[2].Subnet or nil
+			local ipv6 =  v.IPAM and v.IPAM.Config and v.IPAM.Config[2] and v.IPAM.Config[2].Subnet or nil
 			local network_name = v.Name .. " | " .. v.Driver .. (parent and (" | "  ..  parent) or "") .. (ip and (" | " .. ip) or "") .. (ipv6 and (" | " .. ipv6) or "")
 			list_networks[v.Name] = network_name
 		end
