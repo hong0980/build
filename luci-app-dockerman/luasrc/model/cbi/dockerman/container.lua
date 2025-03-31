@@ -52,15 +52,15 @@ local get_mounts = function(d)
 	if d.Mounts then
 		for _, v in ipairs(d.Mounts) do
 			local v_sorce = ""
-			local mode = is_empty(v["Mode"]) and ":" .. v["Mode"] or ""
-			for v_sorce_d in v["Source"]:gmatch('[^/]+') do
+			local mode = is_empty(v.Mode) and ":" .. v.Mode or ""
+			for v_sorce_d in v.Source:gmatch('[^/]+') do
 				if v_sorce_d and #v_sorce_d > 12 then
 					v_sorce = "%s/%s..." %{v_sorce, v_sorce_d:sub(1,12)}
 				else
 					v_sorce = v_sorce .."/".. v_sorce_d
 				end
 			end
-			data = (data and (data .. "<br>") or "") ..  "%s:%s%s" %{v_sorce, v["Destination"], mode}
+			data = (data and (data .. "<br>") or "") ..  "%s:%s%s" %{v_sorce, v.Destination, mode}
 		end
 	end
 
@@ -96,7 +96,7 @@ local get_device = function(d)
 
 	if d.HostConfig and d.HostConfig.Devices then
 		for _, v in ipairs(d.HostConfig.Devices) do
-			data = (data and (data .. "<br>") or "") .. v["PathOnHost"] .. ":" .. v["PathInContainer"] .. (is_empty(v["CgroupPermissions"]) and (":" .. v["CgroupPermissions"]) or "")
+			data = (data and (data .. "<br>") or "") .. v.PathOnHost .. ":" .. v.PathInContainer .. (is_empty(v.CgroupPermissions) and (":" .. v.CgroupPermissions) or "")
 		end
 	end
 
@@ -329,7 +329,8 @@ if action == "info" then
 		-- },
 		["09mount"] = {
 			_key = translate("Mount/Volume"),
-			_value = get_mounts(container_info) or "-"
+			-- _value = get_mounts(container_info) or "-"
+			_value = (container_info.HostConfig and container_info.HostConfig.Binds or get_mounts(container_info)) or "-"
 		},
 		["10cmd"] = {
 			_key = translate("Command"),
@@ -367,16 +368,6 @@ if action == "info" then
 
 	list_networks = {}
 	info_networks = get_networks(container_info)
-	for _, v in pairs(networks) do
-		if v and v.Name then
-			local parent = v.Options and v.Options.parent or nil
-			local ip = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Subnet or nil
-			local ipv6 =  v.IPAM and v.IPAM.Config and v.IPAM.Config[2] and v.IPAM.Config[2].Subnet or nil
-			local network_name = v.Name .. " | " .. v.Driver .. (parent and (" | "  ..  parent) or "") .. (ip and (" | " .. ip) or "") .. (ipv6 and (" | " .. ipv6) or "")
-			list_networks[v.Name] = network_name
-		end
-	end
-
 	if type(info_networks) == "table" then
 		for k, v in pairs(info_networks) do
 			table_info["14network" .. k] = {
@@ -385,6 +376,16 @@ if action == "info" then
 				_button = translate("Disconnect")
 			}
 			list_networks[k] = nil
+		end
+	end
+
+	for _, v in pairs(networks) do
+		if v and v.Name then
+			local parent = v.Options and v.Options.parent or nil
+			local ip = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Subnet or nil
+			local ipv6 = v.IPAM and v.IPAM.Config and v.IPAM.Config[2] and v.IPAM.Config[2].Subnet or nil
+			local network_name = v.Name .. " | " .. v.Driver .. (parent and (" | " .. parent) or "") .. (ip and (" | " .. ip) or "") .. (ipv6 and (" | " .. ipv6) or "")
+			list_networks[v.Name] = network_name
 		end
 	end
 

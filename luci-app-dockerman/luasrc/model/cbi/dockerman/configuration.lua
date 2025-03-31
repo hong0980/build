@@ -52,6 +52,7 @@ if remote_endpoint_boot then
 		translate("Specify IP"),
 		translate("Docker will use the given IP address instead of automatically assigning one"))
 	o:depends("remote_endpoint", 0)
+	o.datatype="ipaddr"
 
 	o = s:option(DynamicList, "registry_mirrors",
 		translate("Registry Mirrors"),

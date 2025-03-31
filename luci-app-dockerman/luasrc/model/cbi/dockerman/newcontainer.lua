@@ -225,9 +225,9 @@ elseif cmd_line and cmd_line:match("^duplicate/[^/]+$") then
 		-- if container has leave original network, and add new network, .HostConfig.NetworkMode is INcorrect, so using first child of .NetworkingConfig.EndpointsConfig
 		default_config.network = create_body.NetworkingConfig and create_body.NetworkingConfig.EndpointsConfig and next(create_body.NetworkingConfig.EndpointsConfig) or nil
 		default_config.ip = default_config.network and default_config.network ~= "bridge" and default_config.network ~= "host" and default_config.network ~= "null" and create_body.NetworkingConfig.EndpointsConfig[default_config.network].IPAMConfig and create_body.NetworkingConfig.EndpointsConfig[default_config.network].IPAMConfig.IPv4Address or nil
-		default_config.link = create_body.HostConfig.Links
 		default_config.env = create_body.Env
 		default_config.dns = create_body.HostConfig.Dns
+		default_config.link = create_body.HostConfig.Links
 		default_config.volume = create_body.HostConfig.Binds
 		default_config.cap_add = create_body.HostConfig.CapAdd
 		default_config.publish_all = create_body.HostConfig.PublishAllPorts
@@ -585,10 +585,7 @@ m.handle = function(self, state, data)
 	if type(tmp) == "table" then
 		for _, v in ipairs(tmp) do
 			local k, v1 = v:match("(.-)=(.+)")
-
-			if k and v1 then
-				log_opt[k] = v1
-			end
+			if k and v1 then log_opt[k] = v1 end
 		end
 	end
 
@@ -605,10 +602,7 @@ m.handle = function(self, state, data)
 		for _, v in ipairs(tmp) do
 			local k = v:match("([^:]+)")
 			local v1 = v:match(".-:([^:]+)") or ""
-
-			if k then
-				tmpfs[k] = v1
-			end
+			if k then tmpfs[k] = v1 end
 		end
 	end
 
@@ -662,8 +656,8 @@ m.handle = function(self, state, data)
 
 	create_body.Env = env
 	create_body.User = user
-	create_body.Cmd = command
 	create_body.Image = image
+	create_body.Cmd = command
 	create_body.ExposedPorts = exposedports
 	create_body.Tty = tty and true or false
 	create_body.Hostname = network ~= "host" and (hostname or name) or nil
@@ -715,7 +709,6 @@ m.handle = function(self, state, data)
 	end
 
 	local pull_image = function(image)
-		local json_stringify = luci.jsonc and luci.jsonc.stringify
 		docker:append_status("Images: pulling %s...\n" %image)
 		local res = dk.images:create({query = {fromImage = image}}, docker.pull_image_show_status_cb)
 		if res and res.code and res.code == 200
@@ -747,20 +740,22 @@ m.handle = function(self, state, data)
 		end
 	end
 
-	local uci = require "luci.model.uci".cursor()
-	uci:add("firewall", "redirect")
-	uci:set("firewall", "@redirect[-1]", "name", "docker")
-	uci:set("firewall", "@redirect[-1]", "target", "DNAT")
-	uci:set("firewall", "@redirect[-1]", "src", "wan")
-	uci:set("firewall", "@redirect[-1]", "dest", "lan")
-	uci:set("firewall", "@redirect[-1]", "proto", "tcp")
-	uci:set("firewall", "@redirect[-1]", "dest_ip", gateway)
-	uci:set("firewall", "@redirect[-1]", "src_dport", data.publish[1]:match("^(%d+):"))
-	uci:set("firewall", "@redirect[-1]", "dest_port", data.publish[1]:match(":(%d+)"))
-	uci:delete("firewall", "@redirect[-1]", "enabled")
-	uci:commit("firewall")
-	luci.util.exec("/etc/init.d/firewall restart")
-
+	-- local uci = require "luci.model.uci".cursor()
+	-- local redirect = uci:get("firewall", "@redirect[-1]")
+	-- if not redirect then
+	-- 	uci:add("firewall", "redirect")
+	-- 	uci:set("firewall", "@redirect[-1]", "name", "docker")
+	-- 	uci:set("firewall", "@redirect[-1]", "target", "DNAT")
+	-- 	uci:set("firewall", "@redirect[-1]", "src", "wan")
+	-- 	uci:set("firewall", "@redirect[-1]", "dest", "lan")
+	-- 	uci:set("firewall", "@redirect[-1]", "proto", "tcp")
+	-- 	uci:set("firewall", "@redirect[-1]", "dest_ip", gateway)
+	-- 	uci:set("firewall", "@redirect[-1]", "src_dport", data.publish[1]:match("^(%d+):"))
+	-- 	uci:set("firewall", "@redirect[-1]", "dest_port", data.publish[1]:match(":(%d+)"))
+	-- 	uci:delete("firewall", "@redirect[-1]", "enabled")
+	-- 	uci:commit("firewall")
+	-- 	luci.util.exec("/etc/init.d/firewall restart")
+	-- end
 	create_body = docker.clear_empty_tables(create_body)
 
 	docker:append_status("Container: create %s..." %name)

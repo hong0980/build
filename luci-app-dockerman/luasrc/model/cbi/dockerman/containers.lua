@@ -39,8 +39,8 @@ function get_containers()
 
 		data[index] = {}
 		data[index]["_selected"] = 0
-		data[index]["_id"] = v.Id:sub(1,12)
 		data[index]["_status"] = v.Status
+		data[index]["_id"] = v.Id:sub(1,12)
 
 		if v.Status:find("^Up") then
 			data[index]["_name"] = "<font color='green'>%s</font>" %{v.Names[1]:sub(2)}
@@ -55,8 +55,8 @@ function get_containers()
 				data[index]["_status"],
 			}
 		else
-			data[index]["_name"] = "<font color='red'>"..v.Names[1]:sub(2).."</font>"
-			data[index]["_status"] = '<font class="container_not_running" color="red">'.. data[index]["_status"] .. "</font>"
+			data[index]["_name"] = "<font color='red'>" .. v.Names[1]:sub(2) .. "</font>"
+			data[index]["_status"] = '<font class="container_not_running" color="red">' .. data[index]["_status"] .. "</font>"
 		end
 
 		if (type(v.NetworkSettings) == "table" and type(v.NetworkSettings.Networks) == "table") then
@@ -110,8 +110,8 @@ function get_containers()
 			{
 				luci.dispatcher.build_url("admin/services/docker/container/%s" %v.Id),
 				translate("Container detail"),
-				data[index]["_name"],
 				data[index]["_id"],
+				data[index]["_name"],
 				data[index]["_image"] or "&lt;none&gt;",
 				v.Id
 			}
@@ -205,12 +205,13 @@ o.width="10%"
 o = s:option(DummyValue, "_ports", translate("Ports"))
 o.width="5%"
 o.rawhtml = true
+
 o = s:option(DummyValue, "_mounts", translate("Mounts"))
 o.width="25%"
 o.rawhtml = true
 
--- o = s:option(DummyValue, "_image", translate("Image"))
--- o.width="8%"
+o = s:option(DummyValue, "_image", translate("Image"))
+o.width="8%"
 
 o = s:option(DummyValue, "_command", translate("Command"))
 o.width="15%"
@@ -304,31 +305,32 @@ o.inputtitle = translate("Remove")
 o.inputstyle = "remove"
 o.forcewrite = true
 o.write = function(self, section)
+	start_stop_remove(m, "kill")
 	start_stop_remove(m, "remove")
 end
 o.disable = lost_state
 
-if not lost_state then
-	for i, v in pairs(networks) do
-		gateway = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Gateway or nil
-	end
-end
+-- if not lost_state then
+-- 	for i, v in pairs(networks) do
+-- 		gateway = v.IPAM and v.IPAM.Config and v.IPAM.Config[1] and v.IPAM.Config[1].Gateway or nil
+-- 	end
+-- end
 
-local uci = require "luci.model.uci".cursor()
-local redirect = uci:get("firewall", "@redirect[-1]")
-if not redirect then
-	uci:add("firewall", "redirect")
-	uci:set("firewall", "@redirect[-1]", "name", "docker")
-	uci:set("firewall", "@redirect[-1]", "target", "DNAT")
-	uci:set("firewall", "@redirect[-1]", "src", "wan")
-	uci:set("firewall", "@redirect[-1]", "dest", "lan")
-	uci:set("firewall", "@redirect[-1]", "proto", "tcp")
-	uci:set("firewall", "@redirect[-1]", "dest_ip", gateway)
-	uci:set("firewall", "@redirect[-1]", "src_dport", src_dport)
-	uci:set("firewall", "@redirect[-1]", "dest_port", dest_port)
-	uci:delete("firewall", "@redirect[-1]", "enabled")
-	uci:commit("firewall")
-	luci.util.exec("/etc/init.d/firewall restart")
-end
+-- local uci = require "luci.model.uci".cursor()
+-- local redirect = uci:get("firewall", "@redirect[-1]")
+-- if not redirect then
+-- 	uci:add("firewall", "redirect")
+-- 	uci:set("firewall", "@redirect[-1]", "name", "docker")
+-- 	uci:set("firewall", "@redirect[-1]", "target", "DNAT")
+-- 	uci:set("firewall", "@redirect[-1]", "src", "wan")
+-- 	uci:set("firewall", "@redirect[-1]", "dest", "lan")
+-- 	uci:set("firewall", "@redirect[-1]", "proto", "tcp")
+-- 	uci:set("firewall", "@redirect[-1]", "dest_ip", gateway)
+-- 	uci:set("firewall", "@redirect[-1]", "src_dport", src_dport)
+-- 	uci:set("firewall", "@redirect[-1]", "dest_port", dest_port)
+-- 	uci:delete("firewall", "@redirect[-1]", "enabled")
+-- 	uci:commit("firewall")
+-- 	luci.util.exec("/etc/init.d/firewall restart")
+-- end
 
 return m
