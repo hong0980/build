@@ -54,16 +54,15 @@ m.reset=false
 s = m:section(Table, network_list, translate("Networks overview"))
 s.nodescr=true
 
-o = s:option(Flag, "_selected","")
+o = s:option(Flag, "_selected", "")
 o.template = "dockerman/cbi/xfvalue"
 o.disabled = 0
 o.enabled = 1
 o.default = 0
 o.render = function(self, section, scope)
 	self.disable = 0
-	if network_list[section]["_name"] == "bridge"
-		or network_list[section]["_name"] == "none"
-		or network_list[section]["_name"] == "host" then
+	local network_name = network_list[section]["_name"]
+	if network_name == "bridge" or network_name == "none" or network_name == "host" then
 		self.disable = 1
 	end
 	Flag.render(self, section, scope)

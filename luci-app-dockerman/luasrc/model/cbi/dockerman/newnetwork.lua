@@ -4,23 +4,21 @@ Copyright 2019 lisaac <https://github.com/lisaac/luci-app-dockerman>
 ]]--
 
 local docker = require "luci.model.docker"
-local m, s, o
 local dk = docker.new()
+local lost_state = (dk:_ping().code ~= 200)
 
-if dk:_ping().code ~= 200 then lost_state = true end
-
-m = SimpleForm("docker", translate("Docker - Network"))
+local m = SimpleForm("docker", translate("Docker - Network"))
 m.redirect = luci.dispatcher.build_url("admin", "services", "docker", "networks")
 if lost_state then
-	m.submit=false
-	m.reset=false
+	m.submit = false
+	m.reset = false
 end
 
-s = m:section(SimpleSection)
+local s = m:section(SimpleSection)
 s.template = "dockerman/apply_widget"
-s.err=docker:read_status()
-s.err=s.err and s.err:gsub("\n","<br>"):gsub(" ","&nbsp;")
+s.err = docker:read_status()
 if s.err then
+	s.err = s.err:gsub("\n", "<br>"):gsub(" ", "&nbsp;")
 	docker:clear_status()
 end
 
@@ -28,59 +26,68 @@ s = m:section(SimpleSection, translate("Create new docker network"))
 s.addremove = true
 s.anonymous = true
 
-o = s:option(Value, "name",
-	translate("Network Name"),
-	translate("Name of the network that can be selected during container creation"))
-o.rmempty = true
+local o = s:option(Value, "name", translate("Network Name"), translate("Unique name for the network"))
+o.rmempty = false
+o.datatype = "string"
+o.placeholder = "my-network"
 
-o = s:option(ListValue, "driver", translate("Driver"))
-o.rmempty = true
+o = s:option(ListValue, "driver", translate("Driver"), translate("Select the network driver type"))
+o.rmempty = false
 o:value("bridge", translate("Bridge device"))
 o:value("macvlan", translate("MAC VLAN"))
-o:value("ipvlan",  translate("IP VLAN"))
+o:value("ipvlan", translate("IP VLAN"))
 o:value("overlay", translate("Overlay network"))
+o.default = "bridge"
 
-o = s:option(Value, "parent", translate("Base device"))
-o.rmempty = true
+o = s:option(ListValue, "parent",
+	translate("Base device"),
+	translate("The host interface to bind the network to.") ..
+	translate("'macvlan': acts as a separate device (e.g., 'eth0', 'br-lan').") ..
+	translate("'ipvlan': shares the host’s MAC with unique IPs (e.g., 'eth0', 'br-lan').") ..
+	translate("'bridge': bridges to the host (defaults to 'br-lan')."))
 o:depends("driver", "macvlan")
+o:depends("driver", "ipvlan")
+o:depends("driver", "bridge")
 local interfaces = luci.sys.net.devices() or {}
 for _, v in ipairs(interfaces) do
 	o:value(v, v)
 end
-o.default="br-lan"
-o.placeholder="br-lan"
+o.default = "br-lan"
+o.placeholder = "br-lan"
 
 o = s:option(ListValue, "macvlan_mode", translate("Mode"))
-o.rmempty = true
 o:depends("driver", "macvlan")
-o.default="bridge"
+o.default = "bridge"
 o:value("bridge", translate("Bridge (Support direct communication between MAC VLANs)"))
 o:value("private", translate("Private (Prevent communication between MAC VLANs)"))
 o:value("vepa", translate("VEPA (Virtual Ethernet Port Aggregator)"))
 o:value("passthru", translate("Pass-through (Mirror physical device to single MAC VLAN)"))
 
-o = s:option(ListValue, "ipvlan_mode", translate("Ipvlan Mode"))
-o.rmempty = true
+o = s:option(ListValue, "ipvlan_mode", translate("IP VLAN Mode"))
 o:depends("driver", "ipvlan")
-o.default="l3"
+o.default = "l3"
 o:value("l2", translate("L2 bridge"))
 o:value("l3", translate("L3 bridge"))
 
 o = s:option(Flag, "ingress",
 	translate("Ingress"),
 	translate("Ingress network is the network which provides the routing-mesh in swarm mode"))
-o.rmempty = true
 o.disabled = 0
 o.enabled = 1
 o.default = 0
 o:depends("driver", "overlay")
 
-o = s:option(DynamicList, "options", translate("Options"))
-o.rmempty = true
-o.placeholder="com.docker.network.driver.mtu=1500"
+o = s:option(DynamicList, "options", translate("Options"),
+	translate("e.g., com.docker.network.driver.mtu=1500"))
+o.placeholder = "key=value"
+o.validate = function(self, value)
+	if value and not value:match("^[^=]+=.+$") then
+		return nil, translate("Option must be in 'key=value' format.")
+	end
+	return value
+end
 
 o = s:option(Flag, "internal", translate("Internal"), translate("Restrict external access to the network"))
-o.rmempty = true
 o:depends("driver", "overlay")
 o.disabled = 0
 o.enabled = 1
@@ -95,41 +102,34 @@ if nixio.fs.access("/etc/config/network") and nixio.fs.access("/etc/config/firew
 end
 
 o = s:option(Value, "subnet", translate("Subnet"))
-o.rmempty = true
-o.placeholder="10.1.0.0/16"
-o.datatype="ip4addr"
+o.placeholder = "10.1.0.0/16"
+o.datatype = "ip4addr"
 
 o = s:option(Value, "gateway", translate("Gateway"))
-o.rmempty = true
-o.placeholder="10.1.1.1"
-o.datatype="ip4addr"
+o.placeholder = "10.1.1.1"
+o.datatype = "ip4addr"
 
 o = s:option(Value, "ip_range", translate("IP range"))
-o.rmempty = true
-o.placeholder="10.1.1.0/24"
-o.datatype="ip4addr"
+o.placeholder = "10.1.1.0/24"
+o.datatype = "ip4addr"
 
 o = s:option(DynamicList, "aux_address", translate("Exclude IPs"))
-o.rmempty = true
-o.placeholder="my-route=10.1.1.1"
+o.placeholder = "my-route=10.1.1.1"
 
 o = s:option(Flag, "ipv6", translate("Enable IPv6"))
-o.rmempty = true
 o.disabled = 0
 o.enabled = 1
 o.default = 0
 
 o = s:option(Value, "subnet6", translate("IPv6 Subnet"))
-o.rmempty = true
-o.placeholder="fe80::/10"
-o.datatype="ip6addr"
 o:depends("ipv6", 1)
+o.placeholder = "fe80::/10"
+o.datatype = "ip6addr"
 
 o = s:option(Value, "gateway6", translate("IPv6 Gateway"))
-o.rmempty = true
-o.placeholder="fe80::1"
-o.datatype="ip6addr"
 o:depends("ipv6", 1)
+o.placeholder = "fe80::1"
+o.datatype = "ip6addr"
 
 m.handle = function(self, state, data)
 	if state == FORM_VALID then
@@ -138,8 +138,9 @@ m.handle = function(self, state, data)
 		local subnet	= data.subnet
 		local gateway	= data.gateway
 		local ip_range	= data.ip_range
+		local ipv6		= data.ipv6 == 1
 		local tmp		= data.aux_address or {}
-		local internal	= data.internal == 1 and true or false
+		local internal	= data.internal == 1
 		local options, aux_address = {}, {}
 
 		for i,v in ipairs(tmp) do
@@ -156,9 +157,9 @@ m.handle = function(self, state, data)
 		local create_body = {
 			Name = name,
 			Driver = driver,
+			EnableIPv6 = ipv6,
 			Internal = internal,
-			IPAM = {Driver = "default"},
-			EnableIPv6 = data.ipv6 == 1 and true or false
+			IPAM = {Driver = "default"}
 		}
 
 		if subnet or gateway or ip_range then
@@ -179,7 +180,7 @@ m.handle = function(self, state, data)
 		elseif driver == "ipvlan" then
 			create_body.Options = {ipvlan_mode = data.ipvlan_mode}
 		elseif driver == "overlay" then
-			create_body.Ingress = data.ingerss == 1 and true or false
+			create_body.Ingress = data.ingress == 1
 		end
 
 		if ipv6 and data.subnet6 then
@@ -187,7 +188,7 @@ m.handle = function(self, state, data)
 				create_body.IPAM.Config = {}
 			end
 			local index = #create_body.IPAM.Config
-			create_body.IPAM.Config[index+1] = {
+			create_body.IPAM.Config[index + 1] = {
 				Subnet = data.subnet6,
 				Gateway = data.gateway6
 			}

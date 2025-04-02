@@ -1237,3 +1237,27 @@ msgstr "指定 IP"
 
 msgid "Docker will use the given IP address instead of automatically assigning one"
 msgstr "Docker 将使用给定的 IP 地址，而不是自动分配"
+
+msgid "Unique name for the network"
+msgstr "网络的唯一名称"
+
+msgid "Select the network driver type"
+msgstr "选择网络驱动程序的类型"
+
+msgid "The host interface to bind the network to."
+msgstr "绑定网络的主机接口。"
+
+msgid "'macvlan': acts as a separate device (e.g., 'eth0', 'br-lan')."
+msgstr "'macvlan'：作为独立设备运行（例如 'eth0'、'br-lan'）。"
+
+msgid "'ipvlan': shares the host’s MAC with unique IPs (e.g., 'eth0', 'br-lan')."
+msgstr "'ipvlan'：与主机共享 MAC 地址但使用独立 IP（例如 'eth0'、'br-lan'）。"
+
+msgid "'bridge': bridges to the host (defaults to 'br-lan')."
+msgstr "'bridge'：桥接到主机（默认值为 'br-lan'）。"
+
+msgid "e.g., com.docker.network.driver.mtu=1500"
+msgstr "例如，com.docker.network.driver.mtu = 1500"
+
+msgid "Option must be in 'key=value' format."
+msgstr "选项必须处是 'key=value' 格式"
