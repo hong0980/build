@@ -4,8 +4,7 @@ Copyright 2021 Florian Eckert <fe@dev.tdt.de>
 Copyright 2021 lisaac <lisaac.cn@gmail.com>
 ]]--
 
-local uci = (require "luci.model.uci").cursor()
-local m, s, o
+local uci = require "luci.model.uci".cursor()
 local remote_endpoint_boot = uci:get("dockerd", "dockerman", "remote_endpoint") == "0"
 
 m = Map("dockerd",
@@ -16,12 +15,12 @@ if remote_endpoint_boot then
 	s = m:section(NamedSection, "globals", "section", translate("Docker Daemon settings"))
 	o = s:option(Flag, "auto_start", translate("Auto start"))
 	o.rmempty = false
-	o.write = function(self, section, value)
-		if value == "1" then
-			luci.util.exec("/etc/init.d/dockerd enable")
-		else
-			luci.util.exec("/etc/init.d/dockerd disable")
+	function o.write(self, section, value)
+		if not value or value == "" then
+			return
 		end
+		local val = value == "1" and 'enable' or 'disable'
+		luci.util.exec("/etc/init.d/dockerd %s" %val)
 		uci:set("dockerd", "globals", "auto_start", value)
 	end
 
@@ -52,7 +51,7 @@ if remote_endpoint_boot then
 		translate("Specify IP"),
 		translate("Docker will use the given IP address instead of automatically assigning one"))
 	o:depends("remote_endpoint", 0)
-	o.datatype="ipaddr"
+	o.datatype = "ipaddr"
 
 	o = s:option(DynamicList, "registry_mirrors",
 		translate("Registry Mirrors"),
@@ -96,9 +95,9 @@ o.validate = function(self, value, sid)
 	local res = luci.http.formvaluetable("cbid.dockerd")
 	if res["dockerman.remote_endpoint"] == "1" then
 	 if res["dockerman.remote_port"]
-	 	and res["dockerman.remote_port"] ~= ""
-	 	and res["dockerman.remote_host"]
-	 	and res["dockerman.remote_host"] ~= "" then
+		and res["dockerman.remote_port"] ~= ""
+		and res["dockerman.remote_host"]
+		and res["dockerman.remote_host"] ~= "" then
 			return 1
 		else
 			return nil, translate("Please input the PORT or HOST IP of remote docker instance!")
@@ -137,18 +136,12 @@ o = s:taboption("dockerman", Value, "status_path",
 o = s:taboption("dockerman", Flag, "debug",
 	translate("Enable Debug"),
 	translate("For debug, It shows all docker API actions of luci-app-dockerman in Debug Tempfile Path"))
-o.enabled="true"
-o.disabled="false"
+o.enabled = "true"
+o.disabled = "false"
 
 o = s:taboption("dockerman", Value, "debug_path",
 	translate("Debug Tempfile Path"),
 	translate("Where you want to save the debug tempfile"))
-
--- 是否只查看最后一次启动的日志
--- o = s:taboption("dockerman", Flag, "log_last_start",
--- 	translate("Enable"),
--- 	translate("Enable to limit container logs to the last start time"))
--- o.rmempty = true
 
 if remote_endpoint_boot then
 	o = s:taboption("ac", DynamicList, "ac_allowed_interface",
@@ -186,6 +179,23 @@ if remote_endpoint_boot then
 			end
 		end
 	end
+end
+
+o = s:taboption("ac", Flag, "forward",
+	translate("Enable"),
+	translate("允许防火墙直接转发所有流量"))
+	o.rmempty = false
+	o.default = uci:get("firewall", "@defaults[0]", "forward") == "ACCEPT"
+
+function o.write(self, section, value)
+	if not value or value == "" then
+		return
+	end
+	local val = value == "1" and 'ACCEPT' or 'REJECT'
+	uci:set("firewall", "@defaults[0]", "forward", val)
+	uci:commit("firewall")
+	luci.util.exec("/etc/init.d/firewall restart &")
+	uci:set("dockerd", "dockerman", "forward", value)
 end
 
 return m
