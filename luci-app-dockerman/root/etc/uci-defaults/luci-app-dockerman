@@ -22,6 +22,15 @@ uci -q batch <<-EOF >/dev/null
 	add_list dockerd.dockerman.ac_allowed_interface='br-lan'
 
 	commit dockerd
+
+	add firewall forwarding
+	set firewall.@forwarding[-1].src='lan'
+	set firewall.@forwarding[-1].dest='docker'
+
+	add firewall forwarding
+	set firewall.@forwarding[-1].src='docker'
+	set firewall.@forwarding[-1].dest='wan'
+	commit firewall
 EOF
 # remove dockerd firewall
 config_load dockerd
