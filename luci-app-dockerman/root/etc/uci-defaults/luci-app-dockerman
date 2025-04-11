@@ -21,19 +21,6 @@ uci -q batch <<-EOF >/dev/null
 	del_list dockerd.dockerman.ac_allowed_interface='br-lan'
 	add_list dockerd.dockerman.ac_allowed_interface='br-lan'
 	commit dockerd
-
-	add firewall rule
-	set firewall.@rule[-1].name='Allow_LAN_to_Docker'
-	set firewall.@rule[-1].src='lan'
-	set firewall.@rule[-1].dest='docker'
-	set firewall.@rule[-1].target='ACCEPT'
-
-	add firewall rule
-	set firewall.@rule[-1].name='Allow_Docker_to_WAN'
-	set firewall.@rule[-1].src='docker'
-	set firewall.@rule[-1].dest='wan'
-	set firewall.@rule[-1].target='ACCEPT'
-	commit firewall
 EOF
 # remove dockerd firewall
 config_load dockerd
