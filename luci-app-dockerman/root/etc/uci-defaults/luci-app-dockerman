@@ -11,25 +11,28 @@ ls /etc/rc.d/*dockerd &> /dev/null && uci -q set dockerd.globals.auto_start="1" 
 uci -q batch <<-EOF >/dev/null
 	set uhttpd.main.script_timeout="3600"
 	commit uhttpd
+
 	set dockerd.dockerman=dockerman
 	set dockerd.dockerman.socket_path='/var/run/docker.sock'
 	set dockerd.dockerman.status_path='/tmp/.docker_action_status'
 	set dockerd.dockerman.debug='false'
 	set dockerd.dockerman.debug_path='/tmp/.docker_debug'
 	set dockerd.dockerman.remote_endpoint='0'
-
 	del_list dockerd.dockerman.ac_allowed_interface='br-lan'
 	add_list dockerd.dockerman.ac_allowed_interface='br-lan'
-
 	commit dockerd
 
-	add firewall forwarding
-	set firewall.@forwarding[-1].src='lan'
-	set firewall.@forwarding[-1].dest='docker'
+	add firewall rule
+	set firewall.@rule[-1].name='Allow_LAN_to_Docker'
+	set firewall.@rule[-1].src='lan'
+	set firewall.@rule[-1].dest='docker'
+	set firewall.@rule[-1].target='ACCEPT'
 
-	add firewall forwarding
-	set firewall.@forwarding[-1].src='docker'
-	set firewall.@forwarding[-1].dest='wan'
+	add firewall rule
+	set firewall.@rule[-1].name='Allow_Docker_to_WAN'
+	set firewall.@rule[-1].src='docker'
+	set firewall.@rule[-1].dest='wan'
+	set firewall.@rule[-1].target='ACCEPT'
 	commit firewall
 EOF
 # remove dockerd firewall
