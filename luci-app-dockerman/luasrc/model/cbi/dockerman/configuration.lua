@@ -3,20 +3,21 @@ LuCI - Lua Configuration Interface
 Copyright 2021 Florian Eckert <fe@dev.tdt.de>
 Copyright 2021 lisaac <lisaac.cn@gmail.com>
 ]]--
+
 local util = require "luci.util"
 local uci = require "luci.model.uci".cursor()
 local isfw4 = util.exec("command -v fw4") ~= ''
-local remote_endpoint_boot = uci:get("dockerd", "dockerman", "remote_endpoint") == "0"
+local isremote_endpoint = uci:get("dockerd", "dockerman", "remote_endpoint") == "0"
 
 m = Map("dockerd",
 	translate("Docker - Configuration"),
 	translate("DockerMan is a simple docker manager client for LuCI"))
 
-if remote_endpoint_boot then
+if isremote_endpoint then
 	s = m:section(NamedSection, "globals", "section", translate("Docker Daemon settings"))
 	s:tab("globals", translate("Access Control"))
-	s:tab("firewall", translate("防火墙设置"))
-	s:tab("proxies", translate("代理设置"))
+	s:tab("firewall", translate("Firewall Settings"))
+	s:tab("proxies", translate("Proxy Settings"))
 
 	o = s:taboption("globals", Flag, "auto_start", translate("Auto start"))
 	o.rmempty = false
@@ -53,15 +54,15 @@ if remote_endpoint_boot then
 	o:depends("remote_endpoint", 0)
 
 	o = s:taboption("globals", Value, "fixed_cidr",
-		translate("限制容器可用的 IP 范围"),
-		translate("为 Docker 桥接网络分配固定的 CIDR 子网（IPv4）"))
+		translate("Limit IP Range Available for Containers"),
+		translate("Assign a fixed CIDR subnet (IPv4) for Docker bridge network"))
 	o.placeholder = '172.17.0.0/16'
 	o:depends("remote_endpoint", 0)
 	o.datatype = "ipaddr"
 
 	o = s:taboption("globals", Value, "alt_config_file",
-		translate("指定 Docker 配置文件"),
-		translate("使用自定义的 JSON 配置，默认使用 /tmp/dockerd/daemon.json"))
+		translate("Specify Docker Configuration File"),
+		translate("Use a custom JSON configuration, default is /tmp/dockerd/daemon.json"))
 	o.placeholder = "/etc/dockerd/daemon.json"
 	o:depends("remote_endpoint", 0)
 
@@ -80,8 +81,8 @@ if remote_endpoint_boot then
 	o.datatype = "ipaddr"
 
 	o = s:taboption("globals", DynamicList, "dns",
-		translate("DNS 服务器"),
-		translate("设置 Docker 自定义 DNS"))
+		translate("DNS Servers"),
+		translate("Set custom DNS for Docker"))
 	o:depends("remote_endpoint", 0)
 	o.datatype = "ipaddr"
 
@@ -109,7 +110,7 @@ if remote_endpoint_boot then
 	if isfw4 then
 		o = s:taboption("firewall", Flag, "fw4",
 			translate("Enable"),
-			translate("允许 Docker 网络加入 WAN 区域，解决 Docker 与 firewall4 的兼容性"))
+			translate("Add Docker network to WAN, resolve compatibility with firewall4"))
 		o.rmempty = false
 		function o.write(self, section, value)
 			if not value or value == "" then
@@ -161,35 +162,35 @@ if remote_endpoint_boot then
 	end
 
 	o = s:taboption("firewall", Value, "device",
-		translate("Docker 网络接口"),
-		translate('默认防火墙将 docker0 接口与 Docker 区域关联'))
+		translate("Docker Network Interface"),
+		translate('By default, the firewall associates the docker0 interface with the Docker zone'))
 	o.placeholder = 'docker0'
 
 	o = s:taboption("firewall", DynamicList, "blocked_interfaces",
-		translate("阻止 Docker 访问的网络"),
-		translate('设置 wan 表示 Docker 容器无法直接发起到 WAN 接口（例如，pppoe-wan 或 eth1）的连接。'))
+		translate("Blocked Networks for Docker Access"),
+		translate("Setting 'wan' means Docker containers cannot directly initiate connections to WAN interfaces (e.g., pppoe-wan or eth1)."))
 	local wa = require "luci.tools.webadmin"
 	wa.cbi_add_networks(o)
 
 	o = s:taboption("firewall", Value, "extra_iptables_args",
-		translate("防火墙规则"),
-		translate('为 Docker 生成的 iptables 规则添加额外的参数，修改后需重启 Docker'))
+		translate("Firewall Rules"),
+		translate("Add extra parameters to the generated iptables rules. Restart Docker after modification"))
 	o.placeholder = '--match conntrack ! --ctstate RELATED,ESTABLISHED'
 	o:depends("iptables", 1)
 
 	o = s:taboption("proxies", Value, "http_proxy",
-		translate("为 HTTP 流量设置代理服务器"),
-		translate('当 Docker 守护进程或容器需要通过代理访问 HTTP 资源（例如，拉取镜像）时使用。'))
+		translate("HTTP Proxy Server"),
+		translate("Set the HTTP proxy server for Docker"))
 	o.placeholder = "http://proxy.example.com:3128"
 
 	o = s:taboption("proxies", Value, "https_proxy",
-		translate("为 HTTPS 流量设置代理服务器"),
-		translate('当 Docker 守护进程或容器需要通过代理访问 HTTP 资源（例如，拉取镜像）时使用。'))
+		translate("HTTPS Proxy Server"),
+		translate("Set the HTTPS proxy server for Docker"))
 	o.placeholder = "https://proxy.example.com:3129"
 
 	o = s:taboption("proxies", Value, "no_proxy",
-		translate("指定不走代理的地址和网络"),
-		translate('排除内网地址、特定域名或本地地址，避免通过代理访问。'))
+		translate("Specify Addresses and Networks Not to Use Proxy"),
+		translate('Exclude internal network addresses, specific domains, or local addresses from being accessed through the proxy.'))
 	o.placeholder = '*.test.example.com,.example.org,127.0.0.0/8'
 end
 
@@ -253,7 +254,7 @@ o = s:taboption("dockerman", Value, "debug_path",
 	translate("Debug Tempfile Path"),
 	translate("Where you want to save the debug tempfile"))
 
-if remote_endpoint_boot then
+if isremote_endpoint then
 	o = s:taboption("ac", DynamicList, "ac_allowed_interface",
 		translate("Allowed access interfaces"),
 		translate("Which interface(s) can access containers under the bridge network, fill-in Interface Name"))

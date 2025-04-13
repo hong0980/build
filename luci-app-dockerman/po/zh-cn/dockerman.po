@@ -1261,3 +1261,66 @@ msgstr "例如，com.docker.network.driver.mtu = 1500"
 
 msgid "Option must be in 'key=value' format."
 msgstr "选项必须处是 'key=value' 格式"
+
+msgid "Blocked Networks for Docker Access"
+msgstr "阻止 Docker 访问的网络"
+
+msgid "Setting 'wan' means Docker containers cannot directly initiate connections to WAN interfaces (e.g., pppoe-wan or eth1)."
+msgstr "设置 'wan' 表示 Docker 容器无法直接发起到 WAN 接口（例如，pppoe-wan 或 eth1）的连接。"
+
+msgid "Firewall Rules"
+msgstr "防火墙规则"
+
+msgid "Add extra parameters to the generated iptables rules. Restart Docker after modification"
+msgstr "为生成的 iptables 规则添加额外的参数，修改后需重启 Docker"
+
+msgid "HTTP Proxy Server"
+msgstr "HTTP 代理服务器"
+
+msgid "Set the HTTP proxy server for Docker"
+msgstr "为 Docker 设置 HTTP 流量代理服务器"
+
+msgid "HTTPS Proxy Server"
+msgstr "HTTPS 代理服务器"
+
+msgid "Set the HTTPS proxy server for Docker"
+msgstr "为 Docker 设置 HTTPS 流量代理服务器"
+
+msgid "Specify Addresses and Networks Not to Use Proxy"
+msgstr "指定不走代理的地址和网络"
+
+msgid "Exclude internal network addresses, specific domains, or local addresses from being accessed through the proxy."
+msgstr "排除内网地址、特定域名或本地地址，避免通过代理访问。"
+
+msgid "Docker Network Interface"
+msgstr "Docker 网络接口"
+
+msgid "By default, the firewall associates the docker0 interface with the Docker zone"
+msgstr "默认防火墙将 docker0 接口与 Docker 区域关联"
+
+msgid "Limit IP Range Available for Containers"
+msgstr "限制容器可用的 IP 范围"
+
+msgid "Assign a fixed CIDR subnet (IPv4) for Docker bridge network"
+msgstr "为 Docker 桥接网络分配固定的 CIDR 子网（IPv4）"
+
+msgid "Specify Docker Configuration File"
+msgstr "指定 Docker 配置文件"
+
+msgid "Use a custom JSON configuration, default is /tmp/dockerd/daemon.json"
+msgstr "使用自定义的 JSON 配置，默认使用 /tmp/dockerd/daemon.json"
+
+msgid "DNS Servers"
+msgstr "DNS 服务器"
+
+msgid "Set custom DNS for Docker"
+msgstr "设置 Docker 自定义 DNS"
+
+msgid "Firewall Settings"
+msgstr "防火墙设置"
+
+msgid "Proxy Settings"
+msgstr "代理设置"
+
+msgid "Add Docker network to WAN, resolve compatibility with firewall4"
+msgstr "Docker 网络添加到 WAN，解决 firewall4 的兼容性"
