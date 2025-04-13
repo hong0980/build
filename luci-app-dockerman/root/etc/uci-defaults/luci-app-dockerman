@@ -20,6 +20,9 @@ uci -q batch <<-EOF >/dev/null
 	set dockerd.dockerman.remote_endpoint='0'
 	del_list dockerd.dockerman.ac_allowed_interface='br-lan'
 	add_list dockerd.dockerman.ac_allowed_interface='br-lan'
+
+	set dockerd.proxies=proxies
+	set dockerd.firewall=firewall
 	commit dockerd
 EOF
 # remove dockerd firewall
