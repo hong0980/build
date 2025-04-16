@@ -12,7 +12,7 @@ PKG_VERSION:=2.0.10
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
-PKG_SOURCE_URL:=https://github.com/arvidn/libtorrent/releases/download/v$(PKG_VERSION)/
+PKG_SOURCE_URL:=https://github.com/arvidn/libtorrent/releases/download/v$(PKG_VERSION)
 PKG_HASH:=fc935b8c1daca5c0a4d304bff59e64e532be16bb877c012aea4bda73d9ca885d
 
 PKG_MAINTAINER:=David Yang <mmyangfl@gmail.com>
@@ -67,7 +67,7 @@ PKG_UNPACK:=$(HOST_TAR) -C $(PKG_BUILD_DIR) --strip-components=1 -xzf $(DL_DIR)/
 define Build/Prepare
 	$(Build/Prepare/Default)
 	$(eval $(Download/try_signal))
-	xzcat $(DL_DIR)/$(PKG_NAME)-try_signal-$(VERSION).tar.xz | tar -C $(PKG_BUILD_DIR) $(TAR_OPTIONS)
+	xzcat $(DL_DIR)/$(TITLE) | tar -C $(PKG_BUILD_DIR) $(TAR_OPTIONS)
 endef
 
 TARGET_CXXFLAGS += -DBOOST_BIND_GLOBAL_PLACEHOLDERS
@@ -97,7 +97,7 @@ endef
 
 define Package/python3-libtorrent/install
 	$(INSTALL_DIR) $(1)/usr/lib/python$(PYTHON3_VERSION)/site-packages
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/python$(PYTHON3_VERSION)/site-packages/*.so $(1)/usr/lib/python$(PYTHON3_VERSION)/site-packages/
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/python$(PYTHON3_VERSION)/site-packages/*.so $(1)/usr/lib/python$(PYTHON3_VERSION)/site-packages
 endef
 
 $(eval $(call BuildPackage,libtorrent-rasterbar))
