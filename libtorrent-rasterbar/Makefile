@@ -75,13 +75,7 @@ TARGET_LDFLAGS += -latomic
 
 CMAKE_OPTIONS += \
 	-DCMAKE_BUILD_TYPE=Release \
-	-Dpython-bindings=$(if $(CONFIG_PACKAGE_python3-libtorrent),ON,OFF) \
-	-Dpython-egg-info=$(if $(CONFIG_PACKAGE_python3-libtorrent),ON,OFF) \
-	-DPYTHON_EXECUTABLE=$(STAGING_DIR_HOSTPKG)/bin/python$(PYTHON3_VERSION) \
-	-DPYTHON_INCLUDE_DIR=$(STAGING_DIR)/usr/include/python$(PYTHON3_VERSION) \
-	-DPYTHON_LIBRARY=$(STAGING_DIR)/usr/lib/libpython$(PYTHON3_VERSION).so \
-	-DBOOST_ROOT=$(STAGING_DIR)/usr \
-	-DBoost_NO_BOOST_CMAKE=ON
+	-Dpython-bindings=$(if $(CONFIG_PACKAGE_python3-libtorrent),ON,OFF)
 
 define Build/InstallDev
 	$(INSTALL_DIR) $(1)/usr/include $(1)/usr/lib $(1)/usr/lib/pkgconfig
