@@ -739,23 +739,6 @@ m.handle = function(self, state, data)
 			pull_image(image)
 		end
 	end
-
-	-- local uci = require "luci.model.uci".cursor()
-	-- local redirect = uci:get("firewall", "@redirect[-1]")
-	-- if not redirect then
-	-- 	uci:add("firewall", "redirect")
-	-- 	uci:set("firewall", "@redirect[-1]", "name", "docker")
-	-- 	uci:set("firewall", "@redirect[-1]", "target", "DNAT")
-	-- 	uci:set("firewall", "@redirect[-1]", "src", "wan")
-	-- 	uci:set("firewall", "@redirect[-1]", "dest", "lan")
-	-- 	uci:set("firewall", "@redirect[-1]", "proto", "tcp")
-	-- 	uci:set("firewall", "@redirect[-1]", "dest_ip", gateway)
-	-- 	uci:set("firewall", "@redirect[-1]", "src_dport", data.publish[1]:match("^(%d+):"))
-	-- 	uci:set("firewall", "@redirect[-1]", "dest_port", data.publish[1]:match(":(%d+)"))
-	-- 	uci:delete("firewall", "@redirect[-1]", "enabled")
-	-- 	uci:commit("firewall")
-	-- 	luci.util.exec("/etc/init.d/firewall restart")
-	-- end
 	create_body = docker.clear_empty_tables(create_body)
 
 	docker:append_status("Container: create %s..." %name)

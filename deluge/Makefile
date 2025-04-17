@@ -24,17 +24,18 @@ define Package/$(PKG_NAME)
 	TITLE+= (console UI & daemon)
 	DEPENDS:= \
 	    +python3-chardet \
+	    +python3-ifaddr \
 	    +python3-libtorrent \
 	    +python3-mako \
-	    +python3-markupsafe \
 	    +python3-pillow \
+	    +python3-pyasn1 \
 	    +python3-pyopenssl \
 	    +python3-pyxdg \
 	    +python3-rencode \
-	    +python3-service-identity \
 	    +python3-setproctitle \
 	    +python3-setuptools \
-	    +python3-twisted
+	    +python3-twisted \
+	    +python3-zope-interface
 endef
 
 define Package/$(PKG_NAME)-ui-web

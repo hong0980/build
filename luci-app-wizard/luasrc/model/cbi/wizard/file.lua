@@ -20,7 +20,10 @@ local function _writefile(value, path)
     end
 end
 
-function isfile(file) return fs.lstat(file, "type") == "reg" end
+function isfile(file)
+    local data = fs.readfile(file, 100)
+    return data ~= nil and #data > 0
+end
 
 local function description(x)
     return translatef([[<font color='red'><strong>配置文件是直接编辑保存的！除非你知道在干什么，否则请不要修改这些配置文件。配置不正确可能会导致不能开机，联网等错误。</strong></font><br/><b><font color='green'>修改行前建议先备份行再修改，注释行在行首添加 ＃。</font></b><br>本页是<code>%s</code>的配置文件内容，编辑后点击<code>保存&应用</code>按钮后重启生效<br>]], x)
@@ -55,16 +58,6 @@ if isfile(file_network) then
             sys.init.restart("network")
         end
     end
-end
-
-if isfile(file_wireless) then
-    s:tab('wifisetup', translate('Wireless Settings'),
-        translate('Set the router\'s wireless name and password. For more advanced settings, please go to the Network-Wireless page.'))
-    o = s:taboption('wifisetup', Value, 'wifi_ssid', translate('<abbr title=\"Extended Service Set Identifier\">ESSID</abbr>'))
-    o.datatype = 'maxlength(32)'
-    o = s:taboption("wifisetup", Value, "wifi_key", translate("Key"))
-    o.datatype = 'wpakey'
-    o.password = true
 end
 
 if isfile(file_dhcp) then
@@ -192,6 +185,24 @@ if isfile(dnsmasq_conf) then
         if _writefile(value, dnsmasq_conf) then
             sys.init.restart("dnsmasq")
         end
+    end
+end
+
+if isfile(file_wireless) then
+    s:tab("file_wirelessconf", translate("修改wireless"),
+        translatef("本页是<code>%s</code>的配置文件内容，编辑后点击<code>保存&应用</code>按钮后生效。", file_wireless))
+    conf = s:taboption("file_wirelessconf", Value, "file_wirelessconf", nil)
+    conf.template = "cbi/tvalue"
+    conf.rows = 25
+    conf.wrap = "off"
+
+    function conf.cfgvalue(self, section)
+        return fs.readfile(file_wireless) or ""
+    end
+
+    function conf.write(self, section, value)
+        if not value then return end
+        _writefile(value, file_wireless)
     end
 end
 
