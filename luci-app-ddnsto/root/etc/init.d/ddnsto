@@ -1,34 +1,45 @@
 #!/bin/sh /etc/rc.common
 
 START=99
+USE_PROCD=1
 
-enable=$(uci_get ddnsto ddnsto enable 0)
-log_level=$(uci_get ddnsto ddnsto log_level)
-routerId=$(uci_get ddnsto ddnsto routerId '')
-username=$(uci_get ddnsto ddnsto username '')
-threads=$(uci_get ddnsto ddnsto threads $(grep -c 'processor' /proc/cpuinfo))
+get_config() {
+    config_get token $1 token
+    config_get index $1 index 0
+    config_get_bool logger $1 logger 0
+    config_get_bool enabled $1 enabled 1
+    config_get_bool feat_enabled $1 feat_enabled 1
+}
 
-start() {
-    [ "$enable" -eq 0 ] && return 0
-    [ -z $username ] && {
-        logger -t ddnsto "username值为空"
+ddnsto_prepare() {
+    killall ddnstod 2>/dev/null
+    killall ddwebdav 2>/dev/null
+}
+
+stop_service() {
+    ddnsto_prepare
+}
+
+start_service() {
+    ddnsto_prepare
+    config_load ddnsto
+    config_foreach get_config ddnsto
+    if [ $enabled != 1 ]; then
         return 1
-    }
-    idx=${routerId:+"-x $routerId"}
-    /usr/bin/ddnsto $idx -u $username -c $threads -l $log_level -d -F >/dev/null 2>&1 && \
-        logger -t ddnsto "启动 ddnsto 服务"
+    fi
+
+    if [ -z "$token" ]; then
+        logger -t ddnsto -p warn "token not set"
+        return 1
+    fi
+
+    procd_open_instance
+    procd_set_param command /usr/sbin/ddnstod -u "$token" -x $index -F
+    [ "$logger" == 1 ] && procd_set_param stderr 1
+    procd_set_param respawn
+    procd_close_instance
 }
 
-stop() {
-    pidof ddnsto >/dev/null && {
-        killall ddnsto 2>/dev/null && \
-            logger -t ddnsto "关闭 ddnsto 服务"
-    }
-}
-
-boot() {
-    [ "$enable" -eq 0 ] && return 0
-    logger -t ddnsto "延时 $delay_start 秒启动 ddnsto"
-    sleep $(uci_get ddnsto ddnsto start_delay)
-    start
+service_triggers() {
+    procd_add_reload_trigger "ddnsto"
 }

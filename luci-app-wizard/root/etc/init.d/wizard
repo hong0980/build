@@ -6,10 +6,7 @@ USE_PROCD=1
 # 日志函数
 log_msg() {
     logger -t wizard "${@}"
-}
-
-uci_quiet() {
-    uci -q "${@}" >/dev/null
+    # echo "${@}" >> /etc/config/wwww
 }
 
 uci_changes() {
@@ -38,6 +35,7 @@ add_wizard() {
     local wan_proto ipv6 pppoe_user pppoe_pass wan_ipaddr wan_gateway ap_lan_ipaddr ap_dhcp ap_ssid ap_password
     local enable_siderouter lan_ipaddr siderouter_lan_ipaddr hostname lan_gateway lan_netmask lan_sum lan_dns wan_lan
     local wan_dns_1 wan_ipaddr_1 wan_gateway_1 wan_netmask_1 firewall fullcone masq syn_flood omasq ip_tables
+    local switch_type
     config_get ipv6 "$cfg" ipv6 "auto"
     config_get wan_proto "$cfg" wan_proto ""
     config_get pppoe_user "$cfg" pppoe_user ""
@@ -68,11 +66,6 @@ add_wizard() {
     config_get_bool omasq "$cfg" omasq 0
     config_get ip_tables "$cfg" ip_tables ""
 
-    # 获取网络配置
-    local is_dsa=0
-    local wan_device=$(uci_get network wan device || echo "eth1")
-    uci show network | grep -q "device.*name='br-lan'" && is_dsa=1
-
     # 输入验证
     case "$wan_proto" in
         pppoe)
@@ -91,6 +84,14 @@ add_wizard() {
             [ -z "$lan_gateway" ] && return 1
             ;;
     esac
+
+    # 获取网络配置
+    local wan_device=$(uci_get network wan device eth1)
+    if uci show network | grep -q 'switch'; then
+        switch_type="swconfig"
+    elif uci show network | grep -q 'device.*bridge'; then
+        switch_type="dsa"
+    fi
 
     # 配置网络
     case "$wan_proto" in
@@ -112,6 +113,100 @@ add_wizard() {
             uci_set network wan proto dhcp
             uci_set network wan device "$wan_device"
             ;;
+        ap)
+            log_msg "Configuring AP mode"
+            # 删除 WAN/WAN6 接口
+            # uci_remove network wan
+            # uci_remove network wan6
+            log_msg "uci_remove network wan"
+            if [ "$switch_type" = "dsa" ]; then
+                # DSA: 添加到 br-lan 的 ports
+                # 将 WAN 端口加入 LAN 桥接
+                local ports=$(uci get network.@device[0].ports 2>/dev/null || echo "")
+                echo "$ports" | grep -qw "$wan_device" || {
+                    # uci -q add_list network.@device[0].ports="$wan_device"
+                    log_msg "uci add_list network.@device[0].ports='$wan_device'"
+                    log_msg "Merged WAN device $wan_device to br-lan ports"
+
+                    # 将 WAN 端口加入 LAN 桥接
+                    uci add_list network.br_lan.ports='wan'
+                }
+            elif [ "$switch_type" = "swconfig" ]; then
+                # 非 DSA: 添加到 ifname
+                local lan_ifname=$(uci get network.lan.ifname 2>/dev/null || echo "")
+                echo "$lan_ifname" | grep -qw "$wan_device" || {
+                    # uci -q set network.lan.ifname="$lan_ifname $wan_device"
+                    log_msg "uci set network.lan.ifname='$lan_ifname $wan_device'"
+                    log_msg "Merged WAN device $wan_device to LAN ifname"
+
+                    # 删除 WAN VLAN（通常为 VLAN 2）
+                    uci delete network.@switch_vlan[1]
+                    # 将所有端口加入 LAN VLAN（端口号需根据设备调整）
+                    set network.@switch_vlan[0].ports='0 1 2 3 4 5t'
+                }
+            fi
+            # 设置 LAN 为静态 IP
+            log_msg "uci_set network lan proto static"
+            # uci_set network lan proto static
+            # uci_set network lan ipaddr "$ap_lan_ipaddr"
+            # uci_set network lan netmask "255.255.255.0"
+            # uci_set network lan gateway '192.168.1.1'
+            # uci_set network lan dns '192.168.1.1'
+            # uci_set dhcp lan ignore "$ap_dhcp" # 关闭 LAN DHCP
+
+            # 禁用防火墙
+            # uci_set firewall @zone[0] masq 0          # 关闭 NAT
+            # uci_set firewall @zone[0] forward ACCEPT  # 允许所有转发
+            # uci_remove firewall @forwarding[0]        # 删除所有转发规则
+
+            # 无线配置
+            # 5. 配置无线为 AP 模式
+            # uci set wireless.@wifi-iface[0].mode='ap'
+            # uci set wireless.@wifi-iface[0].network='lan'
+            # uci set wireless.@wifi-iface[0].ssid='YourSSID'
+            # uci set wireless.@wifi-iface[0].encryption='psk2'
+            # uci set wireless.@wifi-iface[0].key='YourPassword'
+            [ -f /etc/config/wireless ] && {
+                local wireless_available=0
+                config_load wireless
+                config_foreach() {
+                    local section="$2"
+                    [ "$(uci get wireless."$section" 2>/dev/null)" = "wifi-device" ] && wireless_available=1
+                }
+                config_load wireless
+                if [ "$wireless_available" -eq 1 ]; then
+                    log_msg "Configuring wireless for AP"
+                    config_foreach() {
+                        local section="$2"
+                        if [ "$(uci get wireless."$section" 2>/dev/null)" = "wifi-device" ]; then
+                            local radio="$section"
+                            # uci -q set wireless."$radio".disabled="0"
+                            log_msg "uci set wireless.$radio.disabled='0'"
+                            # uci -q set wireless.ap_"$radio"=wifi-iface
+                            log_msg "uci set wireless.ap_$radio=wifi-iface"
+                            # uci -q set wireless.ap_"$radio".device="$radio"
+                            log_msg "uci set wireless.ap_$radio.device='$radio'"
+                            # uci -q set wireless.ap_"$radio".mode="ap"
+                            log_msg "uci set wireless.ap_$radio.mode='ap'"
+                            # uci -q set wireless.ap_"$radio".ssid="$ap_ssid"
+                            log_msg "uci set wireless.ap_$radio.ssid='$ap_ssid'"
+                            if [ -n "$ap_password" ]; then
+                                # uci -q set wireless.ap_"$radio".encryption="psk2"
+                                log_msg "uci set wireless.ap_$radio.encryption='psk2'"
+                                # uci -q set wireless.ap_"$radio".key="$ap_password"
+                                log_msg "uci set wireless.ap_$radio.key='$ap_password'"
+                            else
+                                # uci -q set wireless.ap_"$radio".encryption="none"
+                                log_msg "uci set wireless.ap_$radio.encryption='none'"
+                            fi
+                            # uci -q set wireless.ap_"$radio".network="lan"
+                            log_msg "uci set wireless.ap_$radio.network='lan'"
+                        fi
+                    }
+                    config_load wireless
+                fi
+            }
+            ;;
         # static)
         #     log_msg "Configuring Static mode"
         #     # uci_remove network wan
@@ -122,119 +217,39 @@ add_wizard() {
         #     log_msg "uci set network.wan.device='$wan_device'"
         #     # uci_set network wan device "$wan_ipaddr"
         #     log_msg "uci set network.wan.ipaddr='$wan_ipaddr'"
-        #     # uci_quiet set network.wan.netmask="$wan_netmask"
+        #     # uci -q set network.wan.netmask="$wan_netmask"
         #     log_msg "uci set network.wan.netmask='$wan_netmask'"
-        #     # uci_quiet set network.wan.gateway="$wan_gateway"
+        #     # uci -q set network.wan.gateway="$wan_gateway"
         #     log_msg "uci set network.wan.gateway='$wan_gateway'"
-        #     ;;
-        # ap)
-        #     log_msg "Configuring AP mode"
-        #     # uci_quiet delete network.wan
-        #     log_msg "uci delete network.wan"
-        #     if [ -n "$wan_device" ] && [ "$is_dsa" -eq 1 ]; then
-        #         # DSA: 添加到 br-lan 的 ports
-        #         local ports=$(uci get network.@device[0].ports 2>/dev/null || echo "")
-        #         echo "$ports" | grep -qw "$wan_device" || {
-        #             # uci_quiet add_list network.@device[0].ports="$wan_device"
-        #             log_msg "uci add_list network.@device[0].ports='$wan_device'"
-        #             log_msg "Merged WAN device $wan_device to br-lan ports"
-        #         }
-        #     elif [ -n "$wan_device" ]; then
-        #         # 非 DSA: 添加到 ifname
-        #         local lan_ifname=$(uci get network.lan.ifname 2>/dev/null || echo "")
-        #         echo "$lan_ifname" | grep -qw "$wan_device" || {
-        #             # uci_quiet set network.lan.ifname="$lan_ifname $wan_device"
-        #             log_msg "uci set network.lan.ifname='$lan_ifname $wan_device'"
-        #             log_msg "Merged WAN device $wan_device to LAN ifname"
-        #         }
-        #     fi
-        #     # uci_quiet set network.lan.ipaddr="$ap_lan_ipaddr"
-        #     log_msg "uci set network.lan.ipaddr='$ap_lan_ipaddr'"
-        #     # uci_quiet set network.lan.netmask="255.255.255.0"
-        #     log_msg "uci set network.lan.netmask='255.255.255.0'"
-        #     # uci_quiet set network.lan.proto="static"
-        #     log_msg "uci set network.lan.proto='static'"
-        #     # uci_quiet set dhcp.lan.ignore="$ap_dhcp"
-        #     log_msg "uci set dhcp.lan.ignore='$ap_dhcp'"
-
-        #     # 无线配置
-        #     [ -f /etc/config/wireless ] && {
-        #         local wireless_available=0
-        #         config_load wireless
-        #         config_foreach() {
-        #             local section="$2"
-        #             [ "$(uci get wireless."$section" 2>/dev/null)" = "wifi-device" ] && wireless_available=1
-        #         }
-        #         config_load wireless
-        #         if [ "$wireless_available" -eq 1 ]; then
-        #             log_msg "Configuring wireless for AP"
-        #             config_foreach() {
-        #                 local section="$2"
-        #                 if [ "$(uci get wireless."$section" 2>/dev/null)" = "wifi-device" ]; then
-        #                     local radio="$section"
-        #                     # uci_quiet set wireless."$radio".disabled="0"
-        #                     log_msg "uci set wireless.$radio.disabled='0'"
-        #                     # uci_quiet set wireless.ap_"$radio"=wifi-iface
-        #                     log_msg "uci set wireless.ap_$radio=wifi-iface"
-        #                     # uci_quiet set wireless.ap_"$radio".device="$radio"
-        #                     log_msg "uci set wireless.ap_$radio.device='$radio'"
-        #                     # uci_quiet set wireless.ap_"$radio".mode="ap"
-        #                     log_msg "uci set wireless.ap_$radio.mode='ap'"
-        #                     # uci_quiet set wireless.ap_"$radio".ssid="$ap_ssid"
-        #                     log_msg "uci set wireless.ap_$radio.ssid='$ap_ssid'"
-        #                     if [ -n "$ap_password" ]; then
-        #                         # uci_quiet set wireless.ap_"$radio".encryption="psk2"
-        #                         log_msg "uci set wireless.ap_$radio.encryption='psk2'"
-        #                         # uci_quiet set wireless.ap_"$radio".key="$ap_password"
-        #                         log_msg "uci set wireless.ap_$radio.key='$ap_password'"
-        #                     else
-        #                         # uci_quiet set wireless.ap_"$radio".encryption="none"
-        #                         log_msg "uci set wireless.ap_$radio.encryption='none'"
-        #                     fi
-        #                     # uci_quiet set wireless.ap_"$radio".network="lan"
-        #                     log_msg "uci set wireless.ap_$radio.network='lan'"
-        #                 fi
-        #             }
-        #             config_load wireless
-        #         fi
-        #     }
-
-        #     # 禁用防火墙
-        #     # uci_quiet set firewall.@defaults[0].disabled="1"
-        #     log_msg "uci set firewall.@defaults[0].disabled='1'"
-        #     # uci_quiet delete firewall.@zone[1]
-        #     log_msg "uci delete firewall.@zone[1]"
-        #     # uci_quiet set firewall.@zone[0].masq="0"
-        #     log_msg "uci set firewall.@zone[0].masq='0'"
         #     ;;
         # siderouter)
         #     log_msg "Configuring Siderouter mode"
-        #     # uci_quiet delete network.wan
+        #     # uci -q delete network.wan
         #     log_msg "uci delete network.wan"
-        #     # uci_quiet set network.lan.ipaddr="$siderouter_lan_ipaddr"
+        #     # uci -q set network.lan.ipaddr="$siderouter_lan_ipaddr"
         #     log_msg "uci set network.lan.ipaddr='$siderouter_lan_ipaddr'"
-        #     # uci_quiet set network.lan.netmask="$lan_netmask"
+        #     # uci -q set network.lan.netmask="$lan_netmask"
         #     log_msg "uci set network.lan.netmask='$lan_netmask'"
-        #     # uci_quiet set network.lan.gateway="$lan_gateway"
+        #     # uci -q set network.lan.gateway="$lan_gateway"
         #     log_msg "uci set network.lan.gateway='$lan_gateway'"
         #     [ -n "$lan_dns" ] && {
-        #         # uci_quiet delete network.lan.dns
+        #         # uci -q delete network.lan.dns
         #         log_msg "uci delete network.lan.dns"
         #         for dns in $lan_dns; do
-        #             # uci_quiet add_list network.lan.dns="$dns"
+        #             # uci -q add_list network.lan.dns="$dns"
         #             log_msg "uci add_list network.lan.dns='$dns'"
         #         done
         #     }
-        #     # uci_quiet set dhcp.lan.ignore="$dhcp"
+        #     # uci -q set dhcp.lan.ignore="$dhcp"
         #     log_msg "uci set dhcp.lan.ignore='$dhcp'"
-        #     # uci_quiet set system.@system[0].hostname="$hostname"
+        #     # uci -q set system.@system[0].hostname="$hostname"
 
         #     if [ "$wan_lan" -eq 1 ]; then
-        #         if [ -n "$wan_device" ] && [ "$is_dsa" -eq 1 ]; then
+        #         if [ -n "$wan_device" ] && [ "$switch_type" = "dsa" ]; then
         #             # DSA: 添加到 br-lan 的 ports
         #             local ports=$(uci get network.@device[0].ports 2>/dev/null || echo "")
         #             echo "$ports" | grep -qw "$wan_device" || {
-        #                 # uci_quiet add_list network.@device[0].ports="$wan_device"
+        #                 # uci -q add_list network.@device[0].ports="$wan_device"
         #                 log_msg "uci add_list network.@device[0].ports='$wan_device'"
         #                 log_msg "Merged WAN device $wan_device to br-lan ports"
         #             }
@@ -242,70 +257,72 @@ add_wizard() {
         #             # 非 DSA: 添加到 ifname
         #             local lan_ifname=$(uci get network.lan.ifname 2>/dev/null || echo "")
         #             echo "$lan_ifname" | grep -qw "$wan_device" || {
-        #                 # uci_quiet set network.lan.ifname="$lan_ifname $wan_device"
+        #                 # uci -q set network.lan.ifname="$lan_ifname $wan_device"
         #                 log_msg "uci set network.lan.ifname='$lan_ifname $wan_device'"
         #                 log_msg "Merged WAN device $wan_device to LAN ifname"
         #             }
         #         fi
-        #         # uci_quiet add network interface
+        #         # uci -q add network interface
         #         log_msg "uci add network interface"
-        #         # uci_quiet set network.wan.proto="static"
+        #         # uci -q set network.wan.proto="static"
         #         log_msg "uci set network.wan.proto='static'"
-        #         # uci_quiet set network.wan.ipaddr="$wan_ipaddr_1"
+        #         # uci -q set network.wan.ipaddr="$wan_ipaddr_1"
         #         log_msg "uci set network.wan.ipaddr='$wan_ipaddr_1'"
-        #         # uci_quiet set network.wan.netmask="$wan_netmask_1"
+        #         # uci -q set network.wan.netmask="$wan_netmask_1"
         #         log_msg "uci set network.wan.gateway='$wan_gateway_1'"
         #         [ -n "$wan_dns_1" ] && {
-        #             # uci_quiet set network.wan.peerdns="0"
+        #             # uci -q set network.wan.peerdns="0"
         #             log_msg "uci set network.wan.peerdns='0'"
-        #             # uci_quiet set network.wan.dns="$wan_dns_1"
+        #             # uci -q set network.wan.dns="$wan_dns_1"
         #             log_msg "uci set network.wan.dns='$wan_dns_1'"
         #         }
         #     fi
 
         #     if [ "$firewall" -eq 1 ]; then
-        #         # uci_quiet set firewall.@defaults[0].syn_flood="$([ "$syn_flood" -eq 1 ] && echo 1 || echo 0)"
+        #         # uci -q set firewall.@defaults[0].syn_flood="$([ "$syn_flood" -eq 1 ] && echo 1 || echo 0)"
         #         log_msg "uci set firewall.@defaults[0].syn_flood='$([ "$syn_flood" -eq 1 ] && echo 1 || echo 0)'"
-        #         # uci_quiet set firewall.@defaults[0].fullcone="$([ "$fullcone" -eq 1 ] && echo 1 || echo 0)"
+        #         # uci -q set firewall.@defaults[0].fullcone="$([ "$fullcone" -eq 1 ] && echo 1 || echo 0)"
         #         log_msg "uci set firewall.@defaults[0].fullcone='$([ "$fullcone" -eq 1 ] && echo 1 || echo 0)'"
-        #         # uci_quiet set firewall.@zone[0].masq="$([ "$masq" -eq 1 ] && echo 1 || echo 0)"
+        #         # uci -q set firewall.@zone[0].masq="$([ "$masq" -eq 1 ] && echo 1 || echo 0)"
         #         log_msg "uci set firewall.@zone[0].masq='$([ "$masq" -eq 1 ] && echo 1 || echo 0)'"
         #         if [ "$omasq" -eq 1 ] && [ -n "$ip_tables" ]; then
-        #             # uci_quiet delete firewall.custom
+        #             # uci -q delete firewall.custom
         #             log_msg "uci delete firewall.custom"
-        #             # uci_quiet add firewall rule
+        #             # uci -q add firewall rule
         #             log_msg "uci add firewall rule"
-        #             # uci_quiet rename firewall.@rule[-1]="custom"
+        #             # uci -q rename firewall.@rule[-1]="custom"
         #             log_msg "uci rename firewall.@rule[-1]='custom'"
-        #             # uci_quiet set firewall.custom.src="*"
+        #             # uci -q set firewall.custom.src="*"
         #             log_msg "uci set firewall.custom.src='*'"
-        #             # uci_quiet set firewall.custom.dest="*"
+        #             # uci -q set firewall.custom.dest="*"
         #             log_msg "uci set firewall.custom.dest='*'"
-        #             # uci_quiet set firewall.custom.target="ACCEPT"
+        #             # uci -q set firewall.custom.target="ACCEPT"
         #             log_msg "uci set firewall.custom.target='ACCEPT'"
-        #             # uci_quiet set firewall.custom.extra="$ip_tables"
+        #             # uci -q set firewall.custom.extra="$ip_tables"
         #             log_msg "uci set firewall.custom.extra='$ip_tables'"
         #         fi
         #     fi
         #     ;;
-        *)
-            return 1
-            ;;
+        # *)
+        #     log_msg "Unknown wan_proto: $wan_proto"
+        #     return 1
+        #     ;;
     esac
 
     [ -n "$wan_dns_1" ] && {
-        # uci_quiet set network.wan.peerdns="0"
+        # uci -q set network.wan.peerdns="0"
         log_msg "uci set network.wan.peerdns='0'"
-        # uci_quiet set network.wan.dns="$wan_dns_1"
+        # uci -q set network.wan.dns="$wan_dns_1"
         log_msg "uci set network.wan.dns='$wan_dns_1'"
     }
 
     # 更新 LAN IP 和 DNS
-    if [ "$wan_proto" != "ap" ] && [ "$wan_proto" != "siderouter" ] && [ -n "$lan_ipaddr" ]; then
-        # uci_quiet set network.lan.ipaddr="$lan_ipaddr"
+    if [ "$wan_proto" != "ap" -a "$wan_proto" != "siderouter" -a -n "$lan_ipaddr" ]; then
+        # uci -q set network.lan.ipaddr="$lan_ipaddr"
         log_msg "uci set network.lan.ipaddr='$lan_ipaddr'"
     fi
-    if [ "$wan_proto" != "siderouter" ] && [ -n "$lan_dns" ]; then
+
+    if [ "$wan_proto" != "siderouter" -a -n "$lan_dns" ]; then
         uci_remove network lan dns
         for dns in $lan_dns; do
             uci_add_list network lan dns "$dns"
@@ -353,20 +370,16 @@ add_wizard() {
             case "$config" in
                 network)
                     /etc/init.d/network restart &
-                    # log_msg "Would restart: /etc/init.d/network restart"
                 ;;
                 firewall)
                     /etc/init.d/firewall reload &
-                    # log_msg "Would restart: /etc/init.d/firewall reload"
                 ;;
                 dhcp)
                     /etc/init.d/dnsmasq reload &
-                    # log_msg "Would restart: /etc/init.d/dnsmasq reload"
                 ;;
                 wireless)
                     wifi reload &
-                    # log_msg "wifi reload"
-                    ;;
+                ;;
             esac
         fi
     done
