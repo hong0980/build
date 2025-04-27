@@ -52,23 +52,23 @@ local function status_container()
             local id = sys.exec("/usr/sbin/ddnstod -x %s -w | cut -d' ' -f2" %config.index)
             local enabled_html = status_html % {is_enabled and "green" or "red", is_enabled and "已启用" or "未启用"}
             local labels = {
-                { key = "服务状态：", value = status_html %{sta and "green" or "red", sta and "已启动" or "未运行"}},
-                { key = "插件版本：", value = sys.exec("/usr/sbin/ddnstod -v")},
-                { key = "设备ID：", value = "<b style='color:green;font-weight:bolder'>%s</b>（设备编号: %s）" %{id, config.index}},
-                { key = "控制台：", value = "<a href='https://www.ddnsto.com/app/#/devices' target='_blank'>点击前往DDNSTO控制台</a>"},
-                { key = "拓展功能：", value = enabled_html}
+                {key = "服务状态：", value = status_html %{sta and "green" or "red", sta and "已启动" or "未运行"}},
+                {key = "插件版本：", value = sys.exec("/usr/sbin/ddnstod -v")},
+                {key = "设备ID：", value = "<b style='color:green;font-weight:bolder'>%s</b>（设备编号: %s）" %{id, config.index}},
+                {key = "控制台：", value = "<a href='https://www.ddnsto.com/app/#/devices' target='_blank'>点击前往DDNSTO控制台</a>"},
+                {key = "拓展功能：", value = enabled_html}
             }
 
             if is_enabled then
                 local ip = http.getenv("SERVER_NAME") or "localhost"
                 local webdav_url = "http://%s:%s/webdav" %{ip, config.feat_port}
-                table.insert(labels, { key = "拓展用户名：", value = config.feat_username})
-                table.insert(labels, { key = "webdav服务：", value = enabled_html})
+                table.insert(labels, {key = "拓展用户名：", value = config.feat_username})
+                table.insert(labels, {key = "webdav服务：", value = enabled_html})
                 table.insert(labels, {
                     key = "webdav地址：",
                     value = "<a href='%s' target='_blank'>%s</a>" %{webdav_url, webdav_url}
                })
-                table.insert(labels, { key = "远程开机服务：", value = enabled_html})
+                table.insert(labels, {key = "远程开机服务：", value = enabled_html})
             end
 
             return labels
