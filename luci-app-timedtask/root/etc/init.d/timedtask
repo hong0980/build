@@ -7,7 +7,7 @@ cron_file=/etc/crontabs/root
 
 timedtask_get() {
     local command day enable month minute hour week
-    config_get enable "$1" enable "0"
+    config_get_bool enable "$1" enable "0"
     config_get day "$1" day "*"
     config_get week "$1" week "*"
     config_get hour "$1" hour "*"
@@ -24,8 +24,11 @@ timedtask_get() {
 
 start_service() {
     sed -i '/timedtask$/d' $cron_file
-    config_load 'timedtask'
-    config_foreach timedtask_get "crontab"
+    config_load timedtask
+    config_foreach timedtask_get crontab
+    sy_level=$(uci_get system @system[0] cronloglevel)
+    cronloglevel=$(uci_get timedtask @cronloglevel[0] cronloglevel)
+    [ "$cronloglevel" != "$sy_level" ] && uci_set system @system[0] cronloglevel ${cronloglevel}; uci commit system
 }
 
 stop_service() {
@@ -34,5 +37,5 @@ stop_service() {
 }
 
 service_triggers() {
-    procd_add_reload_trigger "timedtask"
+    procd_add_reload_trigger timedtask
 }

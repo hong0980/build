@@ -32,6 +32,8 @@ end
 local config = {
     token = cfg.token or "",
     enabled = cfg.enabled == "1",
+    threads = cfg.threads or '0',
+    log_level = cfg.log_level or "2",
     index = tonumber(cfg.index) or '0',
     feat_enabled = cfg.feat_enabled == "1",
     feat_password = cfg.feat_password or "",
@@ -81,7 +83,8 @@ local function main_container()
             {
                 name = "enabled",
                 title = "启用",
-                type = "boolean"
+                type = "boolean",
+                ["ui:options"] = {description = "启用DDNSTO 远程控制"}
             },
             {
                 name = "token",
@@ -99,9 +102,23 @@ local function main_container()
                 enumNames = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
                 title = "设备编号",
                 type = "interger",
-                ["ui:options"] = {
-                    description = "如有多台设备id重复，请修改此编号"
-                }
+                ["ui:options"] = {description = "如有多台设备id重复，请修改此编号"}
+            },
+            {
+                name = "threads",
+                title = "CPU核心数",
+                type = "interger",
+                enum = {0, 1, 2, 4, 8, 16, 32},
+                enumNames = {'自动获取', 1, 2, 4, 8, 16, 32},
+                ["ui:options"] = {description = "CPU核心数"}
+            },
+            {
+                name = "log_level",
+                title = "日志",
+                type = "interger",
+                enum = {0, 1, 2, 3},
+                enumNames = {'调试', '信息', '警告', '错误'},
+                ["ui:options"] = {description = "日志级别，默认值是警告"}
             }
         }
     }
@@ -238,8 +255,10 @@ function ddnsto_submit()
 
     if success then
         local con = {
-            index = req.index or '0',
             token = trim(req.token),
+            index = req.index or '0',
+            threads = req.threads or '0',
+            log_level = req.log_level or '2',
             feat_port = req.feat_port or '3033',
             enabled = req.enabled and "1" or "0",
             feat_username = trim(req.feat_username),

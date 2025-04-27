@@ -18,16 +18,9 @@ f = m:section(TypedSection, "cronloglevel")
 f.anonymous = true
 f = f:option(ListValue, "cronloglevel", translate("Cron Log Level"))
 f:value(5, translate("Debug"))
-f:value(8, translate("Normal"))
-f:value(9, translate("Warning"))
-f.default = "9"
-
-local sy_level = uci:get("system", "@system[0]", "cronloglevel")
-local ti_level = uci:get("timedtask", "@cronloglevel[0]", "cronloglevel") or ""
-if ti_level ~= sy_level then
-    uci:set("system", "@system[0]", "cronloglevel", ti_level)
-    uci:commit("system")
-end
+f:value(7, translate("Normal"))
+f:value(9, translate("Disabled"))
+f.default = "7"
 
 s = m:section(TypedSection, "crontab", "")
 s.template = "cbi/tblsection"
@@ -38,8 +31,11 @@ s.addremove = true -- 添加
 
 enable = s:option(Flag, "enable", translate("Enable"))
 enable.rmempty = false
-enable.default = 0
+enable.default = "false"  -- 默认值设置为 "false"
 enable.width = '10%'
+-- 自定义 Flag 的启用与禁用值
+enable.enabled = "true"  -- 表示启用时的值，例如 "on", "true", "yes"
+enable.disabled = "false"  -- 表示禁用时的值，例如 "off", "false", "no"
 
 minute = s:option(Value, "minute", translate("minute"))
 minute.default = '0'
