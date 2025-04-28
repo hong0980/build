@@ -99,7 +99,6 @@ local function main_container()
             {
                 name = "index",
                 enum = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
-                enumNames = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
                 title = "设备编号",
                 type = "interger",
                 ["ui:options"] = {description = "如有多台设备id重复，请修改此编号"}
@@ -108,8 +107,8 @@ local function main_container()
                 name = "threads",
                 title = "CPU核心数",
                 type = "interger",
-                enum = {0, 1, 2, 4, 8, 16, 32},
-                enumNames = {'自动获取', 1, 2, 4, 8, 16, 32},
+                enum = {0, 1, 2, 4, 8, 16},
+                enumNames = {'自动获取', '1 线程', '2 线程', '4 线程', '8 线程', '16 线程'},
                 ["ui:options"] = {description = "CPU核心数"}
             },
             {
