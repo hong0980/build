@@ -2,8 +2,8 @@
 msgid "A cross-platform open source BitTorrent client based on QT<br>"
 msgstr "一个基于QT的跨平台的开源BitTorrent客户端<br>"
 
-msgid "Current version: </b><b style='color:red'>%s</b>"
-msgstr "当前版本: </b><b style='color:red'>%s</b>"
+msgid "Current version: <b style='color:red'>%s</b>"
+msgstr "当前版本： <b style='color:red'>%s</b>"
 
 msgid "Open Web Interface"
 msgstr "打开 Web 管理界面"

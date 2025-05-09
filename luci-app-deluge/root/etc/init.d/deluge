@@ -2,74 +2,79 @@
 
 START=99
 
-_info() {
-    logger -st 'deluge' -p 'daemon.info' "$*"
+log_msg() {
+    logger -p daemon.info -t "deluge" "$*"
 }
 
 get_config() {
-    while [ -n "$1" ]; do
-        eval "$1=\"$(uci_get deluge main $1)\""
-        shift
+    for val in "$@"; do
+        config_get "$val" main "$val" ""
     done
 }
 
-set_config() {
+update_config() {
     file="$1"; shift
-    while [ -n "$1" ]; do
-        node="$1"
-        [ "$node" = "pwd_sha1" ] || get_config "$node"
-        conf="$(grep "\"$node\"" "$file" | sed 's/[ ,"]//g' | cut -d':' -f2)"
+    for node in "$@"; do
         eval "val=\"\${$node}\""
-
-        if [ "$conf" != "$val" -a -n "$val" ]; then
-            if [ -n "$conf" ]; then
-                sed -i "/\"$node\"/{s|$conf|$val|}" "$file"
-            else
-                sed -i "/\"$node\"/{s|\"\"|\"$val\"|}" "$file"
-            fi
+        conf=$(grep "\"$node\"" "$file" | sed 's/[ ,"]//g; s/.*://')
+        if [ -n "$val" -a "$conf" != "$val" ]; then
+            sed -i "/\"$node\"/ s|${conf:-\"\"}|$val|" "$file"
         fi
-        shift
     done
 }
 
-make_dir() {
-    while [ $# -gt 0 ]; do
-        [ -n "$1" -a ! -d "$1" ] && mkdir -m 755 -p "$1"
-        shift
+set_ownership() {
+    local path="$1"
+    local recursive="$2"
+
+    [ -z "$user" ] && return 0
+    if ! id "$user" >/dev/null 2>&1; then
+        return 1
+    fi
+
+    if [ -d "$path" ]; then
+        [ "$recursive" = "1" ] && chown -R "$user" "$path" || chown "$user" "$path"
+        chmod 750 "$path"
+    elif [ -f "$path" ]; then
+        chown "$user" "$path"
+        chmod 640 "$path"
+    fi
+}
+
+create_directory() {
+    for dir in "$@"; do
+        [ -n "$dir" -a ! -d "$dir" ] && mkdir -p "$dir" 2>/dev/null
     done
 }
 
-deluge_boot() {
-    get_config "download_location" "enable_logging" "geoip_db_location" "https" \
-    "language" "log_dir" "log_level" "password" "port" "profile_dir" "user"
+start_deluge() {
+    get_config download_location enable_logging geoip_db_location https \
+        language log_dir log_level password port profile_dir user enabled
+    [ ."$enabled" = .0 ] && return 1
 
     web="$profile_dir/web.conf"
     core="$profile_dir/core.conf"
-    make_dir "$profile_dir" "$download_location"
+    create_directory "$profile_dir" "$download_location"
 
-    if [ x"$enable_logging" = x1 ]; then
-        make_dir "$log_dir"
-        log_level=${log_level:+"-L $log_level"}
-        log_file="-l ${log_dir:-$profile_dir}/deluge.log"
+    if [ ! -e "$profile_dir/sha1.py" ]; then
+		cat <<-EOF > "$profile_dir/sha1.py"
+		#!/usr/bin/env python
+		import sys
+		import hashlib
+		password, pwd_sha1 = sys.argv[1:3]
+		hashed_password = hashlib.sha1(pwd_sha1.encode("utf-8") + password.encode("utf-8")).hexdigest()
+		print(hashed_password)
+		EOF
     fi
 
-	[ ! -e "$profile_dir/sha1.py" ] && cat <<-EOF > "$profile_dir/sha1.py"
-	#!/usr/bin/env python
-	import sys
-	import hashlib
-	password, pwd_sha1 = sys.argv[1:3]
-	hashed_password = hashlib.sha1(pwd_sha1.encode("utf-8") + password.encode("utf-8")).hexdigest()
-	print(hashed_password)
-	EOF
-
     if [ -e "$core" ]; then
-        set_config "$core" "cache_size" "copy_torrent_file" "download_location" "max_active_downloading" \
-        "max_active_limit" "max_active_seeding" "max_connections_global" "max_connections_per_torrent" \
-        "max_download_speed" "max_download_speed_per_torrent" "max_upload_slots_global" \
-        "max_upload_slots_per_torrent" "max_upload_speed" "max_upload_speed_per_torrent" \
-        "move_completed" "move_completed_path" "prioritize_first_last_pieces" "sequential_download" \
-        "torrentfiles_location"
-        make_dir "$move_completed_path" "$torrentfiles_location"
+        update_config "$core" cache_size copy_torrent_file download_location max_active_downloading \
+            max_active_limit max_active_seeding max_connections_global max_connections_per_torrent \
+            max_download_speed max_download_speed_per_torrent max_upload_slots_global \
+            max_upload_slots_per_torrent max_upload_speed max_upload_speed_per_torrent \
+            move_completed move_completed_path prioritize_first_last_pieces sequential_download \
+            torrentfiles_location
+        create_directory "$move_completed_path" "$torrentfiles_location"
     else
 		cat <<-EOF > "$core"
 		{
@@ -85,14 +90,15 @@ deluge_boot() {
 		EOF
     fi
 
-    [ -e "$web" ] && _pwd_salt=$(grep "pwd_salt" "$web" | sed 's/[ ,"]//g' | cut -d':' -f2)
-    dwsalt=${_pwd_salt:-$(tr -dc 'a-e0-9' < /dev/urandom | head -c 40)}
+    local isboot log_param log_file
+    dwsalt=$(awk -F'"' '/pwd_salt/ {print $4}' $web 2>/dev/null || tr -dc 'a-e0-9' < /dev/urandom | head -c 40)
     pwd_sha1="$(python $profile_dir/sha1.py $password $dwsalt)"
     if [ -e "$web" ]; then
-        set_config "$web" "geoip_db_location" "https" "language" "port" "pwd_sha1"
+        update_config "$web" geoip_db_location https language port pwd_sha1
     else
 		cat <<-EOF > "$web"
 		{
+		    "port": $port,
 		    "https": $https,
 		    "pwd_salt": "$dwsalt",
 		    "pwd_sha1": "$pwd_sha1",
@@ -101,24 +107,44 @@ deluge_boot() {
 		    "geoip_db_location": "$geoip_db_location/GeoIP.dat"
 		}
 		EOF
+        isboot=1
     fi
-    port=${port:+"-p $port"}
-    user=${user:+"-U $user"}
-    profile_dir=${profile_dir:+"-c $profile_dir"}
-    python /usr/bin/deluged    $profile_dir $log_file $log_level $user
-    python /usr/bin/deluge-web $profile_dir $log_file $log_level $user $port
+
+    if [ "$enable_logging" = 1 ]; then
+        create_directory "$log_dir"
+        log_file="${log_dir:-$profile_dir}/deluge.log"
+        touch "$log_file"
+        log_param="-l $log_file ${log_level:+"-L $log_level"}"
+    fi
+
+    if [ -n "$user" ]; then
+        for dir in "$profile_dir" "$download_location" "$move_completed_path" "$torrentfiles_location" "$log_dir"; do
+            [ -n "$dir" -a -d "$dir" ] && set_ownership "$dir" 1
+        done
+        for file in "$profile_dir/sha1.py" "$core" "$web" "$log_file"; do
+            [ -f "$file" ] && set_ownership "$file"
+        done
+    fi
+
+    local port_param=${port:+"-p $port"}
+    local user_param=${user:+"-U $user"}
+    local profile_param=${profile_dir:+"-c $profile_dir"}
+    deluged    $profile_param $log_param $user_param             || log_msg "Failed to start deluged"
+    deluge-web $profile_param $log_param $user_param $port_param || log_msg "Failed to start deluge-web"
+    sleep 3
+    if [ "$isboot" = 1 ]; then
+        restart
+    else
+        ps | grep -q "[d]eluged" && log_msg 'Start deluge service'
+        ps | grep -q "[d]eluge-web" && log_msg 'Start deluge-web service'
+    fi
 }
 
 start() {
-    [ x$(uci -q get deluge.main.enabled) = x ] && return 1
-    deluge_boot
-    sleep 3
-    ps | grep deluge | awk '/usr/{print $1}' >/dev/null 2>&1 && _info 'Start deluge service'
-    ps | grep deluge | awk '/web/{print $1}' >/dev/null 2>&1 && _info 'Start deluge-web service'
+    config_load deluge
+    config_foreach start_deluge
 }
 
 stop() {
-    kill "$(ps | grep deluge | awk '/usr/{print $1}')" >/dev/null 2>&1
-    kill "$(ps | grep deluge | awk '/web/{print $1}')" >/dev/null 2>&1
-    _info 'Stop deluge service'
+    kill $(ps | grep -E "[d]eluge(d|-web)" | awk '{print $1}') 2>/dev/null
 }

@@ -1,21 +1,16 @@
 #!/bin/sh
-[ -f /etc/init.d/qbittorrent ] && chmod +x /etc/init.d/qbittorrent
+
+touch /etc/config/qbittorrent
+[ -x /etc/init.d/qbittorrent ] || chmod +x /etc/init.d/qbittorrent
 uci -q batch <<-EOF >/dev/null
 	delete ucitrack.@qbittorrent[-1]
 	add ucitrack qbittorrent
 	set ucitrack.@qbittorrent[-1].init=qbittorrent
 	commit ucitrack
-EOF
 
-if [ ."$(uci -q get qbittorrent.main)" != ."qbittorrent" ]; then
-	uci -q batch <<-EOF >/dev/null
-		add qbittorrent qbittorrent
-		rename qbittorrent.@qbittorrent[-1]="main"
-		set qbittorrent.main.enabled=0
-		set qbittorrent.main.profile="/tmp"
-		commit qbittorrent
-	EOF
-fi
+	set qbittorrent.main=qbittorrent
+	commit qbittorrent
+EOF
 
 rm -f /tmp/luci-indexcache
 exit 0

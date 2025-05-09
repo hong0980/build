@@ -34,7 +34,7 @@ endchoice
 
 choice
 	prompt "XML Library"
-	default ARIA2_EXPAT
+	default ARIA2_NOXML
 
 config ARIA2_LIBXML2
 	bool "Libxml2"
@@ -50,7 +50,7 @@ endchoice
 config ARIA2_GMP
 	bool "GNU Multiple Precision Arithmetic Library"
 	depends on ARIA2_NETTLE
-	default n
+	default y
 
 config ARIA2_BITTORRENT
 	bool "Enable Bittorrent Support"

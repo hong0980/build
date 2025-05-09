@@ -1,7 +1,6 @@
 module("luci.controller.qbittorrent", package.seeall)
-local sys  = require "luci.sys"
-local uci  = require "luci.model.uci".cursor()
-local con  = uci:get_all("qbittorrent", "main")
+local sys = require "luci.sys"
+local con = require "luci.model.uci".cursor():get_all("qbittorrent", "main")
 
 function index()
     if not nixio.fs.access("/etc/config/qbittorrent") then return end
@@ -11,33 +10,20 @@ function index()
     entry({"admin", "nas", "qbittorrent", "log"}, form("qbittorrent/log"), _("Log"), 3).leaf=true
     entry({"admin", "nas", "qbittorrent", "status"}, call("act_status")).leaf=true
     entry({"admin", "nas", "qbittorrent", "action_log"}, call("action_log_read")).leaf=true
-    entry({"admin", "nas", "qbittorrent", "savePassword"}, call("savePassword")).leaf=true
-end
-
-function savePassword()
-    local flag = luci.http.formvalue('flag')
-    local password = luci.http.formvalue('password')
-
-    if password then
-        local password_key = flag and "Password_PBKDF2" or "Password_ha1"
-        uci:set("qbittorrent", "main", password_key, password)
-        uci:commit("qbittorrent")
-    end
 end
 
 function act_status()
-    local BinaryLocation = con.BinaryLocation or "/usr/bin/qbittorrent-nox"
+    local BL = con.BinaryLocation or "/usr/bin/qbittorrent-nox"
     luci.http.prepare_content("application/json")
     luci.http.write_json({
-        port  = con.Port  or '8080',
-        https = con.https or 'false',
-        pid   = sys.exec("pidof %s" %BinaryLocation) or "",
-        pat   = BinaryLocation ~= "/usr/bin/qbittorrent-nox" and BinaryLocation or nil
+        port  = con.port  or '8080',
+        pid   = sys.exec("pidof %s" %BL) or "",
+        pat   = con.BinaryLocation and BL or nil
     })
 end
 
 function action_log_read()
-    local log_file = (con.Path or con.RootProfilePath .. "/qBittorrent/data/logs") .. "/qbittorrent.log"
+    local log_file = (con.Path or (con.RootProfilePath .. "/qBittorrent/data/logs")) .. "/qbittorrent.log"
     luci.http.prepare_content("application/json")
     luci.http.write_json({
         syslog = sys.exec("/sbin/logread -e qbittorrent -t 100") or nil,

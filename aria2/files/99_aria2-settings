@@ -2,7 +2,7 @@
 
 mem="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
 
-if [ "$mem" -gt 131072 ]; then # mem > 128M 
+if [ "$mem" -gt 131072 ]; then # mem > 128M
 	disk_cache='16M'
 elif [ "$mem" -gt 65536 ]; then # 64M < mem <= 128M
 	disk_cache='8M'

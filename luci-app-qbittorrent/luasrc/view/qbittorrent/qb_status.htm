@@ -4,8 +4,8 @@
         if (data && tb) {
             if (data.pid) {
                 let links = '<b><font color="green">qBittorrent <%:RUNNING%></font></b><input type="button" class="cbi-button cbi-button-apply" style="margin-left: 20px;" value="<%:Open Web Interface%>"/>';
-                if (data.pat) links += `<%:The current qBittorrent is at%><font color="red">${data.pat}</font>`;
-                tb.onclick = () => openwebui(data.port, data.https, data.pid);
+                if (data.pat) links += `&nbsp;&nbsp;&nbsp;<%:The current qBittorrent is at%><font color="red">${data.pat}</font>`;
+                tb.onclick = () => openwebui(data.port, data.pid);
                 tb.innerHTML = links;
             } else {
                 tb.innerHTML = '<b><font color="red">qBittorrent <%:NOT RUNNING%></font></b>';
@@ -13,9 +13,8 @@
         }
     });
 
-    function openwebui(port, https, pid) {
-        const protocol = (https === false) ? 'https://' : 'http://';
-        window.open(`${protocol}${window.location.host}:${port}`, 'qbittorrent');
+    function openwebui(port, pid) {
+        window.open(`http://${window.location.host}:${port}`, 'qbittorrent');
     }
 
     function randomPort() {

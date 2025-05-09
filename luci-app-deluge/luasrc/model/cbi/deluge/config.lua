@@ -16,6 +16,7 @@ t:tab("other_settings", translate("其他设置"))
 e = t:taboption("Settings", Flag, "enabled", translate("Enabled"))
 e = t:option(Flag, "enabled", translate("Enabled"))
 e.default = "0"
+e.rmempty = false
 
 e = t:taboption("Settings", ListValue, "user", translate("Run daemon as user"))
 for t in util.execi("cut -d ':' -f1 /etc/passwd") do
@@ -25,6 +26,7 @@ end
 e = t:taboption("Settings", Value, "profile_dir", translate("Root Path of the Profile"),
     translate("默认保存在/etc/deluge"))
 e.default = '/etc/deluge'
+e.rmempty = false
 
 local download_location = t:taboption("Settings", Value, "download_location", translate("下载文件路径"),
     translate("The files are stored in the download directory automatically created under the selected mounted disk"))
@@ -38,23 +40,28 @@ for disk in util.execi("df -h | awk '/dev.*mnt/{print $6,$2,$3,$5,$1}'") do
             translatef(("%s/download (size: %s) (used: %s/%s)"), diskInfo[1], diskInfo[2], diskInfo[3], diskInfo[4]))
     end
 end
+download_location.rmempty = false
 
 e = t:taboption("Settings", Value, "language", translate("Locale Language"))
 e:value("zh_CN", translate("Simplified Chinese"))
 e:value("en_GB", translate("English"))
 e.default = "zh_CN"
+e.rmempty = false
 
 e = t:taboption("Settings", Value, "port", translate("Listening Port"), translate("默认端口：8112"))
 e.datatype = "port"
 e.default = "8112"
+e.rmempty = false
 
 e = t:taboption("Settings", Value, "password", translate("WebUI密码"), translate("默认密码：deluge"))
 e.default = "deluge"
+e.rmempty = false
 
 e = t:taboption("Settings", ListValue, "https", translate("WebUI使用https"), translate("默认不使用"))
 e:value("false", translate("不使用"))
 e:value("true", translate("使用"))
 e.default = "false"
+e.rmempty = false
 
 e = t:taboption("download", Flag, "event_seed", color("DodgerBlue", "活动种子"))
 e = t:taboption("download", Value, "max_active_limit", translate("总数"))
@@ -129,7 +136,8 @@ e.placeholder = "/mnt/sda3/download"
 e:depends("copy_torrent_file", 'true')
 
 e = t:taboption("other_settings", Flag, "enable_logging", translate("Enable Log"))
-e.rmempty = "false"
+e.default = 1
+e.rmempty = false
 
 e = t:taboption("other_settings", Value, "log_dir", translate("Log Path"), translate("默认在配置目录下"))
 e:depends("enable_logging", 1)

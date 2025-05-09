@@ -4,8 +4,8 @@ m.reset  = false
 m.submit = false
 
 local files = {
-    {name = "conf", path = "/etc/config/qbittorrent"},
-    {name = "qbittorrent", path = (luci.model.uci.cursor():get("qbittorrent", "main", "RootProfilePath") or "/tmp") .. "/qBittorrent/config/qBittorrent.conf"}
+    {name = "qbittorrent", path = (luci.model.uci.cursor():get("qbittorrent", "main", "RootProfilePath") or "/tmp") .. "/qBittorrent/config/qBittorrent.conf"},
+    {name = "conf", path = "/etc/config/qbittorrent"}
 }
 
 for _, file in ipairs(files) do
