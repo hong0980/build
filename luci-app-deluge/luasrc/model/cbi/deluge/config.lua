@@ -158,4 +158,8 @@ e.default = "/usr/share/GeoIP"
 e = t:taboption("other_settings", Value, "cache_size", translate("缓存大小"), translate("单位：KiB"))
 e.default = "32768"
 
+-- if luci.http.formvalue("cbi.apply") then
+--     luci.sys.exec("/etc/init.d/deluge reload &")
+-- end
+
 return a

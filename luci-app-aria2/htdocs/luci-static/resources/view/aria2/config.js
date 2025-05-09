@@ -41,7 +41,7 @@ CBIAria2Status = form.DummyValue.extend({
 					var btns = [E('label'), _('Installed web interface: ')];
 					for (var i in installed) {
 						btns.push(E('button', {
-							'class': 'btn cbi-button',
+							'class': 'btn cbi-button cbi-button-apply',
 							'click': openWebInterface.bind(this, i)
 						}, installed[i]));
 					}
