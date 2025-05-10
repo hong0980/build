@@ -1,12 +1,11 @@
 #!/bin/sh /etc/rc.common
 
 START=95
-USE_PROCD=1
 cron_ini=/etc/init.d/cron
 cron_file=/etc/crontabs/root
 
 timedtask_get() {
-    local command day enable month minute hour week
+    local command day enable month minute hour week mcronrst
     config_get_bool enable "$1" enable "0"
     config_get day "$1" day "*"
     config_get week "$1" week "*"
@@ -22,20 +21,19 @@ timedtask_get() {
     [ -n "$mcronrst" ] && $cron_ini restart
 }
 
-start_service() {
+start() {
     sed -i '/timedtask$/d' $cron_file
     config_load timedtask
     config_foreach timedtask_get crontab
     sy_level=$(uci_get system @system[0] cronloglevel)
     cronloglevel=$(uci_get timedtask @cronloglevel[0] cronloglevel)
-    [ "$cronloglevel" != "$sy_level" ] && uci_set system @system[0] cronloglevel ${cronloglevel}; uci commit system
+    [ "$cronloglevel" != "$sy_level" ] && {
+        uci_set system @system[0] cronloglevel ${cronloglevel}
+        uci commit system
+    }
 }
 
-stop_service() {
+stop() {
     sed -i '/timedtask/d' $cron_file
     $cron_ini restart
-}
-
-service_triggers() {
-    procd_add_reload_trigger timedtask
 }

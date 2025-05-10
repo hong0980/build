@@ -246,6 +246,7 @@ return view.extend({
 
 		o = s.taboption('basic', form.Flag, 'enable_logging', _('Enable logging'));
 		o.rmempty = false;
+		o.default = 'true';
 
 		o = s.taboption('basic', form.Value, 'log', _('Log file'),
 			_('The file name of the log file.'));
