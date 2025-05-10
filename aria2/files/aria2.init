@@ -180,8 +180,7 @@ pro_conf() {
 			-e "s|/root/.aria2|$pro_file|g" \
 			-e "/CONF_DIR/s|aria2.conf|$config_file|g" \
 			*
-		chmod +x *.sh
-		sh ./tracker.sh
+		_change_file_mode 755 tracker.sh && sh ./tracker.sh
 		[ -z "$rpc_secret" ] && sed -i '/^rpc-secret/s/^/#/' aria2.conf
 		_info "Aria2 增强配置下载完成！"
 	fi
@@ -196,9 +195,9 @@ pro_conf() {
 	trap "rm -f '$temp_file'" 0
 	cat aria2.conf > $temp_file
 	while read p; do
-		grep -q "^${p%%=*}" $temp_file \
-		&& sed -i "s|^${p%%=*}=.*|$p|" $temp_file \
-		|| echo "$p" >> $temp_file
+		grep -q "${p%%=*}=" $temp_file && \
+			sed -i "s|^#\?\(${p%%=*}\)=.*|\1=${p#*=}|" $temp_file || \
+			echo "$p" >> $temp_file
 	done < $config_file_tmp
 	cat $temp_file > $config_file_tmp
 	sed -i 's/.*Auto generated.*/# 系统生成配置，优先级高于上方配置/' $config_file_tmp
@@ -385,6 +384,7 @@ aria2_start() {
 			user=
 		fi
 	fi
+	_change_file_mode 755 "$config_dir"/*.sh
 
 	procd_open_instance "$NAME.$section"
 	procd_set_param command "$PROG"
