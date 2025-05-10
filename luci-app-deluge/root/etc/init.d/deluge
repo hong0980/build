@@ -49,9 +49,10 @@ create_directory() {
 }
 
 start_deluge() {
+    config_get_bool enabled main enabled 0
+    [ "$enabled" -eq 0 ] && return 1
     get_config download_location enable_logging geoip_db_location https \
-        language log_dir log_level password port profile_dir user enabled
-    [ ."$enabled" = .0 ] && return 1
+        language log_dir log_level password port profile_dir user
 
     web="$profile_dir/web.conf"
     core="$profile_dir/core.conf"

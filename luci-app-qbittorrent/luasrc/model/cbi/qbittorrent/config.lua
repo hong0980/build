@@ -6,7 +6,7 @@ local ver  = util.exec("export HOME=/var/run/qbittorrent; %s -v 2>/dev/null | aw
 
 m = Map("qbittorrent", translate("qBittorrent Downloader"),
     translate("A cross-platform open source BitTorrent client based on QT<br>") ..
-    translatef("Current version: <b style='color:green'>%s</b>", ver))
+    translatef("Current version: <b style='color:red'>%s</b>", ver))
 m:section(SimpleSection).template = "qbittorrent/qb_status"
 
 t = m:section(NamedSection, "main", "qbittorrent")
