@@ -179,22 +179,30 @@ return view.extend({
 				return info;
 			}),
 			L.resolveDefault(fs.exec_direct('/bin/df', ['-h']))
-				.then(function(disk) {
-					var result = [], lines = disk.trim().split('\n');
-					for (var i = 1; i < lines.length; i++) {
-						var line = lines[i].trim();
-						if (line) {
-							var fields = line.split(/\s+/);
-							if (fields.length >= 6) {
-								if (fields[0].startsWith('/dev') && fields[5].includes('mnt')) {
-									result.push([fields[5], fields[1], fields[2], fields[4]]);
-								}
+			.then(function(disk) {
+				var result = [], lines = disk.trim().split('\n');
+				const systemMounts = ['/', '/rom', '/tmp', '/dev', '/boot', '/opt', '/overlay'];
+				const preferredMountPrefixes = ['/mnt/', '/media/', '/usb/', '/data/'];
+
+				for (var i = 1; i < lines.length; i++) {
+					var line = lines[i].trim();
+					if (line) {
+						var fields = line.split(/\s+/);
+						if (fields.length >= 6) {
+							if ((fields[0].match(/^\/dev\/sd[a-z]\d*$/) ||
+								 fields[0].match(/^\/dev\/mmcblk\d+p\d*$/)) &&
+								!systemMounts.includes(fields[5]) &&
+								preferredMountPrefixes.some(prefix => fields[5].startsWith(prefix))) {
+								result.push([
+									fields[5], fields[1], fields[2], fields[4]
+								]);
 							}
 						}
 					}
-					return result;
-				})
-		])
+				}
+				return result;
+			})
+		]);
 	},
 	render: function(data) {
 		let m, s, o;
@@ -231,10 +239,6 @@ return view.extend({
 			o.value(item[0] + "/download", _("%s/download (size: %s) (used: %s/%s)").format(item[0], item[1], item[2], item[3]));
 		});
 
-		o = s.taboption('basic', form.Value, 'config_dir', _('Config file directory'),
-			_('The directory to store the config file, session file and DHT file.'));
-		o.placeholder = '/var/etc/aria2';
-
 		o = s.taboption('basic', form.Flag, 'enable_pro', _('Aria2 pro file'),
 			_('When enabled,  the original system configuration directory will be merged.'));
 		o.rmempty = false;
@@ -242,11 +246,16 @@ return view.extend({
 		o = s.taboption('basic', form.Value, 'pro_file', _('Aria2 pro file'),
 			_('Use the configuration scheme of p3terx to realize the enhancement and expansion of aria2 function.'));
 		o.depends('enable_pro', '1');
-		o.default = "/usr/share/aria2"
+		o.default = "/usr/share/aria2";
+
+		o = s.taboption('basic', form.Value, 'config_dir', _('Config file directory'),
+			_('The directory to store the config file, session file and DHT file.'));
+		o.depends('enable_pro', '0');
+		o.placeholder = '/var/etc/aria2';
 
 		o = s.taboption('basic', form.Flag, 'enable_logging', _('Enable logging'));
 		o.rmempty = false;
-		o.default = 'true';
+		o.default = 1;
 
 		o = s.taboption('basic', form.Value, 'log', _('Log file'),
 			_('The file name of the log file.'));

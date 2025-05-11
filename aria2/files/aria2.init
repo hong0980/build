@@ -154,7 +154,7 @@ aria2_validate() {
 		'split:uinteger' \
 		'timeout:uinteger' \
 		'user_agent:string' \
-		'enable_pro:bool' \
+		'enable_pro:bool:0' \
 		'pro_file:string:/usr/share/aria2'
 }
 
@@ -191,16 +191,14 @@ pro_conf() {
 		return 1
 	}
 
-	temp_file=$(mktemp)
-	trap "rm -f '$temp_file'" 0
-	cat aria2.conf > $temp_file
-	while read p; do
-		grep -q "${p%%=*}=" $temp_file && \
-			sed -i "s|^#\?\(${p%%=*}\)=.*|\1=${p#*=}|" $temp_file || \
-			echo "$p" >> $temp_file
-	done < $config_file_tmp
-	cat $temp_file > $config_file_tmp
-	sed -i 's/.*Auto generated.*/# 系统生成配置，优先级高于上方配置/' $config_file_tmp
+	cp -f aria2.conf "$config_file_tmp.tmp"
+	while read -r p; do
+		grep -q "^[#]\?${p%%=*}=" "$config_file_tmp.tmp" && \
+			sed -i "s|^[#]\?\(${p%%=*}\)=.*|\1=${p#*=}|" "$config_file_tmp.tmp" || \
+			echo "$p" >> "$config_file_tmp.tmp"
+	done < "$config_file_tmp"
+	mv -f "$config_file_tmp.tmp" "$config_file_tmp"
+	sed -i 's/.*Auto generated.*/# 系统生成配置，优先级高于上方配置/' "$config_file_tmp"
 }
 
 aria2_start() {
@@ -209,12 +207,11 @@ aria2_start() {
 
 	[ "$enabled" = "1" ] || { _info "Instance \"$section\" disabled."; return 1; }
 	[ -n "$dir" ] || { _err "Please set download dir."; return 1; }
-	_make_dir "$dir"
 	if [ "$enable_pro" = "1" -a -n "$pro_file" ]; then
 		config_dir_tmp="$config_dir"
 		config_dir="$pro_file"
 	else
-		[ -d "$pro_file" ] && {
+		[ -n "$pro_file" -a -d "$pro_file" ] && {
 			rm -rf "$pro_file"
 			_info "扩展功能已关闭，删除原来的 $pro_file 目录"
 		}
@@ -224,7 +221,7 @@ aria2_start() {
 	config_file_tmp="$config_dir/$NAME.conf.tmp"
 	session_file="$config_dir/$NAME.session.$section"
 
-	_make_dir "$config_dir" || {
+	_make_dir "$config_dir" "$dir" || {
 		_err "Can't create config dir: $config_dir"
 		return 1
 	}
