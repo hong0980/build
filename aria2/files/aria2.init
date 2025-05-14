@@ -159,16 +159,16 @@ aria2_validate() {
 }
 
 pro_conf() {
-	[ -s "$config_file" -a -z "$pro_file" ] && return 0
+	[ "$enable_pro" = "0" ] && return 0
 	cd "$pro_file"
 
 	if [ ! -s aria2.conf ]; then
 		files="core aria2.conf clean.sh delete.sh tracker.sh upload.sh move.sh dht.dat dht6.dat script.conf rclone.env"
 		for file in $files; do
 			(
-				wget -q -N -t 2 -T 3 "raw.githubusercontent.com/P3TERX/aria2.conf/master/$file" || \
-				wget -q -N -t 2 -T 3 "cdn.jsdelivr.net/gh/P3TERX/aria2.conf/$file" || \
-				curl -f -s -S -L -O "p3terx.github.io/aria2.conf/$file"
+				wget -qN -t2 -T3 "raw.githubusercontent.com/P3TERX/aria2.conf/master/$file" || \
+				wget -qN -t2 -T3 "cdn.jsdelivr.net/gh/P3TERX/aria2.conf/$file" || \
+				curl -fsSLO "p3terx.github.io/aria2.conf/$file"
 				[ -s "$file" ] && _info "$file 下载成功！" || _info "$file 下载失败！"
 			) &
 		done
@@ -178,10 +178,11 @@ pro_conf() {
 			-e '/033\|^#$/d' \
 			-e 's|^#!.*|#!/bin/sh|' \
 			-e "s|/root/.aria2|$pro_file|g" \
-			-e "/CONF_DIR/s|aria2.conf|$config_file|g" \
+			-e '/^ARIA2_CONF/s/conf/conf.main/' \
+			-e '/^ARIA2_SESSION/s/session/session.main/' \
 			*
+		sed -i '/^rpc-secret/s/^/#/' aria2.conf
 		_change_file_mode 755 tracker.sh && sh ./tracker.sh
-		[ -z "$rpc_secret" ] && sed -i '/^rpc-secret/s/^/#/' aria2.conf
 		_info "Aria2 增强配置下载完成！"
 	fi
 
@@ -194,7 +195,7 @@ pro_conf() {
 	cp -f aria2.conf "$config_file_tmp.tmp"
 	while read -r p; do
 		grep -q "^[#]\?${p%%=*}=" "$config_file_tmp.tmp" && \
-			sed -i "s|^[#]\?\(${p%%=*}\)=.*|\1=${p#*=}|" "$config_file_tmp.tmp" || \
+			sed -i "s|^[#]\?\(${p%%=*}=\).*|\1${p#*=}|" "$config_file_tmp.tmp" || \
 			echo "$p" >> "$config_file_tmp.tmp"
 	done < "$config_file_tmp"
 	mv -f "$config_file_tmp.tmp" "$config_file_tmp"
@@ -218,7 +219,7 @@ aria2_start() {
 	fi
 
 	config_file="$config_dir/$NAME.conf.$section"
-	config_file_tmp="$config_dir/$NAME.conf.tmp"
+	config_file_tmp="$config_file.tmp"
 	session_file="$config_dir/$NAME.session.$section"
 
 	_make_dir "$config_dir" "$dir" || {
@@ -363,7 +364,7 @@ aria2_start() {
 	config_list_foreach "$section" "header" append_header
 	config_list_foreach "$section" "extra_settings" append_setting
 
-	[ "$enable_pro" = "1" ] && pro_conf
+	pro_conf
 	sed '/^$/N;/^\n$/D' "$config_file_tmp" >"$config_file"
 	rm -f "$config_file_tmp"
 
