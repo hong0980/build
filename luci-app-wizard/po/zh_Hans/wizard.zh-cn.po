@@ -1,26 +1,6 @@
-"Project-Id-Version: OpenWrt\n"
-"Language: zh\n"
-"MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
-"Content-Transfer-Encoding: 8bit\n"
 
 msgid "%s Configuration File"
 msgstr "%s 配置文件"
-
-msgid "Command failed"
-msgstr "命令失败"
-
-msgid "Failed to execute \"/etc/init.d/%s %s\" action: %s"
-msgstr "无法执行 \"/etc/init.d/%s %s\" 操作: %s"
-
-msgid "Enabled"
-msgstr "已启用"
-
-msgid "Disabled"
-msgstr "禁用"
-
-msgid "Textarea not found: %s"
-msgstr "未找到文本区域: %s"
 
 msgid "Contents of %s have been saved."
 msgstr "%s 内容已保存。"
@@ -34,8 +14,8 @@ msgstr "服务重载失败: %s"
 msgid "Unable to save contents: %s"
 msgstr "无法保存内容: %s"
 
-msgid "This page contains the configuration file content for <code>%s</code>. After editing, click the <b><font color=\"red\">Save</font></b> button to apply changes immediately."
-msgstr "本页是<code>%s</code>的配置文件内容，编辑后点击<b><font color=\"red\"> 保存 </font></b>按钮后立即生效"
+msgid "This page contains the configuration file content for <code>%s</code>. After editing, click the <b><font color='red'>Save</font></b> button to apply changes immediately."
+msgstr "本页是<code>%s</code>的配置文件内容，编辑后点击<b><font color='red'> 保存 </font></b>按钮后立即生效"
 
 msgid "The configuration file is directly edited and saved! Unless you know what you are doing, please do not modify these configuration files. Incorrect configurations may cause issues such as failure to boot or network errors."
 msgstr "配置文件是直接编辑保存的！除非你知道在干什么，否则请不要修改这些配置文件。配置不正确可能会导致不能开机，联网等错误。"
@@ -67,18 +47,6 @@ msgstr "无线设置"
 msgid "Set the router's wireless name and password. For more advanced settings, please go to the Network-Wireless page."
 msgstr "设置路由器的无线名称和密码。如需更高级的设置，请前往网络-无线页面。"
 
-msgid "Siderouter"
-msgstr "旁路由模式"
-
-msgid "Enable IPv6"
-msgstr "启用IPv6"
-
-msgid "Enable/Disable IPv6"
-msgstr "一键开启/关闭 IPv6"
-
-msgid "Protocol"
-msgstr "协议"
-
 msgid "DHCP client"
 msgstr "DHCP 客户端"
 
@@ -87,18 +55,6 @@ msgstr "PPPoE"
 
 msgid "Static address"
 msgstr "静态地址"
-
-msgid "Automatic"
-msgstr "自动"
-
-msgid "Manual"
-msgstr "手动"
-
-msgid "PAP/CHAP username"
-msgstr "PAP/CHAP 用户名"
-
-msgid "PAP/CHAP password"
-msgstr "PAP/CHAP 密码"
 
 msgid "Obtain IPv6 address"
 msgstr "获取 IPv6 地址"
@@ -175,8 +131,8 @@ msgstr "114DNS：114.114.115.115"
 msgid "The local IP address should not be in the same subnet as the main router IP (%s). Try a different subnet, e.g., 192.168.2.x."
 msgstr "本地 IP 地址不应与主路由器 IP（%s）在同一子网内。请尝试使用不同的子网，例如 192.168.2.x。"
 
-msgid "<abbr title=\"Extended Service Set Identifier\">ESSID</abbr>"
-msgstr "<abbr title=\"扩展服务集标识符\">ESSID</abbr>"
+msgid "<abbr title='Extended Service Set Identifier'>ESSID</abbr>"
+msgstr "<abbr title='扩展服务集标识符'>ESSID</abbr>"
 
 msgid "Key"
 msgstr "密钥"

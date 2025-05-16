@@ -1,6 +1,5 @@
 'use strict';
 'require view';
-'require rpc';
 'require fs';
 'require ui';
 
@@ -62,7 +61,7 @@ return view.extend({
 			var content = data[index];
 			return content ?
 				E('div', { 'class': 'cbi-tab', 'data-tab': config.data_tab, 'data-tab-title': _('%s Configuration File').format(config.title)}, [
-					E('p', {}, _("This page contains the configuration file content for <code>%s</code>. After editing, click the <b><font color=\"red\">Save</font></b> button to apply changes immediately.").format(config.path)),
+					E('p', {}, _("This page contains the configuration file content for <code>%s</code>. After editing, click the <b><font color='red'>Save</font></b> button to apply changes immediately.").format(config.path)),
 					E('textarea', {
 						'rows': 20,
 						'id': config.data_tab,

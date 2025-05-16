@@ -1,9 +1,6 @@
 'use strict';
 'require view';
-'require dom';
-'require poll';
 'require uci';
-'require rpc';
 'require form';
 'require fs';
 'require network';
@@ -187,9 +184,9 @@ return view.extend({
 
 		if (uci.sections('wireless', 'wifi-device').length > 0) {
 			s.tab('wifisetup', _('Wireless Settings'),
-				_('Set the router\'s wireless name and password. For more advanced settings, please go to the Network-Wireless page.'));
+				_("Set the router's wireless name and password. For more advanced settings, please go to the Network-Wireless page."));
 			o = s.taboption('wifisetup', form.Value, 'wifi_ssid',
-				_('<abbr title=\"Extended Service Set Identifier\">ESSID</abbr>'),
+				_("<abbr title='Extended Service Set Identifier'>ESSID</abbr>"),
 				_('SSID of the wireless network, with a maximum length of 32 characters.'));
 			o.datatype = 'maxlength(32)';
 
