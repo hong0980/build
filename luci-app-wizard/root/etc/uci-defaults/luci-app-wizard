@@ -1,4 +1,5 @@
 #!/bin/sh
+
 touch /etc/config/wizard
 uci -q batch <<-EOF >/dev/null
 	delete ucitrack.@wizard[-1]
@@ -9,17 +10,19 @@ uci -q batch <<-EOF >/dev/null
 	commit wizard
 	set upnpd.config.enabled=1
 	commit upnpd
-	set system.@system[0].hostname=OpenWrt
+	set system.@system[0].timezone='CST-8'
+	set system.@system[0].hostname='OpenWrt'
+	set system.@system[0].zonename='Asia/Shanghai'
 	commit system
-	set luci.main.mediaurlbase=/luci-static/bootstrap
+	set luci.main.lang='zh_cn'
+	set luci.main.mediaurlbase='/luci-static/bootstrap'
 	commit luci
 EOF
-
 for file in dhcp network firewall wireless; do
-    [ ! -f /etc/config/bk_$file -a -s /etc/config/$file ] && cp /etc/config/$file /etc/config/bk_$file
+	cp /etc/config/"$file" /etc/config/bk_"$file"
 done
 
 sed -i 's/root:.*/root:$1$pn1ABFaI$vt5cmIjlr6M7Z79Eds2lV0:16821:0:99999:7:::/g' /etc/shadow
+chmod +x /etc/init.d/wizard 2>/dev/null
 rm -f /tmp/luci-*
-
 exit 0

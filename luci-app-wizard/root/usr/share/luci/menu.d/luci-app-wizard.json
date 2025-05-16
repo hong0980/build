@@ -1,0 +1,31 @@
+{
+	"admin/system/wizard": {
+		"title": "Wizard",
+		"order": 10,
+		"action": {
+			"type": "firstchild",
+		},
+		"depends": {
+			"acl": [ "luci-app-wizard" ],
+			"uci": { "wizard": true }
+		}
+	},
+
+	"admin/system/wizard/wizard": {
+		"title": "Configuration",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "wizard/wizard"
+		}
+	},
+
+	"admin/system/wizard/file": {
+		"title": "Files",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "wizard/file"
+		}
+	}
+}

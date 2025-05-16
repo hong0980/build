@@ -1,0 +1,44 @@
+{
+	"luci-app-wizard": {
+		"description": "Grant UCI access for luci-app-wizard",
+		"read": {
+			"uci": [ "wizard" ],
+			"file": {
+				"/etc/init.d/wizard reconfig": [ "exec" ],
+				"/etc/hosts": [ "read" ],
+				"/etc/rc.local": [ "read" ],
+				"/etc/config/dhcp": [ "read" ],
+				"/etc/dnsmasq.conf": [ "read" ],
+				"/etc/config/uhttpd": [ "read" ],
+				"/etc/config/network": [ "read" ],
+				"/etc/config/firewall": [ "read" ],
+				"/etc/config/wireless": [ "read" ]
+			},
+			"ubus": {
+				"file": [ "read" ],
+				"rc": [ "list" ]
+			}
+		},
+		"write": {
+			"file": {
+				"/etc/hosts": ["write"],
+				"/etc/rc.local": ["write"],
+				"/etc/config/dhcp": ["write"],
+				"/etc/dnsmasq.conf": ["write"],
+				"/etc/config/uhttpd": ["write"],
+				"/etc/config/network": ["write"],
+				"/etc/config/firewall": ["write"],
+				"/etc/config/wireless": ["write"],
+				"/etc/init.d/cron reload": ["exec"],
+				"/etc/init.d/uhttpd reload": ["exec"],
+				"/etc/init.d/network reload": ["exec"],
+				"/etc/init.d/dnsmasq reload": ["exec"],
+				"/etc/init.d/firewall reload": ["exec"]
+			},
+			"ubus": {
+				"file": ["write"],
+				"rc": ["init"]
+			}
+		}
+	}
+}
