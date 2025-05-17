@@ -205,3 +205,12 @@ msgstr "交换机 (AP)"
 
 msgid "Side Router"
 msgstr "旁路由"
+
+msgid "IP address for the side router's WAN interface to connect to the main network."
+msgstr "旁路由 WAN 接口连接主网络的 IP 地址"
+
+msgid "IPv4 address for static address mode."
+msgstr "静态地址模式的 IPv4 地址。"
+
+msgid "WAN IP address"
+msgstr "WAN IP 地址"

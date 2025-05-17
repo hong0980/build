@@ -21,16 +21,18 @@ return view.extend({
 	render: function(data) {
 		var m, s, o;
 
-		m = new form.Map('wizard', [_('Inital Router Setup')],
+		m = new form.Map('wizard', _('Inital Router Setup'),
 			_('If you are using this router for the first time, please configure it here.'));
 
 		s = m.section(form.NamedSection, 'default', 'wizard');
 		s.addremove = false;
+
 		s.tab('wansetup', _('Wan Settings'),
 			_('There are several different ways to access the Internet, please choose according to your own situation.'));
 		s.tab('lansetup', _('Lan Settings'));
 
-		o = s.taboption('wansetup', form.ListValue, 'wan_proto', _('Protocol'), _('Select the network access protocol to determine how the router connects to the Internet.'));
+		o = s.taboption('wansetup', form.ListValue, 'wan_proto', _('Protocol'),
+			_('Select the network access protocol to determine how the router connects to the Internet.'));
 		o.rmempty = false;
 		o.default = 'dhcp';
 		o.value('dhcp', _('DHCP client'));
@@ -42,11 +44,13 @@ return view.extend({
 		o = s.taboption('wansetup', form.Value, 'wan_pppoe_user', _('PAP/CHAP username'),
 			_('Username for PPPoE dial-up.'));
 		o.depends('wan_proto', 'pppoe');
+		o.datatype = 'minlength(1)';
 		o.rmempty = false;
 
 		o = s.taboption('wansetup', form.Value, 'wan_pppoe_pass', _('PAP/CHAP password'),
 			_('Password for PPPoE dial-up.'));
 		o.depends('wan_proto', 'pppoe');
+		o.datatype = 'minlength(1)';
 		o.rmempty = false;
 		o.password = true;
 
@@ -59,6 +63,12 @@ return view.extend({
 		o.value('1', _('Manual'));
 		o.default = 'auto';
 
+		o = s.taboption('wansetup', form.Value, 'wan_ipaddr', _('IPv4 address'),
+			_('IPv4 address for static address mode.'));
+		o.depends('wan_proto', 'static');
+		o.datatype = 'ip4addr';
+		o.rmempty = false;
+
 		o = s.taboption('wansetup', form.Value, 'wan_netmask', _('IPv4 netmask'),
 			_('Subnet mask for static address mode.'));
 		o.depends('wan_proto', 'static');
@@ -66,17 +76,20 @@ return view.extend({
 		o.value('255.255.255.0');
 		o.value('255.255.0.0');
 		o.value('255.0.0.0');
+		o.rmempty = false;
 
 		o = s.taboption('wansetup', form.Value, 'wan_gateway', _('IPv4 gateway'),
 			_('Gateway address for static address mode.'));
 		o.depends('wan_proto', 'static');
 		o.datatype = 'ip4addr';
+		o.rmempty = false;
 
 		o = s.taboption('wansetup', form.Value, 'ap_bridge_ip', _('Bridge IP address'),
 			_('Static IP address assigned to the router in access point mode for connecting to the main network.'));
 		o.depends('wan_proto', 'ap');
 		o.datatype = 'ip4addr';
 		o.placeholder = '192.168.1.2';
+		o.rmempty = false;
 
 		o = s.taboption('wansetup', form.Value, 'ap_netmask', _('Bridge netmask'),
 			_('Subnet mask for the router in access point mode, which should match the main network.'));
@@ -85,12 +98,14 @@ return view.extend({
 		o.value('255.255.255.0');
 		o.value('255.255.0.0');
 		o.value('255.0.0.0');
+		o.rmempty = false;
 
 		o = s.taboption('wansetup', form.Value, 'ap_gateway', _('Bridge gateway'),
 			_('Gateway address of the main network, typically the IP address of the main router.'));
 		o.depends('wan_proto', 'ap');
 		o.datatype = 'ip4addr';
 		o.placeholder = '192.168.1.1';
+		o.rmempty = false;
 
 		o = s.taboption('wansetup', form.ListValue, 'ap_dhcp', _('DHCP for AP mode'),
 			_("Disable DHCP to rely on the main router's DHCP server, or enable local DHCP service."));
@@ -105,12 +120,23 @@ return view.extend({
 		o.multiple = true;
 		o.noaliases = true;
 		o.ucioption = 'ap_bridge_interfaces';
+		o.validate = function(section_id, value) {
+			return value.length > 0 ? true : _('At least one interface must be selected');
+		};
 
 		o = s.taboption('wansetup', form.Value, 'siderouter_local_ip', _('Local IP address'),
 			_("IP address assigned to the side router in the main network, which should avoid conflicts with the main router's LAN subnet."));
 		o.depends('wan_proto', 'siderouter');
 		o.datatype = 'ip4addr';
-		o.placeholder = '192.168.2.2';
+		o.placeholder = '192.168.2.1';
+		o.rmempty = false;
+
+		o = s.taboption('wansetup', form.Value, 'siderouter_wan_ip', _('WAN IP address'),
+			_("IP address for the side router's WAN interface to connect to the main network."));
+		o.depends('wan_proto', 'siderouter');
+		o.datatype = 'ip4addr';
+		o.placeholder = '192.168.1.2';
+		o.rmempty = false;
 
 		o = s.taboption('wansetup', form.Value, 'siderouter_netmask', _('Netmask for side router'),
 			_('Subnet mask for the side router, which should match the main network.'));
@@ -119,6 +145,7 @@ return view.extend({
 		o.value('255.255.255.0');
 		o.value('255.255.0.0');
 		o.value('255.0.0.0');
+		o.rmempty = false;
 
 		o = s.taboption('wansetup', form.Value, 'siderouter_main_router_ip', _('Main router IP address'),
 			_('IP address of the main router to which the side router connects.'));
@@ -131,6 +158,7 @@ return view.extend({
 		o.depends('wan_proto', 'siderouter');
 		o.datatype = 'ip4addr';
 		o.placeholder = '192.168.1.1';
+		o.rmempty = false;
 
 		o = s.taboption('wansetup', form.ListValue, 'siderouter_dhcp', _('DHCP for side router'),
 			_("Disable DHCP to rely on the main router's DHCP server, or enable local DHCP service."));
@@ -145,6 +173,9 @@ return view.extend({
 		o.multiple = true;
 		o.noaliases = true;
 		o.ucioption = 'siderouter_interfaces';
+		o.validate = function(section_id, value) {
+			return value.length > 0 ? true : _('At least one interface must be selected');
+		};
 
 		o = s.taboption('wansetup', form.DynamicList, 'wan_dns', _('WAN DNS servers'),
 			_('List of custom DNS servers for the WAN interface.'));

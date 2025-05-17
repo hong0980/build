@@ -16,6 +16,10 @@ reconfig() {
 		set wizard.default.lan_netmask="$(uci_get network lan netmask)"
 		set wizard.default.lan_gateway="$(uci_get network lan gateway)"
 		set wizard.default.lan_dns="$(uci_get network lan dns)"
+		set wizard.default.wan_ipaddr="$(uci_get network wan ipaddr)"
+		set wizard.default.wan_netmask="$(uci_get network wan netmask)"
+		set wizard.default.wan_gateway="$(uci_get network wan gateway)"
+		set wizard.default.wan_dns="$(uci_get network wan dns)"
 		set wizard.default.ap_bridge_ip="$(uci_get network lan ipaddr)"
 		set wizard.default.ap_netmask="$(uci_get network lan netmask)"
 		set wizard.default.ap_gateway="$(uci_get network lan gateway)"
@@ -23,7 +27,7 @@ reconfig() {
 		set wizard.default.ap_bridge_interfaces="$(uci_get network lan ifname)"
 		set wizard.default.siderouter_local_ip="$(uci_get network lan ipaddr)"
 		set wizard.default.siderouter_netmask="$(uci_get network lan netmask)"
-		set wizard.default.siderouter_main_router_ip="$(uci_get network wan gateway)"
+		set wizard.default.siderouter_wan_ip="$(uci_get network wan ipaddr)"
 		set wizard.default.siderouter_gateway="$(uci_get network wan gateway)"
 		set wizard.default.siderouter_dhcp="$(uci_get dhcp lan ignore '0')"
 		set wizard.default.siderouter_interfaces="$(uci_get network wan ifname)"
@@ -49,18 +53,42 @@ get_config() {
 	done
 }
 
+validate_device() {
+	local dev=$1
+	[ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1 && return 0
+	log_msg "Invalid device: $dev"
+	return 1
+}
+
+set_dns() {
+	local cfg=$1 dns_list=$2
+	[ -n "$dns_list" ] || return 0
+	uci_remove network "$cfg" dns
+	for dns in $dns_list; do
+		[ -n "$dns" ] && uci_add_list network "$cfg" dns "$dns"
+	done
+	uci_set network "$cfg" peerdns '0'
+}
+
 add_wizard() {
 	[ "$XBOOT" = 1 ] && return 0
-	get_config wan_proto wan_ipaddr wan_netmask wan_gateway wan_dns lan_dns ipv6
-	get_config ap_bridge_ip ap_netmask ap_gateway ap_dhcp ap_bridge_interfaces
-	get_config siderouter_local_ip siderouter_netmask siderouter_main_router_ip siderouter_gateway siderouter_dhcp siderouter_interfaces
+
+	get_config wan_proto wan_pppoe_user wan_pppoe_pass  \
+		wan_ipaddr wan_netmask wan_gateway wan_dns lan_dns ipv6 \
+		ap_bridge_ip ap_netmask ap_gateway ap_dhcp ap_bridge_interfaces \
+		siderouter_local_ip siderouter_netmask siderouter_wan_ip siderouter_gateway siderouter_dhcp siderouter_interfaces \
+		wifi_ssid wifi_key wifi_ssid_old wifi_key_old lan_ipaddr lan_netmask lan_ipaddr_old lan_netmask_old
+
+	local device ifname
 	device=$(uci_get network wan device || uci_get bk_network wan device "")
 	ifname=$(uci_get network wan ifname "")
+	validate_device "$device" || return 1
 
 	case "$wan_proto" in
 		pppoe)
-			get_config wan_pppoe_user wan_pppoe_pass username_old password_old
-			test -n "$device" && [ "$username_old" != "$wan_pppoe_user" -o "$password_old" != "$wan_pppoe_pass" ] && {
+			username_old="$(uci_get network wan username "")"
+			password_old="$(uci_get network wan password "")"
+			[ x"$username_old" != x"$wan_pppoe_user" -o x"$password_old" != x"$wan_pppoe_pass" ] && {
 				uci_remove network wan
 				uci_add network interface wan
 				uci_set network wan proto 'pppoe'
@@ -68,119 +96,105 @@ add_wizard() {
 				uci_set network wan username "$wan_pppoe_user"
 				uci_set network wan password "$wan_pppoe_pass"
 				uci_set network wan ipv6 "$ipv6"
-				uci_set network wan keepalive '5 5'
-				uci_set network wan mtu '1492'
-				uci_set network wan metric '40'
-				test -n "$ifname" && uci_set network wan ifname "$ifname"
-
-				test -n "$wan_dns" && {
-					uci_set network wan peerdns '0'
-					uci_set network wan dns "$wan_dns"
-				}
-				uci_set wizard default username_old "$wan_pppoe_user"
-				uci_set wizard default password_old "$wan_pppoe_pass"
+				[ -n "$ifname" ] && uci_set network wan ifname "$ifname"
+				set_dns wan "$wan_dns"
 			}
 			;;
-		dhcp)
-			[ -z "$device" ] && return 1
+		dhcp|static)
+			[ "$wan_proto" = "static" ] && \
+				[ -n "$wan_ipaddr" -a -n "$wan_netmask" -a -n "$wan_gateway" ] || \
+				[ "$wan_proto" = "dhcp" ] || return 1
 			uci_remove network wan
 			uci_add network interface wan
-			uci_set network wan proto 'dhcp'
+			uci_set network wan proto "$wan_proto"
 			uci_set network wan device "$device"
-			test -n "$ifname" && uci_set network wan ifname "$ifname"
-			test -n "$wan_dns" && {
-				uci_set network wan peerdns '0'
-				uci_set network wan dns "$wan_dns"
-			}
-			;;
-		static)
-			test -n "$wan_ipaddr" && test -n "$wan_netmask" && {
-				uci_remove network wan
-				uci_add network interface wan
-				uci_set network wan proto 'static'
-				uci_set network wan force_link '0'
-				test -n "$device" && uci_set network wan device "$device"
-				test -n "$ifname" && uci_set network wan ifname "$ifname"
-				uci_set network wan metric '40'
+			[ -n "$ifname" ] && uci_set network wan ifname "$ifname"
+			[ "$wan_proto" = "static" ] && {
 				uci_set network wan ipaddr "$wan_ipaddr"
 				uci_set network wan netmask "$wan_netmask"
 				uci_set network wan gateway "$wan_gateway"
-
-				test -n "$wan_dns" && {
-					uci_set network wan peerdns '0'
-					uci_set network wan dns "$wan_dns"
-				}
+				uci_set network wan metric '40'
 			}
+			set_dns wan "$wan_dns"
 			;;
 		ap)
-			test -n "$ap_bridge_ip" && test -n "$ap_netmask" && {
-				uci_remove network wan # 禁用 WAN 接口
-				uci_set network lan ipaddr "$ap_bridge_ip"
-				uci_set network lan netmask "$ap_netmask"
-				uci_set network lan gateway "$ap_gateway"
-				uci_set network lan type 'bridge'
-				uci_set network lan ifname "$ap_bridge_interfaces"
-				uci_set dhcp lan ignore "$ap_dhcp"
-				test -n "$wan_dns" && {
-					uci_set network lan dns "$wan_dns"
-				}
-			}
+			[ -n "$ap_bridge_ip" -a -n "$ap_netmask" -a -n "$ap_gateway" -a -n "$ap_bridge_interfaces" ] || return 1
+			for iface in $ap_bridge_interfaces; do
+				validate_device "$iface" || return 1
+			done
+			uci_remove network wan
+			uci_set network lan ipaddr "$ap_bridge_ip"
+			uci_set network lan netmask "$ap_netmask"
+			uci_set network lan gateway "$ap_gateway"
+			uci_set network lan type 'bridge'
+			uci_set network lan ifname "$ap_bridge_interfaces"
+			uci_set dhcp lan ignore "$ap_dhcp"
+			set_dns lan "$wan_dns"
 			;;
 		siderouter)
-			test -n "$siderouter_local_ip" && test -n "$siderouter_netmask" && {
-				uci_set network lan ipaddr "$siderouter_local_ip"
-				uci_set network lan netmask "$siderouter_netmask"
-				uci_set network wan proto 'static'
-				uci_set network wan ifname "$siderouter_interfaces"
-				uci_set network wan gateway "$siderouter_gateway"
-				uci_set dhcp lan ignore "$siderouter_dhcp"
-				test -n "$wan_dns" && {
-					uci_set network wan dns "$wan_dns"
-				}
-			}
+			[ -n "$siderouter_local_ip" -a -n "$siderouter_netmask" -a -n "$siderouter_wan_ip" -a -n "$siderouter_gateway" -a -n "$siderouter_interfaces" ] || return 1
+			for iface in $siderouter_interfaces; do
+				validate_device "$iface" || return 1
+			done
+			uci_remove network wan
+			uci_add network interface wan
+			uci_set network wan proto 'static'
+			uci_set network lan ipaddr "$siderouter_local_ip"
+			uci_set network lan netmask "$siderouter_netmask"
+			uci_set network wan ipaddr "$siderouter_wan_ip"
+			uci_set network wan netmask "$siderouter_netmask"
+			uci_set network wan ifname "$siderouter_interfaces"
+			uci_set network wan gateway "$siderouter_gateway"
+			uci_set dhcp lan ignore "$siderouter_dhcp"
+			set_dns wan "$wan_dns"
+			;;
+		*)
+			log_msg "Unknown wan_proto: $wan_proto"
+			return 1
 			;;
 	esac
 
-	get_config lan_ipaddr lan_netmask lan_ipaddr_old lan_netmask_old
-	[ "$lan_ipaddr" != "$lan_ipaddr_old" -o "$lan_netmask" != "$lan_netmask_old" ] && {
+	[ -n "$lan_ipaddr" -a -n "$lan_netmask" -a \
+	  \( "$lan_ipaddr" != "$lan_ipaddr_old" -o "$lan_netmask" != "$lan_netmask_old" \) ] && {
 		uci_set network lan ipaddr "$lan_ipaddr"
 		uci_set network lan netmask "$lan_netmask"
 		uci_set wizard default lan_ipaddr_old "$lan_ipaddr"
 		uci_set wizard default lan_netmask_old "$lan_netmask"
 	}
 
-	# 处理 LAN DNS
-	test -n "$lan_dns" && {
-		uci_remove network lan dns
-		uci_remove dhcp lan ra_slaac
-		for dns in $lan_dns; do
-			uci_add_list network lan dns "$dns"
-		done
+	[ -n "$lan_dns" ] && {
+		[ "$ipv6" = "0" ] && uci_remove dhcp lan ra_slaac
+		set_dns lan "$lan_dns"
 	}
 
-	get_config wifi_ssid wifi_key
-	test -n "$wifi_ssid" && test -n "$wifi_key" && {
-		get_config wifi_ssid_old wifi_key_old
+	[ -n "$wifi_ssid" -a -n "$wifi_key" ] && {
+		config_load wireless
+		local wifi_updated=0
+		process_wifi_iface() {
+			local cfg=$1
+			config_get mode "$cfg" mode
+			config_get device "$cfg" device
+			[ "$mode" = "ap" ] || return 0
+			uci_set wireless "$cfg" ssid "$wifi_ssid"
+			uci_set wireless "$cfg" key "$wifi_key"
+			uci_set wireless "$cfg" encryption 'psk2'
+			config_get band "$device" band
+			if [ "$band" = "6g" ]; then
+				uci_set wireless "$cfg" ocv '0'
+				uci_set wireless "$cfg" ssid "${wifi_ssid}_6G"
+				uci_set wireless "$cfg" encryption 'sae'
+				uci_remove wireless "$cfg" ft_psk_generate_local
+				uci_set wireless "$device" country 'DE'
+				uci_set wireless "$device" channel '21'
+			fi
+			wifi_updated=1
+		}
+		config_foreach process_wifi_iface wifi-iface
+		[ "$wifi_updated" = "1" ] || {
+			log_msg "No wireless AP interfaces"
+			return 1
+		}
 		if [ "$wifi_ssid" != "$wifi_ssid_old" -o "$wifi_key" != "$wifi_key_old" ]; then
-			for idx in `seq 0 64`; do
-				uci_get wireless "@wifi-iface[$idx]" || break
-				[ "$(uci_get wireless "@wifi-iface[$idx]" mode)" = "ap" ] && {
-					uci_set wireless "@wifi-iface[$idx]" ssid "$wifi_ssid"
-					uci_set wireless "@wifi-iface[$idx]" key "$wifi_key"
-					uci_set wireless "@wifi-iface[$idx]" encryption 'psk2'
-				}
-				device=$(uci_get wireless "@wifi-iface[$idx]" device)
-				[ "$(uci_get wireless "$device" band)" = "2g" ] || [ "$(uci_get wireless "$device" band)" = "5g" ] || {
-					uci_set wireless "@wifi-iface[$idx]" ocv '0'
-					uci_set wireless "@wifi-iface[$idx]" ssid "${wifi_ssid}_6G"
-					uci_set wireless "@wifi-iface[$idx]" key "$wifi_key"
-					uci_set wireless "@wifi-iface[$idx]" encryption 'sae'
-					uci_remove wireless "@wifi-iface[$idx]" ft_psk_generate_local
-					uci_set wireless "$device" country 'DE'
-					uci_set wireless "$device" channel '21'
-					uci_set wireless "$device" band '6g'
-				}
-			done
 			uci_set wizard default wifi_key_old "$wifi_key"
 			uci_set wizard default wifi_ssid_old "$wifi_ssid"
 		fi
@@ -191,18 +205,15 @@ start() {
 	config_load wizard
 	config_foreach add_wizard wizard
 
-	for config in network dhcp firewall wireless wizard; do
-		if uci_changes "$config"; then
-			case "$config" in
-				wireless) wifi reload & ;;
-				dhcp) /etc/init.d/dnsmasq reload & ;;
-				network) /etc/init.d/network restart & ;;
-				firewall) /etc/init.d/firewall reload & ;;
-			esac
-		fi
-	done
-}
+	local services=""
+	[ -n "$(uci_changes network)" ] && services="$services network"
+	[ -n "$(uci_changes wireless)" ] && services="$services wireless"
+	[ -n "$(uci_changes dhcp)" ] && services="$services dnsmasq"
+	[ -n "$(uci_changes firewall)" ] && services="$services firewall"
+	[ -n "$(uci_changes wizard)" ] && uci_commit wizard
 
-boot() {
-	XBOOT=1 start
+	for svc in $services; do
+		/etc/init.d/$svc restart &
+	done
+	[ -n "$wifi_ssid" -a -n "$wifi_key" ] && wifi reload &
 }

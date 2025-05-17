@@ -32,7 +32,8 @@ return view.extend({
 		var value = (document.getElementById(textareaId)?.value || '').trim().replace(/\r\n/g, '\n') + '\n';
 		return fs.write(path, value).then(function() {
 			document.getElementById(textareaId).value = value;
-			ui.addNotification(null, E('p', _('Contents of %s have been saved.').format(path)), 'info');
+			ui.addNotification(null, E('p',
+				_('Contents of %s have been saved.').format(path)), 'info');
 
 			var service = path.includes('crontabs') ? 'cron' :
 						 path.includes('dhcp') ? 'dnsmasq' :
@@ -45,13 +46,16 @@ return view.extend({
 				var cmd = service === 'wifi' ? '/sbin/wifi' : '/etc/init.d/' + service;
 				var args = service === 'wifi' ? ['reload'] : ['reload'];
 				return fs.exec_direct(cmd, args).then(function() {
-					ui.addNotification(null, E('p', _('Service %s reloaded successfully.').format(cmd)), 'info');
+					ui.addNotification(null, E('p',
+						_('Service %s reloaded successfully.').format(cmd)), 'info');
 				}).catch(function(err) {
-					ui.addNotification(null, E('p', _('Service reload failed: %s').format(err.message)), 'warning');
+					ui.addNotification(null, E('p',
+						_('Service reload failed: %s').format(err.message)), 'warning');
 				});
 			}
 		}).catch(function(err) {
-			ui.addNotification(null, E('p', _('Unable to save contents: %s').format(err.message)), 'error');
+			ui.addNotification(null, E('p',
+				_('Unable to save contents: %s').format(err.message)), 'error');
 		});
 	},
 
@@ -63,7 +67,7 @@ return view.extend({
 				E('div', { 'class': 'cbi-tab', 'data-tab': config.data_tab, 'data-tab-title': _('%s Configuration File').format(config.title)}, [
 					E('p', {}, _("This page contains the configuration file content for <code>%s</code>. After editing, click the <b><font color='red'>Save</font></b> button to apply changes immediately.").format(config.path)),
 					E('textarea', {
-						'rows': 20,
+						'rows': 25,
 						'id': config.data_tab,
 						'disabled': isReadonlyView,
 						'style': 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;'
