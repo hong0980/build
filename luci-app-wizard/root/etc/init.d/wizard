@@ -86,9 +86,9 @@ add_wizard() {
 
 	case "$wan_proto" in
 		pppoe)
-			username_old="$(uci_get network wan username "")"
-			password_old="$(uci_get network wan password "")"
-			[ x"$username_old" != x"$wan_pppoe_user" -o x"$password_old" != x"$wan_pppoe_pass" ] && {
+			username="$(uci_get network wan username)"
+			password="$(uci_get network wan password)"
+			[ x"$username" != x"$wan_pppoe_user" -o z"$password" != z"$wan_pppoe_pass" ] && {
 				uci_remove network wan
 				uci_add network interface wan
 				uci_set network wan proto 'pppoe'
@@ -199,21 +199,20 @@ add_wizard() {
 			uci_set wizard default wifi_ssid_old "$wifi_ssid"
 		fi
 	}
+
+	for config in network dhcp firewall wireless wizard; do
+		if uci_changes "$config"; then
+			case "$config" in
+				wireless) wifi reload & ;;
+				dhcp) /etc/init.d/dnsmasq reload & ;;
+				network) /etc/init.d/network reload & ;;
+				firewall) /etc/init.d/firewall reload & ;;
+			esac
+		fi
+	done
 }
 
 start() {
 	config_load wizard
 	config_foreach add_wizard wizard
-
-	local services=""
-	[ -n "$(uci_changes network)" ] && services="$services network"
-	[ -n "$(uci_changes wireless)" ] && services="$services wireless"
-	[ -n "$(uci_changes dhcp)" ] && services="$services dnsmasq"
-	[ -n "$(uci_changes firewall)" ] && services="$services firewall"
-	[ -n "$(uci_changes wizard)" ] && uci_commit wizard
-
-	for svc in $services; do
-		/etc/init.d/$svc restart &
-	done
-	[ -n "$wifi_ssid" -a -n "$wifi_key" ] && wifi reload &
 }
