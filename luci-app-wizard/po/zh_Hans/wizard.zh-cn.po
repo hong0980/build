@@ -214,3 +214,6 @@ msgstr "静态地址模式的 IPv4 地址。"
 
 msgid "WAN IP address"
 msgstr "WAN IP 地址"
+
+msgid "Enable editing"
+msgstr "启用编辑"
