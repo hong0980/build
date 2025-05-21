@@ -4,15 +4,15 @@
 'require ui';
 
 var configFiles = [
-	{ path: '/etc/config/network', title: _('网络配置（network）') },
-	{ path: '/etc/config/firewall', title: _('防火墙配置（firewall）') },
-	{ path: '/etc/config/dhcp', title: _('DHCP配置（dhcp）') },
-	{ path: '/etc/dnsmasq.conf', title: _('DNS配置（dnsmasq）') },
-	{ path: '/etc/config/uhttpd', title: _('Web服务器配置（uhttpd）') },
-	{ path: '/etc/config/wireless', title: _('无线配置（wireless）') },
-	{ path: '/etc/hosts', title: _('主机配置（hosts）') },
-	{ path: '/etc/rc.local', title: _('启动脚本') },
-	{ path: '/etc/crontabs/root', title: _('定时任务（crontabs）') }
+	{ path: '/etc/config/network', title: _('Network configuration (network)') },
+	{ path: '/etc/config/firewall', title: _('Firewall configuration (firewall)') },
+	{ path: '/etc/config/dhcp', title: _('DHCP configuration (dhcp)') },
+	{ path: '/etc/dnsmasq.conf', title: _('DNS configuration (dnsmasq)') },
+	{ path: '/etc/config/uhttpd', title: _('Web server configuration (uhttpd)') },
+	{ path: '/etc/config/wireless', title: _('Wireless configuration (wireless)') },
+	{ path: '/etc/hosts', title: _('Host configuration (hosts)') },
+	{ path: '/etc/rc.local', title: _('Startup script') },
+	{ path: '/etc/crontabs/root', title: _('Scheduled tasks (crontabs)') }
 ];
 
 return view.extend({
@@ -62,6 +62,7 @@ return view.extend({
 	render: function(data) {
 		var self = this;
 		self.originalContent = '';
+		self.lastSelectedPath = '';
 		var view = E('div', { 'class': 'cbi-section' }, [
 			E('b', {}, [
 				E('font', { 'color': 'red' }, _('The configuration file is directly edited and saved! Unless you know what you are doing, please do not modify these configuration files. Incorrect configurations may cause issues such as failure to boot or network errors.')),
@@ -78,11 +79,15 @@ return view.extend({
 							var value = ev.target.value;
 							var textarea = document.getElementById('file_content');
 							var editToggle = document.getElementById('edit_toggle');
-							textarea.value = '';
-							self.originalContent = '';
+							if (!value) {
+								textarea.value = self.originalContent || '';
+								textarea.readOnly = editToggle.checked;
+								return;
+							}
 							fs.read(value)
 								.then(function(content) {
 									textarea.value = content;
+									self.lastSelectedPath = value;
 									self.originalContent = content;
 									textarea.readOnly = editToggle.checked;
 								})
@@ -134,7 +139,7 @@ return view.extend({
 					'class': 'btn cbi-button-save',
 					'style': 'display: none; margin-right: 10px;',
 					'click': ui.createHandlerFn(self, function() {
-						var path = document.getElementById('file_select').value;
+						var path = document.getElementById('file_select').value || self.lastSelectedPath;
 						if (!path) {
 							ui.addNotification(null, E('p', _('Please select a file.')), 'error');
 							return;

@@ -217,3 +217,30 @@ msgstr "WAN IP 地址"
 
 msgid "Enable editing"
 msgstr "启用编辑"
+
+msgid "Network configuration (network)"
+msgstr "网络配置（network）"
+
+msgid "Firewall configuration (firewall)"
+msgstr "防火墙配置（firewall）"
+
+msgid "DHCP configuration (dhcp)"
+msgstr "DHCP配置（dhcp）"
+
+msgid "DNS configuration (dnsmasq)"
+msgstr "DNS配置（dnsmasq）"
+
+msgid "Web server configuration (uhttpd)"
+msgstr "Web服务器配置（uhttpd）"
+
+msgid "Wireless configuration (wireless)"
+msgstr "无线配置（wireless）"
+
+msgid "Host configuration (hosts)"
+msgstr "主机配置（hosts）"
+
+msgid "Startup script"
+msgstr "启动脚本"
+
+msgid "Scheduled tasks (crontabs)"
+msgstr "定时任务（crontabs）"
