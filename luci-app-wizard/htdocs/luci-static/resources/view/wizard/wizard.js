@@ -11,15 +11,25 @@ return view.extend({
 		return Promise.all([
 			fs.exec('/etc/init.d/wizard', ['reconfig']),
 			uci.changes(),
-			L.resolveDefault(uci.load('wireless')),
-			uci.load('wizard'),
-			uci.load('network'),
-			uci.load('firewall')
+			L.resolveDefault(uci.load(['network', 'firewall', 'wireless']))
 		]);
+	},
+
+	validateNonEmptyArray: function(section_id, value) {
+		return value.length || _('At least one interface must be selected');
 	},
 
 	render: function(data) {
 		var m, s, o;
+		var dnsOptions = [
+			{ value: '223.5.5.5', label: _('AliDNS: 223.5.5.5') },
+			{ value: '223.6.6.6', label: _('AliDNS: 223.6.6.6') },
+			{ value: '101.226.4.6', label: _('DNSPod: 101.226.4.6') },
+			{ value: '218.30.118.6', label: _('DNSPod: 218.30.118.6') },
+			{ value: '180.76.76.76', label: _('BaiduDNS: 180.76.76.76') },
+			{ value: '114.114.114.114', label: _('114DNS: 114.114.114.114') },
+			{ value: '114.114.115.115', label: _('114DNS: 114.114.115.115') }
+		];
 
 		m = new form.Map('wizard', _('Inital Router Setup'),
 			_('If you are using this router for the first time, please configure it here.'));
@@ -37,7 +47,6 @@ return view.extend({
 		o.default = 'dhcp';
 		o.value('dhcp', _('DHCP client'));
 		o.value('pppoe', _('PPPoE'));
-		o.value('static', _('Static address'));
 		o.value('ap', _('Access Point (AP)'));
 		o.value('siderouter', _('Side Router'));
 
@@ -62,27 +71,6 @@ return view.extend({
 		o.value('0', _('Disabled'));
 		o.value('1', _('Manual'));
 		o.default = 'auto';
-
-		o = s.taboption('wansetup', form.Value, 'wan_ipaddr', _('IPv4 address'),
-			_('IPv4 address for static address mode.'));
-		o.depends('wan_proto', 'static');
-		o.datatype = 'ip4addr';
-		o.rmempty = false;
-
-		o = s.taboption('wansetup', form.Value, 'wan_netmask', _('IPv4 netmask'),
-			_('Subnet mask for static address mode.'));
-		o.depends('wan_proto', 'static');
-		o.datatype = 'ip4addr';
-		o.value('255.255.255.0');
-		o.value('255.255.0.0');
-		o.value('255.0.0.0');
-		o.rmempty = false;
-
-		o = s.taboption('wansetup', form.Value, 'wan_gateway', _('IPv4 gateway'),
-			_('Gateway address for static address mode.'));
-		o.depends('wan_proto', 'static');
-		o.datatype = 'ip4addr';
-		o.rmempty = false;
 
 		o = s.taboption('wansetup', form.Value, 'ap_bridge_ip', _('Bridge IP address'),
 			_('Static IP address assigned to the router in access point mode for connecting to the main network.'));
@@ -119,10 +107,7 @@ return view.extend({
 		o.depends('wan_proto', 'ap');
 		o.multiple = true;
 		o.noaliases = true;
-		o.ucioption = 'ap_bridge_interfaces';
-		o.validate = function(section_id, value) {
-			return value.length > 0 ? true : _('At least one interface must be selected');
-		};
+		o.validate = this.validateNonEmptyArray;
 
 		o = s.taboption('wansetup', form.Value, 'siderouter_local_ip', _('Local IP address'),
 			_("IP address assigned to the side router in the main network, which should avoid conflicts with the main router's LAN subnet."));
@@ -172,23 +157,14 @@ return view.extend({
 		o.depends('wan_proto', 'siderouter');
 		o.multiple = true;
 		o.noaliases = true;
-		o.ucioption = 'siderouter_interfaces';
-		o.validate = function(section_id, value) {
-			return value.length > 0 ? true : _('At least one interface must be selected');
-		};
+		o.validate = this.validateNonEmptyArray;
 
 		o = s.taboption('wansetup', form.DynamicList, 'wan_dns', _('WAN DNS servers'),
 			_('List of custom DNS servers for the WAN interface.'));
 		o.datatype = 'ip4addr';
 		o.ucioption = 'wan_dns';
-		o.cast = 'string';
-		o.value("223.5.5.5", _("AliDNS: 223.5.5.5"));
-		o.value("223.6.6.6", _("AliDNS: 223.6.6.6"));
-		o.value("101.226.4.6", _("DNSPod: 101.226.4.6"));
-		o.value("218.30.118.6", _("DNSPod: 218.30.118.6"));
-		o.value("180.76.76.76", _("BaiduDNS: 180.76.76.76"));
-		o.value("114.114.114.114", _("114DNS: 114.114.114.114"));
-		o.value("114.114.115.115", _("114DNS: 114.114.115.115"));
+		o.default = '';
+		dnsOptions.forEach(opt => o.value(opt.value, opt.label));
 
 		o = s.taboption('lansetup', form.Value, 'lan_ipaddr', _('IPv4 address'),
 			_('IPv4 address for the LAN interface.'));
@@ -204,14 +180,8 @@ return view.extend({
 		o = s.taboption('lansetup', form.DynamicList, 'lan_dns', _('LAN DNS servers'),
 			_('List of custom DNS servers used by LAN clients (DHCP).'));
 		o.datatype = 'ip4addr';
-		o.cast = 'string';
-		o.value("223.5.5.5", _("AliDNS: 223.5.5.5"));
-		o.value("223.6.6.6", _("AliDNS: 223.6.6.6"));
-		o.value("101.226.4.6", _("DNSPod: 101.226.4.6"));
-		o.value("218.30.118.6", _("DNSPod: 218.30.118.6"));
-		o.value("180.76.76.76", _("BaiduDNS: 180.76.76.76"));
-		o.value("114.114.114.114", _("114DNS: 114.114.114.114"));
-		o.value("114.114.115.115", _("114DNS: 114.114.115.115"));
+		o.default = '';
+		dnsOptions.forEach(opt => o.value(opt.value, opt.label));
 
 		if (uci.sections('wireless', 'wifi-device').length > 0) {
 			s.tab('wifisetup', _('Wireless Settings'),

@@ -41,8 +41,7 @@ log_msg() {
 }
 
 uci_changes() {
-	local changes
-	changes=$(uci -q changes "$1")
+	local changes=$(uci -q changes "$1")
 	[ -n "$changes" ] && uci_commit "$1" && return 0
 	return 1
 }
@@ -56,18 +55,22 @@ get_config() {
 validate_device() {
 	local dev=$1
 	[ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1 && return 0
-	log_msg "Invalid device: $dev"
 	return 1
 }
 
 set_dns() {
-	local cfg=$1 dns_list=$2
-	[ -n "$dns_list" ] || return 0
-	uci_remove network "$cfg" dns
-	for dns in $dns_list; do
-		[ -n "$dns" ] && uci_add_list network "$cfg" dns "$dns"
+	for cfg in wan lan; do
+		eval dns_list=\$${cfg}_dns
+		uci_remove network "$cfg" dns
+		uci_remove network wan peerdns
+		[ -z "$dns_list" ] && continue
+		for dns in $dns_list; do
+			uci_add_list network "$cfg" dns "$dns"
+		done
+
+		[ "$cfg" = "lan" ] && uci_remove dhcp lan ra_slaac
+		[ "$cfg" = "wan" ] && uci_set network wan peerdns '0'
 	done
-	uci_set network "$cfg" peerdns '0'
 }
 
 add_wizard() {
@@ -86,36 +89,24 @@ add_wizard() {
 
 	case "$wan_proto" in
 		pppoe)
-			username="$(uci_get network wan username)"
-			password="$(uci_get network wan password)"
-			[ x"$username" != x"$wan_pppoe_user" -o z"$password" != z"$wan_pppoe_pass" ] && {
+			[ x"$(uci_get network wan username)" != x"$wan_pppoe_user" -o \
+			  z"$(uci_get network wan password)" != z"$wan_pppoe_pass" ] && {
 				uci_remove network wan
 				uci_add network interface wan
-				uci_set network wan proto 'pppoe'
+				uci_set network wan proto pppoe
 				uci_set network wan device "$device"
 				uci_set network wan username "$wan_pppoe_user"
 				uci_set network wan password "$wan_pppoe_pass"
 				uci_set network wan ipv6 "$ipv6"
 				[ -n "$ifname" ] && uci_set network wan ifname "$ifname"
-				set_dns wan "$wan_dns"
 			}
 			;;
-		dhcp|static)
-			[ "$wan_proto" = "static" ] && \
-				[ -n "$wan_ipaddr" -a -n "$wan_netmask" -a -n "$wan_gateway" ] || \
-				[ "$wan_proto" = "dhcp" ] || return 1
+		dhcp)
 			uci_remove network wan
 			uci_add network interface wan
-			uci_set network wan proto "$wan_proto"
+			uci_set network wan proto dhcp
 			uci_set network wan device "$device"
 			[ -n "$ifname" ] && uci_set network wan ifname "$ifname"
-			[ "$wan_proto" = "static" ] && {
-				uci_set network wan ipaddr "$wan_ipaddr"
-				uci_set network wan netmask "$wan_netmask"
-				uci_set network wan gateway "$wan_gateway"
-				uci_set network wan metric '40'
-			}
-			set_dns wan "$wan_dns"
 			;;
 		ap)
 			[ -n "$ap_bridge_ip" -a -n "$ap_netmask" -a -n "$ap_gateway" -a -n "$ap_bridge_interfaces" ] || return 1
@@ -129,7 +120,6 @@ add_wizard() {
 			uci_set network lan type 'bridge'
 			uci_set network lan ifname "$ap_bridge_interfaces"
 			uci_set dhcp lan ignore "$ap_dhcp"
-			set_dns lan "$wan_dns"
 			;;
 		siderouter)
 			[ -n "$siderouter_local_ip" -a -n "$siderouter_netmask" -a -n "$siderouter_wan_ip" -a -n "$siderouter_gateway" -a -n "$siderouter_interfaces" ] || return 1
@@ -146,10 +136,8 @@ add_wizard() {
 			uci_set network wan ifname "$siderouter_interfaces"
 			uci_set network wan gateway "$siderouter_gateway"
 			uci_set dhcp lan ignore "$siderouter_dhcp"
-			set_dns wan "$wan_dns"
 			;;
 		*)
-			log_msg "Unknown wan_proto: $wan_proto"
 			return 1
 			;;
 	esac
@@ -160,11 +148,6 @@ add_wizard() {
 		uci_set network lan netmask "$lan_netmask"
 		uci_set wizard default lan_ipaddr_old "$lan_ipaddr"
 		uci_set wizard default lan_netmask_old "$lan_netmask"
-	}
-
-	[ -n "$lan_dns" ] && {
-		[ "$ipv6" = "0" ] && uci_remove dhcp lan ra_slaac
-		set_dns lan "$lan_dns"
 	}
 
 	[ -n "$wifi_ssid" -a -n "$wifi_key" ] && {
@@ -191,7 +174,6 @@ add_wizard() {
 		}
 		config_foreach process_wifi_iface wifi-iface
 		[ "$wifi_updated" = "1" ] || {
-			log_msg "No wireless AP interfaces"
 			return 1
 		}
 		if [ "$wifi_ssid" != "$wifi_ssid_old" -o "$wifi_key" != "$wifi_key_old" ]; then
@@ -200,6 +182,7 @@ add_wizard() {
 		fi
 	}
 
+	set_dns
 	for config in network dhcp firewall wireless wizard; do
 		if uci_changes "$config"; then
 			case "$config" in

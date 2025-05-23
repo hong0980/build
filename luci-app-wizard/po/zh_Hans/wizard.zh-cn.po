@@ -24,7 +24,7 @@ msgid "It is recommended to back up the file before making changes. Comments can
 msgstr "修改前建议先备份行再修改，注释可以在行首添加 ＃。"
 
 msgid "Wizard"
-msgstr "设置向导"
+msgstr "快捷设置"
 
 msgid "Inital Router Setup"
 msgstr "初始路由器设置"
@@ -244,3 +244,6 @@ msgstr "启动脚本"
 
 msgid "Scheduled tasks (crontabs)"
 msgstr "定时任务（crontabs）"
+
+msgid "At least one interface must be selected"
+msgstr "至少必须选择一个接口"
