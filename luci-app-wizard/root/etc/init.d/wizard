@@ -47,8 +47,10 @@ uci_changes() {
 }
 
 get_config() {
+	local default="$1"
+	shift
 	for val in "$@"; do
-		config_get "$val" default "$val" ""
+		config_get "$val" "$default" "$val" ""
 	done
 }
 
@@ -76,7 +78,7 @@ set_dns() {
 add_wizard() {
 	[ "$XBOOT" = 1 ] && return 0
 
-	get_config wan_proto wan_pppoe_user wan_pppoe_pass  \
+	get_config default wan_proto wan_pppoe_user wan_pppoe_pass  \
 		wan_ipaddr wan_netmask wan_gateway wan_dns lan_dns ipv6 \
 		ap_bridge_ip ap_netmask ap_gateway ap_dhcp ap_bridge_interfaces \
 		siderouter_local_ip siderouter_netmask siderouter_wan_ip siderouter_gateway siderouter_dhcp siderouter_interfaces \
@@ -120,6 +122,10 @@ add_wizard() {
 			uci_set network lan type 'bridge'
 			uci_set network lan ifname "$ap_bridge_interfaces"
 			uci_set dhcp lan ignore "$ap_dhcp"
+			# uci_remove dhcp lan ra
+			# uci_remove dhcp lan ra_slaac
+			# uci_remove dhcp lan ra_flags
+			# uci_remove dhcp lan dhcpv6
 			;;
 		siderouter)
 			[ -n "$siderouter_local_ip" -a -n "$siderouter_netmask" -a -n "$siderouter_wan_ip" -a -n "$siderouter_gateway" -a -n "$siderouter_interfaces" ] || return 1
@@ -154,14 +160,14 @@ add_wizard() {
 		config_load wireless
 		local wifi_updated=0
 		process_wifi_iface() {
-			local cfg=$1
-			config_get mode "$cfg" mode
-			config_get device "$cfg" device
+			local cfg="$1"
+			get_config "$cfg" mode
+			get_config "$cfg" device
 			[ "$mode" = "ap" ] || return 0
 			uci_set wireless "$cfg" ssid "$wifi_ssid"
 			uci_set wireless "$cfg" key "$wifi_key"
 			uci_set wireless "$cfg" encryption 'psk2'
-			config_get band "$device" band
+			get_config "$device" band
 			if [ "$band" = "6g" ]; then
 				uci_set wireless "$cfg" ocv '0'
 				uci_set wireless "$cfg" ssid "${wifi_ssid}_6G"
