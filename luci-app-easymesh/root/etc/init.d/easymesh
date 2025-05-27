@@ -1,0 +1,229 @@
+#!/bin/sh /etc/rc.common
+START=99
+STOP=70
+
+uci_changes() {
+	local changes=$(uci -q changes "$1")
+	[ -n "$changes" ] && uci_commit "$1" && return 0
+	return 1
+}
+
+load_easymesh_config() {
+	ipaddr=$(uci_get network lan ipaddr)
+	mesh_bat0=$(uci_get network bat0 '')
+	lan=$(uci_get network lan ifname '')
+	brlan=$(uci_get network @device[0] name '')
+
+	config_get_bool kvr default kvr 0
+	config_get_bool enabled default enabled 0
+	config_get_bool ap_mode default ap_mode 0
+	config_get_bool encryption default encryption 0
+	config_get dns default dns ""
+	config_get key default key ""
+	config_get role default role ""
+	config_get ap_ipaddr default ap_ipaddr ""
+	config_get netmask default netmask ""
+	config_get gateway default gateway ""
+	config_get apRadio default apRadio ""
+	config_get mesh_id default mesh_id ""
+	config_get rssi_val default rssi_val ""
+	config_get low_rssi_val default low_rssi_val ""
+	config_get mobility_domain default mobility_domain ""
+
+    config_get dns_old default dns_old ""
+    config_get ipaddr_old default ipaddr_old ""
+    config_get netmask_old default netmask_old ""
+}
+
+configure_ap_mode() {
+	if [ "$ap_mode" -eq 1 -a "$ap_ipaddr" != "$ipaddr" ]; then
+		uci_set network lan ipaddr "$ap_ipaddr"
+		uci_set network lan netmask "$netmask"
+		uci_set network lan gateway "$gateway"
+		uci_add_list network lan dns "$dns"
+
+        uci_set dhcp lan ignore '1'
+		uci_set dhcp lan dynamicdhcp '0'
+		uci_remove dhcp lan ra
+		uci_remove dhcp lan dhcpv6
+		uci_remove dhcp lan ra_management
+        uci_set easymesh dns_old $dns
+        uci_set easymesh ipaddr_old $ipaddr
+        uci_set easymesh netmask_old $netmask
+
+		/etc/init.d/odhcpd stop && /etc/init.d/odhcpd disable
+		/etc/init.d/firewall stop && /etc/init.d/firewall disable >/dev/null 2>&1
+	elif [ "$ap_mode" -eq 1 -a -n "$ap_ipaddr" -o -n "$ipaddr_old" ]; then
+		if [ "$ap_ipaddr" = "$ipaddr_old" ]; then
+			uci_remove_list network lan dns "$dns_old"
+			uci_remove network lan gateway
+			uci_remove dhcp lan dynamicdhcp
+			uci_remove dhcp lan ignore
+            uci_set network lan netmask "$netmask_old"
+
+			/etc/init.d/odhcpd enable && /etc/init.d/odhcpd start
+			/etc/init.d/firewall enable && /etc/init.d/firewall start >/dev/null 2>&1
+		fi
+	fi
+}
+
+add_wifi_mesh() {
+	local cfg="$1"
+	mesh_mesh=$(uci_get wireless mesh_${cfg} '')
+	mesh_nwi_mesh=$(uci_get network nwi_mesh_${cfg} '')
+	mesh_apRadio=$(uci_get wireless mesh_${cfg} device '')
+
+	if [ "$mesh_nwi_mesh" != "interface" ]; then
+		uci_set network nwi_mesh_${cfg} interface
+		uci_set network nwi_mesh_${cfg} proto 'batadv_hardif'
+		uci_set network nwi_mesh_${cfg} master 'bat0'
+		uci_set network nwi_mesh_${cfg} mtu '1536'
+	fi
+
+	if [ "$mesh_mesh" != "wifi-iface" ]; then
+		uci_set wireless mesh_${cfg} wifi-iface
+		uci_set wireless mesh_${cfg} device "$cfg"
+		uci_set wireless mesh_${cfg} ifname mesh_${cfg}
+		uci_set wireless mesh_${cfg} network nwi_mesh_${cfg}
+		uci_set wireless mesh_${cfg} mode 'mesh'
+		uci_set wireless mesh_${cfg} mesh_id "$mesh_id"
+		uci_set wireless mesh_${cfg} mesh_fwding '0'
+		uci_set wireless mesh_${cfg} mesh_ttl '1'
+		uci_set wireless mesh_${cfg} mcast_rate '24000'
+		uci_set wireless mesh_${cfg} disabled '0'
+	fi
+
+	if [ "$mesh_mesh" = "wifi-iface" ] && [ "$mesh_apRadio" != "$cfg" ]; then
+		uci_set wireless mesh_${cfg} device "$cfg"
+	fi
+
+	if [ "$encryption" != 1 ]; then
+		uci_set wireless mesh_${cfg} encryption 'none'
+	else
+		uci_set wireless mesh_${cfg} encryption 'sae'
+		uci_set wireless mesh_${cfg} key "$key"
+	fi
+}
+
+configure_kvr() {
+	local cfg="$1"
+	if [ "$kvr" = 1 ]; then
+		uci_set wireless default_${cfg} ieee80211k 1 2>/dev/null
+		uci_set wireless default_${cfg} rrm_neighbor_report 1 2>/dev/null
+		uci_set wireless default_${cfg} rrm_beacon_report 1 2>/dev/null
+		uci_set wireless default_${cfg} ieee80211v 1 2>/dev/null
+		uci_set wireless default_${cfg} bss_transition 1 2>/dev/null
+		uci_set wireless default_${cfg} ieee80211r 1 2>/dev/null
+		uci_set wireless default_${cfg} encryption 'psk2+ccmp' 2>/dev/null
+		uci_set wireless default_${cfg} mobility_domain "$mobility_domain" 2>/dev/null
+		uci_set wireless default_${cfg} ft_over_ds 1 2>/dev/null
+		uci_set wireless default_${cfg} ft_psk_generate_local 1 2>/dev/null
+	else
+		uci_remove wireless default_${cfg} ieee80211k 2>/dev/null
+		uci_remove wireless default_${cfg} ieee80211v 2>/dev/null
+		uci_remove wireless default_${cfg} ieee80211r 2>/dev/null
+	fi
+}
+
+add_dawn() {
+	if [ "$kvr" = 1 ]; then
+		uci_set dawn @metric[0] rssi_val "$rssi_val"
+		uci_set dawn @metric[0] low_rssi_val "$low_rssi_val"
+	else
+		/etc/init.d/dawn stop && /etc/init.d/dawn disable
+		return
+	fi
+}
+
+remove_wifi_mesh() {
+	local cfg="$1"
+	mesh_nwi_mesh=$(uci_get network nwi_mesh_${cfg} '')
+	mesh_mesh=$(uci_get wireless mesh_${cfg} '')
+
+	if [ "$mesh_nwi_mesh" = "interface" ]; then
+		uci_remove network nwi_mesh_${cfg}
+	fi
+
+	if [ "$mesh_mesh" = "wifi-iface" ]; then
+		uci_remove wireless mesh_${cfg}
+	fi
+}
+
+set_easymesh() {
+	load_easymesh_config
+	config_load wireless
+
+	if [ "$enabled" = 1 ]; then
+		if [ "$mesh_bat0" != "interface" ]; then
+			uci_set network bat0 interface
+			uci_set network bat0 proto 'batadv'
+			uci_set network bat0 routing_algo 'BATMAN_IV'
+			uci_set network bat0 aggregated_ogms '1'
+			uci_set network bat0 ap_isolation '0'
+			uci_set network bat0 bonding '0'
+			uci_set network bat0 bridge_loop_avoidance '1'
+			uci_set network bat0 distributed_arp_table '1'
+			uci_set network bat0 fragmentation '1'
+			uci_set network bat0 hop_penalty '30'
+			uci_set network bat0 isolation_mark '0x00000000/0x00000000'
+			uci_set network bat0 log_level '0'
+			uci_set network bat0 multicast_fanout '16'
+			uci_set network bat0 multicast_mode '1'
+			uci_set network bat0 network_coding '0'
+			uci_set network bat0 orig_interval '1000'
+			uci_set network bat0 gw_mode "$role"
+
+			if [ "$brlan" = "br-lan" ]; then
+				uci_add_list network @device[0] ports 'bat0'
+			else
+				uci_set network lan ifname "$lan bat0"
+			fi
+		fi
+
+		if [ "$apRadio" = "all" ]; then
+			config_foreach add_wifi_mesh wifi-device
+		else
+			[ -n "$(uci_get wireless "$apRadio" '')" ] && add_wifi_mesh "$apRadio"
+		fi
+
+	else
+		if [ "$mesh_bat0" = "interface" ]; then
+			uci_remove network bat0
+			if [ "$brlan" = "br-lan" ]; then
+				uci_remove_list network @device[0] ports 'bat0'
+			else
+				uci_set network lan ifname "$(echo "$lan" | sed 's/ bat0//')"
+			fi
+		fi
+
+		config_foreach remove_wifi_mesh wifi-device
+	fi
+
+	config_foreach configure_kvr wifi-device
+	add_dawn
+	configure_ap_mode
+
+	for config in network dhcp wireless dawn easymesh; do
+		if uci_changes "$config"; then
+			case "$config" in
+				dawn) /etc/init.d/dawn reload ;;
+				dhcp) /etc/init.d/dnsmasq reload ;;
+				network|wireless) /etc/init.d/network reload || /etc/init.d/network restart ;;
+			esac
+		fi
+	done
+}
+
+restart() {
+	[ -e '/etc/config/wireless' ] || return 1
+	config_load easymesh
+	config_foreach set_easymesh easymesh
+}
+
+stop() {
+	:
+}
+
+start() {
+	:
+}

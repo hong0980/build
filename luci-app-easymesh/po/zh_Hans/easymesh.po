@@ -1,0 +1,83 @@
+msgid "<b>Active node：%s</b>"
+msgstr "<b>活动节点：%s</b>"
+
+msgid "Neighbor"
+msgstr "节点邻居设备"
+
+msgid "lastseen"
+msgstr "上次连接延时"
+
+msgid "EASY MESH"
+msgstr "简单MESH"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "General Settings"
+msgstr "基本设置"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "role"
+msgstr "角色"
+
+msgid "off"
+msgstr "关闭"
+
+msgid "host MESH"
+msgstr "主MESH"
+
+msgid "son MESH"
+msgstr "子MESH"
+
+msgid "MESH Radio device"
+msgstr "MESH无线设备"
+
+msgid "The radio device which MESH use"
+msgstr "使用MESH组网的无线设备"
+
+msgid "AUTO"
+msgstr "自动"
+
+msgid "Enable or disable EASY MESH"
+msgstr "启用或禁用简单MESH"
+
+msgid "Encryption"
+msgstr "加密"
+
+msgid "Key"
+msgstr "密码"
+
+msgid "Threshold for an good RSSI"
+msgstr "快速漫游接入值"
+
+msgid "Threshold for an bad RSSI"
+msgstr "快速漫游踢出值"
+
+msgid "AP MODE Enable"
+msgstr "启用AP模式"
+
+msgid "Enable or disable AP MODE"
+msgstr "启用或禁用AP模式"
+
+msgid "IPv4-Address"
+msgstr "IPv4 地址"
+
+msgid "IPv4 netmask"
+msgstr "IPv4 子网掩码"
+
+msgid "IPv4 gateway"
+msgstr "IPv4 网关"
+
+msgid "Use custom DNS servers"
+msgstr "使用自定义的 DNS 服务器"
+
+msgid "Enable 802.11k/v/r for improved roaming and network management. 802.11k provides neighbor reports, 802.11v supports load balancing, and 802.11r enables fast AP transitions."
+msgstr "启用 802.11k/v/r 以改善漫游和网络管理。802.11k 提供邻居报告，802.11v 支持负载均衡，802.11r 实现快速 AP 切换。"
+
+msgid "RSSI threshold (dBm) for a good signal, used by DAWN to prefer stronger APs."
+msgstr "良好信号的 RSSI 阈值（dBm），DAWN 用以优先选择较强的 AP。"
+
+msgid "RSSI threshold (dBm) for a bad signal, used by DAWN to trigger AP switching."
+msgstr "较差信号的 RSSI 阈值（dBm），DAWN 用以触发 AP 切换。"
