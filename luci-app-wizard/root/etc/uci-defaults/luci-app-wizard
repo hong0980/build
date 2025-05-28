@@ -10,7 +10,7 @@ uci -q batch <<-EOF >/dev/null
 	commit wizard
 EOF
 for file in dhcp network firewall wireless; do
-	cp /etc/config/"$file" /etc/config/bk_"$file"
+	[ -s /etc/config/$file ] && cp /etc/config/$file /etc/config/bk_$file
 done
 
 chmod +x /etc/init.d/wizard 2>/dev/null

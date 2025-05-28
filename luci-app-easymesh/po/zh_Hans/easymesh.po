@@ -1,3 +1,15 @@
+msgid "EasyMesh Configuration"
+msgstr "EasyMesh 配置"
+
+msgid "Configure wireless mesh network using Batman-adv"
+msgstr "使用 Batman-adv 配置 Mesh 无线网络"
+
+msgid "Neighbor MAC"
+msgstr "邻居 MAC 地址"
+
+msgid "Last Seen"
+msgstr "最后出现时间"
+
 msgid "<b>Active node：%s</b>"
 msgstr "<b>活动节点：%s</b>"
 
