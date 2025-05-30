@@ -92,9 +92,12 @@ return view.extend({
 									textarea.readOnly = editToggle.checked;
 								})
 								.catch(function(err) {
-									ui.addNotification(null, E('p',
-										_('Unable to read file: %s').format(err.message)), 'error');
-								});
+										ui.addNotification(null, E('p',
+											_('Unable to read %s: %s')
+												.replace("%s", value)
+												.replace("%s", err.message)
+											), 'error');
+									});
 						}
 					}, [
 						E('option', { 'value': '' }, _('-- Please choose --')),
