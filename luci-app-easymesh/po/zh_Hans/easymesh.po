@@ -1,35 +1,35 @@
+msgid "EASY MESH"
+msgstr "简单MESH"
+
 msgid "EasyMesh Configuration"
 msgstr "EasyMesh 配置"
 
 msgid "Configure wireless mesh network using Batman-adv"
 msgstr "使用 Batman-adv 配置 Mesh 无线网络"
 
+msgid "<b>Active Mesh Nodes: %d</b>"
+msgstr "<b>活动 Mesh 节点：%d</b>"
+
 msgid "Neighbor MAC"
-msgstr "邻居 MAC 地址"
+msgstr "MAC 地址"
 
 msgid "Last Seen"
-msgstr "最后出现时间"
+msgstr "连接时间"
 
-msgid "<b>Active node：%s</b>"
-msgstr "<b>活动节点：%s</b>"
-
-msgid "Neighbor"
-msgstr "节点邻居设备"
-
-msgid "lastseen"
-msgstr "上次连接延时"
-
-msgid "EASY MESH"
-msgstr "简单MESH"
-
-msgid "Settings"
-msgstr "设置"
-
-msgid "General Settings"
-msgstr "基本设置"
+msgid "Link Quality"
+msgstr "连接时间"
 
 msgid "Enable"
 msgstr "启用"
+
+msgid "Enable or disable EASY MESH"
+msgstr "启用或禁用简单MESH"
+
+msgid "Radio device"
+msgstr "无线设备"
+
+msgid "The radio device which MESH use"
+msgstr "选择 MESH 组网的无线设备"
 
 msgid "role"
 msgstr "角色"
@@ -43,17 +43,8 @@ msgstr "主MESH"
 msgid "son MESH"
 msgstr "子MESH"
 
-msgid "MESH Radio device"
-msgstr "MESH无线设备"
-
-msgid "The radio device which MESH use"
-msgstr "使用MESH组网的无线设备"
-
 msgid "AUTO"
 msgstr "自动"
-
-msgid "Enable or disable EASY MESH"
-msgstr "启用或禁用简单MESH"
 
 msgid "Encryption"
 msgstr "加密"
