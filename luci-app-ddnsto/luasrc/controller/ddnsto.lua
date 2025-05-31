@@ -42,18 +42,17 @@ local config = {
     feat_port = tonumber(cfg.feat_port) or '3030',
     feat_disk_path_selected = cfg.feat_disk_path_selected or ""
 }
-
+local color_html = i18n.translatef("<b style='color:%s;font-weight:bolder'>%s</b>", "%s", "%s")
 local function status_container()
     local is_enabled = sys.call("pidof ddwebdav >/dev/null") == 0
-    local status_html = i18n.translatef("<b style='color:%s;font-weight:bolder'>%s</b>", "%s", "%s")
 
     return {
         title = i18n.translate("Service Status"),
         labels = (function()
             local id = sys.exec("/usr/sbin/ddnstod -x %s -w | cut -d' ' -f2" %config.index)
-            local enabled_html = status_html % {is_enabled and "green" or "red", is_enabled and i18n.translate("Enabled") or i18n.translate("Disabled")}
+            local enabled_html = color_html % {is_enabled and "green" or "red", is_enabled and i18n.translate("Enabled") or i18n.translate("Disabled")}
             local labels = {
-                {key = i18n.translate("Service Status:"), value = status_html %{sta and "green" or "red", sta and i18n.translate("Running") or i18n.translate("Not Running")}},
+                {key = i18n.translate("Service Status:"), value = color_html %{sta and "green" or "red", sta and i18n.translate("Running") or i18n.translate("Not Running")}},
                 {key = i18n.translate("Plugin Version:"), value = sys.exec("/usr/sbin/ddnstod -v")},
                 {key = i18n.translate("Device ID:"), value = i18n.translatef("<b style='color:green;font-weight:bolder'>%s</b> (Device Number: %s)", id, config.index)},
                 {key = i18n.translate("Console:"), value = i18n.translate("<a href='https://www.ddnsto.com/app/#/devices' target='_blank'>Click to go to DDNSTO Console</a>")},
@@ -83,32 +82,32 @@ local function main_container()
         properties = {
             {
                 name = "enabled",
-                title = i18n.translate("Enable"),
                 type = "boolean",
+                title = i18n.translate("Enable"),
                 ["ui:options"] = {description = i18n.translate("Enable DDNSTO Remote Control")}
             },
             {
                 name = "token",
                 required = true,
                 mode = "password",
-                title = i18n.translate("User Token"),
                 type = "string",
+                title = i18n.translate("User Token"),
                 ["ui:options"] = {
                     description = i18n.translate("<a href='https://doc.linkease.com/zh/guide/ddnsto/' target='_blank'>How to obtain a token?</a>")
                 }
             },
             {
                 name = "index",
+                type = "interger",
                 enum = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
                 title = i18n.translate("Device Number"),
-                type = "interger",
                 ["ui:options"] = {description = i18n.translate("If multiple devices have duplicate IDs, please modify this number")}
             },
             {
                 name = "threads",
-                title = i18n.translate("CPU Core Count"),
                 type = "interger",
                 enum = {0, 1, 2, 4, 8, 16},
+                title = i18n.translate("CPU Core Count"),
                 enumNames = { i18n.translate("Auto Detect"),
                               i18n.translate("1 Thread"),
                               i18n.translate("2 Threads"),
@@ -119,9 +118,9 @@ local function main_container()
             },
             {
                 name = "log_level",
-                title = i18n.translate("Log"),
                 type = "interger",
                 enum = {0, 1, 2, 3},
+                title = i18n.translate("Log"),
                 enumNames = { i18n.translate("Debug"),
                               i18n.translate("Info"),
                               i18n.translate("Warning"),
@@ -133,19 +132,14 @@ local function main_container()
 end
 
 local function get_block_devices()
-    local b = io.popen("/sbin/block info", "r")
-    if not b then
-        return {}
-    end
     local rv = {}
-    for ln in b:lines() do
+    for ln in luci.util.execi("/sbin/block info") do
         if ln:match("^/dev/.-:") then
-            for k, v in ln:gmatch([[(%w+)="(.-)"]]) do
-                if k:lower() == "mount" then rv[#rv+1] = v end
+            for k, v in ln:gmatch('(%w+)="(.-)"') do
+                if k:lower() == "mount" then rv[#rv + 1] = v end
             end
         end
     end
-    b:close()
     return rv
 end
 
@@ -199,101 +193,64 @@ local function get_schema()
     return {
         title = i18n.translate("DDNSTO Remote Control"),
         description = i18n.translate("DDNSTO Remote Control is a plugin developed by Koolcenter Xiaobao, supporting HTTP2 for remote penetration control.<br />It supports accessing intranet device backends via custom domains in a browser, remote RDP/VNC desktops, remote file management, and more.<br />For details, visit <a href='https://www.ddnsto.com/' target='_blank'>https://www.ddnsto.com</a>"),
-        actions = {{
-            text = i18n.translate("Save and Apply"),
-            type = "apply"
-        }},
-        containers = {
-            status_container(),
-            main_container(),
-            feat_container()
-        }
+        actions = {{text = i18n.translate("Save and Apply"), type = "apply"}},
+        containers = {status_container(), main_container(), feat_container()}
     }
 end
 
 function ddnsto_form()
     http.prepare_content("application/json")
     http.write_json({
-        error = "",
-        scope = "",
-        success = 0,
-        result = {
-            data = config,
-            schema = get_schema()
-        }
+        error = "", scope = "", success = 0,
+        result = {data = config, schema = get_schema()}
     })
 end
 
 function ddnsto_submit()
+    local error
     local req = luci.jsonc.parse(http.content()) or {}
-    local error = ''
-    local success = true
     local log = i18n.translate("Verifying parameters...<br>")
 
-    if not next(req) then
-        error = i18n.translate("Invalid request")
-    elseif req.enabled and is_empty(req.token) then
-        error = i18n.translate("Please enter a valid User Token")
-        success = nil
-    elseif req.token and #req.token ~= 36 then
-        error = i18n.translate("Token length must be 36 characters")
-        success = nil
-    elseif req.token and req.token:find(" ") then
-        error = i18n.translate("Token must not contain spaces")
-        success = nil
-    elseif not tonumber(req.index) or req.index < 0 or req.index > 99 then
-        error = i18n.translate("Please enter a valid Device Number")
-        success = nil
-    elseif req.feat_enabled and (
-        not tonumber(req.feat_port) or req.feat_port == 0 or
-        is_empty(req.feat_username) or req.feat_username:find(" ") or
-        is_empty(req.feat_password) or req.feat_password:find(" ") or
-        is_empty(req.feat_disk_path_selected)
-    ) then
-        error = ({
-            [true] = i18n.translate("Please enter a valid port"),
-            [is_empty(req.feat_username)] = i18n.translate("Please enter an authorized username"),
-            [req.feat_username:find(" ")] = i18n.translate("Username must not contain spaces"),
-            [is_empty(req.feat_password)] = i18n.translate("Please enter an authorized user password"),
-            [req.feat_password:find(" ")] = i18n.translate("User password must not contain spaces"),
-            [is_empty(req.feat_disk_path_selected)] = i18n.translate("Please enter a shared disk path")
-        })[true]
-        success = nil
-    end
+    for _, v in ipairs({
+        {not next(req), "Invalid request"},
+        {req.token and req.token:find(" "), "Token must not contain spaces"},
+        {req.token and #req.token ~= 36, "Token length must be 36 characters"},
+        {req.enabled and is_empty(req.token), "Please enter a valid User Token"},
+        {not tonumber(req.index) or req.index < 0 or req.index > 99, "Please enter a valid Device Number"},
+        {req.feat_enabled and req.feat_username:find(" "), "Username must not contain spaces"},
+        {req.feat_enabled and is_empty(req.feat_username), "Please enter an authorized username"},
+        {req.feat_enabled and req.feat_password:find(" "), "User password must not contain spaces"},
+        {req.feat_enabled and is_empty(req.feat_password), "Please enter an authorized user password"},
+        {req.feat_enabled and is_empty(req.feat_disk_path_selected), "Please enter a shared disk path"},
+        {req.feat_enabled and not tonumber(req.feat_port) or req.feat_port == 0, "Please enter a valid port"}
+    }) do
+        if v[1] then error = i18n.translate(v[2]) break end end
 
-    if success then
-        local con = {
-            token = trim(req.token),
+    if not error then
+        for k, v in pairs({
+            token = trim(req.token or ""),
             index = req.index or '0',
             threads = req.threads or '0',
             log_level = req.log_level or '2',
             feat_port = req.feat_port or '3033',
             enabled = req.enabled and "1" or "0",
-            feat_username = trim(req.feat_username),
-            feat_password = trim(req.feat_password),
+            feat_username = trim(req.feat_username or ""),
+            feat_password = trim(req.feat_password or ""),
             feat_enabled = req.feat_enabled and "1" or "0",
-            feat_disk_path_selected = trim(req.feat_disk_path_selected)
-        }
-        for k, v in pairs(con) do
+            feat_disk_path_selected = trim(req.feat_disk_path_selected or "")
+        }) do
             uci:set("ddnsto", "default", k, v)
         end
         uci:commit("ddnsto")
-        sys.exec("/etc/init.d/ddnsto stop; /etc/init.d/ddnsto start; sleep 1")
+        sys.exec("/etc/init.d/ddnsto restart")
         log = i18n.translatef("%sSaving parameters...<br>Saved successfully!<br>Please close the dialog<br>", log)
     else
-        log = i18n.translatef("%sParameter error: %s<br>Save failed!<br>Please close the dialog<br>", log, "<b style='color:red;font-weight:bolder'>%s</b>" %error)
-        sys.exec("sleep 1")
+        log = i18n.translatef("%sParameter error: %s<br>Save failed!<br>Please close the dialog<br>", log, color_html %{'red', error})
     end
 
-    http.prepare_content("application/json")
     http.write_json({
         success = 0,
-        result = {
-            log = log,
-            async = false,
-            data = config,
-            schema = get_schema()
-        }
+        result = {log = log, async = false, data = config, schema = get_schema()}
     })
 end
 
@@ -304,9 +261,7 @@ end
 
 function ddnsto_status()
     http.prepare_content("application/json")
-    http.write_json({
-        running = sta
-    })
+    http.write_json({running = sta})
 end
 
 function redirect_index()
