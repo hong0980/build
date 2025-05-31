@@ -84,3 +84,9 @@ msgstr "良好信号的 RSSI 阈值（dBm），DAWN 用以优先选择较强的 
 
 msgid "RSSI threshold (dBm) for a bad signal, used by DAWN to trigger AP switching."
 msgstr "较差信号的 RSSI 阈值（dBm），DAWN 用以触发 AP 切换。"
+
+msgid "Up"
+msgstr "上移"
+
+msgid "Down"
+msgstr "下移"

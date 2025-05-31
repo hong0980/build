@@ -1,6 +1,7 @@
 module("luci.controller.ddnsto", package.seeall)
 
 local sys   = require "luci.sys"
+local i18n  = require "luci.i18n"
 local fs    = require "nixio.fs"
 local http  = require "luci.http"
 local uci   = require "luci.model.uci".cursor()
@@ -9,7 +10,7 @@ local sta   = sys.call("pidof ddnstod >/dev/null") == 0
 
 function index()
     if not fs.access("/etc/config/ddnsto") then return end
-    entry({"admin", "services", "ddnsto"}, call("redirect_index"), _("DDNSTO 远程控制"), 20).dependent = true
+    entry({"admin", "services", "ddnsto"}, call("redirect_index"), _("DDNSTO Remote Control"), 20).dependent = true
     entry({"admin", "services", "ddnsto", "pages"}, call("ddnsto_index")).leaf = true
     if fs.access("/usr/lib/lua/luci/view/ddnsto/main_dev.htm") then
         entry({"admin", "services", "ddnsto", "dev"}, call("ddnsto_dev")).leaf = true
@@ -44,31 +45,31 @@ local config = {
 
 local function status_container()
     local is_enabled = sys.call("pidof ddwebdav >/dev/null") == 0
-    local status_html = "<b style='color:%s;font-weight:bolder'>%s</b>"
+    local status_html = i18n.translatef("<b style='color:%s;font-weight:bolder'>%s</b>", "%s", "%s")
 
     return {
-        title = "服务状态",
+        title = i18n.translate("Service Status"),
         labels = (function()
             local id = sys.exec("/usr/sbin/ddnstod -x %s -w | cut -d' ' -f2" %config.index)
-            local enabled_html = status_html % {is_enabled and "green" or "red", is_enabled and "已启用" or "未启用"}
+            local enabled_html = status_html % {is_enabled and "green" or "red", is_enabled and i18n.translate("Enabled") or i18n.translate("Disabled")}
             local labels = {
-                {key = "服务状态：", value = status_html %{sta and "green" or "red", sta and "已启动" or "未运行"}},
-                {key = "插件版本：", value = sys.exec("/usr/sbin/ddnstod -v")},
-                {key = "设备ID：", value = "<b style='color:green;font-weight:bolder'>%s</b>（设备编号: %s）" %{id, config.index}},
-                {key = "控制台：", value = "<a href='https://www.ddnsto.com/app/#/devices' target='_blank'>点击前往DDNSTO控制台</a>"},
-                {key = "拓展功能：", value = enabled_html}
+                {key = i18n.translate("Service Status:"), value = status_html %{sta and "green" or "red", sta and i18n.translate("Running") or i18n.translate("Not Running")}},
+                {key = i18n.translate("Plugin Version:"), value = sys.exec("/usr/sbin/ddnstod -v")},
+                {key = i18n.translate("Device ID:"), value = i18n.translatef("<b style='color:green;font-weight:bolder'>%s</b> (Device Number: %s)", id, config.index)},
+                {key = i18n.translate("Console:"), value = i18n.translate("<a href='https://www.ddnsto.com/app/#/devices' target='_blank'>Click to go to DDNSTO Console</a>")},
+                {key = i18n.translate("Extended Features:"), value = enabled_html}
             }
 
             if is_enabled then
                 local ip = http.getenv("SERVER_NAME") or "localhost"
                 local webdav_url = "http://%s:%s/webdav" %{ip, config.feat_port}
-                table.insert(labels, {key = "拓展用户名：", value = config.feat_username})
-                table.insert(labels, {key = "webdav服务：", value = enabled_html})
+                table.insert(labels, {key = i18n.translate("Extended Username:"), value = config.feat_username})
+                table.insert(labels, {key = i18n.translate("WebDAV Service:"), value = enabled_html})
                 table.insert(labels, {
-                    key = "webdav地址：",
-                    value = "<a href='%s' target='_blank'>%s</a>" %{webdav_url, webdav_url}
-               })
-                table.insert(labels, {key = "远程开机服务：", value = enabled_html})
+                    key = i18n.translate("WebDAV Address:"),
+                    value = i18n.translatef("<a href='%s' target='_blank'>%s</a>", webdav_url, webdav_url)
+                })
+                table.insert(labels, {key = i18n.translate("Remote Boot Service:"), value = enabled_html})
             end
 
             return labels
@@ -78,46 +79,54 @@ end
 
 local function main_container()
     return {
-        title = "基础设置",
+        title = i18n.translate("Basic Settings"),
         properties = {
             {
                 name = "enabled",
-                title = "启用",
+                title = i18n.translate("Enable"),
                 type = "boolean",
-                ["ui:options"] = {description = "启用DDNSTO 远程控制"}
+                ["ui:options"] = {description = i18n.translate("Enable DDNSTO Remote Control")}
             },
             {
                 name = "token",
                 required = true,
                 mode = "password",
-                title = "用户Token",
+                title = i18n.translate("User Token"),
                 type = "string",
                 ["ui:options"] = {
-                    description = "<a href='https://doc.linkease.com/zh/guide/ddnsto/' target='_blank'>如何获取令牌?</a>"
+                    description = i18n.translate("<a href='https://doc.linkease.com/zh/guide/ddnsto/' target='_blank'>How to obtain a token?</a>")
                 }
             },
             {
                 name = "index",
                 enum = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
-                title = "设备编号",
+                title = i18n.translate("Device Number"),
                 type = "interger",
-                ["ui:options"] = {description = "如有多台设备id重复，请修改此编号"}
+                ["ui:options"] = {description = i18n.translate("If multiple devices have duplicate IDs, please modify this number")}
             },
             {
                 name = "threads",
-                title = "CPU核心数",
+                title = i18n.translate("CPU Core Count"),
                 type = "interger",
                 enum = {0, 1, 2, 4, 8, 16},
-                enumNames = {'自动获取', '1 线程', '2 线程', '4 线程', '8 线程', '16 线程'},
-                ["ui:options"] = {description = "CPU核心数"}
+                enumNames = { i18n.translate("Auto Detect"),
+                              i18n.translate("1 Thread"),
+                              i18n.translate("2 Threads"),
+                              i18n.translate("4 Threads"),
+                              i18n.translate("8 Threads"),
+                              i18n.translate("16 Threads")},
+                ["ui:options"] = {description = i18n.translate("CPU Core Count")}
             },
             {
                 name = "log_level",
-                title = "日志",
+                title = i18n.translate("Log"),
                 type = "interger",
                 enum = {0, 1, 2, 3},
-                enumNames = {'调试', '信息', '警告', '错误'},
-                ["ui:options"] = {description = "日志级别，默认值是警告"}
+                enumNames = { i18n.translate("Debug"),
+                              i18n.translate("Info"),
+                              i18n.translate("Warning"),
+                              i18n.translate("Error")},
+                ["ui:options"] = {description = i18n.translate("Log level, default is Warning")}
             }
         }
     }
@@ -143,25 +152,25 @@ end
 local function feat_container()
     local disks = get_block_devices()
     return {
-        title = "拓展功能",
-        description = "启用后可支持控制台的“文件管理”及“远程开机”功能 <a href='https://doc.linkease.com/zh/guide/ddnsto/ddnstofile.html' target='_blank'>查看教程</a>",
+        title = i18n.translate("Extended Features"),
+        description = i18n.translate("When enabled, supports console 'File Management' and 'Remote Boot' features <a href='https://doc.linkease.com/zh/guide/ddnsto/ddnstofile.html' target='_blank'>View Tutorial</a>"),
         properties = {
             {
                 name = "feat_enabled",
-                title = "启用",
+                title = i18n.translate("Enable"),
                 type = "boolean"
             },
             {
                 name = "feat_port",
                 required = true,
-                title = "端口",
+                title = i18n.translate("Port"),
                 type = "interger",
                 ["ui:hidden"] = "{{rootValue.feat_enabled !== true }}"
             },
             {
                 name = "feat_username",
                 required = true,
-                title = "授权用户名",
+                title = i18n.translate("Authorized Username"),
                 type = "string",
                 ["ui:hidden"] = "{{rootValue.feat_enabled !== true }}"
             },
@@ -169,7 +178,7 @@ local function feat_container()
                 name = "feat_password",
                 mode = "password",
                 required = true,
-                title = "授权用户密码",
+                title = i18n.translate("Authorized User Password"),
                 type = "string",
                 ["ui:hidden"] = "{{rootValue.feat_enabled !== true }}"
             },
@@ -178,7 +187,7 @@ local function feat_container()
                 enum = disks,
                 enumNames = disks,
                 required = true,
-                title = "共享磁盘",
+                title = i18n.translate("Shared Disk"),
                 type = "string",
                 ["ui:hidden"] = "{{rootValue.feat_enabled !== true }}"
             }
@@ -188,10 +197,10 @@ end
 
 local function get_schema()
     return {
-        title = "DDNSTO 远程控制",
-        description = "DDNSTO远程控制是Koolcenter小宝开发的，支持http2的远程穿透控制插件。<br />支持通过浏览器访问自定义域名访问内网设备后台、远程RDP/VNC桌面、远程文件管理等多种功能。<br />详情请查看 <a href='https://www.ddnsto.com/' target='_blank'>https://www.ddnsto.com</a>",
+        title = i18n.translate("DDNSTO Remote Control"),
+        description = i18n.translate("DDNSTO Remote Control is a plugin developed by Koolcenter Xiaobao, supporting HTTP2 for remote penetration control.<br />It supports accessing intranet device backends via custom domains in a browser, remote RDP/VNC desktops, remote file management, and more.<br />For details, visit <a href='https://www.ddnsto.com/' target='_blank'>https://www.ddnsto.com</a>"),
         actions = {{
-            text = "保存并应用",
+            text = i18n.translate("Save and Apply"),
             type = "apply"
         }},
         containers = {
@@ -219,21 +228,21 @@ function ddnsto_submit()
     local req = luci.jsonc.parse(http.content()) or {}
     local error = ''
     local success = true
-    local log = "正在验证参数...\n"
+    local log = i18n.translate("Verifying parameters...<br>")
 
     if not next(req) then
-        error = "无效的请求"
+        error = i18n.translate("Invalid request")
     elseif req.enabled and is_empty(req.token) then
-        error = "请填写正确用户Token（令牌）"
+        error = i18n.translate("Please enter a valid User Token")
         success = nil
     elseif req.token and #req.token ~= 36 then
-        error = "令牌长度必须是36个字符"
+        error = i18n.translate("Token length must be 36 characters")
         success = nil
     elseif req.token and req.token:find(" ") then
-        error = "令牌勿包含空格"
+        error = i18n.translate("Token must not contain spaces")
         success = nil
     elseif not tonumber(req.index) or req.index < 0 or req.index > 99 then
-        error = "请填写正确的设备编号"
+        error = i18n.translate("Please enter a valid Device Number")
         success = nil
     elseif req.feat_enabled and (
         not tonumber(req.feat_port) or req.feat_port == 0 or
@@ -242,12 +251,12 @@ function ddnsto_submit()
         is_empty(req.feat_disk_path_selected)
     ) then
         error = ({
-            [true] = "请填写正确的端口",
-            [is_empty(req.feat_username)] = "请填写授权用户名",
-            [req.feat_username:find(" ")] = "用户名请勿包含空格",
-            [is_empty(req.feat_password)] = "请填写授权用户密码",
-            [req.feat_password:find(" ")] = "用户密码请勿包含空格",
-            [is_empty(req.feat_disk_path_selected)] = "请填写共享磁盘路径"
+            [true] = i18n.translate("Please enter a valid port"),
+            [is_empty(req.feat_username)] = i18n.translate("Please enter an authorized username"),
+            [req.feat_username:find(" ")] = i18n.translate("Username must not contain spaces"),
+            [is_empty(req.feat_password)] = i18n.translate("Please enter an authorized user password"),
+            [req.feat_password:find(" ")] = i18n.translate("User password must not contain spaces"),
+            [is_empty(req.feat_disk_path_selected)] = i18n.translate("Please enter a shared disk path")
         })[true]
         success = nil
     end
@@ -270,9 +279,9 @@ function ddnsto_submit()
         end
         uci:commit("ddnsto")
         sys.exec("/etc/init.d/ddnsto stop; /etc/init.d/ddnsto start; sleep 1")
-        log = "%s正在保存参数...\n保存成功!\n请关闭对话框\n" %log
+        log = i18n.translatef("%sSaving parameters...<br>Saved successfully!<br>Please close the dialog<br>", log)
     else
-        log = "%s参数错误： %s\n保存失败！\n请关闭对话框\n" %{log, "<b style='color:red;font-weight:bolder'>%s</b>" %error}
+        log = i18n.translatef("%sParameter error: %s<br>Save failed!<br>Please close the dialog<br>", log, "<b style='color:red;font-weight:bolder'>%s</b>" %error)
         sys.exec("sleep 1")
     end
 

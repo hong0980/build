@@ -1,0 +1,242 @@
+#: ddnsto.lua:10
+msgid "DDNSTO Remote Control"
+msgstr "DDNSTO 远程控制"
+
+#: ddnsto.lua:43
+msgid "Enabled"
+msgstr "已启用"
+
+#: ddnsto.lua:43
+msgid "Disabled"
+msgstr "未启用"
+
+#: ddnsto.lua:44
+msgid "Running"
+msgstr "已启动"
+
+#: ddnsto.lua:44
+msgid "Not Running"
+msgstr "未运行"
+
+#: ddnsto.lua:44
+msgid "Service Status:"
+msgstr "服务状态："
+
+#: ddnsto.lua:45
+msgid "Plugin Version:"
+msgstr "插件版本："
+
+#: ddnsto.lua:46
+msgid "Device ID:"
+msgstr "设备ID："
+
+#: ddnsto.lua:47
+msgid "Console:"
+msgstr "控制台："
+
+#: ddnsto.lua:47
+msgid "<a href='https://www.ddnsto.com/app/#/devices' target='_blank'>Click to go to DDNSTO Console</a>"
+msgstr "<a href='https://www.ddnsto.com/app/#/devices' target='_blank'>点击前往DDNSTO控制台</a>"
+
+#: ddnsto.lua:48
+msgid "Extended Features:"
+msgstr "拓展功能："
+
+#: ddnsto.lua:52
+msgid "Extended Username:"
+msgstr "拓展用户名："
+
+#: ddnsto.lua:54
+msgid "WebDAV Service:"
+msgstr "webdav服务："
+
+#: ddnsto.lua:56
+msgid "WebDAV Address:"
+msgstr "webdav地址："
+
+#: ddnsto.lua:59
+msgid "Remote Boot Service:"
+msgstr "远程开机服务："
+
+#: ddnsto.lua:39
+msgid "Service Status"
+msgstr "服务状态"
+
+#: ddnsto.lua:65
+msgid "Basic Settings"
+msgstr "基础设置"
+
+#: ddnsto.lua:70
+msgid "Enable"
+msgstr "启用"
+
+#: ddnsto.lua:72
+msgid "Enable DDNSTO Remote Control"
+msgstr "启用DDNSTO 远程控制"
+
+#: ddnsto.lua:75
+msgid "User Token"
+msgstr "用户Token"
+
+#: ddnsto.lua:78
+msgid "<a href='https://doc.linkease.com/zh/guide/ddnsto/' target='_blank'>How to obtain a token?</a>"
+msgstr "<a href='https://doc.linkease.com/zh/guide/ddnsto/' target='_blank'>如何获取令牌？</a>"
+
+#: ddnsto.lua:83
+msgid "Device Number"
+msgstr "设备编号"
+
+#: ddnsto.lua:85
+msgid "If multiple devices have duplicate IDs, please modify this number"
+msgstr "如有多台设备id重复，请修改此编号"
+
+#: ddnsto.lua:90
+msgid "CPU Core Count"
+msgstr "CPU核心数"
+
+#: ddnsto.lua:93
+msgid "Auto Detect"
+msgstr "自动获取"
+
+#: ddnsto.lua:93
+msgid "1 Thread"
+msgstr "1 线程"
+
+#: ddnsto.lua:93
+msgid "2 Threads"
+msgstr "2 线程"
+
+#: ddnsto.lua:93
+msgid "4 Threads"
+msgstr "4 线程"
+
+#: ddnsto.lua:93
+msgid "8 Threads"
+msgstr "8 线程"
+
+#: ddnsto.lua:93
+msgid "16 Threads"
+msgstr "16 线程"
+
+#: ddnsto.lua:98
+msgid "Log"
+msgstr "日志"
+
+#: ddnsto.lua:100
+msgid "Log level, default is Warning"
+msgstr "日志级别，默认值是警告"
+
+#: ddnsto.lua:101
+msgid "Debug"
+msgstr "调试"
+
+#: ddnsto.lua:101
+msgid "Info"
+msgstr "信息"
+
+#: ddnsto.lua:101
+msgid "Warning"
+msgstr "警告"
+
+#: ddnsto.lua:101
+msgid "Error"
+msgstr "错误"
+
+#: ddnsto.lua:122
+msgid "Extended Features"
+msgstr "拓展功能"
+
+#: ddnsto.lua:123
+msgid "When enabled, supports console 'File Management' and 'Remote Boot' features"
+msgstr "启用后可支持控制台的“文件管理”及“远程开机”功能"
+
+#: ddnsto.lua:123
+msgid "View Tutorial"
+msgstr "查看教程"
+
+#: ddnsto.lua:130
+msgid "Port"
+msgstr "端口"
+
+#: ddnsto.lua:137
+msgid "Authorized Username"
+msgstr "授权用户名"
+
+#: ddnsto.lua:144
+msgid "Authorized User Password"
+msgstr "授权用户密码"
+
+#: ddnsto.lua:151
+msgid "Shared Disk"
+msgstr "共享磁盘"
+
+#: ddnsto.lua:171
+msgid "DDNSTO Remote Control is a plugin developed by Koolcenter Xiaobao, supporting HTTP2 for remote penetration control.<br />It supports accessing intranet device backends via custom domains in a browser, remote RDP/VNC desktops, remote file management, and more.<br />For details, visit <a href='https://www.ddnsto.com/' target='_blank'>https://www.ddnsto.com</a>"
+msgstr "DDNSTO远程控制是Koolcenter小宝开发的，支持http2的远程穿透控制插件。<br />支持通过浏览器访问自定义域名访问内网设备后台、远程RDP/VNC桌面、远程文件管理等多种功能。<br />详情请查看 <a href='https://www.ddnsto.com/' target='_blank'>https://www.ddnsto.com</a>"
+
+#: ddnsto.lua:174
+msgid "Save and Apply"
+msgstr "保存并应用"
+
+#: ddnsto.lua:195
+msgid "Invalid request"
+msgstr "无效的请求"
+
+#: ddnsto.lua:197
+msgid "Please enter a valid User Token"
+msgstr "请填写正确用户Token（令牌）"
+
+#: ddnsto.lua:203
+msgid "Please enter a valid Device Number"
+msgstr "请填写正确的设备编号"
+
+#: ddnsto.lua:208
+msgid "Please enter a valid port"
+msgstr "请填写正确的端口"
+
+#: ddnsto.lua:208
+msgid "Please enter an authorized username"
+msgstr "请填写授权用户名"
+
+msgid "When enabled, supports console 'File Management' and 'Remote Boot' features <a href='https://doc.linkease.com/zh/guide/ddnsto/ddnstofile.html' target='_blank'>View Tutorial</a>"
+msgstr "启用后可支持控制台的“文件管理”及“远程开机”功能 <a href='https://doc.linkease.com/zh/guide/ddnsto/ddnstofile.html' target='_blank'>查看教程</a>"
+
+#: ddnsto.lua:208
+msgid "Please enter an authorized user password"
+msgstr "请填写授权用户密码"
+
+#: ddnsto.lua:208
+msgid "Please enter a shared disk path"
+msgstr "请填写共享磁盘路径"
+
+#: ddnsto.lua:192
+msgid "Verifying parameters...<br>"
+msgstr "正在验证参数...<br>"
+
+#: ddnsto.lua:46
+msgid "<b style='color:green;font-weight:bolder'>%s</b> (Device Number: %s)"
+msgstr "<b style='color:green;font-weight:bolder'>%s</b>（设备编号: %s）"
+
+#: ddnsto.lua:213
+msgid "%sSaving parameters...<br>Saved successfully!<br>Please close the dialog<br>"
+msgstr "%s正在保存参数...<br>保存成功!<br>请关闭对话框<br>"
+
+#: ddnsto.lua:217
+msgid "%sParameter error: %s<br>Save failed!<br>Please close the dialog<br>"
+msgstr "%s参数错误： %s<br>保存失败！<br>请关闭对话框<br>"
+
+#: ddnsto.lua:199
+msgid "Token length must be 36 characters"
+msgstr "令牌长度必须是36个字符"
+
+#: ddnsto.lua:201
+msgid "Token must not contain spaces"
+msgstr "令牌勿包含空格"
+
+#: ddnsto.lua:208
+msgid "Username must not contain spaces"
+msgstr "用户名请勿包含空格"
+
+#: ddnsto.lua:208
+msgid "User password must not contain spaces"
+msgstr "用户密码请勿包含空格"
