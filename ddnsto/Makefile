@@ -3,6 +3,7 @@ include $(TOPDIR)/rules.mk
 PKG_ARCH_DDNSTO:=$(ARCH)
 
 PKG_NAME:=ddnsto
+# use PKG_SOURCE_DATE instead of PKG_VERSION for compitable
 PKG_SOURCE_DATE:=3.0.4
 PKG_RELEASE:=14
 ARCH_HEXCODE:=
@@ -35,6 +36,23 @@ define Package/$(PKG_NAME)
 	DEPENDS:=
 	PKGARCH:=all
 	URL:=https://www.ddnsto.com/
+endef
+
+define Package/$(PKG_NAME)/description
+  DDNS.to is a reverse proxy
+endef
+
+define Package/$(PKG_NAME)/conffiles
+/etc/config/ddnsto
+endef
+
+define Package/$(PKG_NAME)/postinst
+endef
+
+define Build/Configure
+endef
+
+define Build/Compile
 endef
 
 define Package/$(PKG_NAME)/install
