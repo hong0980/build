@@ -1,16 +1,8 @@
-#
-# Copyright (C) 2015-2016 OpenWrt.org
-# Copyright (C) 2020 jjm2473@gmail.com
-#
-# This is free software, licensed under the GNU General Public License v3.
-#
-
 include $(TOPDIR)/rules.mk
 
 PKG_ARCH_DDNSTO:=$(ARCH)
 
 PKG_NAME:=ddnsto
-# use PKG_SOURCE_DATE instead of PKG_VERSION for compitable
 PKG_SOURCE_DATE:=3.0.4
 PKG_RELEASE:=14
 ARCH_HEXCODE:=
