@@ -11,6 +11,7 @@ uci -q batch <<-EOF >/dev/null
 	commit ddnsto
 EOF
 
+chmod +x /etc/init.d/ddnsto 2>/dev/null
 rm -f /tmp/luci-*
 /etc/init.d/ddnsto enable
 
