@@ -35,15 +35,15 @@ local config = {
     enabled = cfg.enabled == "1",
     threads = cfg.threads or '0',
     log_level = cfg.log_level or "2",
-    index = tonumber(cfg.index) or '0',
+    index = tonumber(cfg.index) or 0,
     feat_enabled = cfg.feat_enabled == "1",
     feat_password = cfg.feat_password or "",
     feat_username = cfg.feat_username or "",
-    feat_port = tonumber(cfg.feat_port) or '3030',
+    feat_port = tonumber(cfg.feat_port) or 3030,
     feat_disk_path_selected = cfg.feat_disk_path_selected or ""
 }
 local color_html = i18n.translatef("<b style='color:%s;font-weight:bolder'>%s</b>", "%s", "%s")
-local function status_container()
+function status_container()
     local is_enabled = sys.call("pidof ddwebdav >/dev/null") == 0
 
     return {
@@ -76,7 +76,7 @@ local function status_container()
     }
 end
 
-local function main_container()
+function main_container()
     return {
         title = i18n.translate("Basic Settings"),
         properties = {
@@ -131,7 +131,7 @@ local function main_container()
     }
 end
 
-local function get_block_devices()
+function get_block_devices()
     local rv = {}
     for ln in luci.util.execi("/sbin/block info") do
         if ln:match("^/dev/.-:") then
@@ -143,7 +143,7 @@ local function get_block_devices()
     return rv
 end
 
-local function feat_container()
+function feat_container()
     local disks = get_block_devices()
     return {
         title = i18n.translate("Extended Features"),
@@ -189,7 +189,7 @@ local function feat_container()
     }
 end
 
-local function get_schema()
+function get_schema()
     return {
         title = i18n.translate("DDNSTO Remote Control"),
         description = i18n.translate("DDNSTO Remote Control is a plugin developed by Koolcenter Xiaobao, supporting HTTP2 for remote penetration control.<br />It supports accessing intranet device backends via custom domains in a browser, remote RDP/VNC desktops, remote file management, and more.<br />For details, visit <a href='https://www.ddnsto.com/' target='_blank'>https://www.ddnsto.com</a>"),
@@ -248,6 +248,7 @@ function ddnsto_submit()
         log = i18n.translatef("%sParameter error: %s<br>Save failed!<br>Please close the dialog<br>", log, color_html %{'red', error})
     end
 
+    http.prepare_content("application/json")
     http.write_json({
         success = 0,
         result = {log = log, async = false, data = config, schema = get_schema()}
