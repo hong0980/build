@@ -1,0 +1,49 @@
+<%+cbi/valueheader%>
+<div class="cbi-section">
+	<input type="button" class="btn cbi-button cbi-button-apply" id="apply_update_button" value="<%:Clear Log%>" onclick="apply_del_log()" />
+	<label style="vertical-align: middle;">
+		<input type="checkbox" name="log_reverse" value="reverse" onclick="reverselog()" style="vertical-align: middle; height: auto;">
+		<%:Reverse%>
+	</label>
+
+	<textarea id="cbid.logview.1.conf" class="cbi-input-textarea" style="width: 100%; display: inline;" rows="32" cols="60" readonly="readonly"></textarea>
+</div>
+
+<script type="text/javascript">
+	let isLogReverse = false;
+
+	function createAndDownloadFile(fileName, content) {
+		const aTag = document.createElement('a');
+		const blob = new Blob([content]);
+		aTag.download = fileName;
+		aTag.href = URL.createObjectURL(blob);
+		aTag.click();
+		URL.revokeObjectURL(aTag.href);
+	}
+
+	function apply_del_log() {
+		XHR.get('<%=url("admin", "control", "taskplan", "dellog")%>', null, function(xhr, data) {
+			const logView = document.getElementById('cbid.logview.1.conf');
+			if (logView) logView.innerHTML = '';
+		});
+	}
+
+	function reverselog() {
+		const logView = document.getElementById('cbid.logview.1.conf');
+		if (logView) {
+			logView.innerHTML = logView.innerHTML.split('\n').reverse().join('\n');
+			isLogReverse = !isLogReverse;
+		}
+	}
+
+	XHR.poll(3, '<%=url("admin", "control", "taskplan", "getlog")%>', null, function(xhr, data) {
+		const logView = document.getElementById('cbid.logview.1.conf');
+		if (logView && xhr.responseText) {
+			logView.innerHTML = '';
+			logView.innerHTML = isLogReverse
+			? xhr.responseText.split('\n').reverse().join('\n')
+			: xhr.responseText;
+		}
+	});
+</script>
+<%+cbi/valuefooter%>

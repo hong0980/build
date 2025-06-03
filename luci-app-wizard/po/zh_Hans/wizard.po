@@ -239,8 +239,8 @@ msgstr "无线配置（wireless）"
 msgid "Host configuration (hosts)"
 msgstr "主机配置（hosts）"
 
-msgid "Startup script"
-msgstr "启动脚本"
+msgid "Startup script (rc.local)"
+msgstr "启动脚本（rc.local）"
 
 msgid "Scheduled tasks (crontabs)"
 msgstr "定时任务（crontabs）"

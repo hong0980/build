@@ -1,0 +1,82 @@
+#!/bin/sh /etc/rc.common
+# Copyright by sirpdboy
+
+START=99
+STOP=10
+USE_PROCD=1
+
+CR=/etc/crontabs/root
+
+task_cmd() {
+    case "$1" in
+        1) echo "reboot" ;;
+        2) echo "poweroff" ;;
+        3) echo "network" ;;
+        4) echo "restartsamba" ;;
+        5) echo "restartwan" ;;
+        6) echo "closewan" ;;
+        7) echo "clearmem" ;;
+        8) echo "sysfree" ;;
+        9) echo "disreconn" ;;
+        10) echo "disrereboot" ;;
+        11) echo "restartmwan3" ;;
+        12) echo "customscript" ;;
+        13) echo "upwifi" ;;
+        14) echo "downwifi" ;;
+        15) echo "customscript2" ;;
+        16) echo "restartlan" ;;
+    esac
+}
+
+run_script() {
+    config_get customscript "$1" customscript ""
+    config_get customscript2 "$1" customscript2 ""
+    echo "$customscript" > /etc/taskplan/taskplancustomscript
+    echo "$customscript2" > /etc/taskplan/taskplancustomscript2
+}
+
+run_stime() {
+    config_get_bool enable "$1" enable "0"
+    [ "$enable" -eq 0 ] && return
+    config_get minute "$1" minute "0"
+    config_get hour "$1" hour "*"
+    config_get month "$1" month "*"
+    config_get week "$1" week "*"
+    config_get stype "$1" stype
+
+    [ "$hour" = "0" ] && hour="00"
+    [ "$minute" = "0" ] && minute="00"
+
+    echo "$minute $hour * $month $week /usr/bin/taskplanhandler $(task_cmd "$stype") Scheduled_task" >> "$CR"
+}
+
+run_ltime() {
+    config_get_bool enable "$1" enable "0"
+    [ "$enable" -eq 0 ] && return
+    config_get stype "$1" stype
+    config_get delay "$1" delay "10"
+
+    sed -i "\$i(sleep $delay && /usr/bin/taskplanhandler $(task_cmd "$stype") Startup_task)&" /etc/rc.local
+}
+
+del_cru() {
+	sed -i '/Scheduled_task/d' "$CR" /etc/rc.local 2>/dev/null || true
+}
+
+start_service() {
+    del_cru
+    config_load taskplan
+    config_foreach run_script global
+    config_foreach run_stime stime
+    config_foreach run_ltime ltime
+    /etc/init.d/cron reload
+}
+
+stop_service() {
+    del_cru
+    /etc/init.d/cron reload
+}
+
+service_triggers() {
+    procd_add_reload_trigger taskplan
+}
