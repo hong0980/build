@@ -1,11 +1,15 @@
 {
 	"luci-app-taskplan": {
-		"description": "Grant UCI access for luci-app-taskplan",
+		"description": "Grant access for luci-app-taskplan",
 		"read": {
-			"uci": [ "taskplan" ]
+			"file": {
+				"/etc/taskplan/*": [ "read" ]
+			}
 		},
 		"write": {
-			"uci": [ "taskplan" ]
+			"file": {
+				"/etc/taskplan/*": [ "write" ]
+			}
 		}
 	}
 }
