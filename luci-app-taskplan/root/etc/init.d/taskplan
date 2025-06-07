@@ -9,6 +9,12 @@ RC=/etc/rc.local
 CR=/etc/crontabs/root
 TASKPLAN_DIR=/etc/taskplan
 
+del_cru() {
+    for file in "$CR" "$RC"; do
+        grep -q "taskplanhandler" "$file" && sed -i '/taskplanhandler/d' "$file"
+    done
+}
+
 task_cmd() {
     case "$1" in
         01) echo "reboot" ;;
@@ -37,10 +43,10 @@ run_stime() {
     config_get week "$1" week "*"
     config_get hour "$1" hour "*"
     config_get month "$1" month "*"
-    config_get minute "$1" minute "*"
+    config_get minute "$1" minute "0"
     config_get stype "$1" stype "#"
 
-    echo "$minute $hour $day $month $week /usr/bin/taskplanhandler $(task_cmd "$stype") Scheduled_task" >> "$CR"
+    echo "$minute $hour $day $month $week /usr/bin/taskplanhandler $(task_cmd "$stype") Scheduled_task > /dev/null 2>&1 &" >> "$CR"
 }
 
 run_ltime() {
@@ -57,7 +63,7 @@ run_ltime() {
 }
 
 start_service() {
-    sed -i '/taskplanhandler/d' $CR $RC 2>/dev/null || true
+    del_cru
     config_load taskplan
     config_foreach run_stime stime
     config_foreach run_ltime ltime
@@ -65,7 +71,7 @@ start_service() {
 }
 
 stop_service() {
-    sed -i '/taskplanhandler/d' $CR $RC 2>/dev/null || true
+    del_cru
     /etc/init.d/cron reload
 }
 

@@ -129,9 +129,8 @@ function validateCrontabField(type, value) {
 };
 
 function showScriptEditModal(v) {
-    var path, scriptLabel;
-    if (v === '15') { path = '/etc/taskplan/customscript1'; scriptLabel = _('Custom Script 1')}
-    else { path = '/etc/taskplan/customscript2'; scriptLabel = _('Custom Script 2') };
+    var path = '/etc/taskplan/customscript1', scriptLabel = _('Custom Script 1');
+    if (v === '16') { path = '/etc/taskplan/customscript2'; scriptLabel = _('Custom Script 2')};
     fs.stat(path).then(function() {
         return fs.read(path).then(function(content) {
             var textareaContent = (typeof content === 'string' ? content : '') || '';
@@ -223,18 +222,11 @@ return view.extend({
         e.rmempty = false;
         e.default = '0';
 
-        e = s.option(form.Value, 'minute', _('Minute'));
+        e = s.option(form.Value, 'month', _('Month'));
         e.rmempty = true;
         e.default = '*';
         e.validate = function(section_id, value) {
-            return validateCrontabField('minute', value);
-        };
-
-        e = s.option(form.Value, 'hour', _('Hour'));
-        e.rmempty = true;
-        e.default = '*';
-        e.validate = function(section_id, value) {
-            return validateCrontabField('hour', value);
+            return validateCrontabField('month', value);
         };
 
         e = s.option(form.Value, 'day', _('Day'));
@@ -244,11 +236,18 @@ return view.extend({
             return validateCrontabField('day', value);
         };
 
-        e = s.option(form.Value, 'month', _('Month'));
+        e = s.option(form.Value, 'hour', _('Hours'));
         e.rmempty = true;
         e.default = '*';
         e.validate = function(section_id, value) {
-            return validateCrontabField('month', value);
+            return validateCrontabField('hour', value);
+        };
+
+        e = s.option(form.Value, 'minute', _('Minute'));
+        e.rmempty = true;
+        e.default = '0';
+        e.validate = function(section_id, value) {
+            return validateCrontabField('minute', value);
         };
 
         e = s.option(form.Value, 'week', _('Week'));

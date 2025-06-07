@@ -1,8 +1,8 @@
 #!/bin/sh
 # Copyright 2020-2024 sirpdboy, 2021 jjm2473
 
-TASKPLAN=/etc/taskplan
-LOG="$TASKPLAN/taskplan.log"
+TASKPLAN_DIR=/etc/taskplan
+LOG="$TASKPLAN_DIR/taskplan.log"
 
 log() {
 	echo "$(date +'%m-%d %H:%M:%S')" "$*" >> $LOG
@@ -52,8 +52,8 @@ trigger() {
 		clearmem) sync && echo 3 > /proc/sys/vm/drop_caches ;;
 		restartlan) ifdown lan; ifup lan; log "LAN 重启成功！" ;;
 		disreconn) disreconnwan || { ifup wan; log "重新拨号成功！"; } ;;
-		customscript1) [ -s "$TASKPLAN/customscript1" ] && . "$TASKPLAN/customscript1" ;;
-		customscript2) [ -s "$TASKPLAN/customscript2" ] && . "$TASKPLAN/customscript2" ;;
+		customscript1) [ -s "$TASKPLAN_DIR/customscript1" ] && . "$TASKPLAN_DIR/customscript1" ;;
+		customscript2) [ -s "$TASKPLAN_DIR/customscript2" ] && . "$TASKPLAN_DIR/customscript2" ;;
 		restartsamba)
 			for svc in ksmdb samba samba4; do
 				[ -x "/etc/init.d/$svc" ] && /etc/init.d/"$svc" restart

@@ -82,7 +82,7 @@ msgid "Scheduled Clearmem"
 msgstr "释放内存"
 
 msgid "Scheduled Sysfree"
-msgstr "系统清理（会重启机器）"
+msgstr "系统清理(重启")
 
 msgid "Scheduled DisReconn"
 msgstr "检测断网重连"
@@ -91,7 +91,7 @@ msgid "Scheduled DisRereboot"
 msgstr "检测断网重启"
 
 msgid "Scheduled Restartmwan3"
-msgstr "检测MWAN3失联重启"
+msgstr "检测MWAN3(重启)"
 
 msgid "Scheduled Wifidown"
 msgstr "关闭无线网络"
@@ -150,7 +150,7 @@ msgstr "0-7 (0/7=星期日), '*', '*/N', 范围或列表"
 msgid "Minute"
 msgstr "分"
 
-msgid "Hour"
+msgid "Hours"
 msgstr "时"
 
 msgid "Day"
@@ -176,6 +176,9 @@ msgstr "月份"
 
 msgid "weeks"
 msgstr "星期"
+
+msgid "Everyday"
+msgstr "每天"
 
 msgid "Unknown field type: %s"
 msgstr "未知字段类型: %s"

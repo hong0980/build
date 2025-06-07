@@ -71,7 +71,7 @@ return view.extend({
                         ) : ui.addNotification(null, E('p', _('File not found')), 'error')),
                     crontabs ? E('button', {
                         'class': 'btn cbi-button-apply', 'style': 'margin-left: 2em;',
-                        'click': function() { window.open('https://tool.lu/crontab') }
+                        'click': function() { window.open('https://crontab.guru') }
                     }, _('verify/example')) : "",
                 ]),
                 E('textarea', {
