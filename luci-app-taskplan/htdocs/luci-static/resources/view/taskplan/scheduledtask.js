@@ -5,102 +5,138 @@
 'require view';
 'require form';
 
-var css = '                                          \
-@media (min-width: 992px) {                          \
-    td[data-name="day"]    .cbi-input-text,          \
-    td[data-name="hour"]   .cbi-input-text,          \
-    td[data-name="month"]  .cbi-input-text,          \
-    td[data-name="delay"]  .cbi-input-text,          \
-    td[data-name="minute"] .cbi-input-text {         \
-        max-width: 55px !important;                  \
-        width: 100% !important;                      \
-    }                                                \
-    td[data-name="remarks"] .cbi-input-text {        \
-        min-width: 190px !important;                 \
-        width: 105% !important;                      \
-    }                                                \
-    td[data-name="week"]   .cbi-dropdown,            \
-    td[data-name="stype"]  select.cbi-input-select { \
-        min-width: 100px !important;                 \
-        max-width: 100px !important;                 \
-        width: 100% !important;                      \
-    }                                                \
-}                                                    \
-';
+(function() {
+    var styleTag = document.createElement('style');
+    styleTag.textContent = '\
+        @media (min-width: 992px) {                          \
+            td[data-name="day"]    .cbi-input-text,          \
+            td[data-name="hour"]   .cbi-input-text,          \
+            td[data-name="month"]  .cbi-input-text,          \
+            td[data-name="delay"]  .cbi-input-text,          \
+            td[data-name="minute"] .cbi-input-text {         \
+                max-width: 52px !important;                  \
+                width: 100% !important;                      \
+            }                                                \
+            td[data-name="remarks"] .cbi-input-text {        \
+                min-width: 180px !important;                 \
+                width: 105% !important;                      \
+            }                                                \
+            td[data-name="week"] .cbi-dropdown,              \
+            td[data-name="stype"] select.cbi-input-select {  \
+                min-width: 100px !important;                 \
+                max-width: 100px !important;                 \
+                width: 100% !important;                      \
+            }                                                \
+            td:has(.cbi-button-remove) {                     \
+              width: 50px !important;                        \
+            }                                                \
+            td[data-name="_apply"] {                         \
+                max-width: 58px; !important;                 \
+            }                                                \
+        }';
+    document.head.appendChild(styleTag);
+})();
 
 function validateCrontabField(type, value) {
-    var patterns = {
-        'minute': /^(\*|\*\/[1-9]\d?|([0-5]?\d)(-[0-5]?\d)?(\/[1-9]\d?)?)(,(\*|\*\/[1-9]\d?|([0-5]?\d)(-[0-5]?\d)?(\/[1-9]\d?)?))*$/,
-        'hour': /^(\*|\*\/[1-9]\d?|([01]?\d|2[0-3])(-([01]?\d|2[0-3]))?(\/[1-9]\d?)?)(,(\*|\*\/[1-9]\d?|([01]?\d|2[0-3])(-([01]?\d|2[0-3]))?(\/[1-9]\d?)?))*$/,
-        'day': /^(\*|\*\/[1-9]\d?|([0-9]|[12]\d|3[01])(-([0-9]|[12]\d|3[01]))?(\/[1-9]\d?)?)(,(\*|\*\/[1-9]\d?|([0-9]|[12]\d|3[01])(-([0-9]|[12]\d|3[01]))?(\/[1-9]\d?)?))*$/,
-        'month': /^(\*|\*\/[1-9]\d?|([0-9]|1[01])(-([0-9]|1[01]))?(\/[1-9]\d?)?)(,(\*|\*\/[1-9]\d?|([0-9]|1[01])(-([0-9]|1[01]))?(\/[1-9]\d?)?))*$/,
-        'week': /^(\*|\*\/[1-9]\d?|[0-6](-[0-6])?(\/[1-9]\d?)?)(,(\*|\*\/[1-9]\d?|[0-6](-[0-6])?(\/[1-9]\d?)?))*$/
-    };
-    var maxStep = { 'minute': 59, 'hour': 23, 'day': 31, 'month': 11, 'week': 6 };
-    var messages = {
-        'day': _("Invalid crontab day value. It should be 1-31, '*', '*/N'."),
-        'week': _("Invalid crontab week value. It should be 0-6, '*', '*/N'."),
-        'hour': _("Invalid crontab hour value. It should be 0-23, '*', '*/N'."),
-        'month': _("Invalid crontab month value. It should be 0-11, '*', '*/N'."),
-        'minute': _("Invalid crontab minute value. It should be 0-59, '*', '*/N'.")
+    var types = {
+        'day': { min: 1, max: 31, msg: _('1-31, \'*\', \'*/N\', ranges, or lists') },
+        'hour': { min: 0, max: 23, msg: _('0-23, \'*\', \'*/N\', ranges, or lists') },
+        'month': { min: 1, max: 12, msg: _('1-12, \'*\', \'*/N\', ranges, or lists') },
+        'minute': { min: 0, max: 59, msg: _('0-59, \'*\', \'*/N\', ranges, or lists') },
+        'week': { min: 0, max: 7, msg: _('0-7 (0/7=Sunday), \'*\', \'*/N\', ranges, or lists') }
     };
 
-    if (value === '' || value == null) return true;
-    if (!patterns[type] || !patterns[type].test(value)) {
-        return messages[type] || _('Invalid value');
+    var typeTranslations = {
+        'day': _('days'),
+        'hour': _('hours'),
+        'week': _('weeks'),
+        'month': _('months'),
+        'minute': _('minutes')
+    };
+
+    value = (value || '').replace(/\s/g, '');
+    if (value === '') return true;
+    if (/[^0-9*\-,\/]/.test(value)) {
+        return _('Invalid character in %s').format(typeTranslations[type] || type);
     }
 
-    let max = maxStep[type];
-    let min = (type === 'day') ? 1 : 0;
-    let parts = value.split(',');
-    for (let part of parts) {
-        let m = part.match(/^\*\/(\d+)$/);
-        if (m) {
-            let step = parseInt(m[1]);
-            if (step < 1 || step > max) return _('Step value out of range (max %s)').format(max);
-            continue;
-        }
-        m = part.match(/^(\d+)-(\d+)(?:\/(\d+))?$/);
-        if (m) {
-            let start = parseInt(m[1]);
-            let end = parseInt(m[2]);
-            if (start > end || start < min || end > max)
-                return _('Range out of range for %s').format(type);
-            if (m[3]) {
-                let step = parseInt(m[3]);
-                if (step < 1 || step > max) return _('Step value out of range (max %s)').format(max);
+    var parts = value.split(',').filter(Boolean);
+    var isIncomplete = parts.some(part => {
+        if (part.startsWith('-') || part.endsWith('-')) return true;
+        if (part.endsWith('/')) return true;
+        return false;
+    });
+    if (isIncomplete) return true;
+
+    var field = types[type];
+    if (!field) return _('Unknown field type: %s').format(type);
+
+    var basePattern = /^(\*(\/\d+)?|\d+(-\d+)?(\/\d+)?)(,(\*(\/\d+)?|\d+(-\d+)?(\/\d+)?))*$/;
+    if (!basePattern.test(value)) {
+        return _('Invalid format for %s').format(typeTranslations[type] || type);
+    }
+
+    for (var part of parts) {
+        if (part.startsWith('*/')) {
+            var step = parseInt(part.substring(2), 10);
+            if (isNaN(step) || step < 1 || step > field.max) {
+                return _('Step value must be between 1 and %d').format(field.max);
             }
             continue;
         }
-        m = part.match(/^(\d+)\/(\d+)$/);
-        if (m) {
-            let val = parseInt(m[1]);
-            let step = parseInt(m[2]);
-            if (val < min || val > max)
-                return _('Value out of range for %s').format(type);
-            if (step < 1 || step > max)
-                return _('Step value out of range (max %s)').format(max);
+
+        if (/^\d+$/.test(part)) {
+            var val = parseInt(part, 10);
+            if (val < field.min || val > field.max) {
+                return _('Value %d out of range (%d-%d)').format(val, field.min, field.max);
+            }
             continue;
         }
-        m = part.match(/^\d+$/);
-        if (m) {
-            let val = parseInt(part);
-            if (val < min || val > max)
-                return _('Value out of range for %s').format(type);
+
+        var rangeMatch = part.match(/^(\d+)-(\d+)(?:\/(\d+))?$/);
+        if (rangeMatch) {
+            var start = parseInt(rangeMatch[1], 10);
+            var end = parseInt(rangeMatch[2], 10);
+            var step = rangeMatch[3] ? parseInt(rangeMatch[3], 10) : 1;
+
+            if (isNaN(start) || isNaN(end) || isNaN(step)) {
+                return _('Invalid range or step value in %s').format(part);
+            }
+
+            var actualEnd = Math.max(start, end);
+            var actualStart = Math.min(start, end);
+
+            if (actualStart < field.min || actualEnd > field.max) {
+                return _('Range %d-%d out of bounds (%d-%d)').format(start, end, field.min, field.max);
+            }
+
+            if (step < 1 || step > (actualEnd - actualStart + 1)) {
+                return _('Step value %d out of range (1-%d)').format(step, rangeSpan);
+            }
             continue;
         }
+
         if (part === '*') continue;
+
+        if (/^\d+\/\d+$/.test(part)) {
+            return _('Invalid syntax: %s. Step must be used with * or ranges').format(part);
+        }
+
+        return _('Invalid part: %s').format(part);
     }
+
     return true;
 };
 
 function showScriptEditModal(v) {
-    var path = (v === '15') ? '/etc/taskplan/customscript1' : '/etc/taskplan/customscript2';
+    var path, scriptLabel;
+    if (v === '15') { path = '/etc/taskplan/customscript1'; scriptLabel = _('Custom Script 1')}
+    else { path = '/etc/taskplan/customscript2'; scriptLabel = _('Custom Script 2') };
     fs.stat(path).then(function() {
         return fs.read(path).then(function(content) {
             var textareaContent = (typeof content === 'string' ? content : '') || '';
             var modalContent = [
-                E('p', {}, _('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
+                E('p', { style: 'color:red;font-weight:bold;' }, _('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
                 E('textarea', {
                     'name': 'script',
                     'style': 'width: 600px; min-height: 200px; margin-bottom: 16px; font-family:Consolas, monospace;'
@@ -114,7 +150,7 @@ function showScriptEditModal(v) {
                             var value = textarea ? textarea.value : '';
                             fs.write(path, value).then(function() {
                                 ui.addNotification(null, E('p',
-                                    _('Contents of %s have been saved.').format(path)), 'info');
+                                    _('Contents of %s have been saved.').format(scriptLabel)), 'info');
                                 ui.hideModal();
                             }).catch(function(err) {
                                 ui.addNotification(null, E('p',
@@ -125,18 +161,18 @@ function showScriptEditModal(v) {
                     }, _('Save'))
                 ])
             ];
-            ui.showModal(_('Edit %s').format(path), modalContent);
+            ui.showModal(_('Edit %s').format(scriptLabel), modalContent);
             var textarea = document.querySelector('.modal textarea[name="script"]');
             if (textarea) {
                 textarea.value = textareaContent;
             }
         }).catch(function(err) {
             ui.addNotification(null, E('p', {},
-                _('Unable to read %s: %s').format(path, err.message)), 'error');
+                _('Unable to read %s: %s').format(scriptLabel, err.message)), 'error');
             ui.hideModal();
         });
     }).catch(function() {
-        ui.addNotification(null, E('p', {}, _('No such file %s').format(path)), 'error');
+        ui.addNotification(null, E('p', {}, _('No such file %s').format(scriptLabel)), 'error');
         ui.hideModal();
     });
 };
@@ -163,29 +199,23 @@ return view.extend({
         e.value('12', _('Scheduled Restartmwan3'));
         e.value('13', _('Scheduled Wifiup'));
         e.value('14', _('Scheduled Wifidown'));
-        e.value('15', _('Scheduled Customscript1'));
-        e.value('16', _('Scheduled Customscript2'));
+        e.value('15', _('Custom Script 1'));
+        e.value('16', _('Custom Script 2'));
         return e;
     },
 
     render: function() {
         var m, s, e;
-        m = new form.Map('taskplan', '', E('style', { 'type': 'text/css' }, [ css ]),
-            _('<b>The original [Timing Settings] includes scheduled task execution and startup task execution. ' +
-                 'Presets include over 10 functions, including restart, shutdown, network restart, memory release, system cleaning, ' +
-                 'network sharing, network shutdown, automatic detection of network disconnects and reconnection, ' +
-                 'MWAN3 load balancing detection of reconnection, and custom scripts</b><br/>'));
-
-        s = m.section(form.TableSection, 'stime',
-            E('div', { style: 'display: flex; align-items: center; gap: 12px;' }, [
-                _('Scheduled task'),
-                E('button', {
-                    'class': 'btn cbi-button-apply',
-                    'click': function() { window.open('https://tool.lu/crontab'); }
-                }, _('verify/example'))
-            ]),
-            E('p', {}, _('Minute (0-59) Hour (0-23) Day (1-31) Month (1-12) Weekday (0-6, 0=Sunday, 6=Saturday)'))
-        );
+        m = new form.Map('taskplan', '', [
+            E('div', { 'style': 'font-weight:bold;' }, [
+                _('Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc.'),
+                E('a', { 'target': '_blank', 'style': 'margin-left: 10px;',
+                    'href': 'https://github.com/sirpdboy/luci-app-taskplan'
+                }, [ _('GitHub @sirpdboy/luci-app-taskplan') ])
+            ])
+        ]);
+        s = m.section(form.TableSection, 'stime', _('Scheduled task'),
+            _('Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-7, 0 or 7 = Sunday)'));
         s.addremove = true;
         s.anonymous = true;
 
@@ -193,7 +223,7 @@ return view.extend({
         e.rmempty = false;
         e.default = '0';
 
-        e = s.option(form.Value, 'minute', _('minute'));
+        e = s.option(form.Value, 'minute', _('Minute'));
         e.rmempty = true;
         e.default = '*';
         e.validate = function(section_id, value) {
@@ -207,7 +237,7 @@ return view.extend({
             return validateCrontabField('hour', value);
         };
 
-        e = s.option(form.Value, 'day', _('day'));
+        e = s.option(form.Value, 'day', _('Day'));
         e.rmempty = true;
         e.default = '*';
         e.validate = function(section_id, value) {
@@ -221,7 +251,7 @@ return view.extend({
             return validateCrontabField('month', value);
         };
 
-        e = s.option(form.Value, 'week', _('weeks'));
+        e = s.option(form.Value, 'week', _('Week'));
         e.rmempty = true;
         e.default = '*';
         e.value('*', _('Everyday'));
@@ -241,6 +271,15 @@ return view.extend({
         this.defineStypeOptions(s);
 
         e = s.option(form.Value, 'remarks', _('Remarks'));
+
+        // e = s.option(form.Button, '_apply', _('执行'));
+        // e.inputstyle = 'apply';
+        // e.inputtitle = function(section_id) {
+        //     console.log(section_id)
+        // };
+        // e.onclick = function() {
+        //     console.log()
+        // };
 
         s = m.section(form.TableSection, 'ltime', _('Startup task'),
             _('The task to be executed upon startup, with a startup delay time unit of seconds.'));

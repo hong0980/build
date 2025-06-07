@@ -60,16 +60,22 @@ return view.extend({
     render: function (data) {
         var tabs = fileConfigs.map(function(cfg, idx) {
             var fileContent = data[idx][0], stat = data[idx][1];
+            var crontabs = stat && (stat.path === '/etc/crontabs/root');
             return E('div', { 'data-tab': cfg.tab, 'data-tab-title': cfg.label }, [
-                E('p', { 'class': 'cbi-section-descr' }, cfg.description),
-                stat ? E('p', { 'style': 'color:#888;font-size:90%;margin-bottom:0.5em;' },
-                    _('Last modified: %s, Size: %s bytes').format(
-                        stat.mtime ? new Date(stat.mtime * 1000).toLocaleString() : _('Unknown'),
-                        typeof stat.size === 'number' ? stat.size : '?'
-                    )
-                ) : ui.addNotification(null, E('p', _('File not found')), 'error'),
+                E('p', {}, [
+                    E('span', { style: 'margin-right: 1em;' }, cfg.description),
+                    E('span', { style: 'color:#888;font-size:90%;' },
+                        stat ? _('Last modified: %s, Size: %s bytes').format(
+                            stat.mtime ? new Date(stat.mtime * 1000).toLocaleString() : _('Unknown'),
+                            typeof stat.size === 'number' ? stat.size : '?'
+                        ) : ui.addNotification(null, E('p', _('File not found')), 'error')),
+                    crontabs ? E('button', {
+                        'class': 'btn cbi-button-apply', 'style': 'margin-left: 2em;',
+                        'click': function() { window.open('https://tool.lu/crontab') }
+                    }, _('verify/example')) : "",
+                ]),
                 E('textarea', {
-                    'id': cfg.textareaId, 'rows': 25,
+                    'id': cfg.textareaId, 'rows': 18,
                     'style': 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;'
                 }, [fileContent != null ? fileContent : '']),
                 E('div', { 'class': 'cbi-page-actions' }, [
