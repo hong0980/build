@@ -5,68 +5,66 @@ START=99
 STOP=10
 USE_PROCD=1
 
+RC=/etc/rc.local
 CR=/etc/crontabs/root
+TASKPLAN_DIR=/etc/taskplan
+
+del_cru() {
+    for file in "$CR" "$RC"; do
+        grep -q "taskplanhandler" "$file" && sed -i '/taskplanhandler/d' "$file"
+    done
+}
 
 task_cmd() {
     case "$1" in
-        1) echo "reboot" ;;
-        2) echo "poweroff" ;;
-        3) echo "network" ;;
-        4) echo "restartsamba" ;;
-        5) echo "restartwan" ;;
-        6) echo "closewan" ;;
-        7) echo "clearmem" ;;
-        8) echo "sysfree" ;;
-        9) echo "disreconn" ;;
-        10) echo "disrereboot" ;;
-        11) echo "restartmwan3" ;;
-        12) echo "customscript" ;;
+        01) echo "reboot" ;;
+        02) echo "poweroff" ;;
+        03) echo "network" ;;
+        04) echo "restartsamba" ;;
+        05) echo "restartlan" ;;
+        06) echo "restartwan" ;;
+        07) echo "closewan" ;;
+        08) echo "clearmem" ;;
+        09) echo "sysfree" ;;
+        10) echo "disreconn" ;;
+        11) echo "disrereboot" ;;
+        12) echo "restartmwan3" ;;
         13) echo "upwifi" ;;
         14) echo "downwifi" ;;
-        15) echo "customscript2" ;;
-        16) echo "restartlan" ;;
+        15) echo "customscript1" ;;
+        16) echo "customscript2" ;;
     esac
-}
-
-run_script() {
-    config_get customscript "$1" customscript ""
-    config_get customscript2 "$1" customscript2 ""
-    echo "$customscript" > /etc/taskplan/taskplancustomscript
-    echo "$customscript2" > /etc/taskplan/taskplancustomscript2
 }
 
 run_stime() {
     config_get_bool enable "$1" enable "0"
     [ "$enable" -eq 0 ] && return
-    config_get minute "$1" minute "0"
+    config_get day "$1" day "*"
+    config_get week "$1" week "*"
     config_get hour "$1" hour "*"
     config_get month "$1" month "*"
-    config_get week "$1" week "*"
-    config_get stype "$1" stype
+    config_get minute "$1" minute "0"
+    config_get stype "$1" stype "#"
 
-    [ "$hour" = "0" ] && hour="00"
-    [ "$minute" = "0" ] && minute="00"
-
-    echo "$minute $hour * $month $week /usr/bin/taskplanhandler $(task_cmd "$stype") Scheduled_task" >> "$CR"
+    echo "$minute $hour $day $month $week /usr/bin/taskplanhandler $(task_cmd "$stype") Scheduled_task > /dev/null 2>&1 &" >> "$CR"
 }
 
 run_ltime() {
     config_get_bool enable "$1" enable "0"
     [ "$enable" -eq 0 ] && return
-    config_get stype "$1" stype
+    config_get stype "$1" stype "#"
     config_get delay "$1" delay "10"
 
-    sed -i "\$i(sleep $delay && /usr/bin/taskplanhandler $(task_cmd "$stype") Startup_task)&" /etc/rc.local
-}
-
-del_cru() {
-	sed -i '/Scheduled_task/d' "$CR" /etc/rc.local 2>/dev/null || true
+    awk -v task="(sleep $delay && /usr/bin/taskplanhandler $(task_cmd "$stype") Startup_task) &" '
+        $0 ~ /exit 0/ { print task }
+        $0 !~ /exit 0/ { print }
+        END { print "exit 0" }
+    ' "$RC" > "$RC.tmp" && mv "$RC.tmp" "$RC"
 }
 
 start_service() {
     del_cru
     config_load taskplan
-    config_foreach run_script global
     config_foreach run_stime stime
     config_foreach run_ltime ltime
     /etc/init.d/cron reload

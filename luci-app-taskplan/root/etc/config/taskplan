@@ -1,30 +1,27 @@
 
-config global
-	option enabled '0'
-	option customscript '# Sh script rules'
-	option customscript2 '# Sh script rules'
-
 config stime
-	option hour '*/4'
-	option stype '7'
+	option hour '5,10'
+	option stype '03'
 	option week '*'
 	option minute '0'
 	option month '*'
 	option enable '0'
 	option ttype '0'
 	option delay '10'
-	option remarks '每月每天每过4小时执行一次'
+	option remarks '每月2日到20日的5和10点重启网络'
+	option day '2-20'
 
 config stime
 	option minute '0'
 	option month '*'
 	option enable '0'
 	option delay '10'
-	option stype '1'
+	option stype '01'
 	option ttype '0'
-	option hour '1'
-	option remarks '每月星期日1:00执行'
-	option week '0'
+	option hour '5'
+	option remarks '每7天凌晨5点执行重启'
+	option week '*'
+	option day '*/7'
 
 config stime
 	option week '*'
@@ -35,29 +32,32 @@ config stime
 	option stype '10'
 	option minute '*/5'
 	option hour '*'
-	option remarks '每月每天每过5分钟执行'
+	option remarks '每5分钟执行网络检查'
+	option day '*'
 
 config stime
 	option week '*'
-	option stype '2'
-	option month '*'
+	option stype '09'
+	option month '10'
 	option enable '0'
 	option ttype '0'
 	option delay '10'
-	option remarks '每天22:30执行'
+	option remarks '10月6和7日22:30执行系统清理'
 	option hour '22'
 	option minute '30'
+	option day '6,7'
 
 config stime
 	option minute '0'
 	option enable '0'
 	option ttype '0'
 	option delay '10'
-	option stype '6'
-	option remarks '7月星期一到星期五22:00执行'
+	option stype '06'
+	option remarks '7月工作日22:00执行'
 	option month '7'
 	option week '1-5'
 	option hour '22'
+	option day '*'
 
 config stime
 	option week '*'
@@ -69,10 +69,11 @@ config stime
 	option hour '*'
 	option remarks '每月每天每过4分钟执行'
 	option minute '*/4'
+	option day '*'
 
 config ltime
 	option remarks '开机启动延时30秒执行'
-	option stype '11'
+	option stype '15'
 	option delay '30'
 	option enable '0'
 

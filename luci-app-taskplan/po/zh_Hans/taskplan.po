@@ -1,9 +1,7 @@
-
-msgid "<b>The original [Timing Settings] includes scheduled task execution and startup task execution. Presets include over 10 functions, including restart, shutdown, network restart, memory release, system cleaning, network sharing, network shutdown, automatic detection of network disconnects and reconnection, MWAN3 load balancing detection of reconnection, and custom scripts</b></br>"
-msgstr "<b>任务计划包括定时任务执行和开机启动任务执行，预置：重启、关机、重启网络、释放内存、系统清理、网络共享、关闭网络、自动检测断网重连、自动检测断网重启、MWAN3负载均衡检测重连、自定义脚本等10多个功能.</b></br>"
-
-msgid "N1-N5 is continuous, N1, N3, N5 is discontinuous, */N represents every N hours or every N minutes.The week can only be 0~6, the hour can only be 0~23, the minute can only be 0~59, the unavailable time is 48 hours."
-msgstr "N1-N5连续，N1,N3,N5不连续，*/N表示每N小时或每N分钟。月份范围0-11，星期范围0～6，小时范围0～23，分钟范围0～59，不可用72小时或者90分钟等连续范围。"
+msgid ""
+"Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc."
+msgstr ""
+"定时任务执行和开机任务执行。预置功能超过10种，包括重启、关机、网络重启、释放内存、系统清理、网络共享、关闭网络、自动检测网络断开并重连、MWAN3负载均衡重连检测、自定义脚本等"
 
 msgid "Scheduled task"
 msgstr "定时执行任务"
@@ -20,17 +18,44 @@ msgstr "管控"
 msgid "Task Plan"
 msgstr "任务设置"
 
-msgid "Test/Verify Settings"
-msgstr "测试/验证设置"
-
 msgid "Scheduled Type"
 msgstr "任务类型"
 
 msgid "Delayed Start(seconds)"
 msgstr "开机任务延时(秒)"
 
+msgid "Weekend"
+msgstr "休息日"
+
+msgid "Workdays"
+msgstr "工作日"
+
+msgid "No such file %s"
+msgstr "没有这样的文件 %s"
+
+msgid "Edit %s"
+msgstr "编辑 %s"
+
+msgid "Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., \"rm -rf /\"). The script should not require user interaction."
+msgstr "注意：请使用正确的 sh 语法。脚本是以 root 权限执行，请勿使用破坏性命令（如 \"rm -rf /\"）。脚本是后台自动执行，不会与用户交互。"
+
+msgid "Unable to read %s: %s"
+msgstr "无法打开 %s: %s"
+
 msgid "Log"
 msgstr "日志"
+
+msgid "Log cleared"
+msgstr "日志已清空"
+
+msgid "Failed to clear the log: %s"
+msgstr "清空日志失败: %s"
+
+msgid "Clear Log"
+msgstr "清空日志"
+
+msgid "Display logs in reverse order"
+msgstr "倒序显示日志"
 
 msgid "Scheduled Reboot"
 msgstr "重启机器"
@@ -57,7 +82,7 @@ msgid "Scheduled Clearmem"
 msgstr "释放内存"
 
 msgid "Scheduled Sysfree"
-msgstr "系统清理（会重启机器）"
+msgstr "系统清理(重启")
 
 msgid "Scheduled DisReconn"
 msgstr "检测断网重连"
@@ -66,7 +91,7 @@ msgid "Scheduled DisRereboot"
 msgstr "检测断网重启"
 
 msgid "Scheduled Restartmwan3"
-msgstr "检测MWAN3失联重启服务"
+msgstr "检测MWAN3(重启)"
 
 msgid "Scheduled Wifidown"
 msgstr "关闭无线网络"
@@ -74,36 +99,113 @@ msgstr "关闭无线网络"
 msgid "Scheduled Wifiup"
 msgstr "启用无线网络"
 
-msgid "Edit Custom Script"
-msgstr "【自定义脚本】编辑"
+msgid "Custom Script 1"
+msgstr "自定义脚本 1"
 
-msgid "Edit Custom Script2"
-msgstr "【自定义脚本2】编辑"
+msgid "Custom Script 2"
+msgstr "自定义脚本 2"
 
-msgid "Scheduled Customscript"
-msgstr "自定义脚本"
-
-msgid "Scheduled Customscript2"
-msgstr "自定义脚本2"
-
-msgid "The execution content of the [Scheduled Customscript] in the task name"
-msgstr "任务名称中【自定义脚本】执行内容"
+msgid "The execution content of the [Scheduled Customscript1] in the task name"
+msgstr "任务名称中【自定义脚本1】执行内容"
 
 msgid "The execution content of the [Scheduled Customscript2] in the task name"
 msgstr "任务名称中【自定义脚本2】执行内容"
 
-msgid "Month(0~11)"
-msgstr "月份(0~11)"
+msgid "Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-7, 0 or 7 = Sunday)"
+msgstr "分钟 (0-59)，小时 (0-23)，日期 (1-31)，月份 (1-12)，星期 (0-7，0或7=星期日)"
 
-msgid "Week Day(0~6)"
-msgstr "星期(0~6)"
+msgid "verify/example"
+msgstr "验证/示例"
+
+msgid "Executed"
+msgstr "执行"
+
+msgid "Task Files"
+msgstr "任务文件"
+
+msgid "Schedule Task && Start Script"
+msgstr "计划任务 && 启动脚本"
+
+msgid "Last modified: %s, Size: %s bytes"
+msgstr "最后修改：%s，大小：%s字节"
+
+msgid "File not found"
+msgstr "找不到文件"
+
+msgid "Minute"
+msgstr "分"
+
+msgid "Hours"
+msgstr "时"
+
+msgid "Day"
+msgstr "日"
+
+msgid "Month"
+msgstr "月"
+
+msgid "Week"
+msgstr "周"
+
+msgid "minutes"
+msgstr "分钟"
+
+msgid "hours"
+msgstr "小时"
+
+msgid "dayss"
+msgstr "日期"
+
+msgid "months"
+msgstr "月份"
+
+msgid "weeks"
+msgstr "星期"
 
 msgid "Everyday"
 msgstr "每天"
 
-msgid "Hour(0~23)"
-msgstr "小时(0~23)"
+msgid "1-31, \"*\", \"*/N\", ranges, or lists. E.g.: 1,5,10 or 5-10,*/2"
+msgstr "1-31，\"*\"，\"*/N\"，区间或列表。例如：1,5,10 或 5-10,*/2"
 
-msgid "Minute(0~59)"
-msgstr "分钟(0~59)"
+msgid "0-23, \"*\", \"*/N\", ranges, or lists. E.g.: 0,12,18 or 8-17"
+msgstr "0-23，\"*\"，\"*/N\"，区间或列表。例如：0,12,18 或 8-17"
 
+msgid "1-12, \"*\", \"*/N\", ranges, or lists. E.g.: 1,6,12 or 3-8,*/2"
+msgstr "1-12，\"*\"，\"*/N\"，区间或列表。例如：1,6,12 或 3-8,*/2"
+
+msgid "0-59, \"*\", \"*/N\", ranges, or lists. E.g.: 0,15,30,45 or 10-50,*/5"
+msgstr "0-59，\"*\"，\"*/N\"，区间或列表。例如：0,15,30,45 或 10-50,*/5"
+
+msgid "0-7 (0/7=Sunday), \"*\", \"*/N\", ranges, or lists. E.g.: 0,1,5 or 1-5,*/2"
+msgstr "0-7（0/7=星期日），\"*\"，\"*/N\"，区间或列表。例如：0,1,5 或 1-5,*/2"
+
+msgid "Unknown field type: %s"
+msgstr "未知字段类型：%s"
+
+msgid "Invalid format for %s"
+msgstr "%s 的格式无效"
+
+msgid "Step value in %s must be between 1 and %d"
+msgstr "%s 的步长只能在 1 到 %d 之间"
+
+msgid "%s value %s out of range (%d-%d)"
+msgstr "%s %s 的值超出范围 (%d-%d)"
+
+msgid "Invalid range or step value in %s (%s)"
+msgstr "%s 中的区间或步长值无效（%s）"
+
+msgid "Range %d-%d out of bounds (%d-%d) in %s"
+msgstr "%s 的区间 %d-%d 超出有效范围 (%d-%d)"
+
+msgid "Step value %d out of range (1-%d) in %s"
+msgstr "%s 的步长 %d 超出有效范围 (1-%d)"
+
+msgid "Invalid syntax: %s in (%s). Step must be used with * or ranges"
+msgstr "%s 字段中的语法 (%s) 无效。步长只能用于 * 或区间"
+
+msgid "Invalid part: %s in (%s)"
+msgstr "%s 字段中的 (%s) 部分无效"
+
+msgid "Invalid format for %s. Example: (%s)"
+msgstr "%s 的格式无效，示例：(%s)"
