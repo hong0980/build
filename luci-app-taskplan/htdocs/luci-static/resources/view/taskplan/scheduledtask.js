@@ -5,37 +5,34 @@
 'require view';
 'require form';
 
-(function() {
-    var styleTag = document.createElement('style');
-    styleTag.textContent = '\
-        @media (min-width: 992px) {                          \
-            td[data-name="day"]    .cbi-input-text,          \
-            td[data-name="hour"]   .cbi-input-text,          \
-            td[data-name="month"]  .cbi-input-text,          \
-            td[data-name="delay"]  .cbi-input-text,          \
-            td[data-name="minute"] .cbi-input-text {         \
-                max-width: 52px !important;                  \
-                width: 100% !important;                      \
-            }                                                \
-            td[data-name="remarks"] .cbi-input-text {        \
-                min-width: 180px !important;                 \
-                width: 105% !important;                      \
-            }                                                \
-            td[data-name="week"] .cbi-dropdown,              \
-            td[data-name="stype"] select.cbi-input-select {  \
-                min-width: 100px !important;                 \
-                max-width: 100px !important;                 \
-                width: 100% !important;                      \
-            }                                                \
-            td:has(.cbi-button-remove) {                     \
-              width: 50px !important;                        \
-            }                                                \
-            td[data-name="_apply"] {                         \
-                max-width: 58px; !important;                 \
-            }                                                \
-        }';
-    document.head.appendChild(styleTag);
-})();
+var CSS = `<style>
+@media (min-width: 992px) {
+    td[data-name="day"]    .cbi-input-text,
+    td[data-name="hour"]   .cbi-input-text,
+    td[data-name="month"]  .cbi-input-text,
+    td[data-name="delay"]  .cbi-input-text,
+    td[data-name="minute"] .cbi-input-text {
+        max-width: 52px !important;
+        width: 100% !important;
+    }
+    td[data-name="remarks"] .cbi-input-text {
+        min-width: 180px !important;
+        width: 105% !important;
+    }
+    td[data-name="week"] .cbi-dropdown,
+    td[data-name="stype"] select.cbi-input-select {
+        min-width: 100px !important;
+        max-width: 100px !important;
+        width: 100% !important;
+    }
+    td:has(.cbi-button-remove) {
+        width: 50px !important;
+    }
+    td[data-name="_apply"] {
+        max-width: 58px !important;
+    }
+}
+</style>`;
 
 function validateCrontabField(type, value) {
     var types = {
@@ -43,7 +40,7 @@ function validateCrontabField(type, value) {
         'hour': { min: 0, max: 23, label: _('hours'), msg: _('0-23, "*", "*/N", ranges, or lists. E.g.: 0,12,18 or 8-17') },
         'month': { min: 1, max: 12, label: _('months'), msg: _('1-12, "*", "*/N", ranges, or lists. E.g.: 1,6,12 or 3-8,*/2') },
         'minute': { min: 0, max: 59, label: _('minutes'), msg: _('0-59, "*", "*/N", ranges, or lists. E.g.: 0,15,30,45 or 10-50,*/5') },
-        'week': { min: 0, max: 7, label: _('weeks'), msg: _('0-7 (0/7=Sunday), "*", "*/N", ranges, or lists. E.g.: 0,1,5 or 1-5,*/2') }
+        'week': { min: 0, max: 6, label: _('weeks'), msg: _('0-6 (0/6=Sunday), "*", "*/N", ranges, or lists. E.g.: 0,1,5 or 1-5,*/2') }
     };
 
     value = (value || '').replace(/\s/g, '');
@@ -125,7 +122,7 @@ function showScriptEditModal(v) {
         return fs.read(path).then(function(content) {
             var textareaContent = (typeof content === 'string' ? content : '') || '';
             var modalContent = [
-                E('p', { style: 'color:red;font-weight:bold;' }, _('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
+                E('b', { 'style': 'color:red;' }, _('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
                 E('textarea', {
                     'name': 'script',
                     'style': 'width: 600px; min-height: 200px; margin-bottom: 16px; font-family:Consolas, monospace;'
@@ -195,16 +192,28 @@ return view.extend({
 
     render: function() {
         var m, s, e;
-        m = new form.Map('taskplan', '', [
-            E('div', { 'style': 'font-weight:bold;' }, [
+        m = new form.Map('taskplan', CSS, [
+            E('b', {}, [
                 _('Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc.'),
                 E('a', { 'target': '_blank', 'style': 'margin-left: 10px;',
                     'href': 'https://github.com/sirpdboy/luci-app-taskplan'
                 }, [ _('GitHub @sirpdboy/luci-app-taskplan') ])
             ])
         ]);
-        s = m.section(form.TableSection, 'stime', _('Scheduled task'),
-            _('Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-7, 0 or 7 = Sunday)'));
+        s = m.section(form.TableSection, 'stime', _('Scheduled task'), [
+            E('div', {}, [
+                _('Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-6, 0 and 6 = Sunday)')
+            ]),
+            E('div', { 'style': 'color:#666; margin-top:0.6em;' }, [
+                _('"*" any value, "," value list separator, "-" range of values, "/" step values')
+            ]),
+            E('div', { 'style': 'color:#666; margin-top:0.6em;' }, [
+                _('Examples: Range 2-5 (means 2 to 5), List 1,3,5 (means 1 and 3 and 5), Step */5 (means every 5 units)')
+            ]),
+            E('div', { 'style': 'color:#666; margin-top:0.6em;' }, [
+                _('After adding, you can view the scheduled tasks in the list and verify the execution time and meaning of the cron expression with one click.')
+            ])
+        ]);
         s.addremove = true;
         s.anonymous = true;
 

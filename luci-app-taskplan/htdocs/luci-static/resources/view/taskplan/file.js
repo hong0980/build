@@ -60,7 +60,6 @@ return view.extend({
     render: function (data) {
         var tabs = fileConfigs.map(function(cfg, idx) {
             var fileContent = data[idx][0], stat = data[idx][1];
-            var crontabs = stat && (stat.path === '/etc/crontabs/root');
             return E('div', { 'data-tab': cfg.tab, 'data-tab-title': cfg.label }, [
                 E('p', {}, [
                     E('span', { 'style': 'margin-right: 1em;' }, cfg.description),
@@ -69,28 +68,35 @@ return view.extend({
                             stat.mtime ? new Date(stat.mtime * 1000).toLocaleString() : _('Unknown'),
                             typeof stat.size === 'number' ? stat.size : '?'
                         ) : ui.addNotification(null, E('p', _('File not found')), 'error')),
-                        crontabs ?
+                        cfg.tab === 'crontab' ?
                             (function() {
                                 var exprs = (fileContent || '').split('\n')
                                     .filter(line => line.trim() !== '')
-                                    .map(line => line.trim().split(/\s+/).slice(0, 5).join(' '));
+                                    .map(line => {
+                                        return { title: line.trim(), label: line.trim().split(/\s+/).slice(0, 5).join(' ')};
+                                    });
 
                                 var selectNode = E('select', { 'style': 'width: 120px;' },
-                                    exprs.map(function(expr, idx) { return E('option', { value: expr }, expr) })
+                                    exprs.map((expr, idx) => {
+                                        return E('option', { 'value': expr.label, 'title': expr.title }, expr.label)
+                                    })
                                 );
 
                                 var buttonNode = E('button', {
-                                    'style': 'margin-left: 30px;', 'class': 'btn cbi-button-apply',
-                                    'click': function() {
+                                    'class': 'btn cbi-button-apply', 'style': 'margin-left: 30px;',
+                                    'title': _('Click Verify after selecting'), 'click': function() {
                                         var expr = selectNode.value;
-                                        if (expr) window.open('https://crontab.guru/#%s'.format(expr.replace(/ /g, '_')));
+                                        if (expr) window.open('https://crontab.guru/#' + expr.replace(/ /g, '_'));
                                     }
                                 }, _('verify/example'));
 
                                 return E('div', {}, [selectNode, buttonNode]);
                             })()
-                        : null
+                        : "",
                 ]),
+                cfg.tab === 'customscript1' || cfg.tab === 'customscript2' ?
+                E('b', { 'style': 'color:red;' }, _('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.'))
+                : "",
                 E('textarea', {
                     'id': cfg.textareaId, 'rows': 18,
                     'style': 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;'
@@ -107,7 +113,11 @@ return view.extend({
         });
 
         var viewRoot = E('div', {}, [
-            E('h2', _('Schedule Task && Start Script')),
+            E('div', {}, [
+                _('This page can be edited and saved directly. Changes will take effect immediately after saving.'),
+                E('br'),
+                _('Please ensure the syntax is correct, as incorrect syntax may cause the system to malfunction.')
+            ]),
             E('div', {}, tabs)
         ]);
 
