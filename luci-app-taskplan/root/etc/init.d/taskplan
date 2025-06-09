@@ -8,6 +8,7 @@ USE_PROCD=1
 RC=/etc/rc.local
 CR=/etc/crontabs/root
 TASKPLAN_DIR=/etc/taskplan
+COUNTER_FILE="/var/run/taskplan_counter.dat"
 
 del_cru() {
     for file in "$CR" "$RC"; do
@@ -67,6 +68,7 @@ run_ltime() {
 }
 
 start_service() {
+    [ -f "$COUNTER_FILE" ] || echo "0" > "$COUNTER_FILE"
     del_cru
     config_load taskplan
     config_foreach run_stime stime

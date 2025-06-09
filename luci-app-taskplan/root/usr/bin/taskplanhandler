@@ -3,9 +3,23 @@
 
 TASKPLAN_DIR=/etc/taskplan
 LOG="$TASKPLAN_DIR/taskplan.log"
+LOCK_FILE="/var/lock/taskplan_counter.lock"
+COUNTER_FILE="/var/run/taskplan_counter.dat"
 
 log() {
-	echo "$(date +'%m-%d %H:%M:%S')" "$*" >> $LOG
+	(
+		flock -x -n 200 || {
+			echo "$(date +'%m-%d %H:%M:%S') - [WARN] 获取锁失败，跳过日志记录" >> "$LOG"
+			return 1
+		}
+
+		local count=$(( $(cat "$COUNTER_FILE" 2>/dev/null || echo "0") + 1 ))
+		echo "$count" > "$COUNTER_FILE"
+
+		printf "[%s] #%03d %s\n" \
+			   "$(date +'%m-%d %H:%M:%S')" \
+			   "$count" "$*" >> "$LOG"
+	) 200>"$LOCK_FILE"
 }
 
 limit_log() {
@@ -88,27 +102,27 @@ trigger() {
 }
 
 get_task_description() {
-    [ "$(uci -q get luci.main.lang)" = 'zh_cn' ] || return 0
+	[ "$(uci -q get luci.main.lang)" = 'zh_cn' ] || return 0
 
-    case "$1" in
-        reboot)         echo "重启机器" ;;
-        poweroff)       echo "关闭机器" ;;
-        closewan)       echo "关闭网络" ;;
-        disrereboot)    echo "检测断网重启" ;;
-        network)        echo "重启网络" ;;
-        restartwan)     echo "重启WAN" ;;
-        restartmwan3)   echo "检测MWAN3(重启)" ;;
-        clearmem)       echo "释放内存" ;;
-        restartlan)     echo "重启LAN" ;;
-        disreconn)      echo "检测断网重连" ;;
-        customscript1)  echo "自定义脚本 1" ;;
-        customscript2)  echo "自定义脚本 2" ;;
-        restartsamba)   echo "重启网络共享" ;;
-        upwifi)         echo "启用无线网络" ;;
-        downwifi)       echo "关闭无线网络" ;;
-        sysfree)        echo "系统清理(重启)" ;;
-        *)              echo "" ;;
-    esac
+	case "$1" in
+		reboot)         echo "重启机器" ;;
+		poweroff)       echo "关闭机器" ;;
+		closewan)       echo "关闭网络" ;;
+		disrereboot)    echo "检测断网重启" ;;
+		network)        echo "重启网络" ;;
+		restartwan)     echo "重启WAN" ;;
+		restartmwan3)   echo "检测MWAN3(重启)" ;;
+		clearmem)       echo "释放内存" ;;
+		restartlan)     echo "重启LAN" ;;
+		disreconn)      echo "检测断网重连" ;;
+		customscript1)  echo "自定义脚本 1" ;;
+		customscript2)  echo "自定义脚本 2" ;;
+		restartsamba)   echo "重启网络共享" ;;
+		upwifi)         echo "启用无线网络" ;;
+		downwifi)       echo "关闭无线网络" ;;
+		sysfree)        echo "系统清理(重启)" ;;
+		*)              echo "" ;;
+	esac
 }
 
 task_description=$(get_task_description "$1")

@@ -3,17 +3,17 @@
 'require ui';
 'require view';
 
-function handleFileSave(ev, opts) {
+var handleFileSave = (ev, opts) => {
     var value = (document.getElementById(opts.textareaId).value || '').trim().replace(/\r\n/g, '\n') + '\n';
-    return fs.write(opts.filePath, value).then(function() {
+    return fs.write(opts.filePath, value).then(() => {
         document.getElementById(opts.textareaId).value = value;
         return opts.postSaveCallback ? opts.postSaveCallback() : null;
-    }).then(function() {
+    }).then(() => {
         ui.addNotification(null, E('p', _('Contents have been saved.')), 'info');
-    }).catch(function(e) {
+    }).catch(e => {
         ui.addNotification(null, E('p', _('Unable to save contents: %s').format(e.message)));
     });
-}
+};
 
 var fileConfigs = [
     {
@@ -22,7 +22,7 @@ var fileConfigs = [
         filePath: '/etc/crontabs/root',
         description: _('This is the system crontab in which scheduled tasks can be defined.'),
         tab: 'crontab',
-        postSaveCallback: function() { return fs.exec('/etc/init.d/cron', ['reload']); }
+        postSaveCallback: () => fs.exec('/etc/init.d/cron', ['reload'])
     },
     {
         label: _('Local Startup'),
@@ -48,17 +48,15 @@ var fileConfigs = [
 ];
 
 return view.extend({
-    load: function () {
-        return Promise.all(fileConfigs.map(function(cfg) {
-            return Promise.all([
-                L.resolveDefault(fs.read(cfg.filePath), ''),
-                L.resolveDefault(fs.stat(cfg.filePath), null)
-            ]);
-        }));
-    },
+    load: () => Promise.all(fileConfigs.map(cfg =>
+        Promise.all([
+            L.resolveDefault(fs.read(cfg.filePath), ''),
+            L.resolveDefault(fs.stat(cfg.filePath), null)
+        ])
+    )),
 
-    render: function (data) {
-        var tabs = fileConfigs.map(function(cfg, idx) {
+    render: data => {
+        var tabs = fileConfigs.map((cfg, idx) => {
             var fileContent = data[idx][0], stat = data[idx][1];
             return E('div', { 'data-tab': cfg.tab, 'data-tab-title': cfg.label }, [
                 E('p', {}, [
@@ -67,33 +65,34 @@ return view.extend({
                         stat ? _('Last modified: %s, Size: %s bytes').format(
                             stat.mtime ? new Date(stat.mtime * 1000).toLocaleString() : _('Unknown'),
                             typeof stat.size === 'number' ? stat.size : '?'
-                        ) : ui.addNotification(null, E('p', _('File not found')), 'error')),
-                        cfg.tab === 'crontab' ?
-                            (function() {
-                                var exprs = (fileContent || '').split('\n')
-                                    .filter(line => line.trim() !== '')
-                                    .map(line => {
-                                        return { title: line.trim(), label: line.trim().split(/\s+/).slice(0, 5).join(' ')};
-                                    });
+                        ) : ui.addNotification(null, E('p', _('File not found %s').format(cfg.filePath)), 'error')
+                    ),
+                    cfg.tab === 'crontab' ?
+                        (() => {
+                            var exprs = (fileContent || '').split('\n')
+                                .filter(line => line.trim() !== '')
+                                .map(line => ({
+                                    title: line.trim(),
+                                    label: line.trim().split(/\s+/).slice(0, 5).join(' ')
+                                }));
 
-                                var selectNode = E('select', { 'style': 'width: 120px;' },
-                                    exprs.map((expr, idx) => {
-                                        return E('option', { 'value': expr.label, 'title': expr.title }, expr.label)
-                                    })
-                                );
+                            var selectNode = E('select', { 'style': 'width: 100px; margin-left: 25px;' },
+                                exprs.map(expr =>
+                                    E('option', { 'value': expr.label, 'title': expr.title }, expr.label)
+                                ));
 
-                                var buttonNode = E('button', {
-                                    'class': 'btn cbi-button-apply', 'style': 'margin-left: 30px;',
-                                    'title': _('Click Verify after selecting'), 'click': function() {
-                                        var expr = selectNode.value;
-                                        if (expr) window.open('https://crontab.guru/#' + expr.replace(/ /g, '_'));
-                                    }
-                                }, _('verify/example'));
-
-                                return E('div', {}, [selectNode, buttonNode]);
-                            })()
-                        : "",
-                ]),
+                            var buttonNode = E('button', {
+                                'class': 'btn cbi-button-apply', 'style': 'margin-left: 15px;',
+                                'title': _('Click Verify after selecting'),
+                                'click': () => {
+                                    var expr = selectNode.value;
+                                    if (expr) window.open('https://crontab.guru/#' + expr.replace(/ /g, '_'));
+                                }
+                            }, _('verify/example'));
+                            return [selectNode, buttonNode];
+                        })()
+                    : []
+                ].flat()),
                 cfg.tab === 'customscript1' || cfg.tab === 'customscript2' ?
                 E('b', { 'style': 'color:red;' }, _('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.'))
                 : "",
@@ -104,9 +103,7 @@ return view.extend({
                 E('div', { 'class': 'cbi-page-actions' }, [
                     E('button', {
                         'class': 'btn cbi-button-save',
-                        'click': ui.createHandlerFn(this, function(ev) {
-                            return handleFileSave(ev, cfg);
-                        })
+                        'click': ui.createHandlerFn(this, ev => handleFileSave(ev, cfg))
                     }, _('Save'))
                 ])
             ]);

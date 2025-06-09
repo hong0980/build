@@ -1,5 +1,5 @@
 msgid "Task Plan Plus+"
-msgstr "任务计划 Plus+"
+msgstr "计划任务 Plus+"
 
 msgid ""
 "Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc."
@@ -147,8 +147,8 @@ msgstr "请务必检查语法正确性，错误的语法可能导致系统无法
 msgid "Last modified: %s, Size: %s bytes"
 msgstr "最后修改：%s，大小：%s字节"
 
-msgid "File not found"
-msgstr "找不到文件"
+msgid "File not found %s"
+msgstr "%s 文件不存在"
 
 msgid "Minute"
 msgstr "分"

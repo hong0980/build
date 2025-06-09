@@ -17,16 +17,19 @@ return view.extend({
             E('button', {
                 'class': 'btn cbi-button-negative',
                 'click': ui.createHandlerFn(this, function() {
-                    fs.write('/etc/taskplan/taskplan.log', '')
-                        .then(function() {
-                            textarea.value = '';
-                            originalContent = '';
-                            ui.addNotification(null, E('p', _('Log cleared')), 'info');
-                        })
-                        .catch(function(err) {
-                            ui.addNotification(null, E('p',
-                                _('Failed to clear the log: %s').format(err.message)), 'error');
-                        });
+                    Promise.all([
+                        fs.write('/etc/taskplan/taskplan.log', ''),
+                        fs.write('/var/run/taskplan_counter.dat', '0')
+                    ])
+                    .then(function() {
+                        textarea.value = '';
+                        originalContent = '';
+                        ui.addNotification(null, E('p', _('Log cleared')), 'info');
+                    })
+                    .catch(function(err) {
+                        ui.addNotification(null, E('p',
+                            _('Failed to clear the log: %s').format(err.message)), 'error');
+                    });
                 })
             }, _('Clear Log')),
             E('button', {
