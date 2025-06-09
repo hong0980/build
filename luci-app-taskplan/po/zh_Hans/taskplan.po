@@ -1,3 +1,6 @@
+msgid "Task Plan Plus+"
+msgstr "任务计划 Plus+"
+
 msgid ""
 "Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc."
 msgstr ""

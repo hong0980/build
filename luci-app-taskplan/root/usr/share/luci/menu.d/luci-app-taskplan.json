@@ -1,6 +1,6 @@
 {
 	"admin/control/taskplan": {
-		"title": "Task Plan",
+		"title": "Task Plan Plus+",
 		"order": 20,
 		"action": {
 			"type": "firstchild"
@@ -11,7 +11,7 @@
 		}
 	},
 	"admin/control/taskplan/scheduledtask": {
-		"title": "Scheduled task",
+		"title": "Task Plan",
 		"order": 10,
 		"action": {
 			"type": "view",

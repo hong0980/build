@@ -62,13 +62,13 @@ config stime
 config stime
 	option week '*'
 	option month '*'
-	option stype '11'
+	option stype '08'
 	option ttype '1'
 	option delay '20'
 	option enable '0'
-	option hour '*'
-	option remarks '每月每天每过4分钟执行'
-	option minute '*/4'
+	option hour '7-23/2'
+	option remarks '每天从7点到23点，每2小时的第25分钟执行释放内存'
+	option minute '25'
 	option day '*'
 
 config ltime

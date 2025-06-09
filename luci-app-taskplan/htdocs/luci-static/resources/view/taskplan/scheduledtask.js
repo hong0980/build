@@ -6,30 +6,27 @@
 'require form';
 
 var CSS = `<style>
-@media (min-width: 992px) {
+@media (min-width: 768px) {
     td[data-name="day"]    .cbi-input-text,
     td[data-name="hour"]   .cbi-input-text,
     td[data-name="month"]  .cbi-input-text,
     td[data-name="delay"]  .cbi-input-text,
     td[data-name="minute"] .cbi-input-text {
-        max-width: 52px !important;
+        max-width: 60px !important;
         width: 100% !important;
     }
     td[data-name="remarks"] .cbi-input-text {
-        min-width: 180px !important;
-        width: 105% !important;
+        min-width: 120px !important;
+        width: 100% !important;
     }
     td[data-name="week"] .cbi-dropdown,
-    td[data-name="stype"] select.cbi-input-select {
+    td[data-name="stype"] .cbi-input-select {
         min-width: 100px !important;
         max-width: 100px !important;
         width: 100% !important;
     }
     td:has(.cbi-button-remove) {
         width: 50px !important;
-    }
-    td[data-name="_apply"] {
-        max-width: 58px !important;
     }
 }
 </style>`;
@@ -132,8 +129,8 @@ function showScriptEditModal(v) {
                     E('div', {
                         'class': 'btn cbi-button-positive',
                         'click': function(ev) {
-                            var textarea = findParent(ev.target, '.modal').querySelector('textarea[name="script"]');
-                            var value = textarea ? textarea.value : '';
+                            var textarea = document.querySelector('textarea[name="script"]');
+                            var value = textarea ? textarea.value.trim().replace(/\r\n/g, '\n') + '\n' : '';
                             fs.write(path, value).then(function() {
                                 ui.addNotification(null, E('p',
                                     _('Contents of %s have been saved.').format(scriptLabel)), 'info');
@@ -148,7 +145,7 @@ function showScriptEditModal(v) {
                 ])
             ];
             ui.showModal(_('Edit %s').format(scriptLabel), modalContent);
-            var textarea = document.querySelector('.modal textarea[name="script"]');
+            var textarea = document.querySelector('textarea[name="script"]');
             if (textarea) {
                 textarea.value = textareaContent;
             }
@@ -221,18 +218,11 @@ return view.extend({
         e.rmempty = false;
         e.default = '0';
 
-        e = s.option(form.Value, 'month', _('Month'));
+        e = s.option(form.Value, 'minute', _('Minute'));
         e.rmempty = true;
-        e.default = '*';
+        e.default = '0';
         e.validate = function(section_id, value) {
-            return validateCrontabField('month', value);
-        };
-
-        e = s.option(form.Value, 'day', _('Day'));
-        e.rmempty = true;
-        e.default = '*';
-        e.validate = function(section_id, value) {
-            return validateCrontabField('day', value);
+            return validateCrontabField('minute', value);
         };
 
         e = s.option(form.Value, 'hour', _('Hours'));
@@ -242,11 +232,18 @@ return view.extend({
             return validateCrontabField('hour', value);
         };
 
-        e = s.option(form.Value, 'minute', _('Minute'));
+        e = s.option(form.Value, 'day', _('Day'));
         e.rmempty = true;
-        e.default = '0';
+        e.default = '*';
         e.validate = function(section_id, value) {
-            return validateCrontabField('minute', value);
+            return validateCrontabField('day', value);
+        };
+
+        e = s.option(form.Value, 'month', _('Month'));
+        e.rmempty = true;
+        e.default = '*';
+        e.validate = function(section_id, value) {
+            return validateCrontabField('month', value);
         };
 
         e = s.option(form.Value, 'week', _('Week'));
@@ -270,15 +267,6 @@ return view.extend({
 
         e = s.option(form.Value, 'remarks', _('Remarks'));
 
-        // e = s.option(form.Button, '_apply', _('执行'));
-        // e.inputstyle = 'apply';
-        // e.inputtitle = function(section_id) {
-        //     console.log(section_id)
-        // };
-        // e.onclick = function() {
-        //     console.log()
-        // };
-
         s = m.section(form.TableSection, 'ltime', _('Startup task'),
             _('The task to be executed upon startup, with a startup delay time unit of seconds.'));
         s.addremove = true;
@@ -296,19 +284,21 @@ return view.extend({
 
         e = s.option(form.Value, 'remarks', _('Remarks'));
 
-        setTimeout(function() {
-            document.querySelectorAll('select.cbi-input-select').forEach(function(sel) {
-                if (!sel._custombind) {
-                    sel._custombind = true;
-                    sel.addEventListener('change', function() {
-                        var value = sel.value;
-                        if (value === '15' || value === '16') {
-                            showScriptEditModal(value);
-                        }
-                    });
+        var view = document.getElementById('view');
+
+        view && new MutationObserver(ms => {
+            for (const m of ms) for (const n of m.addedNodes) {
+                if (n.nodeType === 1) for (const name of ['remarks', 'stype']) {
+                    for (const e of n.querySelectorAll?.(`td[data-name="${name}"] .cbi-input-${name === 'remarks' ? 'text' : 'select'}`) || []) {
+                        e.title = name === 'remarks' ? e.value : e.options[e.selectedIndex]?.text || '';
+                        e[`on${name === 'remarks' ? 'input' : 'change'}`] ||= () => {
+                            e.title = name === 'remarks' ? e.value : e.options[e.selectedIndex]?.text || '';
+                            name === 'stype' && ['15', '16'].includes(e.value) && showScriptEditModal(e.value);
+                        };
+                    }
                 }
-            });
-        }, 1000);
+            }
+        }).observe(view, { childList: true, subtree: true });
 
         return m.render();
     }

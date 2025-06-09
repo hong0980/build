@@ -46,7 +46,11 @@ run_stime() {
     config_get minute "$1" minute "0"
     config_get stype "$1" stype "#"
 
-    echo "$minute $hour $day $month $week /usr/bin/taskplanhandler $(task_cmd "$stype") Scheduled_task > /dev/null 2>&1 &" >> "$CR"
+    local time_part="$minute $hour $day $month $week /usr/bin/taskplanhandler"
+    local cmd_part="$(task_cmd "$stype") Scheduled_task > /dev/null 2>&1 &"
+    local full_line="$time_part $cmd_part"
+
+    [ -s "$CR" ] && sed -i "1i\\${full_line//\\/\\\\}" "$CR" || echo "$full_line" >> "$CR"
 }
 
 run_ltime() {

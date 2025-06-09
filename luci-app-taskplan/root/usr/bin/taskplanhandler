@@ -87,5 +87,30 @@ trigger() {
 	esac
 }
 
+get_task_description() {
+    [ "$(uci -q get luci.main.lang)" = 'zh_cn' ] || return 0
+
+    case "$1" in
+        reboot)         echo "重启机器" ;;
+        poweroff)       echo "关闭机器" ;;
+        closewan)       echo "关闭网络" ;;
+        disrereboot)    echo "检测断网重启" ;;
+        network)        echo "重启网络" ;;
+        restartwan)     echo "重启WAN" ;;
+        restartmwan3)   echo "检测MWAN3(重启)" ;;
+        clearmem)       echo "释放内存" ;;
+        restartlan)     echo "重启LAN" ;;
+        disreconn)      echo "检测断网重连" ;;
+        customscript1)  echo "自定义脚本 1" ;;
+        customscript2)  echo "自定义脚本 2" ;;
+        restartsamba)   echo "重启网络共享" ;;
+        upwifi)         echo "启用无线网络" ;;
+        downwifi)       echo "关闭无线网络" ;;
+        sysfree)        echo "系统清理(重启)" ;;
+        *)              echo "" ;;
+    esac
+}
+
+task_description=$(get_task_description "$1")
+log "执行计划任务 $2: ${task_description:-$1}" && trigger "$1"
 limit_log 200
-log "执行计划任务 $2: $1" && trigger "$1"
