@@ -9,9 +9,11 @@ var handleFileSave = (ev, opts) => {
         document.getElementById(opts.textareaId).value = value;
         return opts.postSaveCallback ? opts.postSaveCallback() : null;
     }).then(() => {
-        ui.addNotification(null, E('p', _('Contents have been saved.')), 'info');
+        ui.addTimeLimitedNotification(null, E('p', _('Contents have been saved.')), 3000, 'info');
+        ui.hideModal();
     }).catch(e => {
-        ui.addNotification(null, E('p', _('Unable to save contents: %s').format(e.message)));
+        ui.addTimeLimitedNotification(null, E('p', _('Unable to save contents: %s').format(e.message), 8000, 'error'));
+        ui.hideModal();
     });
 };
 
@@ -65,7 +67,7 @@ return view.extend({
                         stat ? _('Last modified: %s, Size: %s bytes').format(
                             stat.mtime ? new Date(stat.mtime * 1000).toLocaleString() : _('Unknown'),
                             typeof stat.size === 'number' ? stat.size : '?'
-                        ) : ui.addNotification(null, E('p', _('File not found %s').format(cfg.filePath)), 'error')
+                        ) : ui.addTimeLimitedNotification(null, E('p', _('File not found %s').format(cfg.filePath)), 8000, 'error'), ui.hideModal()
                     ),
                     cfg.tab === 'crontab' ?
                         (() => {

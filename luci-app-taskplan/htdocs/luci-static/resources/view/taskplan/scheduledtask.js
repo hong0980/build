@@ -31,7 +31,7 @@ var CSS = `<style>
 }
 </style>`;
 
-function validateCrontabField(type, value) {
+var validateCrontabField = (type, value) => {
     var types = {
         'day': { min: 1, max: 31, label: _('dayss'), msg: _('1-31, "*", "*/N", ranges, or lists. E.g.: 1,5,10 or 5-10,*/2') },
         'hour': { min: 0, max: 23, label: _('hours'), msg: _('0-23, "*", "*/N", ranges, or lists. E.g.: 0,12,18 or 8-17') },
@@ -132,12 +132,12 @@ function showScriptEditModal(v) {
                             var textarea = document.querySelector('textarea[name="script"]');
                             var value = textarea ? textarea.value.trim().replace(/\r\n/g, '\n') + '\n' : '';
                             fs.write(path, value).then(function() {
-                                ui.addNotification(null, E('p',
-                                    _('Contents of %s have been saved.').format(scriptLabel)), 'info');
+                                ui.addTimeLimitedNotification(null, E('p',
+                                    _('Contents of %s have been saved.').format(scriptLabel)), 3000, 'info');
                                 ui.hideModal();
                             }).catch(function(err) {
-                                ui.addNotification(null, E('p',
-                                    _('Unable to save contents: %s').format(err.message)), 'error');
+                                ui.addTimeLimitedNotification(null, E('p',
+                                    _('Unable to save contents: %s').format(err.message)), 8000, 'error');
                                 ui.hideModal();
                             });
                         }
@@ -150,12 +150,12 @@ function showScriptEditModal(v) {
                 textarea.value = textareaContent;
             }
         }).catch(function(err) {
-            ui.addNotification(null, E('p', {},
-                _('Unable to read %s: %s').format(scriptLabel, err.message)), 'error');
+            ui.addTimeLimitedNotification(null, E('p', {},
+                _('Unable to read %s: %s').format(scriptLabel, err.message)), 8000, 'error');
             ui.hideModal();
         });
     }).catch(function() {
-        ui.addNotification(null, E('p', {}, _('No such file %s').format(scriptLabel)), 'error');
+        ui.addTimeLimitedNotification(null, E('p', {}, _('No such file %s').format(scriptLabel)), 8000, 'error');
         ui.hideModal();
     });
 };
@@ -284,20 +284,51 @@ return view.extend({
 
         e = s.option(form.Value, 'remarks', _('Remarks'));
 
-        var view = document.getElementById('view');
+        var view = document.getElementById('view') ?? document.body;
 
-        view && new MutationObserver(ms => {
-            for (const m of ms) for (const n of m.addedNodes) {
-                if (n.nodeType === 1) for (const name of ['remarks', 'stype']) {
-                    for (const e of n.querySelectorAll?.(`td[data-name="${name}"] .cbi-input-${name === 'remarks' ? 'text' : 'select'}`) || []) {
-                        e.title = name === 'remarks' ? e.value : e.options[e.selectedIndex]?.text || '';
-                        e[`on${name === 'remarks' ? 'input' : 'change'}`] ||= () => {
-                            e.title = name === 'remarks' ? e.value : e.options[e.selectedIndex]?.text || '';
-                            name === 'stype' && ['15', '16'].includes(e.value) && showScriptEditModal(e.value);
-                        };
+        view && new MutationObserver(mutations => {
+            mutations.flatMap(m => [...m.addedNodes])
+                .filter(node => node.nodeType === Node.ELEMENT_NODE)
+                .flatMap(node => [...node.querySelectorAll('tr')])
+                .forEach(row => {
+                    var fields = { minute: '', hour: '', day: '', month: '', week: '' };
+                    var selectors = {
+                        remarks: 'cbi-input-text',
+                        minute: 'cbi-input-text',
+                        hour: 'cbi-input-text',
+                        day: 'cbi-input-text',
+                        month: 'cbi-input-text',
+                        week: 'cbi-dropdown',
+                        stype: 'cbi-input-select'
+                    };
+
+                    Object.entries(selectors).forEach(([name, type]) => {
+                        let elements = [...row.querySelectorAll(`td[data-name="${name}"] .${type}`)];
+
+                        elements.forEach(e => {
+                            if (name === 'week') {
+                                fields.week = e.querySelector('input[type="hidden"]')?.value ?? '';
+                            } else if (fields.hasOwnProperty(name)) {
+                                fields[name] = e.value ?? '';
+                            }
+
+                            if (name === 'stype') {
+                                e.addEventListener('change', () => {
+                                    if (['15', '16'].includes(e.value)) showScriptEditModal(e.value);
+                                });
+                            }
+                        });
+                    });
+
+                    let crontabString = Object.values(fields).filter(Boolean).join(' ');
+                    if (crontabString) {
+                        Object.entries(selectors).forEach(([name, type]) => {
+                            row.querySelectorAll(`td[data-name="${name}"] .${type}`).forEach(e => {
+                                e.title = name === 'remarks' ? e.value ?? '' : crontabString;
+                            });
+                        });
                     }
-                }
-            }
+                });
         }).observe(view, { childList: true, subtree: true });
 
         return m.render();
