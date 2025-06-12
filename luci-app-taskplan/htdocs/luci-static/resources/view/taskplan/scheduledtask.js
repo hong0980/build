@@ -267,6 +267,13 @@ return view.extend({
 
         e = s.option(form.Value, 'remarks', _('Remarks'));
 
+        e = s.option(form.Button, '_button', _('verify/example'));
+        e.inputstyle = 'apply';
+        e.onclick = function(ev, section_id) {
+            var crontab = document.getElementById(`widget.cbid.taskplan.${section_id}.month`).title;
+            if (crontab) window.open(`https://crontab.guru/#${crontab.replace(/ /g, '_')}`);
+        };
+
         s = m.section(form.TableSection, 'ltime', _('Startup task'),
             _('The task to be executed upon startup, with a startup delay time unit of seconds.'));
         s.addremove = true;

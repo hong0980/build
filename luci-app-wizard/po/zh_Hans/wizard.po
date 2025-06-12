@@ -26,6 +26,9 @@ msgstr "修改前建议先备份行再修改，注释可以在行首添加 ＃�
 msgid "Wizard"
 msgstr "快捷设置"
 
+msgid "Files"
+msgstr "文件"
+
 msgid "Inital Router Setup"
 msgstr "初始路由器设置"
 
