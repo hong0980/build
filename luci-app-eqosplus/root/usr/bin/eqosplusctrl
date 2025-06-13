@@ -2,13 +2,11 @@
 
 # Copyright (C) 2006 OpenWrt.org
 # Copyright 2022-2023 sirpdboy <herboy2008@gmail.com>
-. /lib/functions.sh
-IDLIST="/var/eqosplus.idlist"
-TMPID="/var/eqosplus.tmpid"
 
-log_msg() {
-    logger -p daemon.info -t "eqosplusctrl" "$*"
-}
+. /lib/functions.sh
+SEEN="var/eqosplus.seen"
+TMPID="/var/eqosplus.tmpid"
+IDLIST="/var/eqosplus.idlist"
 
 to_minutes() {
     echo "$1" | awk -F: 'NF==2 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ { print ($1 * 60 + $2); exit }'
@@ -23,8 +21,7 @@ is_active_now() {
     local start_min=$(to_minutes "$start")
     local end_min=$(to_minutes "$end")
 
-    # 检查星期几是否匹配（支持逗号分隔和"0"表示每天）
-    for w in ${week//,/ }; do
+    for w in ${week//,/ }; do # 检查星期几是否匹配（支持逗号分隔和"0"表示每天）
         [ "$w" = "$weekday" ] || [ "$w" = "0" ] || continue
 
         # 时间判断逻辑
@@ -41,12 +38,18 @@ is_active_now() {
 }
 
 handle_device() {
-    [ -s $IDLIST ] || touch $IDLIST
+    [ -f "$IDLIST" ] || touch "$IDLIST"
     local section="$1"
-    local enable week timestart timeend
 
+    config_get mac "$section" mac ""
     config_get_bool enable "$section" enable "0"
+
+    local id="${mac:-$section}"
+    grep -q "^$id\$" "$SEEN" && return
+    echo "$id" >> "$SEEN"
+
     [ "$enable" = '0' ] && return
+    local enable week timestart timeend
 
     config_get week "$section" week ""
     config_get timeend "$section" timeend ""
@@ -55,16 +58,17 @@ handle_device() {
     if is_active_now "$week" "$timestart" "$timeend"; then
         eqosplus add "$section"
         echo "$section" >> "$IDLIST"
-        sort -u "$IDLIST" > "$TMPID"
-        [ -s "$TMPID" ] && mv "$TMPID" "$IDLIST"
+        sort "$IDLIST" | uniq > "$TMPID" && mv "$TMPID" "$IDLIST"
     else
         eqosplus del "$section"
-        sed -i '/$section/d' $IDLIST
+        sed -i "/^${section}$/d" "$IDLIST"
     fi
 }
 
 while :; do
+    : > "$SEEN"
+    reset_cb
     config_load eqosplus
     config_foreach handle_device device
-    sleep 20
+    sleep 30
 done

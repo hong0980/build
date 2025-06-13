@@ -4,25 +4,13 @@
 # Copyright 2022-2023 sirpdboy <herboy2008@gmail.com>
 . /lib/functions.sh
 
-log_msg() {
-    logger -p daemon.info -t "eqosplusctrl" "$*"
-}
-
+DEBUG=0
 crrun="$1"
 crid="$2"
-TMPID="/var/eqosplus.tmpid"
 IDLIST="/var/eqosplus.idlist"
 
 config_load eqosplus
-config_get mac "$crid" mac ""
-config_get UL "$crid" upload ""
-config_get DL "$crid" download ""
-config_get_bool enable "$section" enable "0"
 config_get dev config ifname ""
-# DL=$(echo $DL | awk '{print $1*8*10^3}')
-# UL=$(echo $UL | awk '{print $1*8*10^3}')
-DL=$(echo $DL | awk '{printf "%d", $1*8000}')
-UL=$(echo $UL | awk '{printf "%d", $1*8000}')
 
 if [ "$dev" = "1" ]; then
     ifname_field="ifname"
@@ -37,14 +25,30 @@ if [ "$dev" = "1" ]; then
     fi
 fi
 
+config_get mac "$crid" mac ""
+config_get upload "$crid" upload ""
+config_get download "$crid" download ""
+config_get_bool enable "$crid" enable "0"
+
+UL=$(echo $upload | awk '{printf "%d", $1*8000}')
+DL=$(echo $download | awk '{printf "%d", $1*8000}')
+
 bin_tc=$(which tc)
 bin_ip=$(which ip)
 bin_iptables=$(which iptables)
 bin_ip6tables=$(which ip6tables)
-# Uncomment this to debug commands
-DEBUG=0
-## End
-# Debug functions - echo + run
+
+iptables="dbg_iptables"
+ip6tables="dbg_ip6tables"
+tc="dbg_tc"
+ip="dbg_ip"
+ipt=$iptables
+ipt6=$ip6tables
+
+log_msg() {
+    logger -p daemon.info -t "eqosplusctrl" "$*"
+}
+
 dbg_iptables() {
     [ "${DEBUG:-0}" -eq 0 ] || echo "DEBUG: iptables $*"
     $bin_iptables "$*"
@@ -66,16 +70,8 @@ dbg_ip() {
 }
 
 is_macaddr() {
-    echo "$1" | grep -qE '^([0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}|[0-9A-Fa-f]{2}(-[0-9A-Fa-f]{2}){5})$' && return 0 || return 1
+    grep -qE '^([0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}|[0-9A-Fa-f]{2}(-[0-9A-Fa-f]{2}){5})$' <<< $1 && return 0 || return 1
 }
-
-# Default commands
-iptables="dbg_iptables"
-ip6tables="dbg_ip6tables"
-tc="dbg_tc"
-ip="dbg_ip"
-ipt=$iptables
-ipt6=$ip6tables
 
 ipt() {
     $iptables $*
@@ -100,8 +96,8 @@ stop_qos() {
 }
 
 init_qosplus() {
-    local lanipaddr=$(uci -q get network.lan.ipaddr 2>/dev/null | awk -F '.' '{print $1"."$2"."$3".0/24"}')
-    insmod sch_htb 2> /dev/null
+    lanipaddr=$(uci -q get network.lan.ipaddr 2>/dev/null | awk -F '.' '{print $1"."$2"."$3".0/24"}')
+    insmod sch_htb > /dev/null 2>&1 || true
     $ip link add dev ${dev}_ifb name ${dev}_ifb type ifb
     $ip link set dev ${dev}_ifb up
     $tc qdisc add dev ${dev} root handle 1:0 htb default 1
@@ -137,129 +133,130 @@ del_id() {
 }
 
 add_mac() {
-    local id=$1
-    local prio_dl=13
-    local prio_ul=13
-    local iptmark=$id
+    local id=$(expr $1 + 11)
+    [ "${DEBUG:-0}" -eq 0 ] || echo "D: add_mac $@ --id:$id --mac:$mac"
 
-    [ "$DL" = "0" ] && prio_dl=5
-    [ "$UL" = "0" ] && prio_ul=6
+    # 将 MAC 地址拆分为十六进制片段（如 aa:bb:cc:dd:ee:ff → aabb ccdd eeff）
+    local M0=$(echo $mac | cut -d : -f 1-2 | tr -d :)
+    local M1=$(echo $mac | cut -d : -f 3-4 | tr -d :)
+    local M2=$(echo $mac | cut -d : -f 5-6 | tr -d :)
+    [ "${DEBUG:-0}" -eq 0 ] || echo "D: MAC segments -> M0:$M0 M1:$M1 M2:$M2"
 
-    # 下载限速（MAC 源地址匹配）
-    if [ "$DL" != "0" ]; then
-        tc class show dev $dev | grep -q "1:$id" || \
-        tc class add dev $dev parent 1:1 classid 1:$id htb rate ${DL}bit ceil ${DL}bit prio $prio_dl 2>/dev/null
+    # 检测上行（UL）规则是否已存在
+    if [ "$UL" -ge 0 ]; then
+        if $tc class show dev ${dev}_ifb | grep -q "1:$id" && \
+           $tc qdisc show dev ${dev}_ifb | grep -q "handle $id:" && \
+           $tc filter show dev ${dev}_ifb | grep -q "match u32 0x${M0}${M1}"; then
+            [ "${DEBUG:-0}" -eq 0 ] || echo "D: UL MAC rule for $mac exists (classid 1:$id), skipping"
+            UL=-1  # 标记为已存在
+        fi
 
-        tc filter show dev $dev parent 1: | grep -q "flowid 1:$id" || \
-        tc filter add dev $dev parent 1: protocol ip prio $prio_dl u32 \
-            match u16 0x0800 0xffff at -2 \
-            match ether src $mac \
-            flowid 1:$id 2>/dev/null
+        # 添加 UL 规则（仅当不存在时）
+        [ "$UL" -ge 0 ] && {
+            [ "$UL" -gt 0 ] && {
+                $tc class add dev ${dev}_ifb parent 1:1 classid 1:$id htb \
+                    rate "${UL}kbit" ceil "${UL}kbit" prio $id quantum 1500 2>/dev/null || true
+                $tc qdisc add dev ${dev}_ifb parent 1:$id handle "$id": sfq perturb 1 2>/dev/null || true
+            }
+            $tc filter add dev ${dev}_ifb parent 1:0 prio $id protocol ip u32 \
+                match u16 0x0800 0xFFFF at -2 \
+                match u16 0x${M2} 0xFFFF at -4 \
+                match u32 0x${M0}${M1} 0xFFFFFFFF at -8 \
+                flowid 1:$( [ "$UL" -gt 0 ] && echo $id || echo 1 ) 2>/dev/null || true
+        }
     fi
 
-    # 上传限速（MAC 目标地址匹配）
-    if [ "$UL" != "0" ]; then
-        local ifbdev="${dev}_ifb"
+    # 检测下行（DL）规则是否已存在
+    if [ "$DL" -ge 0 ]; then
+        if $tc class show dev ${dev} | grep -q "1:$id" && \
+           $tc qdisc show dev ${dev} | grep -q "handle $id:" && \
+           $tc filter show dev ${dev} | grep -q "match u32 0x${M1}${M2}"; then
+            [ "${DEBUG:-0}" -eq 0 ] || echo "D: DL MAC rule for $mac exists (classid 1:$id), skipping"
+            DL=-1  # 标记为已存在
+        fi
 
-        tc class show dev $ifbdev | grep -q "1:$id" || \
-        tc class add dev $ifbdev parent 1:1 classid 1:$id htb rate ${UL}bit ceil ${UL}bit prio $prio_ul 2>/dev/null
+        # 添加 DL 规则（仅当不存在时）
+        [ "$DL" -ge 0 ] && {
+            [ "$DL" -gt 0 ] && {
+                $tc class add dev ${dev} parent 1:1 classid 1:$id htb \
+                    rate "${DL}kbit" ceil "${DL}kbit" prio $id quantum 1500 2>/dev/null || true
+                $tc qdisc add dev ${dev} parent 1:$id handle "$id": sfq perturb 1 2>/dev/null || true
+            }
+            $tc filter add dev ${dev} parent 1:0 prio $id protocol ip u32 \
+                match u16 0x0800 0xFFFF at -2 \
+                match u32 0x${M1}${M2} 0xFFFFFFFF at -12 \
+                match u16 0x${M0} 0xFFFF at -14 \
+                flowid 1:$( [ "$DL" -gt 0 ] && echo $id || echo 1 ) 2>/dev/null || true
+        }
+    fi
 
-        tc filter show dev $ifbdev parent 1: | grep -q "flowid 1:$id" || \
-        tc filter add dev $ifbdev parent 1: protocol ip prio $prio_ul u32 \
-            match u16 0x0800 0xffff at -2 \
-            match ether dst $mac \
-            flowid 1:$id 2>/dev/null
+    if { [ "$UL" -ge 0 ] && [ "$UL" -ne -1 ]; } || { [ "$DL" -ge 0 ] && [ "$DL" -ne -1 ]; }; then
+        local flowid_entry="MAC $mac => ID:$id UL:${UL}kbit DL:${DL}kbit"
+        grep -qF "$flowid_entry" /var/eqosplus.flowid 2>/dev/null || {
+            echo "$flowid_entry" >> /var/eqosplus.flowid
+            [ "${DEBUG:-0}" -eq 0 ] || echo "D: Recorded FlowID: $flowid_entry"
+        }
     fi
 }
-
 
 add_ip() {
-    local id=$1
-    local prio_dl=13
-    local prio_ul=13
+    local id=$(expr $1 + 11)
+    [ "${DEBUG:-0}" -eq 0 ] || echo "D: add_ip $@ --id:$id --mac:$mac"
 
-    [ "$DL" = "0" ] && prio_dl=5
-    [ "$UL" = "0" ] && prio_ul=6
+    # 解析 IP/CIDR 格式（如 192.168.1.100/24）
+    local Z=$(echo $mac | awk -F '/' '{print $2}')
+    [ -n "$Z" ] && mac=$(echo $mac | awk -F '/' '{print $1}') || Z=32
+    local ip_cidr="$mac/$Z"
 
-    # 下载限速（IP 源地址匹配）
-    if [ "$DL" != "0" ]; then
-        tc class show dev $dev | grep -q "1:$id" || \
-        tc class add dev $dev parent 1:1 classid 1:$id htb rate ${DL}bit ceil ${DL}bit prio $prio_dl 2>/dev/null
+    # 检测上行（UL）规则是否已存在
+    if [ "$UL" -ge 0 ]; then
+        if $tc class show dev ${dev}_ifb | grep -q "1:$id" && \
+           $tc qdisc show dev ${dev}_ifb | grep -q "handle $id:" && \
+           $tc filter show dev ${dev}_ifb | grep -q "match ip src $ip_cidr"; then
+            [ "${DEBUG:-0}" -eq 0 ] || echo "D: UL rule for $ip_cidr exists (classid 1:$id), skipping"
+            UL=-1  # 标记为已存在
+        fi
 
-        tc filter show dev $dev parent 1: | grep -q "flowid 1:$id" | grep -q "$ip" || \
-        tc filter add dev $dev parent 1: protocol ip prio $prio_dl u32 \
-            match ip src $ip/32 flowid 1:$id 2>/dev/null
+        # 添加 UL 规则（仅当不存在时）
+        [ "$UL" -ge 0 ] && {
+            [ "$UL" -gt 0 ] && {
+                $tc class add dev ${dev}_ifb parent 1:1 classid 1:$id htb \
+                    rate "${UL}kbit" ceil "${UL}kbit" prio $id quantum 1500 2>/dev/null || true
+                $tc qdisc add dev ${dev}_ifb parent 1:$id handle "$id": sfq perturb 1 2>/dev/null || true
+            }
+            $tc filter add dev ${dev}_ifb parent 1:0 prio $id protocol ip u32 \
+                match ip src "$ip_cidr" flowid 1:$( [ "$UL" -gt 0 ] && echo $id || echo 1 ) 2>/dev/null || true
+        }
     fi
 
-    # 上传限速（IP 目标地址匹配）
-    if [ "$UL" != "0" ]; then
-        local ifbdev="${dev}_ifb"
+    # 检测下行（DL）规则是否已存在
+    if [ "$DL" -ge 0 ]; then
+        if $tc class show dev ${dev} | grep -q "1:$id" && \
+           $tc qdisc show dev ${dev} | grep -q "handle $id:" && \
+           $tc filter show dev ${dev} | grep -q "match ip dst $ip_cidr"; then
+            [ "${DEBUG:-0}" -eq 0 ] || echo "D: DL rule for $ip_cidr exists (classid 1:$id), skipping"
+            DL=-1  # 标记为已存在
+        fi
 
-        tc class show dev $ifbdev | grep -q "1:$id" || \
-        tc class add dev $ifbdev parent 1:1 classid 1:$id htb rate ${UL}bit ceil ${UL}bit prio $prio_ul 2>/dev/null
-
-        tc filter show dev $ifbdev parent 1: | grep -q "flowid 1:$id" | grep -q "$ip" || \
-        tc filter add dev $ifbdev parent 1: protocol ip prio $prio_ul u32 \
-            match ip dst $ip/32 flowid 1:$id 2>/dev/null
+        # 添加 DL 规则（仅当不存在时）
+        [ "$DL" -ge 0 ] && {
+            [ "$DL" -gt 0 ] && {
+                $tc class add dev ${dev} parent 1:1 classid 1:$id htb \
+                    rate "${DL}kbit" ceil "${DL}kbit" prio $id quantum 1500 2>/dev/null || true
+                $tc qdisc add dev ${dev} parent 1:$id handle "$id": sfq perturb 1 2>/dev/null || true
+            }
+            $tc filter add dev ${dev} parent 1:0 prio $id protocol ip u32 \
+                match ip dst "$ip_cidr" flowid 1:$( [ "$DL" -gt 0 ] && echo $id || echo 1 ) 2>/dev/null || true
+        }
+    fi
+    if { [ "$UL" -ge 0 ] && [ "$UL" -ne -1 ]; } || { [ "$DL" -ge 0 ] && [ "$DL" -ne -1 ]; }; then
+        local flowid_entry="IP $mac/$Z => ID:$id UL:${UL}kbit DL:${DL}kbit"
+        grep -qF "$flowid_entry" /var/eqosplus.flowid 2>/dev/null || {
+            echo "$flowid_entry" >> /var/eqosplus.flowid
+            [ "${DEBUG:-0}" -eq 0 ] || echo "D: Recorded FlowID: $flowid_entry"
+        }
     fi
 }
-
-# add_mac() {
-#     id=$(expr $1 + 11)
-#     M0=$(echo $mac | cut -d : -f 1)$(echo $mac | cut -d : -f 2)
-#     M1=$(echo $mac | cut -d : -f 3)$(echo $mac | cut -d : -f 4)
-#     M2=$(echo $mac | cut -d : -f 5)$(echo $mac | cut -d : -f 6)
-
-#     [ "${DEBUG:-0}" -eq 0 ] || echo "D: add_mac $@ --id:$id --mac:$mac M012--$M0-$M1-$M2"
-
-#     if [ "$UL" -ge 0 ]; then
-#         [ "$UL" -gt 0 ] && {
-#             $tc class add dev ${dev}_ifb parent 1:1 classid 1:$id htb rate "${UL}kbit" ceil "${UL}kbit" prio $id quantum 1500
-#             $tc qdisc add dev ${dev}_ifb parent 1:"$id" handle "$id": sfq perturb 1
-#         }
-#         $tc filter add dev ${dev}_ifb parent 1: protocol ip prio $id u32 \
-#             match u16 0x0800 0xFFFF at -2 \
-#             match u16 0x"${M2}" 0xFFFF at -4 \
-#             match u32 0x"${M0}${M1}" 0xFFFFFFFF at -8 flowid 1:$( [ "$UL" -gt 0 ] && echo $id || echo 1 )
-#     fi
-
-#     if [ "$DL" -ge 0 ]; then
-#         [ "$DL" -gt 0 ] && {
-#             $tc class add dev ${dev} parent 1:1 classid 1:$id htb rate "${DL}kbit" ceil "${DL}kbit" prio $id quantum 1500
-#             $tc qdisc add dev ${dev} parent 1:"$id" handle "$id": sfq perturb 1
-#         }
-#         $tc filter add dev ${dev} parent 1: protocol ip prio $id u32 \
-#             match u16 0x0800 0xFFFF at -2 \
-#             match u32 0x"${M1}${M2}" 0xFFFFFFFF at -12 \
-#             match u16 0x"${M0}" 0xFFFF at -14 flowid 1:$( [ "$DL" -gt 0 ] && echo $id || echo 1 )
-#     fi
-# }
-
-# add_ip() {
-#     id=$(expr $1 + 11)
-#     [ "${DEBUG:-0}" -eq 0 ] || echo "D: add_ip $@ --id:$id --mac:$mac"
-
-#     Z=$(echo $mac | awk -F '/' '{print $2}')
-#     [ -n "$Z" ] && mac=$(echo $mac | awk -F '/' '{print $1}') || Z=32
-
-#     if [ "$UL" -ge 0 ]; then
-#         [ "$UL" -gt 0 ] && {
-#             $tc class add dev ${dev}_ifb parent 1:1 classid 1:$id htb rate "${UL}kbit" ceil "${UL}kbit" prio $id quantum 1500
-#             $tc qdisc add dev ${dev}_ifb parent 1:"$id" handle "$id": sfq perturb 1
-#         }
-#         $tc filter add dev ${dev}_ifb parent 1:0 prio $id protocol ip u32 \
-#             match ip src "$mac/$Z" classid 1:$( [ "$UL" -gt 0 ] && echo $id || echo 1 )
-#     fi
-
-#     if [ "$DL" -ge 0 ]; then
-#         [ "$DL" -gt 0 ] && {
-#             $tc class add dev ${dev} parent 1:1 classid 1:$id htb rate "${DL}kbit" ceil "${DL}kbit" prio $id quantum 1500
-#             $tc qdisc add dev ${dev} parent 1:"$id" handle "$id": sfq perturb 1
-#         }
-#         $tc filter add dev ${dev} parent 1:0 prio $id protocol ip u32 \
-#             match ip dst "$mac/$Z" classid 1:$( [ "$DL" -gt 0 ] && echo $id || echo 1 )
-#     fi
-# }
 
 case "$crrun" in
     "stop")
@@ -267,89 +264,100 @@ case "$crrun" in
         touch $IDLIST
     ;;
     "start")
-        echo $crid > $IDLIST
+        # echo $crid > $IDLIST
         init_qosplus
         if [ $crid ]; then
             is_macaddr $mac && add_mac "${crid:4:1}" || add_ip "${crid:4:1}"
-        else
-            [ `cat $IDLIST  2>/dev/null | grep "$crid" | wc -l ` -gt 0 ] && {
-                del_id "${crid:4:1}"
-                sed -i "/$crid/d" $IDLIST >/dev/null 2>&1
-            }
+        # else
+        #     grep -q "$crid" "$IDLIST" 2>/dev/null && {
+        #         del_id "${crid:4:1}"
+        #         sed -i "/$crid/d" $IDLIST >/dev/null 2>&1
+        #     }
         fi
     ;;
     "add") is_macaddr $mac && add_mac "${crid:4:1}" || add_ip "${crid:4:1}" ;;
     "del") del_id "${crid:4:1}" ;;
     "status")
-        echo "=================================="
-        echo "### 网口设备 $dev 状态（上传）###"
-        echo "=================================="
-        echo "# 队列调度器（qdisc）:"
-        tc -s qdisc show dev $dev
-        echo
+        # 打印网口设备状态
+        _print_device_status() {
+            local dev=$1 direction=$2
+            echo "========================================"
+            echo "### $direction 限速状态 ($dev) ###"
+            echo "========================================"
 
-        echo "# 分类（class）:"
-        tc -s class show dev $dev
-        echo
+            # 1. 队列调度器状态 (带统计信息)
+            echo "# 队列调度器 (qdisc):"
+            tc -s qdisc show dev $dev | sed 's/^/  /'
+            echo
 
-        echo "# 筛选器（filter）:"
-        tc -s filter show dev $dev root
-        tc -s filter show dev $dev parent 1:
-        echo
+            # 2. 分类状态 (带流量统计)
+            echo "# 流量分类 (class):"
+            tc -s class show dev $dev | awk '
+                /class/ {printf "  %s\n", $0; getline; printf "    %s\n", $0}'
+            echo
 
-        echo "=================================="
-        echo "### 虚拟设备 ${dev}_ifb 状态（下载）###"
-        echo "=================================="
-        echo "# 队列调度器（qdisc）:"
-        tc -s qdisc show dev ${dev}_ifb
-        echo
+            # 3. 筛选器详情 (带匹配规则解析)
+            echo "# 流量规则 (filter):"
+            tc -s filter show dev $dev | awk '
+                /filter/ {
+                    print "  " $0;
+                    while (getline && $0 !~ /^$/) {
+                        if (/match|flowid/) print "    " $0;
+                        else if (/actions/) print "    " $0;
+                    }
+                }'
+            echo
+        }
 
-        echo "# 分类（class）:"
-        tc -s class show dev ${dev}_ifb
-        echo
+        # 显示物理网口（下载方向）
+        _print_device_status $dev "下载"
 
-        echo "# 筛选器（filter）:"
-        tc -s filter show dev ${dev}_ifb root
-        tc -s filter show dev ${dev}_ifb parent 1:
-        echo
+        # 显示虚拟网口（上传方向）
+        _print_device_status "${dev}_ifb" "上传"
 
+        # 显示启用的限速规则（从UCI配置读取）
         [ -f /var/eqosplus.idlist ] && {
-            echo "=================================="
-            echo "### 当前 EQoS+ 启用的限速规则 ###"
-            echo "=================================="
-            printf "%-12s %-20s %-10s %-10s\n" "配置ID" "设备（MAC/IP）" "下载限速" "上传限速"
-            echo "----------------------------------------------------------"
+            echo "========================================"
+            echo "### 当前启用的限速规则 (EQoS+) ###"
+            echo "========================================"
+            printf "%-6s %-20s %-12s %-12s %-10s\n" "ID" "设备(MAC/IP)" "下载速率" "上传速率" "状态"
+            echo "----------------------------------------------------------------"
             while read -r id; do
-                enabled=$(uci get eqosplus.$id.enable 2>/dev/null)
-                [ "$enabled" != "1" ] && continue
+                enable=$(uci get eqosplus.$id.enable 2>/dev/null)
+                [ "$enable" != "1" ] && continue
 
                 mac=$(uci get eqosplus.$id.mac 2>/dev/null)
-                ip=$(uci get eqosplus.$id.ip 2>/dev/null)
-                dl=$(uci get eqosplus.$id.dl 2>/dev/null)
-                ul=$(uci get eqosplus.$id.ul 2>/dev/null)
+                dl=$(uci get eqosplus.$id.download 2>/dev/null)
+                ul=$(uci get eqosplus.$id.upload 2>/dev/null)
+                status=$([ -n "$dl$ul" ] && echo "活跃" || echo "未配置")
 
-                dl="${dl:-0}M"
-                ul="${ul:-0}M"
+                # 显示速率单位
+                dl_rate=$([ -n "$dl" ] && echo "${dl}kbit" || echo "-")
+                ul_rate=$([ -n "$ul" ] && echo "${ul}kbit" || echo "-")
 
-                if [ -n "$mac" ]; then
-                    device="MAC:$mac"
-                elif [ -n "$ip" ]; then
-                    device="IP:$ip"
-                else
-                    device="<未知>"
-                fi
-
-                printf "%-12s %-20s %-10s %-10s\n" "$id" "$device" "$dl" "$ul"
+                printf "%-6s %-20s %-12s %-12s %-10s\n" "$id" "$mac" "$dl_rate" "$ul_rate" "$status"
             done < /var/eqosplus.idlist
             echo
         }
 
+        # 显示FlowID映射（调试用）
         [ -f /var/eqosplus.flowid ] && {
-            echo "=================================="
-            echo "### FlowID 与配置ID对应关系（调试用）###"
-            echo "=================================="
-            cat /var/eqosplus.flowid
+            echo "========================================"
+            echo "### FlowID 映射表 (调试信息) ###"
+            echo "========================================"
+            cat /var/eqosplus.flowid | sed 's/^/  /'  # 仅缩进不对齐
             echo
         }
+
+        # 显示总流量统计（可选）
+        echo "========================================"
+        echo "### 实时流量统计 ###"
+        echo "========================================"
+        echo "下载方向:"
+        tc -s class show dev $dev | grep -A1 "1:1 " | sed 's/^/  /'
+        echo
+        echo "上传方向:"
+        tc -s class show dev ${dev}_ifb | grep -A1 "1:1 " | sed 's/^/  /'
+        echo
     ;;
 esac
