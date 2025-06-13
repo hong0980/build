@@ -2,64 +2,69 @@
 
 # Copyright (C) 2006 OpenWrt.org
 # Copyright 2022-2023 sirpdboy <herboy2008@gmail.com>
-
 . /lib/functions.sh
-
-TMPID="/var/eqosplus.tmpid"
 IDLIST="/var/eqosplus.idlist"
+TMPID="/var/eqosplus.tmpid"
 
-idlist=`uci show eqosplus | grep "enable='1'" | grep "device" | grep -oE '\[.*?\]' | grep -o '[0-9]'`
-
-check_list() {
-    i=$1
-    checki='0'
-    wweek=`uci -q get eqosplus.@device[$i].week`
-    timeend=$(uci -q get eqosplus.@device[$i].timeend 2>/dev/null)
-    timestart=$(uci -q get eqosplus.@device[$i].timestart 2>/dev/null)
-    current_time=$(date +%H:%M)
-    current_weekday=$(date +%u)
-    for ww in `echo $wweek | sed 's/,/ /g' `; do
-        if [ $current_weekday = $ww ] || [ 'x0' = x$ww ]; then
-            [ "$timestart" = "$timeend" ] && checki='1' || {
-                if [ "$timestart" \< "$timeend" ]; then
-                    if [ "$current_time" \> "$timestart" ] && [ "$current_time" \< "$timeend" ]; then
-                        checki='1'
-                    fi
-                else
-                    if [ "$timestart" \> "$timeend" ] && [ "$current_time" \< "$timestart" ] && [ "$current_time" \> "$timeend" ]; then
-                        checki='1'
-                    fi
-                fi
-            }
-        fi
-    done
-    return
+log_msg() {
+    logger -p daemon.info -t "eqosplusctrl" "$*"
 }
 
-idlistusr(){
-    checki='0'
-    [ -s $IDLIST ] || touch $IDLIST
-    for list in $idlist; do
-        check_list $list
-        if [ $checki == '1' ]; then
-            [ `cat $IDLIST 2>/dev/null | grep "!${list}!" | wc -l` -gt 0 ] || {
-                eqosplus add $list
-                echo "!${list}!" >> $IDLIST
-                cat $IDLIST | sort | uniq > $TMPID
-                cat $TMPID > $IDLIST
-                rm -rf $TMPID
-            }
-        else
-            [ `cat $IDLIST 2>/dev/null | grep "!${list}!" | wc -l` -gt 0 ] && {
-               eqosplus del $list
-               sed -i "/!$list!/d" $IDLIST >/dev/null 2>&1
-            }
+to_minutes() {
+    echo "$1" | awk -F: 'NF==2 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ { print ($1 * 60 + $2); exit }'
+}
+
+is_active_now() {
+    local week="$1" start="$2" end="$3"
+    local now=$(date +%H:%M)
+    local weekday=$(date +%u)  # 1-7 (1=Monday)
+
+    local now_min=$(to_minutes "$now")
+    local start_min=$(to_minutes "$start")
+    local end_min=$(to_minutes "$end")
+
+    # 检查星期几是否匹配（支持逗号分隔和"0"表示每天）
+    for w in ${week//,/ }; do
+        [ "$w" = "$weekday" ] || [ "$w" = "0" ] || continue
+
+        # 时间判断逻辑
+        if [ "$start_min" -eq "$end_min" ]; then  # 全天生效
+            return 0
+        elif [ "$start_min" -lt "$end_min" ]; then  # 正常时间段
+            [ "$now_min" -ge "$start_min" ] && [ "$now_min" -lt "$end_min" ] && return 0
+        else  # 跨午夜时间段
+            [ "$now_min" -ge "$start_min" ] || [ "$now_min" -lt "$end_min" ] && return 0
         fi
     done
+
+    return 1
+}
+
+handle_device() {
+    [ -s $IDLIST ] || touch $IDLIST
+    local section="$1"
+    local enable week timestart timeend
+
+    config_get_bool enable "$section" enable "0"
+    [ "$enable" = '0' ] && return
+
+    config_get week "$section" week ""
+    config_get timeend "$section" timeend ""
+    config_get timestart "$section" timestart ""
+
+    if is_active_now "$week" "$timestart" "$timeend"; then
+        eqosplus add "$section"
+        echo "$section" >> "$IDLIST"
+        sort -u "$IDLIST" > "$TMPID"
+        [ -s "$TMPID" ] && mv "$TMPID" "$IDLIST"
+    else
+        eqosplus del "$section"
+        sed -i '/$section/d' $IDLIST
+    fi
 }
 
 while :; do
-    sleep 30
-    idlistusr
-    sleep 30
+    config_load eqosplus
+    config_foreach handle_device device
+    sleep 20
 done

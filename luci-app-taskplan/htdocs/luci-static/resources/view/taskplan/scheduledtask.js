@@ -7,20 +7,20 @@
 
 var CSS = `<style>
 @media (min-width: 768px) {
-    td[data-name="day"]    .cbi-input-text,
-    td[data-name="hour"]   .cbi-input-text,
-    td[data-name="month"]  .cbi-input-text,
-    td[data-name="delay"]  .cbi-input-text,
-    td[data-name="minute"] .cbi-input-text {
+    [data-name="day"]    .cbi-input-text,
+    [data-name="hour"]   .cbi-input-text,
+    [data-name="month"]  .cbi-input-text,
+    [data-name="delay"]  .cbi-input-text,
+    [data-name="minute"] .cbi-input-text {
         max-width: 60px !important;
         width: 100% !important;
     }
-    td[data-name="remarks"] .cbi-input-text {
+    [data-name="remarks"] .cbi-input-text {
         min-width: 120px !important;
         width: 100% !important;
     }
-    td[data-name="week"] .cbi-dropdown,
-    td[data-name="stype"] .cbi-input-select {
+    [data-name="week"] .cbi-dropdown,
+    [data-name="stype"] .cbi-input-select {
         min-width: 100px !important;
         max-width: 100px !important;
         width: 100% !important;
@@ -310,11 +310,11 @@ return view.extend({
                     };
 
                     Object.entries(selectors).forEach(([name, type]) => {
-                        let elements = [...row.querySelectorAll(`td[data-name="${name}"] .${type}`)];
+                        let elements = [...row.querySelectorAll(`[data-name="${name}"] .${type}`)];
 
                         elements.forEach(e => {
                             if (name === 'week') {
-                                fields.week = e.querySelector('input[type="hidden"]')?.value ?? '';
+                                fields.week = e.querySelector('[type="hidden"]')?.value ?? '';
                             } else if (fields.hasOwnProperty(name)) {
                                 fields[name] = e.value ?? '';
                             }
@@ -330,7 +330,7 @@ return view.extend({
                     let crontabString = Object.values(fields).filter(Boolean).join(' ');
                     if (crontabString) {
                         Object.entries(selectors).forEach(([name, type]) => {
-                            row.querySelectorAll(`td[data-name="${name}"] .${type}`).forEach(e => {
+                            row.querySelectorAll(`[data-name="${name}"] .${type}`).forEach(e => {
                                 e.title = name === 'remarks' ? e.value ?? '' : crontabString;
                             });
                         });

@@ -1,5 +1,5 @@
 
-config eqosplus
+config eqosplus 'config'
 	option enabled '0'
 	option download '1000'
 	option upload '30'
