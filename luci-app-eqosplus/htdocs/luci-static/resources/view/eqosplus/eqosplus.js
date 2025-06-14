@@ -73,6 +73,13 @@ return view.extend({
         }
         o.value(1, _("Automatic settings"));
 
+        o = s.option(form.Value, "time", _("Inspection Interval"),
+            _("Set the frequency for checking device status and applying rules. Shorter intervals provide quicker response but consume more system resources."));
+        for (var i = 1; i <= 7; i++) {
+            o.value(i.toString(), _("%d minute(s)").format(i));
+        }
+        o.default = '2';
+
         s = m.section(form.TableSection, 'device');
         s.addremove = true;
         s.anonymous = true;
@@ -83,17 +90,19 @@ return view.extend({
         o = s.option(form.Value, "mac", _("IP/MAC"))
         for (var mac in hosts) {
             var host = hosts[mac];
-            for (var ip of host.ipaddrs) {
-                var hint = host.name ?? mac;
-                o.value(ip, hint ? '%s (%s)'.format(ip, hint) : ip);
-            };
+            var ip = host.ipaddrs;
+            var hint = host.name ?? host.ipaddrs[0];
+            o.value(mac, hint ? '[ %s | %s ] (%s)'.format(ip, mac, hint) : mac);
         };
+        o.datatype = 'or(macaddr,ip4addr)';
 
         o = s.option(form.Value, "download", _("Downloads"))
         o.default = '0.1';
+        o.datatype = "ufloat";
 
         o = s.option(form.Value, "upload", _("Uploads"))
         o.default = '0.1';
+        o.datatype = "ufloat";
 
         o = s.option(form.Value, "timestart", _("Start control time"))
         o.placeholder = '00:00';

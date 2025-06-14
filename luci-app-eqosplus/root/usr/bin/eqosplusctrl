@@ -1,74 +1,70 @@
-#!/bin/sh
+#!/bin/bash
 
 # Copyright (C) 2006 OpenWrt.org
 # Copyright 2022-2023 sirpdboy <herboy2008@gmail.com>
 
 . /lib/functions.sh
-SEEN="var/eqosplus.seen"
-TMPID="/var/eqosplus.tmpid"
 IDLIST="/var/eqosplus.idlist"
 
+log_msg() {
+    logger -p daemon.info -t "eqosplus" "$*"
+}
+
 to_minutes() {
-    echo "$1" | awk -F: 'NF==2 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ { print ($1 * 60 + $2); exit }'
+    local t="$1"
+    [[ "$t" =~ ^([0-9]{1,2}):([0-9]{2})$ ]] || return 1
+    local mins=$((10#${BASH_REMATCH[2]}))
+    local hours=$((10#${BASH_REMATCH[1]}))
+    (( hours >= 0 && hours < 24 && mins >= 0 && mins < 60 )) || return 1
+    echo $((hours * 60 + mins))
 }
 
 is_active_now() {
-    local week="$1" start="$2" end="$3"
-    local now=$(date +%H:%M)
-    local weekday=$(date +%u)  # 1-7 (1=Monday)
+    local weekday=$(date +%u)
+    local end_min=$(to_minutes "$timeend")
+    local start_min=$(to_minutes "$timestart")
+    local now_min=$(to_minutes "$(date +%H:%M)")
 
-    local now_min=$(to_minutes "$now")
-    local start_min=$(to_minutes "$start")
-    local end_min=$(to_minutes "$end")
-
-    for w in ${week//,/ }; do # 检查星期几是否匹配（支持逗号分隔和"0"表示每天）
-        [ "$w" = "$weekday" ] || [ "$w" = "0" ] || continue
-
-        # 时间判断逻辑
-        if [ "$start_min" -eq "$end_min" ]; then  # 全天生效
-            return 0
-        elif [ "$start_min" -lt "$end_min" ]; then  # 正常时间段
-            [ "$now_min" -ge "$start_min" ] && [ "$now_min" -lt "$end_min" ] && return 0
-        else  # 跨午夜时间段
-            [ "$now_min" -ge "$start_min" ] || [ "$now_min" -lt "$end_min" ] && return 0
+    (( start_min == 0 && end_min == 0 )) && time_ok=1 || {
+        if (( start_min < end_min )); then
+            (( now_min >= start_min && now_min <= end_min )) && time_ok=1 || time_ok=0
+        else
+            (( now_min >= start_min || now_min <= end_min )) && time_ok=1 || time_ok=0
         fi
+    }
+
+    local week_ok=0
+    for w in ${wweek//,/ }; do
+        [[ "$w" == "0" || "$w" == "$weekday" ]] && { week_ok=1; break; }
     done
 
-    return 1
+    (( time_ok && week_ok )) && return 0 || return 1
 }
 
 handle_device() {
     [ -f "$IDLIST" ] || touch "$IDLIST"
     local section="$1"
-
-    config_get mac "$section" mac ""
+    local enable wweek timestart timeend
     config_get_bool enable "$section" enable "0"
 
-    local id="${mac:-$section}"
-    grep -q "^$id\$" "$SEEN" && return
-    echo "$id" >> "$SEEN"
-
     [ "$enable" = '0' ] && return
-    local enable week timestart timeend
 
-    config_get week "$section" week ""
+    config_get wweek "$section" week ""
     config_get timeend "$section" timeend ""
     config_get timestart "$section" timestart ""
 
-    if is_active_now "$week" "$timestart" "$timeend"; then
-        eqosplus add "$section"
-        echo "$section" >> "$IDLIST"
-        sort "$IDLIST" | uniq > "$TMPID" && mv "$TMPID" "$IDLIST"
+    if is_active_now; then
+        /usr/bin/eqosplus add "$section"
+        grep -qxF "$section" "$IDLIST" || echo "$section" >> "$IDLIST"
     else
-        eqosplus del "$section"
+        /usr/bin/eqosplus del "$section"
         sed -i "/^${section}$/d" "$IDLIST"
     fi
 }
 
+time=$(uci_get eqosplus config time 2)
 while :; do
-    : > "$SEEN"
-    reset_cb
     config_load eqosplus
     config_foreach handle_device device
-    sleep 30
+    sleep ${time}m
 done
