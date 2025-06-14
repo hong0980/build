@@ -37,12 +37,12 @@ bin_ip=$(which ip)
 bin_iptables=$(which iptables)
 bin_ip6tables=$(which ip6tables)
 
-iptables="dbg_iptables"
-ip6tables="dbg_ip6tables"
 tc="dbg_tc"
 ip="dbg_ip"
 ipt=$iptables
 ipt6=$ip6tables
+iptables="dbg_iptables"
+ip6tables="dbg_ip6tables"
 
 log_msg() {
     logger -p daemon.info -t "eqosplusctrl" "$*"
@@ -169,7 +169,7 @@ add_rule() {
     }
 
     local newline="${mac} => $classid UL:${UL}kbit DL:${DL}kbit"
-    if ! grep -qxF "$newline" "$FLOWID"; then
+    if ! grep -qxF "$newline" "$FLOWID" && [ -n "$mac" ]; then
         sed -i "/$mac/d" "$FLOWID"
         echo "$newline" >> "$FLOWID"
     fi

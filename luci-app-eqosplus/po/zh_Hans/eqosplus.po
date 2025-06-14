@@ -59,3 +59,14 @@ msgstr "工作日"
 msgid "Automatic settings"
 msgstr "自动设置"
 
+msgid "Invalid time format. Use HH:MM."
+msgstr "无效的时间格式。使用 HH：mm。"
+
+msgid "Inspection Interval"
+msgstr "巡查间隔"
+
+msgid "Set the frequency for checking device status and applying rules. Shorter intervals provide quicker response but consume more system resources."
+msgstr "设置检查设备状态和应用规则的频率。较短的间隔响应更快但消耗更多系统资源。"
+
+msgid "%d minute(s)"
+msgstr "%d 分钟"
