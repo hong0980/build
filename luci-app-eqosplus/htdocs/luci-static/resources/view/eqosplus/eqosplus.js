@@ -3,18 +3,19 @@
 'require view';
 'require form';
 'require network';
+'require tools.widgets as widgets';
 
 var CSS = `<style>
 @media (min-width: 768px) {
-    td[data-name="upload"]   .cbi-input-text,
-    td[data-name="download"]  .cbi-input-text,
-    td[data-name="timeend"]  .cbi-input-text,
-    td[data-name="timestart"] .cbi-input-text {
-        max-width: 50px !important;
+    [data-name="upload"]   .cbi-input-text,
+    [data-name="download"]  .cbi-input-text,
+    [data-name="timeend"]  .cbi-input-text,
+    [data-name="timestart"] .cbi-input-text {
+        max-width: 55px !important;
         width: 100% !important;
     }
-    td[data-name="comment"] .cbi-input-text {
-        min-width: 120px !important;
+    [data-name="comment"] .cbi-input-text {
+        max-width: 120px !important;
         width: 100% !important;
     }
     [data-name="week"] .cbi-dropdown {
@@ -23,8 +24,8 @@ var CSS = `<style>
         width: 100% !important;
     }
     [data-name="mac"] .cbi-dropdown {
-        min-width: 170px !important;
-        max-width: 170px !important;
+        min-width: 160px !important;
+        max-width: 160px !important;
         width: 100% !important;
     }
     td:has(.cbi-button-remove) {
@@ -58,20 +59,20 @@ return view.extend({
                 }, _('GitHub @sirpdboy/luci-app-eqosplus'))
             ),
             E('br'),
-            E('b', { 'style': 'margin-right: 15px;' }, _('Status')),
+            E('br'),
             E('font', { 'color': status ? "green" : "red", 'style': "font-weight:bold;"},
-                _(status ? "RUNNING" : "NOT RUNNING"))
+                _(status ? "Eqosplus RUNNING" : "Eqosplus NOT RUNNING")),
         ]);
 
         s = m.section(form.NamedSection, 'config', 'eqosplus');
 
-        o = s.option(form.Value, 'ifname', _("Interface"),
-            _("Set the interface used for restriction, use pppoe-wan for dialing, use WAN hardware interface for DHCP mode (such as eth1), and use br-lan for bypass mode"))
-        for (var network of networks) {
-            if (network.getName() === 'loopback') continue;
-            o.value(network.getName());
-        }
-        o.value(1, _("Automatic settings"));
+        o = s.option(widgets.DeviceSelect, 'ifname', _("Interface"),
+            _("Set the interface used for restriction, use pppoe-wan for dialing, use WAN hardware interface for DHCP mode (such as eth1), and use br-lan for bypass mode") +
+            _('<br><font color=\"red\"><b>Not specified, automatically obtained</b></font>'));
+        o.multiple = false;
+        o.noaliases = true;
+        o.modalonly = true;
+        o.default = '';
 
         o = s.option(form.Value, "time", _("Inspection Interval"),
             _("Set the frequency for checking device status and applying rules. Shorter intervals provide quicker response but consume more system resources."));
@@ -84,27 +85,27 @@ return view.extend({
         s.addremove = true;
         s.anonymous = true;
 
-        o = s.option(form.Flag, "enable", _("Enable"))
+        o = s.option(form.Flag, "enable", _("Enable"));
         o.rmempty = false;
 
-        o = s.option(form.Value, "mac", _("IP/MAC"))
+        o = s.option(form.Value, "mac", _("IP/MAC"));
         for (var mac in hosts) {
             var host = hosts[mac];
-            var ip = host.ipaddrs;
-            var hint = host.name ?? host.ipaddrs[0];
-            o.value(mac, hint ? '[ %s | %s ] (%s)'.format(ip, mac, hint) : mac);
+            var ip = host.ipaddrs[0];
+            var hint = host.name ?? ip;
+            o.value(mac, hint ? '%s [ %s ] (%s)'.format(ip, mac, hint) : mac);
         };
         o.datatype = 'or(macaddr,ip4addr)';
 
-        o = s.option(form.Value, "download", _("Downloads"))
+        o = s.option(form.Value, "download", _("Downloads"));
         o.default = '0.1';
         o.datatype = "ufloat";
 
-        o = s.option(form.Value, "upload", _("Uploads"))
+        o = s.option(form.Value, "upload", _("Uploads"));
         o.default = '0.1';
         o.datatype = "ufloat";
 
-        o = s.option(form.Value, "timestart", _("Start control time"))
+        o = s.option(form.Value, "timestart", _("Start control time"));
         o.placeholder = '00:00';
         o.default = '00:00';
         o.rmempty = true;
@@ -112,7 +113,7 @@ return view.extend({
             return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value) ? true : _('Invalid time format. Use HH:MM.');
         };
 
-        o = s.option(form.Value, "timeend", _("Stop control time"))
+        o = s.option(form.Value, "timeend", _("Stop control time"));
         o.placeholder = '00:00';
         o.default = '00:00';
         o.rmempty = true;
@@ -120,8 +121,8 @@ return view.extend({
             return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value) ? true : _('Invalid time format. Use HH:MM.');
         };
 
-        o=s.option(form.Value, "week", _("Week Day(1~7)"))
-        o.rmempty = true
+        o=s.option(form.Value, "week", _("Week Day(1~7)"));
+        o.rmempty = true;
         o.value('0', _("Everyday"));
         o.value('1', _("Monday"));
         o.value('2', _("Tuesday"));

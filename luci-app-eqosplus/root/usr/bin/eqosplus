@@ -13,7 +13,7 @@ FLOWID="/var/eqosplus.flowid"
 config_load eqosplus
 config_get dev config ifname ""
 
-if [ "${dev}" = "1" ]; then
+if [ -z "$dev" ]; then
     ifname_field="ifname"
     uci -q get network.wan.ifname >/dev/null || ifname_field="device"
 
@@ -92,8 +92,8 @@ stop_qos() {
 init_qosplus() {
     lanipaddr=$(uci -q get network.lan.ipaddr 2>/dev/null | awk -F '.' '{print $1"."$2"."$3".0/24"}')
 
-    insmod sch_htb 2>/dev/null || true
-    insmod ifb 2>/dev/null || true
+    grep -q '^ifb' /proc/modules || insmod ifb 2>/dev/null
+    grep -q '^sch_htb' /proc/modules || insmod sch_htb 2>/dev/null
 
     $bin_ip link show ${ifbdev} >/dev/null 2>&1 || $bin_ip link add dev ${ifbdev} type ifb
     $bin_ip link set dev ${ifbdev} up

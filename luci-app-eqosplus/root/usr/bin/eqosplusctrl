@@ -20,23 +20,16 @@ to_minutes() {
 }
 
 is_active_now() {
-    local weekday=$(date +%u)
-    local end_min=$(to_minutes "$timeend")
-    local start_min=$(to_minutes "$timestart")
-    local now_min=$(to_minutes "$(date +%H:%M)")
+    local wd=$(date +%u) now=$(to_minutes "$(date +%H:%M)")
+    local sm=$(to_minutes "$timestart") em=$(to_minutes "$timeend")
 
-    (( start_min == 0 && end_min == 0 )) && time_ok=1 || {
-        if (( start_min < end_min )); then
-            (( now_min >= start_min && now_min <= end_min )) && time_ok=1 || time_ok=0
-        else
-            (( now_min >= start_min || now_min <= end_min )) && time_ok=1 || time_ok=0
-        fi
-    }
+    local time_ok=$(( (sm == 0 && em == 0) ||
+                     (sm < em && now >= sm && now <= em) ||
+                     (sm >= em && (now >= sm || now <= em)) ))
 
     local week_ok=0
-    for w in ${wweek//,/ }; do
-        [[ "$w" == "0" || "$w" == "$weekday" ]] && { week_ok=1; break; }
-    done
+    [[ ",${wweek}," =~ ",0," ]] && week_ok=1 ||
+    [[ ",${wweek}," =~ ",${wd}," ]] && week_ok=1
 
     (( time_ok && week_ok )) && return 0 || return 1
 }
