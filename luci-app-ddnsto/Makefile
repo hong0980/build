@@ -1,6 +1,6 @@
 include $(TOPDIR)/rules.mk
 PKG_NAME:=luci-app-ddnsto
-PKG_VERSION:=3.0.4-r1
+PKG_VERSION:=3.0.4
 PKG_RELEASE:=3
 
 LUCI_TITLE:=LuCI Support for ddnst
