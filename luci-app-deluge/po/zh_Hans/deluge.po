@@ -2,11 +2,11 @@
 msgid "This page is the configuration file content of Deluge."
 msgstr "本页是Deluge的配置文件内容。"
 
-msgid "Last 30 lines of run log:"
-msgstr "运行日志的最新 30 行："
+msgid "Last 50 lines of run log:"
+msgstr "运行日志的最新 50 行："
 
-msgid "The last 30 lines of the syslog:"
-msgstr "系统日志的最新 30 行："
+msgid "The last 50 lines of the syslog:"
+msgstr "系统日志的最新 50 行："
 
 msgid "%s/download (size: %s) (used: %s/%s)"
 msgstr "%s/download (大小: %s) (已用: %s/%s)"
@@ -233,3 +233,9 @@ msgstr "下载设置中的速度和连接 %s 为 %s"
 
 msgid "Unlimited"
 msgstr "无限制"
+
+msgid "Deluge - Files"
+msgstr "Deluge - 文件"
+
+msgid "Deluge - Logs"
+msgstr "Deluge - 日志"

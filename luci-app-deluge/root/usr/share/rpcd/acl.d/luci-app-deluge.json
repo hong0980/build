@@ -1,0 +1,16 @@
+{
+	"luci-app-deluge": {
+		"description": "Grant access to Deluge configuration",
+		"read": {
+			"uci": [ "deluge" ],
+			"file": {
+				"/bin/df": [ "exec" ],
+				"/sbin/logread": [ "exec" ],
+				"/usr/bin/pgrep": [ "exec" ]
+			}
+		},
+		"write": {
+			"uci": [ "deluge" ]
+		}
+	}
+}

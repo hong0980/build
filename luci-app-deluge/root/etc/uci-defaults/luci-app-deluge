@@ -1,13 +1,11 @@
 #!/bin/sh
-touch /etc/config/deluge
+chmod +x /etc/init.d/deluge
+echo "config deluge 'main'" > /etc/config/deluge
 uci -q batch <<-EOF >/dev/null
 	delete ucitrack.@deluge[-1]
 	add ucitrack deluge
 	set ucitrack.@deluge[-1].init=deluge
 	commit ucitrack
-
-	set deluge.main=deluge
-	commit deluge
 EOF
 
 rm -rf /tmp/luci-*

@@ -1,8 +1,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-deluge
-PKG_VERSION:=1.0
-PKG_RELEASE:=20230417
+PKG_VERSION:=1.1
+PKG_RELEASE:=20250618
 
 LUCI_TITLE:=LuCI support for deluge
 LUCI_PKGARCH:=all
