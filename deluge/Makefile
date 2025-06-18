@@ -1,11 +1,11 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=deluge
-PKG_VERSION:=2.1.1
+PKG_VERSION:=2.2.0
 PKG_RELEASE:=1
 
 PYPI_NAME:=$(PKG_NAME)
-PKG_HASH:=d6ea7e1f5bdd75f40cbd1d56f0c97cd1b5b74bc9e03783858c7daa81063dd4b9
+PKG_HASH:=f0fc64e052334ef294ca3951975dd926f129d62813f6c909bb523d914abe6537
 
 include $(TOPDIR)/feeds/packages/lang/python/pypi.mk
 include $(INCLUDE_DIR)/package.mk
@@ -24,18 +24,17 @@ define Package/$(PKG_NAME)
 	TITLE+= (console UI & daemon)
 	DEPENDS:= \
 	    +python3-chardet \
-	    +python3-ifaddr \
 	    +python3-libtorrent \
 	    +python3-mako \
+	    +python3-markupsafe \
 	    +python3-pillow \
-	    +python3-pyasn1 \
 	    +python3-pyopenssl \
 	    +python3-pyxdg \
 	    +python3-rencode \
+	    +python3-service-identity \
 	    +python3-setproctitle \
 	    +python3-setuptools \
-	    +python3-twisted \
-	    +python3-zope-interface
+	    +python3-twisted
 endef
 
 define Package/$(PKG_NAME)-ui-web
@@ -69,28 +68,8 @@ define Package/$(PKG_NAME)-ui-web/install
 	$(call Python3/FixShebang,$(1)/usr/bin/*)
 endef
 
-# define Build/Configure
-# 	$(call Py3Build/Configure)
-# 	$(SED) 's/^#.*disable-libevent/disable-libevent/' $(PKG_BUILD_DIR)/setup.cfg
-# 	export CFLAGS="$(TARGET_CFLAGS)"; \
-# 	export LDFLAGS="$(TARGET_LDFLAGS)"; \
-# 	export PYTHON="$(PYTHON3)"; \
-# 	cd $(PKG_BUILD_DIR); \
-# 	$(PYTHON3) setup.py build_ext --inplace --force --disable-shared \
-# 		--curl-config=$(STAGING_DIR_HOST)/bin/curl-config \
-# 		--openssl=$(STAGING_DIR_HOST)/usr
-# endef
-
-# define Build/Compile
-# 	$(call Py3Build/Compile)
-
-# 	mkdir -p $(PKG_INSTALL_DIR)$(PYTHON3_PKG_DIR)/deluge
-# 	$(CP) $(PKG_BUILD_DIR)/deluge/*.py $(PKG_INSTALL_DIR)$(PYTHON3_PKG_DIR)/deluge/
-# 	$(TARGET_CC) -static -o $(PKG_INSTALL_DIR)/usr/bin/deluge $(PKG_BUILD_DIR)/deluge-*/deluge
-# endef
-
 $(eval $(call Py3Package,$(PKG_NAME)))
 $(eval $(call BuildPackage,$(PKG_NAME)))
 
-$(eval $(call Py3Package,deluge-ui-web))
-$(eval $(call BuildPackage,deluge-ui-web))
+$(eval $(call Py3Package,$(PKG_NAME)-ui-web))
+$(eval $(call BuildPackage,$(PKG_NAME)-ui-web))

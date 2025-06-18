@@ -106,6 +106,7 @@ return view.extend({
 		o = s.taboption("settings", form.Value, 'password', _('WebUI Password'),
 			_("Default password: deluge"));
 		o.password = true;
+		o.default = "deluge";
 
 		o = s.taboption("settings", form.ListValue, 'https', _('WebUI uses HTTPS'),
 			_("Not used by default"));

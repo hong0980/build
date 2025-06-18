@@ -1,4 +1,3 @@
-
 msgid "This page is the configuration file content of Deluge."
 msgstr "本页是Deluge的配置文件内容。"
 
@@ -11,223 +10,168 @@ msgstr "系统日志的最新 50 行："
 msgid "%s/download (size: %s) (used: %s/%s)"
 msgstr "%s/download (大小: %s) (已用: %s/%s)"
 
-#: config.lua:10
 msgid "Deluge Downloader"
 msgstr "Deluge 下载器"
 
-#: config.lua:11
 msgid "Deluge is a BitTorrent client with a graphical interface built using PyGTK<br>"
 msgstr "Deluge是一个通过PyGTK建立图形界面的BitTorrent客户端<br>"
 
-#: config.lua:14
 msgid "Basic Settings"
 msgstr "基本设置"
 
-#: config.lua:15
 msgid "Download Settings"
 msgstr "下载设置"
 
-#: config.lua:16
 msgid "Other Settings"
 msgstr "其他设置"
 
-#: config.lua:19
 msgid "Enabled"
 msgstr "启用"
 
-#: config.lua:22
 msgid "Run daemon as user"
 msgstr "以此用户权限运行"
 
-#: config.lua:26
 msgid "Root Path of the Profile"
 msgstr "配置保存路径"
 
-#: config.lua:27
 msgid "Saved by default in /etc/deluge"
 msgstr "默认保存在/etc/deluge"
 
-#: config.lua:30
 msgid "Download File Path"
 msgstr "下载文件路径"
 
-#: config.lua:31
 msgid "The files are stored in the download directory automatically created under the selected mounted disk"
 msgstr "文件存放在所选已挂载磁盘下自动创建的download目录中"
 
-#: config.lua:39
 msgid "Locale Language"
 msgstr "语言"
 
-#: config.lua:40
 msgid "Simplified Chinese"
 msgstr "简体中文"
 
-#: config.lua:41
 msgid "English"
 msgstr "英语"
 
-#: config.lua:45
 msgid "Listening Port"
 msgstr "监听端口"
 
-#: config.lua:46
 msgid "Default port: 8112"
 msgstr "默认端口：8112"
 
-#: config.lua:49
 msgid "WebUI Password"
 msgstr "WebUI密码"
 
-#: config.lua:50
 msgid "Default password: deluge"
 msgstr "默认密码：deluge"
 
-#: config.lua:53
 msgid "WebUI uses HTTPS"
 msgstr "WebUI使用https"
 
-#: config.lua:54
 msgid "Not used by default"
 msgstr "默认不使用"
 
-#: config.lua:56
 msgid "Not Used"
 msgstr "不使用"
 
-#: config.lua:57
 msgid "Use"
 msgstr "使用"
 
-#: config.lua:60
 msgid "Active Seeds"
 msgstr "活动种子"
 
-#: config.lua:61
 msgid "Total"
 msgstr "总数"
 
-#: config.lua:64
 msgid "Downloading"
 msgstr "正在下载"
 
-#: config.lua:67
 msgid "Seeding"
 msgstr "做种"
 
-#: config.lua:70
 msgid "Global Bandwidth Usage"
 msgstr "全局带宽使用"
 
-#: config.lua:71
 msgid "Maximum Connections"
 msgstr "最大连接数"
 
-#: config.lua:74
 msgid "Maximum Download Speed (KiB/s)"
 msgstr "最大下载速度(KiB/s)"
 
-#: config.lua:77
 msgid "Maximum Upload Speed (KiB/s)"
 msgstr "最大上传速度(KiB/s)"
 
-#: config.lua:80
 msgid "Maximum Upload Slots"
 msgstr "最大上传通道"
 
-#: config.lua:83
 msgid "Per-Torrent Bandwidth Usage"
 msgstr "每个种子带宽使用"
 
-#: config.lua:84
 msgid "Maximum Connections"
 msgstr "最大连接数"
 
-#: config.lua:87
 msgid "Maximum Upload Slots"
 msgstr "最大上传通道"
 
-#: config.lua:90
 msgid "Maximum Download Speed (KiB/s)"
 msgstr "最大下载速度(KiB/s)"
 
-#: config.lua:94
 msgid "Maximum Upload Speed (KiB/s)"
 msgstr "最大上传速度(KiB/s)"
 
-#: config.lua:98
 msgid "Sequential Download"
 msgstr "顺序下载"
 
-#: config.lua:101
 msgid "Prioritize First and Last Pieces"
 msgstr "任务首尾块优先"
 
-#: config.lua:104
 msgid "Move Completed Tasks to"
 msgstr "将已完成的任务移动到"
 
-#: config.lua:107
 msgid "Path"
 msgstr "路径"
 
-#: config.lua:110
 msgid "Copy Torrent File to"
 msgstr "将种子文件复制到"
 
-#: config.lua:113
 msgid "Path"
 msgstr "路径"
 
-#: config.lua:116
 msgid "Enable Log"
 msgstr "启用日志"
 
-#: config.lua:119
 msgid "Log Path"
 msgstr "日志路径"
 
-#: config.lua:120
 msgid "By default in the configuration directory"
 msgstr "默认在配置目录下"
 
-#: config.lua:123
 msgid "Log Level"
 msgstr "日志记录等级"
 
-#: config.lua:125
 msgid "none"
 msgstr "无"
 
-#: config.lua:126
 msgid "Error"
 msgstr "错误"
 
-#: config.lua:127
 msgid "Warning"
 msgstr "警告"
 
-#: config.lua:128
 msgid "Info"
 msgstr "信息"
 
-#: config.lua:129
 msgid "Debug"
 msgstr "调试"
 
-#: config.lua:132
 msgid "GeoIP Database Path"
 msgstr "GeoIP 数据库路径"
 
-#: config.lua:135
 msgid "Cache Size"
 msgstr "缓存大小"
 
-#: config.lua:136
 msgid "Unit: KiB"
 msgstr "单位：KiB"
 
-#: config.lua:16
 msgid "Speed and connection in download settings %s are %s"
 msgstr "下载设置中的速度和连接 %s 为 %s"
 
@@ -235,7 +179,43 @@ msgid "Unlimited"
 msgstr "无限制"
 
 msgid "Deluge - Files"
-msgstr "Deluge - 文件"
+msgstr "Deluge - 配置查看"
 
 msgid "Deluge - Logs"
-msgstr "Deluge - 日志"
+msgstr "Deluge - 日志查看"
+
+msgid "Lines:"
+msgstr "显示行数："
+
+msgid "▽ Show Oldest First"
+msgstr "▽ 正序显示(旧在前)"
+
+msgid "△ Show Newest First"
+msgstr "△ 倒序显示(新在前)"
+
+msgid "⟳ Refresh Now"
+msgstr "⟳ 立即刷新"
+
+msgid "Last %s lines of syslog (%s):"
+msgstr "系统日志 (最近%s行, %s):"
+
+msgid "Last %s lines of run log (%s):"
+msgstr "运行日志 (最近%s行, %s):"
+
+msgid "newest first"
+msgstr "新在前"
+
+msgid "oldest first"
+msgstr "旧在前"
+
+msgid "No log data."
+msgstr "没有日志数据"
+
+msgid "No log data available"
+msgstr "无可用日志数据"
+
+msgid "System log: (no data available)"
+msgstr "系统日志：(无数据)"
+
+msgid "Deluge run log: (no data available)"
+msgstr "Deluge运行日志：(无数据)"
