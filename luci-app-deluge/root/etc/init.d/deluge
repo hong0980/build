@@ -18,9 +18,7 @@ set_ownership() {
     local recursive="$2"
 
     [ -z "$user" ] && return 0
-    if ! id "$user" >/dev/null 2>&1; then
-        return 1
-    fi
+    id "$user" >/dev/null 2>&1 || return 1
 
     if [ -d "$path" ]; then
         [ "$recursive" = "1" ] && chown -R "$user" "$path" || chown "$user" "$path"
@@ -157,7 +155,7 @@ start_deluge() {
     python $profile_dir/update_deluge.py "$profile_dir"
 
     local log_param log_file
-    if [ "$enable_logging" = 1 ]; then
+    if [ "$enable_logging" -eq 1 ]; then
         create_directory "$log_dir"
         log_file="${log_dir:-$profile_dir}/deluge.log"
         touch "$log_file"
@@ -166,37 +164,42 @@ start_deluge() {
 
     if [ -n "$user" ]; then
         for dir in "$profile_dir" "$download_location" "$move_completed_path" "$torrentfiles_location" "$log_dir"; do
-            [ -n "$dir" -a -d "$dir" ] && set_ownership "$dir" 1
+            [ -n "$dir" ] && set_ownership "$dir" 1
         done
-        for file in "$profile_dir/sha1.py" "$core" "$web" "$log_file"; do
-            [ -f "$file" ] && set_ownership "$file"
+        for file in "$profile_dir/sha1.py" "$profile_dir/update_deluge.py" "$core" "$web" "$log_file"; do
+            [ -n "$file" ] && set_ownership "$file"
         done
     fi
 
     local port_param=${port:+"-p $port"}
     local user_param=${user:+"-U $user"}
-    local profile_param=${profile_dir:+"-c $profile_dir"}
 
-	procd_open_instance 'deluged'
-	procd_set_param command /usr/bin/deluged -d $profile_param $log_param $user_param
-	procd_set_param respawn
-	procd_set_param stdout 1
-	procd_set_param stderr 1
-	procd_set_param file /usr/bin/deluged
-	procd_set_param term_timeout 10
-	procd_close_instance
+    procd_open_instance 'deluged'
+    procd_set_param command /usr/bin/deluged -d -c $profile_dir $log_param $user_param
+    procd_set_param respawn 300 5 5
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_set_param file /usr/bin/deluged
+    procd_set_param term_timeout 10
+    procd_close_instance
 
-	procd_open_instance 'deluge-web'
-	procd_set_param command /usr/bin/deluge-web -d $profile_param $log_param $user_param $port_param
-	procd_set_param respawn
-	procd_set_param stdout 1
-	procd_set_param stderr 1
-	procd_set_param file /usr/bin/deluge-web
-	procd_set_param term_timeout 10
-	procd_close_instance
+    procd_open_instance 'deluge-web'
+    procd_set_param command /usr/bin/deluge-web -d -c $profile_dir $log_param $user_param $port_param
+    procd_set_param respawn
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_set_param file /usr/bin/deluge-web
+    procd_set_param term_timeout 10
+    procd_close_instance
 
-    ps | grep -q "[d]eluged" && log_msg 'Start deluge service'
-    ps | grep -q "[d]eluge-web" && log_msg 'Start deluge-web service'
+    (
+        sleep 5
+        for proc in deluged deluge-web; do
+            pgrep -x "$proc" >/dev/null \
+                && log_msg "✅ $proc is running" \
+                || log_msg "❌ $proc failed to start"
+        done
+    ) &
 }
 
 start_service() {
@@ -205,7 +208,18 @@ start_service() {
 }
 
 stop_service() {
-    log_msg 'Stop deluge-web service'
+    local deluge_pid=$(pgrep -x deluged)
+    [ -z "$deluge_pid" ] && return 0
+
+    kill -TERM "$deluge_pid" 2>/dev/null
+
+    timeout=10
+    while kill -0 "$deluge_pid" 2>/dev/null && [ $((timeout--)) -gt 0 ]; do
+        sleep 1
+    done
+
+    kill -0 "$deluge_pid" 2>/dev/null && kill -KILL "$deluge_pid"
+    log_msg 'Stop deluged service'
 }
 
 reload_service() {

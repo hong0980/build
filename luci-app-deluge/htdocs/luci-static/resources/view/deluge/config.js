@@ -4,50 +4,28 @@
 'require view';
 'require fs';
 
-function renderWebUIButton(status, port, https) {
-	if (!status) return '';
-	const proto = https ? 'https' : 'http';
-	const host = window.location.hostname;
-	const url = `${proto}://${host}:${port}`;
-	return E('button', {
-		class: 'btn cbi-button cbi-button-apply',
-		style: 'margin-left:10px;',
-		click: () => window.open(url, '_blank')
-	}, _('Open Web Interface'));
-}
-
-function parseMountedDisks(diskList, option) {
-	const devMap = {};
-	diskList.trim().split('\n').slice(1).forEach(line => {
-		const [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
-		if (!dev?.includes('dev') || !mount?.startsWith('/mnt') || devMap[dev]) return;
-		devMap[dev] = true;
-		const path = mount + '/download';
-		option.value(path, _('%s/download (size: %s) (used: %s/%s)').format(path, size, used, usedPct));
-	});
-}
-
 return view.extend({
 	load: function () {
 		return Promise.all([
 			uci.load('deluge'),
-			fs.exec_direct('/usr/bin/pgrep', ['deluge']).then(res => res.trim()).catch(() => ''),
-			fs.exec_direct('/bin/df', ['-h'])
+			fs.exec_direct('/bin/df', ['-h']),
+			fs.exec_direct('/usr/bin/pgrep', ['deluge'])
+				.then(r => r.trim()).catch(() => '')
 		]);
 	},
 
-	render: function ([uciData, statusStr, diskList]) {
-		const status = statusStr !== '';
-		const port = uci.get('deluge', 'main', 'port') || '8112';
-		const https = uci.get('deluge', 'main', 'https') === 'true';
+	render: function ([uciData, diskList, statusStr]) {
+		var status = statusStr !== '';
+		var port = uci.get('deluge', 'main', 'port') || '8112';
+		var https = uci.get('deluge', 'main', 'https') === 'true';
 		var m, s, o;
 
 		m = new form.Map('deluge', _('Deluge Downloader'), [
-			E('div', {}, _('Deluge is a BitTorrent client with a graphical interface built using PyGTK<br>')),
+			E('div', {}, _('Deluge is a BitTorrent client with a graphical interface built using PyGTK')),
 			E('br'),
 			E('div', { style: `font-weight:bold; color:${status ? 'green' : 'red'}` }, [
 				_('Deluge ') + (status ? _('RUNNING') : _('NOT RUNNING')),
-				renderWebUIButton(status, port, https)
+				this.renderWebUIButton(status, port, https)
 			])
 		]);
 
@@ -61,16 +39,16 @@ return view.extend({
 
 		// settings
 		o = s.taboption("settings", form.Flag, 'enabled', _('Enabled'));
-		o.default = "0"
-		o.rmempty = false
+		o.default = "0";
+		o.rmempty = false;
 
 		var user = s.taboption("settings", form.ListValue, 'user', _('Run daemon as user'));
 		user.load = function (section_id) {
 			return fs.read('/etc/passwd').then(data => {
 				data.split('\n').forEach(line => {
-					const parts = line.split(':');
-					const name = parts[0];
-					const uid = parseInt(parts[2], 10);
+					var parts = line.split(':');
+					var name = parts[0];
+					var uid = parseInt(parts[2], 10);
 
 					if (name && (name === 'root' || uid >= 100)) {
 						user.value(name);
@@ -90,7 +68,7 @@ return view.extend({
 		o.default = '/mnt/sda3/download';
 		o.rmempty = false;
 		if (typeof diskList === 'string') {
-			parseMountedDisks(diskList, o);
+			this.parseMountedDisks(diskList, o);
 		}
 
 		o = s.taboption("settings", form.ListValue, 'language', _('Locale Language'));
@@ -100,6 +78,7 @@ return view.extend({
 
 		o = s.taboption("settings", form.Value, 'port', _('Listening Port'),
 			_("Default port: 8112"));
+		o.rmempty = false;
 		o.default = "8112";
 		o.datatype = 'port';
 
@@ -113,29 +92,45 @@ return view.extend({
 		o.value('false', _('Not Used'));
 		o.value('true', _('Use'));
 		o.default = 'false';
+		o.enabled = 'true';
+		o.disabled = 'false';
 
 		// download
 		o = s.taboption("download", form.Flag, 'sequential_download', _('Sequential Download'));
-		o.enabled = 'true';
+		o.rmempty = false;
+		o.default = 'true';
+		o.enabled  = 'true';
 		o.disabled = 'false';
 
 		o = s.taboption("download", form.Flag, 'prioritize_first_last_pieces',
 			_('Prioritize First and Last Pieces'));
-		o.enabled = 'true';
+		o.rmempty = false;
+		o.default = 'false';
+		o.enabled  = 'true';
+		o.disabled = 'false';
 
 		o = s.taboption("download", form.Flag, 'move_completed', _('Move Completed Tasks to'));
-		o.enabled = 'true';
+		o.rmempty  = false;        // 总是写入配置文件
+		o.default  = 'false';       // 默认不勾选
+		o.enabled  = 'true';       // 勾选时写入值
+		o.disabled = 'false';      // 不勾选时写入值
 
 		o = s.taboption("download", form.Value, 'move_completed_path', _('Path'));
-		o.depends('move_completed', '1');
+		o.depends('move_completed', 'true');
+		o.placeholder = "/mnt/sda3/download"
 
 		o = s.taboption("download", form.Flag, 'copy_torrent_file', _('Copy Torrent File to'));
-		o.enabled = 'true';
+		o.rmempty  = false;
+		o.default  = 'false';
+		o.enabled  = 'true';
+		o.disabled = 'false';
 
 		o = s.taboption("download", form.Value, 'torrentfiles_location', _('Path'));
-		o.depends('copy_torrent_file', '1');
+		o.depends('copy_torrent_file', 'true');
+		o.placeholder = "/mnt/sda3/download"
 
 		o = s.taboption("download", form.Flag, "speed", _("Global Bandwidth Usage"));
+		o.rmempty = false;
 
 		o = s.taboption("download", form.Value, 'max_connections_global', _('Max Connections'));
 		o.default = '200';
@@ -156,6 +151,7 @@ return view.extend({
 		// other
 		o = s.taboption("other", form.Flag, 'enable_logging', _('Enable Log'));
 		o.default = '1';
+		o.rmempty = false;
 
 		o = s.taboption("other", form.Value, 'log_dir', _('Log Path'),
 			_("By default in the configuration directory"));
@@ -167,6 +163,7 @@ return view.extend({
 		o.value('warning', _('Warning'));
 		o.value('info', _('Info'));
 		o.value('debug', _('Debug'));
+		o.depends('enable_logging', '1');
 		o.default = 'error';
 
 		o = s.taboption("other", form.Value, 'geoip_db_location', _('GeoIP Database Path'));
@@ -177,5 +174,28 @@ return view.extend({
 		o.datatype = 'uinteger';
 
 		return m.render();
+	},
+
+	renderWebUIButton: function (status, port, https) {
+		if (!status) return '';
+		var proto = https ? 'https' : 'http';
+		var host = window.location.hostname;
+		var url = `${proto}://${host}:${port}`;
+		return E('button', {
+			class: 'btn cbi-button cbi-button-apply',
+			style: 'margin-left:10px;',
+			click: () => window.open(url, '_blank')
+		}, _('Open Web Interface'));
+	},
+
+	parseMountedDisks: function (diskList, option) {
+		var devMap = {};
+		diskList.trim().split('\n').slice(1).forEach(line => {
+			var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
+			if (!dev?.includes('dev') || !mount?.startsWith('/mnt') || devMap[dev]) return;
+			devMap[dev] = true;
+			option.value(mount + '/download',
+				_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
+		});
 	}
 });

@@ -1,20 +1,14 @@
 msgid "This page is the configuration file content of Deluge."
 msgstr "本页是Deluge的配置文件内容。"
 
-msgid "Last 50 lines of run log:"
-msgstr "运行日志的最新 50 行："
-
-msgid "The last 50 lines of the syslog:"
-msgstr "系统日志的最新 50 行："
-
 msgid "%s/download (size: %s) (used: %s/%s)"
 msgstr "%s/download (大小: %s) (已用: %s/%s)"
 
 msgid "Deluge Downloader"
 msgstr "Deluge 下载器"
 
-msgid "Deluge is a BitTorrent client with a graphical interface built using PyGTK<br>"
-msgstr "Deluge是一个通过PyGTK建立图形界面的BitTorrent客户端<br>"
+msgid "Deluge is a BitTorrent client with a graphical interface built using PyGTK"
+msgstr "Deluge是一个通过PyGTK建立图形界面的BitTorrent客户端"
 
 msgid "Basic Settings"
 msgstr "基本设置"
