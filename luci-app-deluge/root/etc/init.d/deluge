@@ -43,19 +43,7 @@ start_deluge() {
 
     web="$profile_dir/web.conf"
     core="$profile_dir/core.conf"
-    auth="$profile_dir/auth"
     create_directory "$profile_dir" "$download_location"
-
-    if [ ! -s "$profile_dir/sha1.py" ]; then
-		cat <<-EOF > "$profile_dir/sha1.py"
-		#!/usr/bin/env python
-		import sys
-		import hashlib
-		password, pwd_sha1 = sys.argv[1:3]
-		hashed_password = hashlib.sha1(pwd_sha1.encode("utf-8") + password.encode("utf-8")).hexdigest()
-		print(hashed_password)
-		EOF
-    fi
 
     [ -s "$profile_dir/update_deluge.py" ] || {
 		cat <<-EOF > "$profile_dir/update_deluge.py"
@@ -63,60 +51,54 @@ start_deluge() {
 		import os, sys, subprocess, hashlib, random
 		from deluge.configmanager import ConfigManager, set_config_dir
 
-		b = lambda v: str(v).strip().lower() in ("1", "true", "yes", "on")
-		i = lambda v, d=0: int(v) if str(v).isdigit() else d
-		f = lambda v, d=0.0: float(v) if str(v).replace('.', '', 1).isdigit() else d
+		b = lambda v: str(v).strip().lower() in ("1","true","yes","on")
+		i = lambda v,d=0: int(v) if str(v).isdigit() else d
+		f = lambda v,d=0.0: float(v) if str(v).replace('.','',1).isdigit() else d
 
 		def uci_cfg():
-		    try:
-		        out = subprocess.run(["uci", "show", "deluge"], capture_output=True, text=True, check=True).stdout
-		        return {l.split('.')[-1].split('=')[0]: l.split('=', 1)[1].strip().strip("'") for l in out.splitlines() if '=' in l}
-		    except: return {}
+		    out = subprocess.run(["uci", "show", "deluge"], capture_output=True, text=True).stdout
+		    return {l.split('.')[-1].split('=')[0]: l.split('=', 1)[1].strip().strip("'") for l in out.splitlines() if '=' in l}
 
 		def sha1(p, s): return hashlib.sha1(s.encode() + p.encode()).hexdigest()
 		def salt(n=40): return ''.join(random.choices('abcde0123456789', k=n))
+		def update(cfg, d): c = False; [cfg.__setitem__(k,v) or (c:=True) for k,v in d.items() if v is not None and cfg.get(k)!=v]; c and cfg.save()
 
-		def update(cfg, new):
-		    changed = False
-		    for k, v in new.items():
-		        if v is not None and cfg.get(k) != v:
-		            cfg[k] = v; changed = True
-		    if changed: cfg.save()
-
-		if __name__ == "__main__":
-		    set_config_dir(sys.argv[1] if len(sys.argv) > 1 else "/etc/deluge")
+		if __name__=="__main__":
 		    u = uci_cfg()
+		    config_dir = os.path.normpath(u.get("profile_dir") or "/etc/deluge")
+		    set_config_dir(config_dir)
+		    if not os.path.exists(os.path.join(config_dir,"web.conf")):
+		        from deluge.ui.web.server import DelugeWeb
+		        ws = DelugeWeb(); ws.daemon = False; ws.start(); ws.shutdown()
+
 		    core = ConfigManager("core.conf")
 		    web = ConfigManager("web.conf")
-
 		    if u.get("password"):
 		        s = web.get("pwd_salt") or salt()
 		        h = sha1(u["password"], s)
-		    else:
-		        s = h = None
+		    else: s = h = None
 
-		    update(core, {
-		        "download_location": u.get("download_location"),
-		        "move_completed": b(u.get("move_completed")),
-		        "sequential_download": b(u.get("sequential_download")),
-		        "prioritize_first_last_pieces": b(u.get("prioritize_first_last_pieces")),
-		        "move_completed_path": u.get("move_completed_path"),
-		        "max_connections_global": i(u.get("max_connections"), 200),
-		        "max_download_speed": f(u.get("max_download_speed"), 0),
-		        "max_upload_speed": f(u.get("max_upload_speed"), 0),
-		        "max_active_limit": i(u.get("max_active_limit"), -1),
-		        "max_active_seeding": i(u.get("max_active_seeding"), -1),
-		        "max_upload_slots_global": i(u.get("max_upload_slots"), -1),
-		        "torrentfiles_location": u.get("torrentfiles_location"),
+		    update(core,{
+		        "download_location":u.get("download_location"),
+		        "move_completed":b(u.get("move_completed")),
+		        "sequential_download":b(u.get("sequential_download")),
+		        "move_completed_path":u.get("move_completed_path"),
+		        "max_connections_global":i(u.get("max_connections"),200),
+		        "max_download_speed":f(u.get("max_download_speed")),
+		        "max_upload_speed":f(u.get("max_upload_speed")),
+		        "max_active_limit":i(u.get("max_active_limit"),-1),
+		        "max_active_seeding":i(u.get("max_active_seeding"),-1),
+		        "max_upload_slots_global":i(u.get("max_upload_slots"),-1),
+		        "torrentfiles_location":u.get("torrentfiles_location"),
+		        "prioritize_first_last_pieces":b(u.get("prioritize_first_last_pieces"))
 		    })
 
-		    update(web, {
-		        "port": i(u.get("port"), 8112),
-		        "https": b(u.get("https", "0")),
-		        "language": u.get("language", "en_GB"),
-		        "geoip_db_location": os.path.join(u.get("geoip_db_location", "/usr/share/GeoIP"), "GeoIP.dat"),
-		        "pwd_salt": s,
-		        "pwd_sha1": h
+		    update(web,{
+		        "pwd_salt":s, "pwd_sha1":h,
+		        "port":i(u.get("port"),8112),
+		        "https":b(u.get("https","0")),
+		        "language":u.get("language","en_GB"),
+		        "geoip_db_location":os.path.join(u.get("geoip_db_location","/usr/share/GeoIP"),"GeoIP.dat")
 		    })
 		EOF
     }
@@ -136,22 +118,6 @@ start_deluge() {
 		EOF
     fi
 
-    if [ ! -s "$web" ]; then
-	    dwsalt=$(awk -F'"' '/pwd_salt/ {print $4}' $web 2>/dev/null || tr -dc 'a-e0-9' < /dev/urandom | head -c 40)
-	    pwd_sha1="$(python $profile_dir/sha1.py $password $dwsalt)"
-		cat <<-EOF > "$web"
-		{
-		    "port": $port,
-		    "https": $https,
-		    "pwd_salt": "$dwsalt",
-		    "pwd_sha1": "$pwd_sha1",
-		    "language": "$language",
-		    "show_session_speed": true,
-		    "geoip_db_location": "$geoip_db_location/GeoIP.dat"
-		}
-		EOF
-    fi
-
     python $profile_dir/update_deluge.py "$profile_dir"
 
     local log_param log_file
@@ -166,7 +132,7 @@ start_deluge() {
         for dir in "$profile_dir" "$download_location" "$move_completed_path" "$torrentfiles_location" "$log_dir"; do
             [ -n "$dir" ] && set_ownership "$dir" 1
         done
-        for file in "$profile_dir/sha1.py" "$profile_dir/update_deluge.py" "$core" "$web" "$log_file"; do
+        for file in "$profile_dir/update_deluge.py" "$core" "$web" "$log_file"; do
             [ -n "$file" ] && set_ownership "$file"
         done
     fi
@@ -196,8 +162,8 @@ start_deluge() {
         sleep 5
         for proc in deluged deluge-web; do
             pgrep -x "$proc" >/dev/null \
-                && log_msg "✅ $proc is running" \
-                || log_msg "❌ $proc failed to start"
+                && log_msg "$proc is running" \
+                || log_msg "$proc failed to start"
         done
     ) &
 }

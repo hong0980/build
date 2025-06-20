@@ -2,29 +2,42 @@
 #
 # Copyright (C) 2025 sirpdboy herboy2008@gmail.com https://github.com/sirpdboy/luci-app-watchdog
 #
-. /lib/functions.sh
 
-config_load watchdog
+. /lib/functions.sh
 
 # 检测防火墙类型
 detect_firewall_type() {
-	if command -v nft >/dev/null && [ -x /sbin/fw4 ]; then
-		echo "nft"
-	elif command -v iptables >/dev/null; then
-		echo "iptables"
-	else
-		echo "unknown"
-	fi
+    if command -v nft >/dev/null && [ -x /sbin/fw4 ]; then
+        echo "nft"
+    elif command -v iptables >/dev/null; then
+        echo "iptables"
+    else
+        echo "unknown"
+    fi
 }
 
 # 读取设置文件
 get_config() {
-	[[ -z "$1" ]] && return
-	config_get "$1" config "$1"
+	while [[ "$*" != "" ]]; do
+		[[ "$1" == "lang" ]] && {
+			lang=$(uci get luci.main.lang 2>/dev/null)
+			if [ -z "$lang" ] || [[ "$lang" == "auto" ]]; then
+				lang=$(echo "${LANG:-${LANGUAGE:-${LC_ALL:-${LC_MESSAGES:-zh_cn}}}}" | awk -F'[ .@]' '{print tolower($1)}' | sed 's/-/_/' 2>/dev/null)
+			fi
+		} || {
+			config_load watchdog
+			config_get "$1" config "$1" ''
+		}
+		shift
+	done
 }
 
 # 初始化设置信息
 read_config() {
+	get_config \
+		"enable" "sleeptime" "lang" \
+		"login_control" "login_max_num" \
+		"login_web_black" "login_ip_black_timeout" "port_release_enable" "login_port_white" "login_port_forward_list" "login_ip_white_timeout"
 
 	(echo "$login_control" | grep -q "web_logged") && web_logged="true"
 	(echo "$login_control" | grep -q "ssh_logged") && ssh_logged="true"
@@ -82,6 +95,7 @@ main() {
 	dir="/tmp/watchdog"
 	logfile="${dir}/watchdog.log"
 	mkdir -p "$(dirname "$logfile")"
+	get_config "thread_num"
 	[ -z "$thread_num" ] || [ "$thread_num" -eq "0" ] && thread_num=5
 	[ "$1" ] && [ $1 == "t1" ] && thread_num=1
 	max_thread_num="$thread_num"
@@ -106,11 +120,7 @@ main() {
 	PROCESS_TAG="{watchdog}_${MAIN_PID}"
 
 	# 初始化
-	if [ "$1" ]; then
-		silent_run read_config
-	else
-		silent_run read_config
-	fi
+	silent_run read_config
 
 	# 载入在线设备
 	init
@@ -167,7 +177,8 @@ length_str() {
 
 # 字符串显示宽度处理
 cut_str() {
-	[ -z "$1" ] && [ -z "$2" ] && return
+	[ -z "$1" ] && return
+		[ -z "$2" ] && return
 	local result
 	# 调试模式不要输出信息
 	{
@@ -201,14 +212,11 @@ cut_str() {
 
 # 翻译
 translate() {
-	lang=$(uci get luci.main.lang 2>/dev/null)
-	[[ -z "$lang" || "$lang" == "auto" ]] && \
-		lang=$(echo "${LANG:-${LANGUAGE:-${LC_ALL:-${LC_MESSAGES:-zh_cn}}}}" \
-			| awk -F'[ .@]' '{print tolower($1)}' | sed 's/-/_/' 2>/dev/null)
 	local template="$1"
 	shift  # 移出第一个参数，剩余参数作为变量
 
 	# 获取基础翻译
+
 	local lua_script=$(cat <<LUA
 	require "luci.i18n".setlanguage("$lang")
 	print(require "luci.i18n".translate([==[$template]==]))
@@ -233,7 +241,7 @@ rand() {
 }
 # 初始化日志
 log() {
-	echo "$(date "+%Y-%m-%d %H:%M:%S") - $*" >> "$logfile"
+    echo "$(date "+%Y-%m-%d %H:%M:%S") - $1" >> "$logfile"
 }
 
 # 文件锁
@@ -276,17 +284,12 @@ run_with_tag() {
 	fi
 }
 
-
 # 清理临时文件
 deltemp() {
 	rm -f "${dir}/send_enable.lock"   >/dev/null 2>&1
 	[ -f "$logfile" ] && local logrow=$(grep -c "" "$logfile") || local logrow="0"
 	[ "$logrow" -gt 500 ] && tail -n 300 "$logfile" >"${logfile}.tmp" && mv "${logfile}.tmp" "$logfile" && log "[DEBUG] $(translate "Log exceeded limit, keeping last 300 entries")"
 }
-
-# ------------------------------------
-# 信息获取类
-
 
 # 获取接口信息
 getinterfacelist() {
@@ -311,12 +314,12 @@ get_ip_attribution() {
 	done <<<"$sorted_attribution_urls"
 }
 
-
 # 检测程序开关
 enable_test() {
 	[ -z "$1" ] && local time_n=1
 	for i in $(seq 1 $time_n); do
-		[ x"$enable" = x1 ] || exit
+		get_config enable
+		[ -z "$enable" ] || [ "$enable" -eq "0" ] && exit || sleep 1
 	done
 	unset i
 }
@@ -482,8 +485,8 @@ set_ip_black() {
 		[ -z "$ip_black" ] && ip_black=$(echo "$ip_black_info" | grep -Eo "([\da-fA-F0-9]{1,4}(:{1,2})){1,15}[\da-fA-F0-9]{1,4}")
 		[ -z "$ip_black" ] && continue
 		cat ${ip_blacklist_path} | grep -q -w -i ${ip_black} && sed -i "/^${ip_black}/d" ${ip_blacklist_path} && echo ${ip_black_info} >>${ip_blacklist_path} || {
-			del_ip_black ${ip_black}
-			log "$(translate "[Ban information]Cancel the ban IP:%s" "$ip_black")"
+		    del_ip_black ${ip_black}
+		    log "$(translate "[Ban information]Cancel the ban IP:%s" "$ip_black")"
 		}
 	done <<<"$combined_fw_info_blacklist"
 }
@@ -491,38 +494,38 @@ set_ip_black() {
 # 监听登录事件
 run_logins() {
 	if [ -n "$web_logged" ] || [ -n "$ssh_logged" ] || [ -n "$web_login_failed" ] || [ -n "$ssh_login_failed" ]; then
-		# 监听系统日志，-f 表示跟随实时日志，-p 表示日志级别为 notice
-		run_with_tag logread -f -p notice | while IFS= read -r line; do
-			[ -n "$web_logged" ] && {
-				web_login_ip=$(echo "$line" | grep -i "accepted login" | awk '{print $NF}')
-				[ -n "$web_login_ip" ] && process_login "$web_login_ip" $(echo "$line" | awk '{print $4}') web_login_counts
-			}
+			# 监听系统日志，-f 表示跟随实时日志，-p 表示日志级别为 notice
+			run_with_tag logread -f -p notice | while IFS= read -r line; do
+				[ -n "$web_logged" ] && {
+					web_login_ip=$(echo "$line" | grep -i "accepted login" | awk '{print $NF}')
+					[ -n "$web_login_ip" ] && process_login "$web_login_ip" $(echo "$line" | awk '{print $4}') web_login_counts
+				}
 
-			[ -n "$ssh_logged" ] && {
-				ssh_login_ip=$(echo "$line" | grep -i "Password auth succeeded\|Pubkey auth succeeded" | awk '{print $NF}' | sed -nr 's#^(.*):.[0-9]{1,5}#\1#gp' | sed -e 's/%.*//')
-				[ -n "$ssh_login_ip" ] && process_login "$ssh_login_ip" $(echo "$line" | awk '{print $4}') ssh_login_counts
-			}
+				[ -n "$ssh_logged" ] && {
+					ssh_login_ip=$(echo "$line" | grep -i "Password auth succeeded\|Pubkey auth succeeded" | awk '{print $NF}' | sed -nr 's#^(.*):.[0-9]{1,5}#\1#gp' | sed -e 's/%.*//')
+					[ -n "$ssh_login_ip" ] && process_login "$ssh_login_ip" $(echo "$line" | awk '{print $4}') ssh_login_counts
+				}
 
-			[ -n "$web_login_failed" ] && {
-				web_failed_ip=$(echo "$line" | grep -i "failed login" | awk '{print $NF}')
-				[ -n "$web_failed_ip" ] && process_login "$web_failed_ip" $(echo "$line" | awk '{print $4}') web_failed_counts
-			}
+				[ -n "$web_login_failed" ] && {
+					web_failed_ip=$(echo "$line" | grep -i "failed login" | awk '{print $NF}')
+					[ -n "$web_failed_ip" ] && process_login "$web_failed_ip" $(echo "$line" | awk '{print $4}') web_failed_counts
+				}
 
-			[ -n "$ssh_login_failed" ] && {
-				# 匹配特定的 SSH 登录失败情况并提取 IP 地址和时间
-				ssh_failed_ip=$(echo "$line" | grep -iE "Bad password attempt|Login attempt for nonexistent user|Max auth tries reached" | awk '{print $NF}' | sed -nr 's#^(.*):[0-9]{1,5}#\1#gp' | sed -e 's/%.*//')
+				[ -n "$ssh_login_failed" ] && {
+					# 匹配特定的 SSH 登录失败情况并提取 IP 地址和时间
+					ssh_failed_ip=$(echo "$line" | grep -iE "Bad password attempt|Login attempt for nonexistent user|Max auth tries reached" | awk '{print $NF}' | sed -nr 's#^(.*):[0-9]{1,5}#\1#gp' | sed -e 's/%.*//')
 
-				# 如果未能提取到 IP，从日志标识符提取失败用户的 ID，并再次提取 IP
-				if [ -z "$ssh_failed_ip" ]; then
-					ssh_failed_num=$(echo "$line" | sed -n 's/.*authpriv\.warn dropbear\[\([0-9]\+\)\]: Login attempt for nonexistent user/\1/p')
-					[ -n "$ssh_failed_num" ] && ssh_failed_ip=$(logread notice | grep "authpriv\.info dropbear\[${ssh_failed_num}\].*Child connection from" | awk '{print $NF}' | sed -nr 's#^(.*):[0-9]{1,5}#\1#gp' | sed -e 's/%.*//' | tail -n 1)
-				fi
+					# 如果未能提取到 IP，从日志标识符提取失败用户的 ID，并再次提取 IP
+					if [ -z "$ssh_failed_ip" ]; then
+						ssh_failed_num=$(echo "$line" | sed -n 's/.*authpriv\.warn dropbear\[\([0-9]\+\)\]: Login attempt for nonexistent user/\1/p')
+						[ -n "$ssh_failed_num" ] && ssh_failed_ip=$(logread notice | grep "authpriv\.info dropbear\[${ssh_failed_num}\].*Child connection from" | awk '{print $NF}' | sed -nr 's#^(.*):[0-9]{1,5}#\1#gp' | sed -e 's/%.*//' | tail -n 1)
+					fi
 
-				# 如果成功提取到 IP 地址，调用 process_login 处理
-				[ -n "$ssh_failed_ip" ] && process_login "$ssh_failed_ip" $(echo "$line" | awk '{print $4}') ssh_failed_counts
-			}
+					# 如果成功提取到 IP 地址，调用 process_login 处理
+					[ -n "$ssh_failed_ip" ] && process_login "$ssh_failed_ip" $(echo "$line" | awk '{print $4}') ssh_failed_counts
+				}
 
-		done
+			done
 		sleep 1
 	fi
 }
@@ -547,15 +550,16 @@ process_login() {
 
 	# 封禁
 	if [[ ("$3" == "web_failed_counts" || "$3" == "ssh_failed_counts") ]]; then
-		if [[ $count -ge $login_max_num ]] ;then
-			add_ip_black ${login_ip} && {
-				unset login_counts["$login_ip"]
-				login_send "$login_ip" "$login_time" "$3"
-				log "$(translate "[Block Information]Add to blacklist IP: %s Attempts:%s Time:%s" "$login_ip" "$count" "$login_time" )"
-			}
-		else
+	    if [[ $count -ge $login_max_num ]] ;then
+		add_ip_black ${login_ip} && {
+			unset login_counts["$login_ip"]
 			login_send "$login_ip" "$login_time" "$3"
-		fi
+			log "$(translate "[Block Information]Add to blacklist IP: %s Attempts:%s Time:%s" "$login_ip" "$count" "$login_time" )"
+		}
+	    else
+	     	login_send "$login_ip" "$login_time" "$3"
+	    fi
+
 	fi
 
 	# 正常登录
@@ -575,6 +579,7 @@ login_send() {
 	local login_ip=$1
 	local login_time=$2
 	local log_type=$3
+
 	local login_title
 	local login_content
 
@@ -599,18 +604,15 @@ login_send() {
 	else
 		local login_mode=$(logread notice | grep -E ".* $login_time.*$login_ip.*" | awk '{for(i=8;i<NF;i++) if($i=="from") break; else printf $i " "}' | tail -n 1)
 	fi
-	if [[ "$log_type" == *"failed"* ]]; then
-		local login_title=$(translate "%s frequent %s login attempts" "$login_ip" "$log_type_short")
-		local login_content_info="${str_splitline}${str_title_start}$(translate "Block Information")${str_title_end}"
-		log "$(translate "Device %s (%s) frequently attempted %s %s login" "$login_ip" "$login_ip_attribution" "$log_type_short" "$login_mode")"
-	else
-		local login_title=$(translate "%s logged into router via %s" "$login_ip" "$log_type_short")
-		local login_content_info="${str_splitline}${str_title_start}$(translate "Login Information")${str_title_end}"
-		log "$(translate "Device %s (%s) logged into router via %s %s" "$login_ip" "$login_ip_attribution" "$log_type_short" "$login_mode")"
-	fi
+		if [[ "$log_type" == *"failed"* ]]; then
+			local login_title=$(translate "%s frequent %s login attempts" "$login_ip" "$log_type_short")
+			local login_content_info="${str_splitline}${str_title_start}$(translate "Block Information")${str_title_end}"
+			log "$(translate "Device %s (%s) frequently attempted %s %s login" "$login_ip" "$login_ip_attribution" "$log_type_short" "$login_mode")"
+		else
+			local login_title=$(translate "%s logged into router via %s" "$login_ip" "$log_type_short")
+			local login_content_info="${str_splitline}${str_title_start}$(translate "Login Information")${str_title_end}"
+			log "$(translate "Device %s (%s) logged into router via %s %s" "$login_ip" "$login_ip_attribution" "$log_type_short" "$login_mode")"
+		fi
 }
-
-get_config "enable" "sleeptime" "thread_num" "login_control" "login_max_num" "login_web_black" \
-	"login_ip_black_timeout" "port_release_enable" "login_port_white" "login_port_forward_list" "login_ip_white_timeout"
 
 main "$@"

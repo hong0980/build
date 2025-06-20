@@ -63,8 +63,8 @@ validate_device() {
 set_dns() {
 	for cfg in wan lan; do
 		eval dns_list=\$${cfg}_dns
-		uci_remove network "$cfg" dns
-		uci_remove network wan peerdns
+		uci_remove network "$cfg" dns >/dev/null 2>&1
+		uci_remove network wan peerdns >/dev/null 2>&1
 		[ -z "$dns_list" ] && continue
 		for dns in $dns_list; do
 			uci_add_list network "$cfg" dns "$dns"
