@@ -86,6 +86,7 @@ return view.extend({
 			_("Default password: deluge"));
 		o.password = true;
 		o.default = "deluge";
+		o.datatype = 'and(rangelength(6, 10), string)'
 
 		o = s.taboption("settings", form.ListValue, 'https', _('WebUI uses HTTPS'),
 			_("Not used by default"));
@@ -129,24 +130,71 @@ return view.extend({
 		o.depends('copy_torrent_file', 'true');
 		o.placeholder = "/mnt/sda3/download"
 
-		o = s.taboption("download", form.Flag, "speed", _("Global Bandwidth Usage"));
-		o.rmempty = false;
+		o = s.taboption("download", form.Flag, "speed_enable",
+			_("Enable Bandwidth Control"),
+			_("Settings rules:") + "\n" +
+			"• " + _("-1 = No limit") + "\n" +
+			"• " + _("0 = Disable") + "\n" +
+			"• " + _("≥1 = Specific limit"));
 
-		o = s.taboption("download", form.Value, 'max_connections_global', _('Max Connections'));
-		o.default = '200';
-		o.depends("speed", '1');
+		const speedOptions = [
+			{
+				name: 'max_connections_global',
+				title: _('Max Connections'),
+				description: _('Total connections for all torrents'),
+				default: '200'
+			},
+			{
+				name: 'max_download_speed',
+				title: _('Max Download (KiB/s)'),
+				description: _('Total download speed limit'),
+				default: '-1'
+			},
+			{
+				name: 'max_upload_speed',
+				title: _('Max Upload (KiB/s)'),
+				description: _('Total upload speed limit'),
+				default: '-1'
+			},
+			{
+				name: 'max_upload_slots_global',
+				title: _('Max Upload Slots'),
+				description: _('Simultaneous upload peers'),
+				default: '-1'
+			},
+			{
+				name: 'max_active_limit',
+				title: _('Active Torrents'),
+				description: _('Total downloading + seeding'),
+				default: '-1'
+			},
+			{
+				name: 'max_active_downloading',
+				title: _('Downloading Torrents'),
+				description: _('Max simultaneous downloads'),
+				default: '-1'
+			},
+			{
+				name: 'max_active_seeding',
+				title: _('Seeding Torrents'),
+				description: _('Max simultaneous seeds'),
+				default: '-1'
+			}
+		];
 
-		o = s.taboption("download", form.Value, 'max_download_speed', _('Maximum Download Speed (KiB/s)'));
-		o.default = '-1';
-		o.depends("speed", '1');
-
-		o = s.taboption("download", form.Value, 'max_upload_speed', _('Maximum Upload Speed (KiB/s)'));
-		o.default = '-1';
-		o.depends("speed", '1');
-
-		o = s.taboption("download", form.Value, 'max_upload_slots_global', _('Maximum Upload Slots'));
-		o.default = '-1';
-		o.depends("speed", '1');
+		speedOptions.forEach(opt => {
+			o = s.taboption("download", form.Value, opt.name, opt.title, opt.description);
+			o.default = opt.default;
+			o.depends("speed_enable", '1');
+			o.datatype = 'integer';
+			o.validate = function(section, value) {
+				value = parseInt(value);
+				if (isNaN(value)) {
+					return _("Please enter a valid number");
+				}
+				return (value === -1 || value >= 0) ? true : _("Value must be -1 (no limit) or a positive number");
+			};
+		});
 
 		// other
 		o = s.taboption("other", form.Flag, 'enable_logging', _('Enable Log'));
@@ -169,9 +217,16 @@ return view.extend({
 		o = s.taboption("other", form.Value, 'geoip_db_location', _('GeoIP Database Path'));
 		o.default = '/usr/share/GeoIP';
 
-		o = s.taboption("other", form.Value, 'cache_size', _('Cache Size'), _('Unit: KiB'));
+		o = s.taboption("other", form.Value, 'cache_size', _('Cache Size'),
+			_('Disk cache size in KiB (1024-65536)'));
 		o.default = "32768";
 		o.datatype = 'uinteger';
+		o.validate = function(section_id, value) {
+			const size = +value;
+			if (size < 1024) return _('Minimum 1024 KiB');
+			if (size > 65536) return _('Maximum 65536 KiB');
+			return true;
+		};
 
 		return m.render();
 	},

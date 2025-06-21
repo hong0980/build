@@ -70,66 +70,6 @@ msgstr "不使用"
 msgid "Use"
 msgstr "使用"
 
-msgid "Active Seeds"
-msgstr "活动种子"
-
-msgid "Total"
-msgstr "总数"
-
-msgid "Downloading"
-msgstr "正在下载"
-
-msgid "Seeding"
-msgstr "做种"
-
-msgid "Global Bandwidth Usage"
-msgstr "全局带宽使用"
-
-msgid "Maximum Connections"
-msgstr "最大连接数"
-
-msgid "Maximum Download Speed (KiB/s)"
-msgstr "最大下载速度(KiB/s)"
-
-msgid "Maximum Upload Speed (KiB/s)"
-msgstr "最大上传速度(KiB/s)"
-
-msgid "Maximum Upload Slots"
-msgstr "最大上传通道"
-
-msgid "Per-Torrent Bandwidth Usage"
-msgstr "每个种子带宽使用"
-
-msgid "Maximum Connections"
-msgstr "最大连接数"
-
-msgid "Maximum Upload Slots"
-msgstr "最大上传通道"
-
-msgid "Maximum Download Speed (KiB/s)"
-msgstr "最大下载速度(KiB/s)"
-
-msgid "Maximum Upload Speed (KiB/s)"
-msgstr "最大上传速度(KiB/s)"
-
-msgid "Sequential Download"
-msgstr "顺序下载"
-
-msgid "Prioritize First and Last Pieces"
-msgstr "任务首尾块优先"
-
-msgid "Move Completed Tasks to"
-msgstr "将已完成的任务移动到"
-
-msgid "Path"
-msgstr "路径"
-
-msgid "Copy Torrent File to"
-msgstr "将种子文件复制到"
-
-msgid "Path"
-msgstr "路径"
-
 msgid "Enable Log"
 msgstr "启用日志"
 
@@ -162,9 +102,6 @@ msgstr "GeoIP 数据库路径"
 
 msgid "Cache Size"
 msgstr "缓存大小"
-
-msgid "Unit: KiB"
-msgstr "单位：KiB"
 
 msgid "Speed and connection in download settings %s are %s"
 msgstr "下载设置中的速度和连接 %s 为 %s"
@@ -213,3 +150,90 @@ msgstr "系统日志：(无数据)"
 
 msgid "Deluge run log: (no data available)"
 msgstr "Deluge运行日志：(无数据)"
+
+msgid "Sequential Download"
+msgstr "顺序下载"
+
+msgid "Prioritize First and Last Pieces"
+msgstr "任务首尾块优先"
+
+msgid "Move Completed Tasks to"
+msgstr "将已完成的任务移动到"
+
+msgid "Copy Torrent File to"
+msgstr "将种子文件复制到"
+
+msgid "Path"
+msgstr "路径"
+
+msgid "Enable Bandwidth Control"
+msgstr "启用带宽控制"
+
+msgid "Settings rules:"
+msgstr "设置规则："
+
+msgid "-1 = No limit"
+msgstr "-1 = 无限制"
+
+msgid "0 = Disable"
+msgstr "0 = 禁用"
+
+msgid "≥1 = Specific limit"
+msgstr "≥1 = 限制值"
+
+msgid "Max Connections"
+msgstr "最大连接数"
+
+msgid "Total connections for all torrents"
+msgstr "所有种子的总连接数"
+
+msgid "Max Download (KiB/s)"
+msgstr "最大下载 (KiB/s)"
+
+msgid "Total download speed limit"
+msgstr "总下载速度限制"
+
+msgid "Max Upload (KiB/s)"
+msgstr "最大上传 (KiB/s)"
+
+msgid "Total upload speed limit"
+msgstr "总上传速度限制"
+
+msgid "Max Upload Slots"
+msgstr "同时上传数"
+
+msgid "Simultaneous upload peers"
+msgstr "同时上传的对等节点数"
+
+msgid "Active Torrents"
+msgstr "活动种子数"
+
+msgid "Total downloading + seeding"
+msgstr "下载和做种任务总数"
+
+msgid "Downloading Torrents"
+msgstr "下载任务数"
+
+msgid "Max simultaneous downloads"
+msgstr "最大同时下载数"
+
+msgid "Seeding Torrents"
+msgstr "做种任务数"
+
+msgid "Max simultaneous seeds"
+msgstr "最大同时做种数"
+
+msgid "Please enter a valid number"
+msgstr "请输入有效的数字"
+
+msgid "Value must be -1 (no limit) or ≥0"
+msgstr "值必须为 -1（无限制）或 ≥0"
+
+msgid "Disk cache size in KiB (1024-65536)"
+msgstr "磁盘缓存大小 (KiB，范围 1024-65536)"
+
+msgid "Minimum 1024 KiB"
+msgstr "最小值 1024 KiB"
+
+msgid "Maximum 65536 KiB"
+msgstr "最大值 65536 KiB"

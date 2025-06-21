@@ -8,25 +8,9 @@ log_msg() {
 }
 
 get_config() {
-    for val in "$@"; do
+    for val in $@; do
         config_get "$val" main "$val" ""
     done
-}
-
-set_ownership() {
-    local path="$1"
-    local recursive="$2"
-
-    [ -z "$user" ] && return 0
-    id "$user" >/dev/null 2>&1 || return 1
-
-    if [ -d "$path" ]; then
-        [ "$recursive" = "1" ] && chown -R "$user" "$path" || chown "$user" "$path"
-        chmod 750 "$path"
-    elif [ -f "$path" ]; then
-        chown "$user" "$path"
-        chmod 640 "$path"
-    fi
 }
 
 create_directory() {
@@ -35,92 +19,106 @@ create_directory() {
     done
 }
 
+set_ownership() {
+    [ -z "$user" ] && return 0
+    id "$user" >/dev/null 2>&1 || return 1
+
+    _paths="$log_file $log_dir $profile_dir $download_location $move_completed_path $torrentfiles_location"
+
+    echo "$_paths" | while read -r path; do
+        [ -z "$path" ] && continue
+        if [ -d "$path" ]; then
+            chown -R "$user" "$path"
+            chmod 750 "$path"
+        elif [ -f "$path" ]; then
+            chown "$user" "$path"
+            chmod 640 "$path"
+        fi
+    done
+}
+
+create_update_script() {
+	cat <<-EOF > "$profile_dir/update_deluge.py"
+	#!/usr/bin/env python3
+	import os, re, sys, subprocess, hashlib, random
+	from deluge.configmanager import ConfigManager, set_config_dir
+
+	b = lambda v: v if (s:=str(v).strip().lower()) not in {'1','0','true','false'} else s in {'1','true'}
+	def sha1(p, s): return hashlib.sha1(s.encode() + p.encode()).hexdigest()
+	def salt(n=40): return ''.join(random.choices('abcde0123456789', k=n))
+	def update(cfg, d): c = False; [cfg.__setitem__(k,v) or (c:=True) for k,v in d.items() if v is not None and cfg.get(k)!=v]; c and cfg.save()
+	def uci_cfg():
+	    out = subprocess.run(["uci", "show", "deluge"], capture_output=True, text=True).stdout
+	    return {m[1]: m[2] for l in out.splitlines() if (m := re.match(r".*main\.([^=]+)='(.*)'$", l))}
+
+	if __name__=="__main__":
+	    u = uci_cfg()
+	    config_dir = os.path.normpath(u.get("profile_dir") or "/etc/deluge")
+	    set_config_dir(config_dir)
+	    if not os.path.exists(os.path.join(config_dir,"web.conf")):
+	        from deluge.ui.web.server import DelugeWeb
+	        w = DelugeWeb(); w.daemon = False; w.start(); w.shutdown()
+
+	    web = ConfigManager("web.conf")
+	    core = ConfigManager("core.conf")
+	    if u.get("password"):
+	        s = web.get("pwd_salt") or salt()
+	        h = sha1(u["password"], s)
+	    else: s = h = None
+
+	    update(core,{
+	        "cache_size":int(u.get("cache_size")),
+	        "move_completed":b(u.get("move_completed")),
+	        "download_location":u.get("download_location"),
+	        "move_completed_path":u.get("move_completed_path"),
+	        "sequential_download":b(u.get("sequential_download")),
+	        "torrentfiles_location":u.get("torrentfiles_location"),
+	        "max_upload_speed":int(u.get("max_upload_speed",-1)),
+	        "max_active_limit":int(u.get("max_active_limit",-1)),
+	        "max_active_seeding":int(u.get("max_active_seeding",-1)),
+	        "max_download_speed":int(u.get("max_download_speed",-1)),
+	        "max_connections_global":int(u.get("max_connections_global",200)),
+	        "max_upload_slots_global":int(u.get("max_upload_slots_global",-1)),
+	        "prioritize_first_last_pieces":b(u.get("prioritize_first_last_pieces"))
+	    })
+
+	    update(web,{
+	        "pwd_salt":s, "pwd_sha1":h,
+	        "port":int(u.get("port",8112)),
+	        "https":b(u.get("https",False)),
+	        "language":u.get("language","en_GB"),
+	        "geoip_db_location":os.path.join(u.get("geoip_db_location","/usr/share/GeoIP"),"GeoIP.dat")
+	    })
+	EOF
+}
+
 start_deluge() {
     config_get_bool enabled main enabled 0
     [ "$enabled" -eq 0 ] && return 1
-    get_config download_location enable_logging geoip_db_location https \
-        language log_dir log_level password port profile_dir user
 
-    web="$profile_dir/web.conf"
+    get_config "port user log_dir log_level profile_dir enable_logging download_location"
+
     core="$profile_dir/core.conf"
     create_directory "$profile_dir" "$download_location"
-
-    [ -s "$profile_dir/update_deluge.py" ] || {
-		cat <<-EOF > "$profile_dir/update_deluge.py"
-		#!/usr/bin/env python3
-		import os, sys, subprocess, hashlib, random
-		from deluge.configmanager import ConfigManager, set_config_dir
-
-		b = lambda v: str(v).strip().lower() in ("1","true","yes","on")
-		i = lambda v,d=0: int(v) if str(v).isdigit() else d
-		f = lambda v,d=0.0: float(v) if str(v).replace('.','',1).isdigit() else d
-
-		def uci_cfg():
-		    out = subprocess.run(["uci", "show", "deluge"], capture_output=True, text=True).stdout
-		    return {l.split('.')[-1].split('=')[0]: l.split('=', 1)[1].strip().strip("'") for l in out.splitlines() if '=' in l}
-
-		def sha1(p, s): return hashlib.sha1(s.encode() + p.encode()).hexdigest()
-		def salt(n=40): return ''.join(random.choices('abcde0123456789', k=n))
-		def update(cfg, d): c = False; [cfg.__setitem__(k,v) or (c:=True) for k,v in d.items() if v is not None and cfg.get(k)!=v]; c and cfg.save()
-
-		if __name__=="__main__":
-		    u = uci_cfg()
-		    config_dir = os.path.normpath(u.get("profile_dir") or "/etc/deluge")
-		    set_config_dir(config_dir)
-		    if not os.path.exists(os.path.join(config_dir,"web.conf")):
-		        from deluge.ui.web.server import DelugeWeb
-		        ws = DelugeWeb(); ws.daemon = False; ws.start(); ws.shutdown()
-
-		    core = ConfigManager("core.conf")
-		    web = ConfigManager("web.conf")
-		    if u.get("password"):
-		        s = web.get("pwd_salt") or salt()
-		        h = sha1(u["password"], s)
-		    else: s = h = None
-
-		    update(core,{
-		        "download_location":u.get("download_location"),
-		        "move_completed":b(u.get("move_completed")),
-		        "sequential_download":b(u.get("sequential_download")),
-		        "move_completed_path":u.get("move_completed_path"),
-		        "max_connections_global":i(u.get("max_connections"),200),
-		        "max_download_speed":f(u.get("max_download_speed")),
-		        "max_upload_speed":f(u.get("max_upload_speed")),
-		        "max_active_limit":i(u.get("max_active_limit"),-1),
-		        "max_active_seeding":i(u.get("max_active_seeding"),-1),
-		        "max_upload_slots_global":i(u.get("max_upload_slots"),-1),
-		        "torrentfiles_location":u.get("torrentfiles_location"),
-		        "prioritize_first_last_pieces":b(u.get("prioritize_first_last_pieces"))
-		    })
-
-		    update(web,{
-		        "pwd_salt":s, "pwd_sha1":h,
-		        "port":i(u.get("port"),8112),
-		        "https":b(u.get("https","0")),
-		        "language":u.get("language","en_GB"),
-		        "geoip_db_location":os.path.join(u.get("geoip_db_location","/usr/share/GeoIP"),"GeoIP.dat")
-		    })
-		EOF
-    }
 
     if [ ! -s "$core" ]; then
 		cat <<-EOF > "$core"
 		{
 		    "random_port": true,
-		    "queue_new_to_top": true,
-		    "new_release_check": false,
-		    "pre_allocate_storage": true,
 		    "max_active_limit": -1,
 		    "max_active_seeding": -1,
+		    "queue_new_to_top": true,
+		    "new_release_check": false,
 		    "max_upload_slots_global": -1,
+		    "pre_allocate_storage": true,
 		    "download_location": "$download_location"
 		}
 		EOF
     fi
 
-    python $profile_dir/update_deluge.py "$profile_dir"
-
     local log_param log_file
+    local port_param=${port:+"-p $port"}
+    local user_param=${user:+"-U $user"}
     if [ "$enable_logging" -eq 1 ]; then
         create_directory "$log_dir"
         log_file="${log_dir:-$profile_dir}/deluge.log"
@@ -128,17 +126,9 @@ start_deluge() {
         log_param="-l $log_file ${log_level:+"-L $log_level"}"
     fi
 
-    if [ -n "$user" ]; then
-        for dir in "$profile_dir" "$download_location" "$move_completed_path" "$torrentfiles_location" "$log_dir"; do
-            [ -n "$dir" ] && set_ownership "$dir" 1
-        done
-        for file in "$profile_dir/update_deluge.py" "$core" "$web" "$log_file"; do
-            [ -n "$file" ] && set_ownership "$file"
-        done
-    fi
-
-    local port_param=${port:+"-p $port"}
-    local user_param=${user:+"-U $user"}
+    set_ownership
+    [ -s "$profile_dir/update_deluge.py" ] || create_update_script
+    python $profile_dir/update_deluge.py
 
     procd_open_instance 'deluged'
     procd_set_param command /usr/bin/deluged -d -c $profile_dir $log_param $user_param
