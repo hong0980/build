@@ -53,13 +53,13 @@ msgid "Default port: 8112"
 msgstr "默认端口：8112"
 
 msgid "WebUI Password"
-msgstr "WebUI密码"
+msgstr "WebUI 密码"
 
 msgid "Default password: deluge"
 msgstr "默认密码：deluge"
 
 msgid "WebUI uses HTTPS"
-msgstr "WebUI使用https"
+msgstr "WebUI 使用https"
 
 msgid "Not used by default"
 msgstr "默认不使用"
@@ -99,9 +99,6 @@ msgstr "调试"
 
 msgid "GeoIP Database Path"
 msgstr "GeoIP 数据库路径"
-
-msgid "Cache Size"
-msgstr "缓存大小"
 
 msgid "Speed and connection in download settings %s are %s"
 msgstr "下载设置中的速度和连接 %s 为 %s"
@@ -229,11 +226,32 @@ msgstr "请输入有效的数字"
 msgid "Value must be -1 (no limit) or ≥0"
 msgstr "值必须为 -1（无限制）或 ≥0"
 
-msgid "Disk cache size in KiB (1024-65536)"
-msgstr "磁盘缓存大小 (KiB，范围 1024-65536)"
+msgid "Add torrents in Paused state"
+msgstr "添加种子时暂停"
 
-msgid "Minimum 1024 KiB"
-msgstr "最小值 1024 KiB"
+msgid "Pre-allocate disk space"
+msgstr "预分配磁盘空间"
 
-msgid "Maximum 65536 KiB"
-msgstr "最大值 65536 KiB"
+msgid "Cache Size"
+msgstr "缓存大小"
+
+msgid "Disk cache size in 16 KiB blocks (e.g. 16384 = 256 MiB)"
+msgstr "磁盘缓存大小（16 KiB块为单位，示例：16384 = 256 MiB）"
+
+msgid "Minimum: 1024 (16 MiB)"
+msgstr "最小值：1024（16 MiB）"
+
+msgid "Maximum: 65536 (1 GiB)"
+msgstr "最大值：65536（1 GiB）"
+
+msgid "Must be multiple of 1024 (16 MiB)"
+msgstr "必须是1024的倍数（16 MiB）"
+
+msgid "Cache Expiry (seconds)"
+msgstr "缓存过期时间(秒)"
+
+msgid "Show session speed in titlebar"
+msgstr "在标题栏显示速度"
+
+msgid "WebUI Session Timeout"
+msgstr "WebUI 会话超时(秒)"

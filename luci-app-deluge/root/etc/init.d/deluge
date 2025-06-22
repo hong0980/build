@@ -37,84 +37,13 @@ set_ownership() {
     done
 }
 
-create_update_script() {
-	cat <<-EOF > "$profile_dir/update_deluge.py"
-	#!/usr/bin/env python3
-	import os, re, sys, subprocess, hashlib, random
-	from deluge.configmanager import ConfigManager, set_config_dir
-
-	b = lambda v: v if (s:=str(v).strip().lower()) not in {'1','0','true','false'} else s in {'1','true'}
-	def sha1(p, s): return hashlib.sha1(s.encode() + p.encode()).hexdigest()
-	def salt(n=40): return ''.join(random.choices('abcde0123456789', k=n))
-	def update(cfg, d): c = False; [cfg.__setitem__(k,v) or (c:=True) for k,v in d.items() if v is not None and cfg.get(k)!=v]; c and cfg.save()
-	def uci_cfg():
-	    out = subprocess.run(["uci", "show", "deluge"], capture_output=True, text=True).stdout
-	    return {m[1]: m[2] for l in out.splitlines() if (m := re.match(r".*main\.([^=]+)='(.*)'$", l))}
-
-	if __name__=="__main__":
-	    u = uci_cfg()
-	    config_dir = os.path.normpath(u.get("profile_dir") or "/etc/deluge")
-	    set_config_dir(config_dir)
-	    if not os.path.exists(os.path.join(config_dir,"web.conf")):
-	        from deluge.ui.web.server import DelugeWeb
-	        w = DelugeWeb(); w.daemon = False; w.start(); w.shutdown()
-
-	    web = ConfigManager("web.conf")
-	    core = ConfigManager("core.conf")
-	    if u.get("password"):
-	        s = web.get("pwd_salt") or salt()
-	        h = sha1(u["password"], s)
-	    else: s = h = None
-
-	    update(core,{
-	        "cache_size":int(u.get("cache_size")),
-	        "move_completed":b(u.get("move_completed")),
-	        "download_location":u.get("download_location"),
-	        "move_completed_path":u.get("move_completed_path"),
-	        "sequential_download":b(u.get("sequential_download")),
-	        "torrentfiles_location":u.get("torrentfiles_location"),
-	        "max_upload_speed":int(u.get("max_upload_speed",-1)),
-	        "max_active_limit":int(u.get("max_active_limit",-1)),
-	        "max_active_seeding":int(u.get("max_active_seeding",-1)),
-	        "max_download_speed":int(u.get("max_download_speed",-1)),
-	        "max_connections_global":int(u.get("max_connections_global",200)),
-	        "max_upload_slots_global":int(u.get("max_upload_slots_global",-1)),
-	        "prioritize_first_last_pieces":b(u.get("prioritize_first_last_pieces"))
-	    })
-
-	    update(web,{
-	        "pwd_salt":s, "pwd_sha1":h,
-	        "port":int(u.get("port",8112)),
-	        "https":b(u.get("https",False)),
-	        "language":u.get("language","en_GB"),
-	        "geoip_db_location":os.path.join(u.get("geoip_db_location","/usr/share/GeoIP"),"GeoIP.dat")
-	    })
-	EOF
-}
-
 start_deluge() {
     config_get_bool enabled main enabled 0
     [ "$enabled" -eq 0 ] && return 1
 
-    get_config "port user log_dir log_level profile_dir enable_logging download_location"
-
-    core="$profile_dir/core.conf"
+    get_config  port user log_dir log_level profile_dir enable_logging \
+                download_location move_completed_path torrentfiles_location
     create_directory "$profile_dir" "$download_location"
-
-    if [ ! -s "$core" ]; then
-		cat <<-EOF > "$core"
-		{
-		    "random_port": true,
-		    "max_active_limit": -1,
-		    "max_active_seeding": -1,
-		    "queue_new_to_top": true,
-		    "new_release_check": false,
-		    "max_upload_slots_global": -1,
-		    "pre_allocate_storage": true,
-		    "download_location": "$download_location"
-		}
-		EOF
-    fi
 
     local log_param log_file
     local port_param=${port:+"-p $port"}
@@ -127,8 +56,7 @@ start_deluge() {
     fi
 
     set_ownership
-    [ -s "$profile_dir/update_deluge.py" ] || create_update_script
-    python $profile_dir/update_deluge.py
+    /usr/bin/python3 /usr/libexec/update_deluge.py
 
     procd_open_instance 'deluged'
     procd_set_param command /usr/bin/deluged -d -c $profile_dir $log_param $user_param

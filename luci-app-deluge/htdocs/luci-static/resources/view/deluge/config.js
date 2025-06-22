@@ -99,22 +99,25 @@ return view.extend({
 		// download
 		o = s.taboption("download", form.Flag, 'sequential_download', _('Sequential Download'));
 		o.rmempty = false;
-		o.default = 'true';
-		o.enabled  = 'true';
-		o.disabled = 'false';
+		o.default = '1';
+
+		o = s.taboption("download", form.Flag, 'pre_allocate_storage', _('Pre-allocate disk space'));
+		o.rmempty = false;
+		o.default = '1';
 
 		o = s.taboption("download", form.Flag, 'prioritize_first_last_pieces',
 			_('Prioritize First and Last Pieces'));
 		o.rmempty = false;
-		o.default = 'false';
-		o.enabled  = 'true';
-		o.disabled = 'false';
+		o.default = '0';
+
+		o = s.taboption("download", form.Flag, 'add_paused', _('Add torrents in Paused state'));
+		o.default = '0';
 
 		o = s.taboption("download", form.Flag, 'move_completed', _('Move Completed Tasks to'));
 		o.rmempty  = false;        // 总是写入配置文件
-		o.default  = 'false';       // 默认不勾选
-		o.enabled  = 'true';       // 勾选时写入值
-		o.disabled = 'false';      // 不勾选时写入值
+		o.default  = 'false';      // 默认不勾选
+		o.enabled  = 'true';       // 勾选时写入 true 值
+		o.disabled = 'false';      // 不勾选时写入 false 值
 
 		o = s.taboption("download", form.Value, 'move_completed_path', _('Path'));
 		o.depends('move_completed', 'true');
@@ -132,71 +135,76 @@ return view.extend({
 
 		o = s.taboption("download", form.Flag, "speed_enable",
 			_("Enable Bandwidth Control"),
-			_("Settings rules:") + "\n" +
-			"• " + _("-1 = No limit") + "\n" +
-			"• " + _("0 = Disable") + "\n" +
-			"• " + _("≥1 = Specific limit"));
+			[   _("Settings rules:"),
+				"• " + _("-1 = No limit"),
+				"• " + _("0 = Disable"),
+				"• " + _("≥1 = Specific limit")
+			].join("<br>"));
 
 		const speedOptions = [
 			{
 				name: 'max_connections_global',
 				title: _('Max Connections'),
-				description: _('Total connections for all torrents'),
-				default: '200'
-			},
-			{
-				name: 'max_download_speed',
-				title: _('Max Download (KiB/s)'),
-				description: _('Total download speed limit'),
-				default: '-1'
-			},
-			{
-				name: 'max_upload_speed',
-				title: _('Max Upload (KiB/s)'),
-				description: _('Total upload speed limit'),
-				default: '-1'
+				description: _('Total connections for all torrents')
 			},
 			{
 				name: 'max_upload_slots_global',
 				title: _('Max Upload Slots'),
-				description: _('Simultaneous upload peers'),
-				default: '-1'
+				description: _('Simultaneous upload peers')
+			},
+			{
+				name: 'max_download_speed',
+				title: _('Max Download (KiB/s)'),
+				description: _('Total download speed limit')
+			},
+			{
+				name: 'max_upload_speed',
+				title: _('Max Upload (KiB/s)'),
+				description: _('Total upload speed limit')
 			},
 			{
 				name: 'max_active_limit',
 				title: _('Active Torrents'),
-				description: _('Total downloading + seeding'),
-				default: '-1'
+				description: _('Total downloading + seeding')
 			},
 			{
 				name: 'max_active_downloading',
 				title: _('Downloading Torrents'),
-				description: _('Max simultaneous downloads'),
-				default: '-1'
+				description: _('Max simultaneous downloads')
 			},
 			{
 				name: 'max_active_seeding',
 				title: _('Seeding Torrents'),
-				description: _('Max simultaneous seeds'),
-				default: '-1'
+				description: _('Max simultaneous seeds')
 			}
 		];
 
 		speedOptions.forEach(opt => {
 			o = s.taboption("download", form.Value, opt.name, opt.title, opt.description);
-			o.default = opt.default;
+			o.default = opt.name === 'max_connections_global' ? '200' :
+						opt.name === 'max_active_downloading' ? '3' :
+						'-1';
 			o.depends("speed_enable", '1');
-			o.datatype = 'integer';
+			o.datatype = 'and(min(-1), integer)';
 			o.validate = function(section, value) {
 				value = parseInt(value);
 				if (isNaN(value)) {
 					return _("Please enter a valid number");
 				}
-				return (value === -1 || value >= 0) ? true : _("Value must be -1 (no limit) or a positive number");
+				return (value === -1 || value >= 0) ? true : _("Value must be -1 (no limit) or ≥0");
 			};
 		});
 
 		// other
+		o = s.taboption("other", form.Flag, 'show_session_speed', _('Show session speed in titlebar'));
+		o.default = '1';
+		o.rmempty = false;
+
+		o = s.taboption("other", form.Value, 'session_timeout', _('Session Timeout'));
+		o.rmempty = false;
+		o.default = "3600";
+		o.datatype = 'integer';
+
 		o = s.taboption("other", form.Flag, 'enable_logging', _('Enable Log'));
 		o.default = '1';
 		o.rmempty = false;
@@ -217,16 +225,22 @@ return view.extend({
 		o = s.taboption("other", form.Value, 'geoip_db_location', _('GeoIP Database Path'));
 		o.default = '/usr/share/GeoIP';
 
-		o = s.taboption("other", form.Value, 'cache_size', _('Cache Size'),
-			_('Disk cache size in KiB (1024-65536)'));
-		o.default = "32768";
-		o.datatype = 'uinteger';
+		o = s.taboption("other", form.Value, "cache_size", _("Cache Size"),
+			_("Disk cache size in 16 KiB blocks (e.g. 16384 = 256 MiB)"));
+		o.default = "16384";
+		o.datatype = "integer";
+
 		o.validate = function(section_id, value) {
 			const size = +value;
-			if (size < 1024) return _('Minimum 1024 KiB');
-			if (size > 65536) return _('Maximum 65536 KiB');
+			if (size < 1024) return _("Minimum: 1024 (16 MiB)");
+			if (size > 65536) return _("Maximum: 65536 (1 GiB)");
+			if (size % 1024 !== 0) return _("Must be multiple of 1024 (16 MiB)");
 			return true;
 		};
+
+		o = s.taboption("other", form.Value, 'cache_expiry', _('Cache Expiry (seconds)'));
+		o.default = "60";
+		o.datatype = 'integer';
 
 		return m.render();
 	},
