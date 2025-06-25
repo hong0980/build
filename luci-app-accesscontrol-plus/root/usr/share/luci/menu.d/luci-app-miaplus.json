@@ -1,0 +1,14 @@
+{
+	"admin/control/miaplus": {
+		"title": "Internet Access Schedule Control Plus",
+		"order": 30,
+		"action": {
+			"type": "view",
+			"path": "miaplus/base"
+		},
+		"depends": {
+			"acl": ["luci-app-miaplus"],
+			"uci": {"miaplus": true}
+		}
+	}
+}

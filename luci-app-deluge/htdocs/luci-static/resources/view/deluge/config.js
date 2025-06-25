@@ -97,21 +97,21 @@ return view.extend({
 		o.disabled = 'false';
 
 		// download
-		o = s.taboption("download", form.Flag, 'sequential_download', _('Sequential Download'));
-		o.rmempty = false;
-		o.default = '1';
-
-		o = s.taboption("download", form.Flag, 'pre_allocate_storage', _('Pre-allocate disk space'));
-		o.rmempty = false;
-		o.default = '1';
-
 		o = s.taboption("download", form.Flag, 'prioritize_first_last_pieces',
 			_('Prioritize First and Last Pieces'));
 		o.rmempty = false;
 		o.default = '0';
 
+		o = s.taboption("download", form.Flag, 'sequential_download', _('Sequential Download'));
+		o.rmempty = false;
+		o.default = '1';
+
 		o = s.taboption("download", form.Flag, 'add_paused', _('Add torrents in Paused state'));
 		o.default = '0';
+
+		o = s.taboption("download", form.Flag, 'pre_allocate_storage', _('Pre-allocate disk space'));
+		o.rmempty = false;
+		o.default = '1';
 
 		o = s.taboption("download", form.Flag, 'move_completed', _('Move Completed Tasks to'));
 		o.rmempty  = false;        // 总是写入配置文件
@@ -200,7 +200,7 @@ return view.extend({
 		o.default = '1';
 		o.rmempty = false;
 
-		o = s.taboption("other", form.Value, 'session_timeout', _('Session Timeout'));
+		o = s.taboption("other", form.Value, 'session_timeout', _('WebUI Session Timeout'));
 		o.rmempty = false;
 		o.default = "3600";
 		o.datatype = 'integer';

@@ -58,6 +58,8 @@ def main():
     hashed_password = sha1_hash(uci_config["password"], salt) if uci_config.get("password") else None
 
     core_updates = {
+        "send_info": False, #发送匿名统计
+        "new_release_check": False, #自动报告新版本/定期检查更新
         "download_location": uci_config.get("download_location", ""),
         "move_completed_path": uci_config.get("move_completed_path", ""),
         "torrentfiles_location": uci_config.get("torrentfiles_location", ""),

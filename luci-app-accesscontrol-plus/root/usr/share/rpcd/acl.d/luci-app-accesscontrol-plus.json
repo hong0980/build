@@ -1,0 +1,15 @@
+{
+	"luci-app-accesscontrol-plus": {
+		"description": "Grant UCI access for luci-app-accesscontrol-plus",
+		"read": {
+				"file": {
+					"/usr/sbin/nft": [ "exec"],
+					"/usr/sbin/iptables": [ "exec"]
+				},
+			"uci": [ "miaplus" ]
+		},
+		"write": {
+			"uci": [ "miaplus" ]
+		}
+	}
+}
