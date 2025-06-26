@@ -67,5 +67,8 @@ msgstr "启用 IPv6"
 msgid "Invalid time format. Use HH:MM."
 msgstr "无效的时间格式。使用 HH：mm。"
 
-msgig "Control date"
-msgsyr "管控日期"
+msgid "Control date"
+msgstr "管控日期"
+
+msgid "Enabled"
+msgstr "启用"

@@ -10,7 +10,7 @@ LUCI_TITLE:=LuCI Access Control Configuration
 LUCI_DEPENDS:=+snmpd
 LUCI_PKGARCH:=all
 
-PKG_NAME:=luci-app-accesscontrol-plus
+PKG_NAME:=luci-app-miaplus
 PKG_VERSION:=1
 PKG_RELEASE:=9
 
