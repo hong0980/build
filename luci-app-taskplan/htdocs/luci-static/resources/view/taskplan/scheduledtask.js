@@ -12,17 +12,17 @@ var CSS = `<style>
     [data-name="month"]  .cbi-input-text,
     [data-name="delay"]  .cbi-input-text,
     [data-name="minute"] .cbi-input-text {
-        max-width: 60px !important;
+        max-width: 55px !important;
         width: 100% !important;
     }
     [data-name="remarks"] .cbi-input-text {
-        min-width: 120px !important;
+        min-width: 110px !important;
         width: 100% !important;
     }
     [data-name="week"] .cbi-dropdown,
     [data-name="stype"] .cbi-input-select {
-        min-width: 100px !important;
-        max-width: 100px !important;
+        min-width: 85px !important;
+        max-width: 85px !important;
         width: 100% !important;
     }
     td:has(.cbi-button-remove) {
@@ -31,9 +31,22 @@ var CSS = `<style>
 }
 </style>`;
 
-var validateCrontabField = (type, value) => {
+var validateCrontabField = (type, value, monthValue) => {
     var types = {
-        'day': { min: 1, max: 31, label: _('dayss'), msg: _('1-31, "*", "*/N", ranges, or lists. E.g.: 1,5,10 or 5-10,*/2') },
+        'day': { min: 1, max: 31, label: _('dayss'), msg: _('1-31, "*", "*/N", ranges, or lists. E.g.: 1,5,10 or 5-10,*/2'),
+            getMaxDays: function(monthValue) {
+                if (!monthValue || monthValue === '*') return 31; // 情况1：未指定月份或通配符
+                var monthValidation = validateCrontabField('month', monthValue); // 情况2：验证月份值是否合法（递归调用）
+                if (monthValidation !== true) return 31; // 非法月份按最大值处理
+
+                var firstMonthPart = monthValue.split(',')[0].replace(/\/\d+$/, ''); // 取列表第一项，移除步长
+                var month = parseInt(firstMonthPart.match(/\d+/)?.[0] || 1); // 提取数字
+                if (month === 2) {
+                    var year = new Date().getFullYear();
+                    return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 29 : 28;
+                }
+                return [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+            }},
         'hour': { min: 0, max: 23, label: _('hours'), msg: _('0-23, "*", "*/N", ranges, or lists. E.g.: 0,12,18 or 8-17') },
         'month': { min: 1, max: 12, label: _('months'), msg: _('1-12, "*", "*/N", ranges, or lists. E.g.: 1,6,12 or 3-8,*/2') },
         'minute': { min: 0, max: 59, label: _('minutes'), msg: _('0-59, "*", "*/N", ranges, or lists. E.g.: 0,15,30,45 or 10-50,*/5') },
@@ -58,6 +71,13 @@ var validateCrontabField = (type, value) => {
     var basePattern = /^(\*(\/\d+)?|\d+(-\d+)?(\/\d+)?)(,(\*(\/\d+)?|\d+(-\d+)?(\/\d+)?))*$/;
     if (!basePattern.test(value)) {
         return _('Invalid format for %s. Example: (%s)').format(field.label, field.msg);
+    }
+
+    if (type === 'day') {
+        field.max = types.day.getMaxDays(monthValue);
+        if (monthValue && !/^\d+$/.test(monthValue)) {
+            field.msg += _(' (Note: Actual days may be limited by specific months)');
+        }
     }
 
     for (var part of parts) {
@@ -112,79 +132,9 @@ var validateCrontabField = (type, value) => {
     return true;
 };
 
-function showScriptEditModal(v) {
-    var path = '/etc/taskplan/customscript1', scriptLabel = _('Custom Script 1');
-    if (v === '16') { path = '/etc/taskplan/customscript2'; scriptLabel = _('Custom Script 2')};
-    fs.stat(path).then(function() {
-        return fs.read(path).then(function(content) {
-            var textareaContent = (typeof content === 'string' ? content : '') || '';
-            var modalContent = [
-                E('b', { 'style': 'color:red;' }, _('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
-                E('textarea', {
-                    'name': 'script',
-                    'style': 'width: 600px; min-height: 200px; margin-bottom: 16px; font-family:Consolas, monospace;'
-                }, '%h'.format(textareaContent)),
-                E('div', { 'class': 'button-row' }, [
-                    E('div', { 'click': ui.hideModal, 'class': 'btn cbi-button-neutral' }, _('Cancel')),
-                    E('div', {
-                        'class': 'btn cbi-button-positive',
-                        'click': function(ev) {
-                            var textarea = document.querySelector('textarea[name="script"]');
-                            var value = textarea ? textarea.value.trim().replace(/\r\n/g, '\n') + '\n' : '';
-                            fs.write(path, value).then(function() {
-                                ui.addTimeLimitedNotification(null, E('p',
-                                    _('Contents of %s have been saved.').format(scriptLabel)), 3000, 'info');
-                                ui.hideModal();
-                            }).catch(function(err) {
-                                ui.addTimeLimitedNotification(null, E('p',
-                                    _('Unable to save contents: %s').format(err.message)), 8000, 'error');
-                                ui.hideModal();
-                            });
-                        }
-                    }, _('Save'))
-                ])
-            ];
-            ui.showModal(_('Edit %s').format(scriptLabel), modalContent);
-            var textarea = document.querySelector('textarea[name="script"]');
-            if (textarea) {
-                textarea.value = textareaContent;
-            }
-        }).catch(function(err) {
-            ui.addTimeLimitedNotification(null, E('p', {},
-                _('Unable to read %s: %s').format(scriptLabel, err.message)), 8000, 'error');
-            ui.hideModal();
-        });
-    }).catch(function() {
-        ui.addTimeLimitedNotification(null, E('p', {}, _('No such file %s').format(scriptLabel)), 8000, 'error');
-        ui.hideModal();
-    });
-};
-
 return view.extend({
     load: function() {
         return uci.load('taskplan');
-    },
-
-    defineStypeOptions: function(section) {
-        var e = section.option(form.ListValue, 'stype', _('Scheduled Type'));
-        e.default = '1';
-        e.value('01', _('Scheduled Reboot'));
-        e.value('02', _('Scheduled Poweroff'));
-        e.value('03', _('Scheduled ReNetwork'));
-        e.value('04', _('Scheduled RestartSamba'));
-        e.value('05', _('Scheduled Restartlan'));
-        e.value('06', _('Scheduled Restartwan'));
-        e.value('07', _('Scheduled Closewan'));
-        e.value('08', _('Scheduled Clearmem'));
-        e.value('09', _('Scheduled Sysfree'));
-        e.value('10', _('Scheduled DisReconn'));
-        e.value('11', _('Scheduled DisRereboot'));
-        e.value('12', _('Scheduled Restartmwan3'));
-        e.value('13', _('Scheduled Wifiup'));
-        e.value('14', _('Scheduled Wifidown'));
-        e.value('15', _('Custom Script 1'));
-        e.value('16', _('Custom Script 2'));
-        return e;
     },
 
     render: function() {
@@ -194,21 +144,14 @@ return view.extend({
                 _('Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc.'),
                 E('a', { 'target': '_blank', 'style': 'margin-left: 10px;',
                     'href': 'https://github.com/sirpdboy/luci-app-taskplan'
-                }, [ _('GitHub @sirpdboy/luci-app-taskplan') ])
+                }, _('GitHub @sirpdboy/luci-app-taskplan'))
             ])
         ]);
         s = m.section(form.TableSection, 'stime', _('Scheduled task'), [
-            E('div', {}, [
-                _('Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-6, 0 and 6 = Sunday)')
-            ]),
             E('div', { 'style': 'color:#666; margin-top:0.6em;' }, [
-                _('"*" any value, "," value list separator, "-" range of values, "/" step values')
-            ]),
-            E('div', { 'style': 'color:#666; margin-top:0.6em;' }, [
+                _('Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-6, 0 and 6 = Sunday)'), E('br'),
+                _('"*" any value, "," value list separator, "-" range of values, "/" step values'), E('br'),
                 _('Examples: Range 2-5 (means 2 to 5), List 1,3,5 (means 1 and 3 and 5), Step */5 (means every 5 units)')
-            ]),
-            E('div', { 'style': 'color:#666; margin-top:0.6em;' }, [
-                _('After adding, you can view the scheduled tasks in the list and verify the execution time and meaning of the cron expression with one click.')
             ])
         ]);
         s.addremove = true;
@@ -236,7 +179,8 @@ return view.extend({
         e.rmempty = true;
         e.default = '*';
         e.validate = function(section_id, value) {
-            return validateCrontabField('day', value);
+            return validateCrontabField('day', value,
+                this.section.formvalue(section_id, 'month'));
         };
 
         e = s.option(form.Value, 'month', _('Month'));
@@ -267,7 +211,7 @@ return view.extend({
 
         e = s.option(form.Value, 'remarks', _('Remarks'));
 
-        e = s.option(form.Button, '_button', _('verify/example'));
+        e = s.option(form.Button, 'button', _('verify'));
         e.inputstyle = 'apply';
         e.onclick = function(ev, section_id) {
             var crontab = document.getElementById(`widget.cbid.taskplan.${section_id}.month`).title;
@@ -300,13 +244,10 @@ return view.extend({
                 .forEach(row => {
                     var fields = { minute: '', hour: '', day: '', month: '', week: '' };
                     var selectors = {
-                        remarks: 'cbi-input-text',
-                        minute: 'cbi-input-text',
-                        hour: 'cbi-input-text',
-                        day: 'cbi-input-text',
-                        month: 'cbi-input-text',
-                        week: 'cbi-dropdown',
-                        stype: 'cbi-input-select'
+                        hour: 'cbi-input-text', day: 'cbi-input-text',
+                        month: 'cbi-input-text', week: 'cbi-dropdown',
+                        remarks: 'cbi-input-text', minute: 'cbi-input-text',
+                        button: 'cbi-button-apply', stype: 'cbi-input-select'
                     };
 
                     Object.entries(selectors).forEach(([name, type]) => {
@@ -321,7 +262,7 @@ return view.extend({
 
                             if (name === 'stype') {
                                 e.addEventListener('change', () => {
-                                    if (['15', '16'].includes(e.value)) showScriptEditModal(e.value);
+                                    if (['15', '16'].includes(e.value)) this.showScriptEditModal(e.value);
                                 });
                             }
                         });
@@ -331,7 +272,10 @@ return view.extend({
                     if (crontabString) {
                         Object.entries(selectors).forEach(([name, type]) => {
                             row.querySelectorAll(`[data-name="${name}"] .${type}`).forEach(e => {
-                                e.title = name === 'remarks' ? e.value ?? '' : crontabString;
+                                e.title = name === 'remarks' ? e.value ?? '' :
+                                name === 'stype' ? e.options[e.selectedIndex].textContent :
+                                name === 'button' ? _('Click to crontab.guru Verification ') + crontabString :
+                                crontabString;
                             });
                         });
                     }
@@ -339,5 +283,72 @@ return view.extend({
         }).observe(view, { childList: true, subtree: true });
 
         return m.render();
+    },
+
+    defineStypeOptions: function(s) {
+        var e = s.option(form.ListValue, 'stype', _('Scheduled Type'));
+        e.default = '1';
+        e.value('01', _('Scheduled Reboot'));
+        e.value('02', _('Scheduled Poweroff'));
+        e.value('03', _('Scheduled ReNetwork'));
+        e.value('04', _('Scheduled RestartSamba'));
+        e.value('05', _('Scheduled Restartlan'));
+        e.value('06', _('Scheduled Restartwan'));
+        e.value('07', _('Scheduled Closewan'));
+        e.value('08', _('Scheduled Clearmem'));
+        e.value('09', _('Scheduled Sysfree'));
+        e.value('10', _('Scheduled DisReconn'));
+        e.value('11', _('Scheduled DisRereboot'));
+        e.value('12', _('Scheduled Restartmwan3'));
+        e.value('13', _('Scheduled Wifiup'));
+        e.value('14', _('Scheduled Wifidown'));
+        e.value('15', _('Custom Script 1'));
+        e.value('16', _('Custom Script 2'));
+        return e;
+    },
+
+    showScriptEditModal: function (v) {
+        var path = '/etc/taskplan/customscript1', scriptLabel = _('Custom Script 1');
+        if (v === '16') { path = '/etc/taskplan/customscript2'; scriptLabel = _('Custom Script 2')};
+        fs.stat(path).then(function() {
+            return fs.read(path).then(function(content) {
+                var textareaContent = (typeof content === 'string' ? content : '') || '';
+                var modalContent = [
+                    E('b', { 'style': 'color:red;' },
+                        _('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
+                    E('textarea', { 'name': 'script',
+                        'style': 'width: 600px; min-height: 200px; margin-bottom: 16px; font-family:Consolas, monospace;'
+                    }, '%h'.format(textareaContent)),
+                    E('div', { 'class': 'button-row' }, [
+                        E('div', { 'click': ui.hideModal, 'class': 'btn cbi-button-neutral' }, _('Cancel')),
+                        E('div', { 'class': 'btn cbi-button-positive',
+                            'click': function(ev) {
+                                var textarea = document.querySelector('textarea[name="script"]');
+                                var value = textarea ? textarea.value.trim().replace(/\r\n/g, '\n') + '\n' : '';
+                                fs.write(path, value).then(function() {
+                                    ui.addTimeLimitedNotification(null, E('p',
+                                        _('Contents of %s have been saved.').format(scriptLabel)), 3000, 'info');
+                                    ui.hideModal();
+                                }).catch(function(err) {
+                                    ui.addTimeLimitedNotification(null, E('p',
+                                        _('Unable to save contents: %s').format(err.message)), 8000, 'error');
+                                    ui.hideModal();
+                                });
+                            }
+                        }, _('Save'))
+                    ])
+                ];
+                ui.showModal(_('Edit %s').format(scriptLabel), modalContent);
+                var textarea = document.querySelector('textarea[name="script"]');
+                if (textarea) textarea.value = textareaContent;
+            }).catch(function(err) {
+                ui.addTimeLimitedNotification(null, E('p', {},
+                    _('Unable to read %s: %s').format(scriptLabel, err.message)), 8000, 'error');
+                ui.hideModal();
+            });
+        }).catch(function() {
+            ui.addTimeLimitedNotification(null, E('p', {}, _('No such file %s').format(scriptLabel)), 8000, 'error');
+            ui.hideModal();
+        });
     }
 });

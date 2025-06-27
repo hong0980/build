@@ -7,10 +7,10 @@ msgstr ""
 "定时任务执行和开机任务执行。预置功能超过10种，包括重启、关机、网络重启、释放内存、系统清理、网络共享、关闭网络、自动检测网络断开并重连、MWAN3负载均衡重连检测、自定义脚本等"
 
 msgid "Scheduled task"
-msgstr "定时执行任务"
+msgstr "定时任务"
 
 msgid "Startup task"
-msgstr "开机启动任务"
+msgstr "开机任务"
 
 msgid "The task to be executed upon startup, with a startup delay time unit of seconds."
 msgstr "开机启动执行的任务，启动延时时间单位为秒。"
@@ -123,14 +123,14 @@ msgstr "\"*\" 任何值，\",\" 值列表分隔符，\"-\" 值范围，\"/\" 步
 msgid "Examples: Range 2-5 (means 2 to 5), List 1,3,5 (means 1 and 3 and 5), Step */5 (means every 5 units)"
 msgstr "示例：区间 2-5（表示2到5），列表 1,3,5（表示1和3和5），步进 */5（表示每5单位一次）"
 
-msgid "After adding, you can view the scheduled tasks in the list and verify the execution time and meaning of the cron expression with one click."
-msgstr "添加成功后，可在任务文件的计划任务列表中查看任务，并可一键验证表达式的执行时间与含义。"
-
 msgid "Click Verify after selecting"
 msgstr "选择后点击验证"
 
-msgid "verify/example"
-msgstr "验证/示例"
+msgid "verify"
+msgstr "验证"
+
+msgid "Click to crontab.guru Verification "
+msgstr "点击到 crontab.guru 验证 "
 
 msgid "Executed"
 msgstr "执行"
@@ -197,6 +197,9 @@ msgstr "0-59，\"*\"，\"*/N\"，区间或列表。例如：0,15,30,45 或 10-50
 
 msgid "0-7 (0/7=Sunday), \"*\", \"*/N\", ranges, or lists. E.g.: 0,1,5 or 1-5,*/2"
 msgstr "0-7（0/7=星期日），\"*\"，\"*/N\"，区间或列表。例如：0,1,5 或 1-5,*/2"
+
+msgid "Note: Actual days may be limited by specific months"
+msgstr "注意：实际天数可能受具体月份限制"
 
 msgid "Unknown field type: %s"
 msgstr "未知字段类型：%s"

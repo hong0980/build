@@ -3,6 +3,8 @@
 START=30
 USE_PROCD=1
 
+. /usr/share/libubox/jshn.sh
+
 log_msg() {
 	logger -p daemon.info -t "miaplus" "$*"
 	echo "$*"
@@ -10,16 +12,13 @@ log_msg() {
 
 add_rule() {
 	config_get_bool enable 'config' enable '0'
-	config_get_bool client_enable "$1" enable '0'
-	[ "$enable" -eq "0" -o "$client_enable" -eq '0' ] && return
+	config_get_bool client "$1" enable '0'
+	[ "$enable" -eq "0" -o "$client" -eq '0' ] && return
 
 	config_get_bool ipv6enable 'config' ipv6enable '0'
 	local cmd="iptables"
 	[ "$ipv6enable" = "1" ] && cmd="ip6tables"
 	config_get_bool strict 'config' strict '0'
-
-	$cmd -t filter -N MIAPLUS 2>/dev/null
-	$cmd -t filter -F MIAPLUS 2>/dev/null
 
 	$cmd -C INPUT -p udp --dport 53 -j MIAPLUS >/dev/null 2>&1 || \
 		$cmd -I INPUT -p udp --dport 53 -m comment --comment "Rule For Control" -j MIAPLUS
@@ -33,30 +32,34 @@ add_rule() {
 	$cmd -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "Rule For Control"
 	$cmd -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "Rule For Control"
 
-	config_get macaddr "$1" macaddr ''
-	config_get timeon "$1" timeon "10:00"
-	config_get timeoff "$1" timeoff "23:00"
-	config_get control_date "$1" control_date "1 2 3 4 5 6 7"
-	macaddr=$(echo "$macaddr" | tr 'A-F' 'a-f')
+	config_get mac "$1" macaddr ''
+	config_get on "$1" timeon "10:00"
+	config_get off "$1" timeoff "23:00"
+	config_get control "$1" control_date "1 2 3 4 5 6 7"
+	mac=$(echo "$mac" | tr 'A-F' 'a-f')
 
-	local weekdays=$(echo "$control_date" | tr ' ' ',' | grep -Eo '[1-7](,[1-7])*')
+	local weekdays=$(echo "$control" | tr ' ' ',' | grep -Eo '[1-7](,[1-7])*')
 	$cmd -t filter -A MIAPLUS \
-		-m mac --mac-source "$macaddr" \
+		-m mac --mac-source "$mac" \
 		-m time --kerneltz \
-		--timestart "$timeon" \
-		--timestop "$timeoff" \
+		--timestart "$on" \
+		--timestop "$of" \
 		--weekdays "$weekdays" \
 		-j DROP \
-		-m comment --comment "Block ${macaddr} ${timeon}-${timeoff} ${weekdays}"
+		-m comment --comment "Block ${mac} ${on}-${of} ${weekdays}"
 
 	$cmd -t filter -A MIAPLUS \
-		-m mac --mac-source "$macaddr" \
+		-m mac --mac-source "$mac" \
 		-j ACCEPT \
-		 -m comment --comment "Allow ${macaddr} other times"
+		-m comment --comment "Allow ${mac} other times"
 }
 
 start_service() {
 	stop_service
+	iptables -t filter -N MIAPLUS 2>/dev/null
+	iptables -t filter -F MIAPLUS 2>/dev/null
+	ip6tables -t filter -N MIAPLUS 2>/dev/null
+	ip6tables -t filter -F MIAPLUS 2>/dev/null
 	config_load miaplus
 	config_foreach add_rule macbind
 }

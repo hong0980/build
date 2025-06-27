@@ -106,22 +106,9 @@ stop_service() {
     log_msg 'Stop deluged service'
 }
 
-# reload() {
-#     config_load deluge
-#     config_get_bool enable main enable "1"
-#     config_get profile_dir main profile_dir
-
-#     if [ "$enable" = "1" -a -d "$profile_dir" ]; then
-#         /usr/bin/python3 /usr/libexec/update_deluge
-#     else
-#         stop
-#         start
-#     fi
-# }
-
 reload_service() {
-    stop_service
-    start_service
+    stop
+    start
 }
 
 service_triggers() {
