@@ -90,7 +90,7 @@ return view.extend({
                                     var expr = selectNode.value;
                                     if (expr) window.open('https://crontab.guru/#' + expr.replace(/ /g, '_'));
                                 }
-                            }, _('verify/example'));
+                            }, _('verify'));
                             return [selectNode, buttonNode];
                         })()
                     : []

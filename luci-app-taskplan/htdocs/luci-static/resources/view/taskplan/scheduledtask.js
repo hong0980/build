@@ -5,31 +5,31 @@
 'require view';
 'require form';
 
-var CSS = `<style>
-@media (min-width: 768px) {
-    [data-name="day"]    .cbi-input-text,
-    [data-name="hour"]   .cbi-input-text,
-    [data-name="month"]  .cbi-input-text,
-    [data-name="delay"]  .cbi-input-text,
-    [data-name="minute"] .cbi-input-text {
-        max-width: 55px !important;
-        width: 100% !important;
-    }
-    [data-name="remarks"] .cbi-input-text {
-        min-width: 110px !important;
-        width: 100% !important;
-    }
-    [data-name="week"] .cbi-dropdown,
-    [data-name="stype"] .cbi-input-select {
-        min-width: 85px !important;
-        max-width: 85px !important;
-        width: 100% !important;
-    }
-    td:has(.cbi-button-remove) {
-        width: 50px !important;
-    }
-}
-</style>`;
+var CSS = '                                 \
+@media (min-width: 768px) {                 \
+    [data-name="day"]    .cbi-input-text    \
+    [data-name="hour"]   .cbi-input-text,   \
+    [data-name="month"]  .cbi-input-text,   \
+    [data-name="delay"]  .cbi-input-text,   \
+    [data-name="minute"] .cbi-input-text {  \
+        max-width: 55px !important;         \
+        width: 100% !important;             \
+    }                                       \
+    [data-name="remarks"] .cbi-input-text   \
+        min-width: 110px !important;        \
+        width: 100% !important;             \
+    }                                       \
+    [data-name="week"] .cbi-dropdown,       \
+    [data-name="stype"] .cbi-input-select { \
+        min-width: 85px !important;         \
+        max-width: 85px !important;         \
+        width: 100% !important;             \
+    }                                       \
+    td:has(.cbi-button-remove) {            \
+        width: 50px !important;             \
+    }                                       \
+}                                           \
+';
 
 var validateCrontabField = (type, value, monthValue) => {
     var types = {
@@ -139,7 +139,8 @@ return view.extend({
 
     render: function() {
         var m, s, e;
-        m = new form.Map('taskplan', CSS, [
+        m = new form.Map('taskplan', '', [
+            E('style', { 'type': 'text/css' }, [ CSS ]),
             E('b', {}, [
                 _('Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc.'),
                 E('a', { 'target': '_blank', 'style': 'margin-left: 10px;',
@@ -274,7 +275,7 @@ return view.extend({
                             row.querySelectorAll(`[data-name="${name}"] .${type}`).forEach(e => {
                                 e.title = name === 'remarks' ? e.value ?? '' :
                                 name === 'stype' ? e.options[e.selectedIndex].textContent :
-                                name === 'button' ? _('Click to crontab.guru Verification ') + crontabString :
+                                name === 'button' ? _('Click to verify on crontab.guru: %s ').format(crontabString) :
                                 crontabString;
                             });
                         });
@@ -316,6 +317,18 @@ return view.extend({
                 var modalContent = [
                     E('b', { 'style': 'color:red;' },
                         _('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
+                    E('div', {}, [
+                        E('button', { 'class': 'btn cbi-button-action',
+                            'title': _('Click to upload the script to %s').format(path),
+                            'click': function() {
+                                return ui.uploadFile(path)
+                                    .then(function() {
+                                        ui.addTimeLimitedNotification(null, E('p',
+                                            _('File saved to %s').format(path)), 3000, 'info');
+                                        ui.hideModal();
+                                    });
+                            }}, [ _('Upload') ]),
+                    ]),
                     E('textarea', { 'name': 'script',
                         'style': 'width: 600px; min-height: 200px; margin-bottom: 16px; font-family:Consolas, monospace;'
                     }, '%h'.format(textareaContent)),
