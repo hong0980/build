@@ -135,9 +135,6 @@ msgstr "选择后点击验证"
 msgid "verify"
 msgstr "验证"
 
-msgid "Click to verify on crontab.guru: %s "
-msgstr "点击在 crontab.guru 验证：%s "
-
 msgid "Executed"
 msgstr "执行"
 
@@ -156,28 +153,13 @@ msgstr "最后修改：%s，大小：%s字节"
 msgid "File not found %s"
 msgstr "%s 文件不存在"
 
-msgid "Minute"
-msgstr "分"
-
-msgid "Hours"
-msgstr "时"
-
-msgid "Day"
-msgstr "日"
-
-msgid "Month"
-msgstr "月"
-
-msgid "Week"
-msgstr "周"
-
 msgid "minutes"
 msgstr "分钟"
 
 msgid "hours"
 msgstr "小时"
 
-msgid "dayss"
+msgid "days"
 msgstr "日期"
 
 msgid "months"

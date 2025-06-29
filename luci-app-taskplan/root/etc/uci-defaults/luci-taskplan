@@ -1,11 +1,7 @@
 #!/bin/sh
 mkdir -p /etc/taskplan
-echo "#!/bin/sh" > /etc/taskplan/customscript1
-echo "#!/bin/sh" > /etc/taskplan/customscript2
 chmod +x /etc/init.d/taskplan \
-		 /usr/bin/taskplanhandler \
-		 /etc/taskplan/customscript1 \
-		 /etc/taskplan/customscript2
+		 /usr/bin/taskplanhandler
 uci -q batch <<-EOF >/dev/null
 	delete ucitrack.@taskplan[-1]
 	add ucitrack taskplan

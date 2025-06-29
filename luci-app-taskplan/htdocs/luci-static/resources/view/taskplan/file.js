@@ -51,10 +51,12 @@ var fileConfigs = [
 
 return view.extend({
     load: () => Promise.all(fileConfigs.map(cfg =>
-        Promise.all([
-            L.resolveDefault(fs.read(cfg.filePath), ''),
-            L.resolveDefault(fs.stat(cfg.filePath), null)
-        ])
+        fs.stat(cfg.filePath)
+            .catch(() => fs.write(cfg.filePath, '#!/bin/sh\n'))
+            .then(() => Promise.all([
+                L.resolveDefault(fs.read(cfg.filePath), ''),
+                L.resolveDefault(fs.stat(cfg.filePath), null)
+            ]))
     )),
 
     render: data => {
@@ -67,7 +69,7 @@ return view.extend({
                         stat ? _('Last modified: %s, Size: %s bytes').format(
                             stat.mtime ? new Date(stat.mtime * 1000).toLocaleString() : _('Unknown'),
                             typeof stat.size === 'number' ? stat.size : '?'
-                        ) : ui.addTimeLimitedNotification(null, E('p', _('File not found %s').format(cfg.filePath)), 8000, 'error'), ui.hideModal()
+                            ) : []
                     ),
                     cfg.tab === 'crontab' ?
                         (() => {
@@ -111,7 +113,7 @@ return view.extend({
             ]);
         });
 
-        var viewRoot = E('div', {}, [
+        var view = E('div', {}, [
             E('div', {}, [
                 _('This page can be edited and saved directly. Changes will take effect immediately after saving.'),
                 E('br'),
@@ -120,9 +122,9 @@ return view.extend({
             E('div', {}, tabs)
         ]);
 
-        ui.tabs.initTabGroup(viewRoot.lastElementChild.childNodes);
+        ui.tabs.initTabGroup(view.lastElementChild.childNodes);
 
-        return viewRoot;
+        return view;
     },
 
     handleSave: null,

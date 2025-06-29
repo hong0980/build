@@ -5,42 +5,37 @@
 'require view';
 'require form';
 
-var CSS = '                                 \
-@media (min-width: 768px) {                 \
-    [data-name="day"]    .cbi-input-text    \
-    [data-name="hour"]   .cbi-input-text,   \
-    [data-name="month"]  .cbi-input-text,   \
-    [data-name="delay"]  .cbi-input-text,   \
-    [data-name="minute"] .cbi-input-text {  \
-        max-width: 55px !important;         \
-        width: 100% !important;             \
-    }                                       \
-    [data-name="remarks"] .cbi-input-text   \
-        min-width: 110px !important;        \
-        width: 100% !important;             \
-    }                                       \
-    [data-name="week"] .cbi-dropdown,       \
-    [data-name="stype"] .cbi-input-select { \
-        min-width: 85px !important;         \
-        max-width: 85px !important;         \
-        width: 100% !important;             \
-    }                                       \
-    td:has(.cbi-button-remove) {            \
-        width: 50px !important;             \
-    }                                       \
-}                                           \
-';
+var CSS = `
+@media (min-width: 768px) {
+    .cbi-section-table .cbi-input-text {
+        max-width: 52px;
+    }
+
+    [data-name="remarks"] .cbi-input-text {
+        min-width: 170px !important;
+    }
+
+    .cbi-section-table select,
+    .table.cbi-section-table .cbi-dropdown {
+        min-width: 85px;
+        max-width: 85px;
+    }
+
+    td:has(.cbi-button) {
+        width: 30px !important;
+    }
+}`;
 
 var validateCrontabField = (type, value, monthValue) => {
     var types = {
         'day': { min: 1, max: 31, label: _('dayss'), msg: _('1-31, "*", "*/N", ranges, or lists. E.g.: 1,5,10 or 5-10,*/2'),
             getMaxDays: function(monthValue) {
-                if (!monthValue || monthValue === '*') return 31; // 情况1：未指定月份或通配符
-                var monthValidation = validateCrontabField('month', monthValue); // 情况2：验证月份值是否合法（递归调用）
-                if (monthValidation !== true) return 31; // 非法月份按最大值处理
+                if (!monthValue || monthValue === '*') return 31;
+                var monthValidation = validateCrontabField('month', monthValue);
+                if (monthValidation !== true) return 31;
 
-                var firstMonthPart = monthValue.split(',')[0].replace(/\/\d+$/, ''); // 取列表第一项，移除步长
-                var month = parseInt(firstMonthPart.match(/\d+/)?.[0] || 1); // 提取数字
+                var firstMonthPart = monthValue.split(',')[0].replace(/\/\d+$/, '');
+                var month = parseInt(firstMonthPart.match(/\d+/)?.[0] || 1);
                 if (month === 2) {
                     var year = new Date().getFullYear();
                     return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 29 : 28;
@@ -155,6 +150,7 @@ return view.extend({
                 _('Examples: Range 2-5 (means 2 to 5), List 1,3,5 (means 1 and 3 and 5), Step */5 (means every 5 units)')
             ])
         ]);
+        s.sortable = true;
         s.addremove = true;
         s.anonymous = true;
 
@@ -162,21 +158,21 @@ return view.extend({
         e.rmempty = false;
         e.default = '0';
 
-        e = s.option(form.Value, 'minute', _('Minute'));
+        e = s.option(form.Value, 'minute', _('minutes'));
         e.rmempty = true;
         e.default = '0';
         e.validate = function(section_id, value) {
             return validateCrontabField('minute', value);
         };
 
-        e = s.option(form.Value, 'hour', _('Hours'));
+        e = s.option(form.Value, 'hour', _('hours'));
         e.rmempty = true;
         e.default = '*';
         e.validate = function(section_id, value) {
             return validateCrontabField('hour', value);
         };
 
-        e = s.option(form.Value, 'day', _('Day'));
+        e = s.option(form.Value, 'day', _('days'));
         e.rmempty = true;
         e.default = '*';
         e.validate = function(section_id, value) {
@@ -184,14 +180,14 @@ return view.extend({
                 this.section.formvalue(section_id, 'month'));
         };
 
-        e = s.option(form.Value, 'month', _('Month'));
+        e = s.option(form.Value, 'month', _('months'));
         e.rmempty = true;
         e.default = '*';
         e.validate = function(section_id, value) {
             return validateCrontabField('month', value);
         };
 
-        e = s.option(form.Value, 'week', _('Week'));
+        e = s.option(form.Value, 'week', _('weeks'));
         e.rmempty = true;
         e.default = '*';
         e.value('*', _('Everyday'));
@@ -215,8 +211,26 @@ return view.extend({
         e = s.option(form.Button, 'button', _('verify'));
         e.inputstyle = 'apply';
         e.onclick = function(ev, section_id) {
-            var crontab = document.getElementById(`widget.cbid.taskplan.${section_id}.month`).title;
-            if (crontab) window.open(`https://crontab.guru/#${crontab.replace(/ /g, '_')}`);
+            var values = ['minute', 'hour', 'day', 'month', 'week'].map(field => {
+                if (field === 'week') {
+                    var weekEl = document.getElementById(`cbid.taskplan.${section_id}.week`);
+                    if (!weekEl) return '';
+                    var selected = weekEl.querySelector('li[selected]');
+                    return selected?.getAttribute('data-value') ?? weekEl.querySelector('input[type="hidden"]')?.value ?? '';
+                }
+                var el = document.getElementById(`widget.cbid.taskplan.${section_id}.${field}`);
+                return el?.value ?? '';
+            });
+
+            var crontab = values.join(' ').trim();
+
+            if (/^\S+(?:\s\S+){4}$/.test(crontab)) {
+                window.open(`https://crontab.guru/#${crontab.replace(/\s/g, '_')}`);
+            } else {
+                ui.addTimeLimitedNotification(null, E('p',
+                    _('Invalid format for %s').format(crontab)), 10000, 'error');
+                ui.hideModal();
+            }
         };
 
         s = m.section(form.TableSection, 'ltime', _('Startup task'),
@@ -275,7 +289,7 @@ return view.extend({
                             row.querySelectorAll(`[data-name="${name}"] .${type}`).forEach(e => {
                                 e.title = name === 'remarks' ? e.value ?? '' :
                                 name === 'stype' ? e.options[e.selectedIndex].textContent :
-                                name === 'button' ? _('Click to verify on crontab.guru: %s ').format(crontabString) :
+                                name === 'button' ? _('verify') :
                                 crontabString;
                             });
                         });
@@ -288,7 +302,7 @@ return view.extend({
 
     defineStypeOptions: function(s) {
         var e = s.option(form.ListValue, 'stype', _('Scheduled Type'));
-        e.default = '1';
+        e.default = '10';
         e.value('01', _('Scheduled Reboot'));
         e.value('02', _('Scheduled Poweroff'));
         e.value('03', _('Scheduled ReNetwork'));
@@ -311,8 +325,10 @@ return view.extend({
     showScriptEditModal: function (v) {
         var path = '/etc/taskplan/customscript1', scriptLabel = _('Custom Script 1');
         if (v === '16') { path = '/etc/taskplan/customscript2'; scriptLabel = _('Custom Script 2')};
-        fs.stat(path).then(function() {
-            return fs.read(path).then(function(content) {
+        fs.stat(path)
+            .catch(err => fs.write(path, '#!/bin/sh\n'))
+            .then(() => fs.read(path))
+            .then(content => {
                 var textareaContent = (typeof content === 'string' ? content : '') || '';
                 var modalContent = [
                     E('b', { 'style': 'color:red;' },
@@ -320,14 +336,12 @@ return view.extend({
                     E('div', {}, [
                         E('button', { 'class': 'btn cbi-button-action',
                             'title': _('Click to upload the script to %s').format(path),
-                            'click': function() {
-                                return ui.uploadFile(path)
-                                    .then(function() {
-                                        ui.addTimeLimitedNotification(null, E('p',
-                                            _('File saved to %s').format(path)), 3000, 'info');
-                                        ui.hideModal();
-                                    });
-                            }}, [ _('Upload') ]),
+                            'click': () => ui.uploadFile(path).then(() => {
+                                ui.addTimeLimitedNotification(null, E('p',
+                                    _('File saved to %s').format(path)), 3000, 'info');
+                                ui.hideModal();
+                            })
+                        }, [ _('Upload') ]),
                     ]),
                     E('textarea', { 'name': 'script',
                         'style': 'width: 600px; min-height: 200px; margin-bottom: 16px; font-family:Consolas, monospace;'
@@ -335,18 +349,18 @@ return view.extend({
                     E('div', { 'class': 'button-row' }, [
                         E('div', { 'click': ui.hideModal, 'class': 'btn cbi-button-neutral' }, _('Cancel')),
                         E('div', { 'class': 'btn cbi-button-positive',
-                            'click': function(ev) {
+                            'click': () => {
                                 var textarea = document.querySelector('textarea[name="script"]');
                                 var value = textarea ? textarea.value.trim().replace(/\r\n/g, '\n') + '\n' : '';
-                                fs.write(path, value).then(function() {
-                                    ui.addTimeLimitedNotification(null, E('p',
-                                        _('Contents of %s have been saved.').format(scriptLabel)), 3000, 'info');
-                                    ui.hideModal();
-                                }).catch(function(err) {
-                                    ui.addTimeLimitedNotification(null, E('p',
-                                        _('Unable to save contents: %s').format(err.message)), 8000, 'error');
-                                    ui.hideModal();
-                                });
+                                fs.write(path, value)
+                                    .then(() => {
+                                        ui.addTimeLimitedNotification(null, E('p',
+                                            _('Contents of %s have been saved.').format(scriptLabel)), 3000, 'info');
+                                        ui.hideModal()})
+                                    .catch(err => {
+                                        ui.addTimeLimitedNotification(null, E('p',
+                                            _('Unable to save contents: %s').format(err.message)), 8000, 'error');
+                                        ui.hideModal()});
                             }
                         }, _('Save'))
                     ])
@@ -354,14 +368,10 @@ return view.extend({
                 ui.showModal(_('Edit %s').format(scriptLabel), modalContent);
                 var textarea = document.querySelector('textarea[name="script"]');
                 if (textarea) textarea.value = textareaContent;
-            }).catch(function(err) {
+            }).catch(err => {
                 ui.addTimeLimitedNotification(null, E('p', {},
                     _('Unable to read %s: %s').format(scriptLabel, err.message)), 8000, 'error');
                 ui.hideModal();
             });
-        }).catch(function() {
-            ui.addTimeLimitedNotification(null, E('p', {}, _('No such file %s').format(scriptLabel)), 8000, 'error');
-            ui.hideModal();
-        });
     }
 });

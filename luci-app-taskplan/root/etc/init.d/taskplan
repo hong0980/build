@@ -7,7 +7,6 @@ USE_PROCD=1
 
 RC=/etc/rc.local
 CR=/etc/crontabs/root
-TASKPLAN_DIR=/etc/taskplan
 
 del_cru() {
     for file in "$CR" "$RC"; do
@@ -44,12 +43,12 @@ run_stime() {
     config_get hour "$1" hour "*"
     config_get month "$1" month "*"
     config_get minute "$1" minute "0"
-    config_get stype "$1" stype "#"
+    config_get stype "$1" stype "07"
 
     local time_part="$minute $hour $day $month $week /usr/bin/taskplanhandler"
     local cmd_part="$(task_cmd "$stype") Scheduled_task > /dev/null 2>&1 &"
 
-    [ -s "$CR" ] && sed -i "1i\\$time_part $cmd_part" "$CR" || echo "$time_part $cmd_part" >> "$CR"
+    [ -s "$CR" ] && sed -i "1i\\$time_part $cmd_part" "$CR" || echo "$time_part $cmd_part" > "$CR"
 }
 
 run_ltime() {
