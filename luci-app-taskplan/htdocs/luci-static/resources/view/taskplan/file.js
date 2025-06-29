@@ -54,7 +54,7 @@ return view.extend({
         fs.stat(cfg.filePath)
             .catch(() => fs.write(cfg.filePath, '#!/bin/sh\n'))
             .then(() => Promise.all([
-                L.resolveDefault(fs.read(cfg.filePath), ''),
+                L.resolveDefault(fs.read_direct(cfg.filePath), ''),
                 L.resolveDefault(fs.stat(cfg.filePath), null)
             ]))
     )),

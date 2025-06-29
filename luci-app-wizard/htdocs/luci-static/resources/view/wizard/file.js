@@ -30,32 +30,36 @@ return view.extend({
 
 	handleFileSave: function(path, textareaId) {
 		var value = document.getElementById(textareaId).value;
-		return fs.write(path, value).then(function() {
-			ui.addNotification(null, E('p',
-				_('Contents of %s have been saved.').format(path)), 'info');
+		return fs.write(path, value)
+			.then(function() {
+				ui.addTimeLimitedNotification(null, E('p',
+					_('Contents of %s have been saved.').format(path)), 5000, 'info');
 
-			var s = path.includes('crontabs') ? 'cron' :
-					path.includes('dhcp') ? 'dnsmasq' :
-					path.includes('hosts') ? 'dnsmasq' :
-					path.includes('wireless') ? 'wifi' :
-					path.includes('uhttpd') ? 'uhttpd' :
-					path.includes('network') ? 'network' :
-					path.includes('dnsmasq') ? 'dnsmasq' :
-					path.includes('firewall') ? 'firewall' : null;
-			if (s) {
-				var c = s === 'wifi' ? '/sbin/wifi' : '/etc/init.d/' + s;
-				return fs.exec_direct(c, 'reload').then(function() {
-					ui.addNotification(null, E('p',
-						_('Service %s reloaded successfully.').format(c)), 'info');
-				}).catch(function(err) {
-					ui.addNotification(null, E('p',
-						_('Service reload failed: %s').format(err.message)), 'warning');
-				});
-			}
-		}).catch(function(err) {
-			ui.addNotification(null, E('p',
-				_('Unable to save contents: %s').format(err.message)), 'error');
-		});
+				var s = path.includes('crontabs') ? 'cron' :
+						path.includes('dhcp') ? 'dnsmasq' :
+						path.includes('hosts') ? 'dnsmasq' :
+						path.includes('wireless') ? 'wifi' :
+						path.includes('uhttpd') ? 'uhttpd' :
+						path.includes('network') ? 'network' :
+						path.includes('dnsmasq') ? 'dnsmasq' :
+						path.includes('firewall') ? 'firewall' : null;
+				if (s) {
+					var c = s === 'wifi' ? '/sbin/wifi' : '/etc/init.d/' + s;
+					return fs.exec_direct(c, ['reload'])
+						.then(function() {
+							ui.addTimeLimitedNotification(null, E('p',
+								_('Service %s reloaded successfully.').format(c)), 5000, 'info');
+						})
+						.catch(function(err) {
+							ui.addTimeLimitedNotification(null, E('p',
+								_('Service reload failed: %s').format(err.message)), 5000, 'warning');
+						});
+				}
+			})
+			.catch(function(err) {
+				ui.addTimeLimitedNotification(null, E('p',
+					_('Unable to save contents: %s').format(err.message)), 5000, 'error');
+			});
 	},
 
 	render: function(data) {
@@ -80,7 +84,7 @@ return view.extend({
 									textarea.readOnly = editToggle.checked;
 									return;
 								}
-								fs.read(value)
+								L.resolveDefault(fs.read_direct(value), '')
 									.then(function(content) {
 										textarea.value = content;
 										self.lastSelectedPath = value;
@@ -88,8 +92,8 @@ return view.extend({
 										textarea.readOnly = editToggle.checked;
 									})
 									.catch(function(err) {
-										ui.addNotification(null, E('p',
-											_('Unable to read %s: %s').replace("%s", value).replace("%s", err.message)), 'error');
+										ui.addTimeLimitedNotification(null, E('p',
+											_('Unable to read %s: %s').replace("%s", value).replace("%s", err.message)), 5000, 'error');
 									});
 							}
 						}, [
@@ -131,7 +135,7 @@ return view.extend({
 					'click': ui.createHandlerFn(self, function() {
 						var path = document.getElementById('file_select').value || self.lastSelectedPath;
 						if (!path) {
-							ui.addNotification(null, E('p', _('Please select a file.')), 'error');
+							ui.addTimeLimitedNotification(null, E('p', _('Please select a file.')), 5000, 'error');
 							return;
 						}
 						return self.handleFileSave(path, 'file_content');

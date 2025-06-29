@@ -327,7 +327,7 @@ return view.extend({
         if (v === '16') { path = '/etc/taskplan/customscript2'; scriptLabel = _('Custom Script 2')};
         fs.stat(path)
             .catch(err => fs.write(path, '#!/bin/sh\n'))
-            .then(() => fs.read(path))
+            .then(() => L.resolveDefault(fs.read_direct(path), ''))
             .then(content => {
                 var textareaContent = (typeof content === 'string' ? content : '') || '';
                 var modalContent = [
