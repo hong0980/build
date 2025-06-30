@@ -28,7 +28,7 @@ var CSS = `
 
 var validateCrontabField = (type, value, monthValue) => {
     var types = {
-        'day': { min: 1, max: 31, label: _('dayss'), msg: _('1-31, "*", "*/N", ranges, or lists. E.g.: 1,5,10 or 5-10,*/2'),
+        'day': { min: 1, max: 31, label: _('Days'), msg: _('1-31, "*", "*/N", ranges, or lists. E.g.: 1,5,10 or 5-10,*/2'),
             getMaxDays: function(monthValue) {
                 if (!monthValue || monthValue === '*') return 31;
                 var monthValidation = validateCrontabField('month', monthValue);
@@ -159,21 +159,21 @@ return view.extend({
         e.default = '0';
 
         e = s.option(form.Value, 'minute', _('minutes'));
-        e.rmempty = true;
+        e.rmempty = false;
         e.default = '0';
         e.validate = function(section_id, value) {
             return validateCrontabField('minute', value);
         };
 
         e = s.option(form.Value, 'hour', _('hours'));
-        e.rmempty = true;
+        e.rmempty = false;
         e.default = '*';
         e.validate = function(section_id, value) {
             return validateCrontabField('hour', value);
         };
 
-        e = s.option(form.Value, 'day', _('days'));
-        e.rmempty = true;
+        e = s.option(form.Value, 'day', _('Days'));
+        e.rmempty = false;
         e.default = '*';
         e.validate = function(section_id, value) {
             return validateCrontabField('day', value,
@@ -181,16 +181,18 @@ return view.extend({
         };
 
         e = s.option(form.Value, 'month', _('months'));
-        e.rmempty = true;
+        e.rmempty = false;
         e.default = '*';
         e.validate = function(section_id, value) {
             return validateCrontabField('month', value);
         };
 
         e = s.option(form.Value, 'week', _('weeks'));
-        e.rmempty = true;
+        e.rmempty = false;
         e.default = '*';
         e.value('*', _('Everyday'));
+        e.value('0,6', _('Weekend'));
+        e.value('1-5', _('Workdays'));
         e.value('0', _('Sunday'));
         e.value('1', _('Monday'));
         e.value('2', _('Tuesday'));
@@ -198,8 +200,6 @@ return view.extend({
         e.value('4', _('Thursday'));
         e.value('5', _('Friday'));
         e.value('6', _('Saturday'));
-        e.value('0,6', _('Weekend'));
-        e.value('1-5', _('Workdays'));
         e.validate = function(section_id, value) {
             return validateCrontabField('week', value);
         };
@@ -211,18 +211,10 @@ return view.extend({
         e = s.option(form.Button, 'button', _('verify'));
         e.inputstyle = 'apply';
         e.onclick = function(ev, section_id) {
-            var values = ['minute', 'hour', 'day', 'month', 'week'].map(field => {
-                if (field === 'week') {
-                    var weekEl = document.getElementById(`cbid.taskplan.${section_id}.week`);
-                    if (!weekEl) return '';
-                    var selected = weekEl.querySelector('li[selected]');
-                    return selected?.getAttribute('data-value') ?? weekEl.querySelector('input[type="hidden"]')?.value ?? '';
-                }
-                var el = document.getElementById(`widget.cbid.taskplan.${section_id}.${field}`);
-                return el?.value ?? '';
-            });
-
-            var crontab = values.join(' ').trim();
+            var crontab = ['minute', 'hour', 'day', 'month', 'week'].map(f => {
+                var opt = m.lookupOption(`taskplan.${section_id}.${f}`)[0];
+                return opt ? opt.formvalue(section_id) : '';
+            }).join(' ').trim();
 
             if (/^\S+(?:\s\S+){4}$/.test(crontab)) {
                 window.open(`https://crontab.guru/#${crontab.replace(/\s/g, '_')}`);
@@ -245,6 +237,7 @@ return view.extend({
         this.defineStypeOptions(s);
 
         e = s.option(form.Value, 'delay', _('Delayed Start(seconds)'));
+        e.rmempty = false;
         e.default = '10';
         e.datatype = 'uinteger';
 
@@ -257,41 +250,42 @@ return view.extend({
                 .filter(node => node.nodeType === Node.ELEMENT_NODE)
                 .flatMap(node => [...node.querySelectorAll('tr')])
                 .forEach(row => {
-                    var fields = { minute: '', hour: '', day: '', month: '', week: '' };
+                    var fields = {};
+                    var crontabFields = ['minute', 'hour', 'day', 'month', 'week'];
                     var selectors = {
-                        hour: 'cbi-input-text', day: 'cbi-input-text',
-                        month: 'cbi-input-text', week: 'cbi-dropdown',
-                        remarks: 'cbi-input-text', minute: 'cbi-input-text',
+                        ...Object.fromEntries(crontabFields.map(f => [f, 'cbi-input-text'])),
+                        week: 'cbi-dropdown', remarks: 'cbi-input-text',
                         button: 'cbi-button-apply', stype: 'cbi-input-select'
                     };
 
-                    Object.entries(selectors).forEach(([name, type]) => {
-                        let elements = [...row.querySelectorAll(`[data-name="${name}"] .${type}`)];
+                    var allElements = Object.entries(selectors).flatMap(([name, type]) =>
+                        [...row.querySelectorAll(`[data-name="${name}"] .${type}`)].map(e => ({ name, type, e }))
+                    );
 
-                        elements.forEach(e => {
-                            if (name === 'week') {
-                                fields.week = e.querySelector('[type="hidden"]')?.value ?? '';
-                            } else if (fields.hasOwnProperty(name)) {
-                                fields[name] = e.value ?? '';
-                            }
-
-                            if (name === 'stype') {
-                                e.addEventListener('change', () => {
-                                    if (['15', '16'].includes(e.value)) this.showScriptEditModal(e.value);
-                                });
-                            }
-                        });
+                    allElements.forEach(({ name, e }) => {
+                        if (name === 'week') {
+                            fields[name] = e.querySelector('[type="hidden"]')?.value ?? '';
+                        } else if (name in selectors) {
+                            fields[name] = e.value ?? '';
+                        }
                     });
 
-                    let crontabString = Object.values(fields).filter(Boolean).join(' ');
+                    allElements
+                        .filter(({ name }) => name === 'stype')
+                        .forEach(({ e }) => {
+                            e.addEventListener('change', () =>
+                                ['15', '16'].includes(e.value) && this.showScriptEditModal(e.value)
+                            );
+                        });
+
+                    var crontabString = crontabFields.map(f => fields[f]).filter(Boolean).join(' ');
                     if (crontabString) {
-                        Object.entries(selectors).forEach(([name, type]) => {
-                            row.querySelectorAll(`[data-name="${name}"] .${type}`).forEach(e => {
-                                e.title = name === 'remarks' ? e.value ?? '' :
-                                name === 'stype' ? e.options[e.selectedIndex].textContent :
+                        allElements.forEach(({ name, e }) => {
+                            e.title =
+                                name === 'remarks' ? e.value ?? '' :
+                                name === 'stype' ? e.options[e.selectedIndex]?.textContent :
                                 name === 'button' ? _('verify') :
                                 crontabString;
-                            });
                         });
                     }
                 });
@@ -300,7 +294,7 @@ return view.extend({
         return m.render();
     },
 
-    defineStypeOptions: function(s) {
+    defineStypeOptions(s) {
         var e = s.option(form.ListValue, 'stype', _('Scheduled Type'));
         e.default = '10';
         e.value('01', _('Scheduled Reboot'));
@@ -322,7 +316,7 @@ return view.extend({
         return e;
     },
 
-    showScriptEditModal: function (v) {
+    showScriptEditModal(v) {
         var path = '/etc/taskplan/customscript1', scriptLabel = _('Custom Script 1');
         if (v === '16') { path = '/etc/taskplan/customscript2'; scriptLabel = _('Custom Script 2')};
         fs.stat(path)

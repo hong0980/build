@@ -120,14 +120,14 @@ return view.extend({
 			]),
 			E('div', { 'style': 'width:100%' }, [
 				E('textarea', {
-					'rows': 22, 'id': 'file_content', 'readonly': true,
+					'rows': 18, 'id': 'file_content', 'readonly': true,
 					'style': 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;'
 				}, '')
 			]),
-			E('div', { 'class': 'cbi-value-description' }, [
+/*			E('div', { 'class': 'cbi-value-description' }, [
 				E('font', { 'color': 'green', 'style': 'font-weight: bold;' },
 					_('It is recommended to back up the file before making changes. Comments can be added by starting a line with #.'))
-			]),
+			]),*/
 			E('div', { 'class': 'cbi-page-actions', 'style': 'display: none;', 'id': 'page-actions' }, [
 				E('button', {
 					'id': 'save_button', 'class': 'btn cbi-button-save',

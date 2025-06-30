@@ -5,7 +5,7 @@
 
 return view.extend({
     load: function() {
-        return L.resolveDefault(fs.read('/etc/taskplan/taskplan.log'), '');
+        return L.resolveDefault(fs.read_direct('/etc/taskplan/taskplan.log'), '');
     },
 
     render: function(content) {

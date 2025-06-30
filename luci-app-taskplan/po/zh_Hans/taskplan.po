@@ -159,7 +159,7 @@ msgstr "分钟"
 msgid "hours"
 msgstr "小时"
 
-msgid "days"
+msgid "Days"
 msgstr "日期"
 
 msgid "months"
