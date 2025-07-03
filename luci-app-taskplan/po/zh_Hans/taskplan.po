@@ -147,6 +147,9 @@ msgstr "本页面可直接编辑保存，保存后立即生效。"
 msgid "Please ensure the syntax is correct, as incorrect syntax may cause the system to malfunction."
 msgstr "请务必检查语法正确性，错误的语法可能导致系统无法正常运行。"
 
+msgid "No modifications detected. The content remains unchanged."
+msgstr "当前编辑内容与原始文件完全相同，无需保存"
+
 msgid "Last modified: %s, Size: %s bytes"
 msgstr "最后修改：%s，大小：%s字节"
 
