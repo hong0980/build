@@ -54,6 +54,9 @@ msgstr "无法打开 %s: %s"
 msgid "Log"
 msgstr "日志"
 
+msgid "No log data available"
+msgstr "无可用日志数据"
+
 msgid "Log cleared"
 msgstr "日志已清空"
 

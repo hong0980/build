@@ -254,50 +254,40 @@ return view.extend({
         e = s.option(form.Value, 'remarks', _('Remarks'));
         e.editable = true;
 
-        const view = document.getElementById('view') || document.body;
-
-        view && new MutationObserver(() => {
-            const firstRow = document.querySelector('tr.cbi-section-table-row');
-            const firstRowId = firstRow.dataset.sectionId || firstRow.dataset.sid;
-            if (!firstRowId) return;
-            const targetSuffix = firstRowId.slice(-4);
-
-            document.querySelectorAll(`tr.cbi-section-table-row[data-section-id$="${targetSuffix}"]`).forEach(row => {
-                const ids = [];
-                const [ , prefix, rowid ] = row.id.split('-');
-                // console.log(rowid);
-
-                const cron = ['minute', 'hour', 'day', 'month', 'week']
-                    .map(f => {
-                        const cfg = m.lookupOption(`${prefix}.${rowid}.${f}`);
-                        if (cfg) {
-                            ids.push(cfg[0].cbid(rowid));
-                            return cfg[0].formvalue(rowid);
-                        }
-                    })
-                    .filter(Boolean)
-                    .join(' ');
-
-                if (!cron) return;
-
-                ids.forEach(id => {
-                    const el = document.getElementById(id);
-                    el && (el.title = cron);
-
-                    ['stype', 'remarks'].forEach(t => {
-                        const wel = document.getElementById(`widget.${id.replace(/\.[^.]*$/, `.${t}`)}`);
-                        wel && (wel.title = t === 'remarks'
-                            ? wel.value
-                            : wel.options[wel.selectedIndex]?.text);
-                    });
-                });
-
-                const btn = row.querySelector('[data-name="button"] .cbi-button-apply');
-                btn && (btn.title = _('verify'));
-            });
-        }).observe(view, { childList: true, subtree: true });
+        setTimeout(() => this.updateTitles(m), 700);
 
         return m.render();
+    },
+
+    updateTitles: function(m) {
+        const name = m.config;
+        const tasks = m.data.state.values?.[name];
+
+        Object.values(tasks)
+            .filter(task => task?.[".type"] === "stime")
+            .forEach(task => {
+                const id = task[".name"];
+                if (!id) return;
+                // console.log(task);
+                const cron = ['minute', 'hour', 'day', 'month', 'week']
+                    .map(f => task[f] || "*")
+                    .join(" ");
+
+                ['minute', 'hour', 'day', 'month', 'week'].forEach(field => {
+                    const el = document.getElementById(`cbid.${name}.${id}.${field}`);
+                    el?.setAttribute('title', cron);
+                });
+
+                ["stype", "remarks"].forEach(field => {
+                    const el = document.getElementById(`widget.cbid.${name}.${id}.${field}`);
+                    el && (el.title = field === "remarks"
+                        ? task?.[field]
+                        : el.options[el.selectedIndex]?.text || "");
+                });
+
+                const btn = document.querySelector(`#cbi-${name}-${id}-button .cbi-button-apply`);
+                btn?.setAttribute('title', _("verify"));
+            });
     },
 
     defineStypeOptions: function(s) {
