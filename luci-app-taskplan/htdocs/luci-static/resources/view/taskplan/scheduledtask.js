@@ -39,7 +39,7 @@ const validateCrontabField = (type, value, monthValue) => {
                 if (month === 2) {
                     const year = new Date().getFullYear();
                     return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 29 : 28;
-                }
+                };
                 return [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
         }},
         'hour': {min: 0, max: 23, label: _('hours'), msg: _('0-23, "*", "*/N", ranges, or lists. E.g.: 0,12,18 or 8-17')},
@@ -66,31 +66,31 @@ const validateCrontabField = (type, value, monthValue) => {
     const basePattern = /^(\*(\/\d+)?|\d+(-\d+)?(\/\d+)?)(,(\*(\/\d+)?|\d+(-\d+)?(\/\d+)?))*$/;
     if (!basePattern.test(value)) {
         return _('Invalid format for %s. Example: (%s)').format(field.label, field.msg);
-    }
+    };
 
     if (type === 'day') {
         field.max = types.day.getMaxDays(monthValue);
         if (monthValue && !/^\d+$/.test(monthValue)) {
             field.msg += _(' (Note: Actual days may be limited by specific months)');
         }
-    }
+    };
 
     for (const part of parts) {
         if (part.startsWith('*/')) {
             const step = parseInt(part.substring(2), 10);
             if (isNaN(step) || step < 1 || step > field.max) {
                 return _('Step value in %s must be between 1 and %d').format(field.label, field.max);
-            }
+            };
             continue;
-        }
+        };
 
         if (/^\d+$/.test(part)) {
             const val = parseInt(part, 10);
             if (val < field.min || val > field.max) {
                 return _('%s value %s out of range (%d-%d)').format(field.label, val, field.min, field.max);
-            }
+            };
             continue;
-        }
+        };
 
         const rangeMatch = part.match(/^(\d+)-(\d+)(?:\/(\d+))?$/);
         if (rangeMatch) {
@@ -100,29 +100,29 @@ const validateCrontabField = (type, value, monthValue) => {
 
             if (isNaN(start) || isNaN(end) || isNaN(step)) {
                 return _('Invalid range or step value in %s (%s)').format(field.label, part);
-            }
+            };
 
             const actualEnd = Math.max(start, end);
             const actualStart = Math.min(start, end);
 
             if (actualStart < field.min || actualEnd > field.max) {
                 return _('Range %d-%d out of bounds (%d-%d) in %s').format(start, end, field.min, field.max, field.label);
-            }
+            };
 
             if (step < 1 || step > (actualEnd - actualStart + 1)) {
                 return _('Step value %d out of range (1-%d) in %s').format(step, actualEnd - actualStart + 1, field.label);
-            }
+            };
             continue;
-        }
+        };
 
         if (part === '*') continue;
 
         if (/^\d+\/\d+$/.test(part)) {
             return _('Invalid syntax: %s in (%s). Step must be used with * or ranges').format(field.label, part);
-        }
+        };
 
         return _('Invalid part: %s in (%s)').format(field.label, part);
-    }
+    };
 
     return true;
 };

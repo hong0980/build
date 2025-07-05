@@ -15,7 +15,7 @@ function checkProcess() {
             pid: res.code === 0 ? res.stdout.trim() : null
         }))
         .catch(() => ({ running: false, pid: null }));
-}
+};
 
 function renderStatus(isRunning) {
     return E('em', { 'style': 'color: ' + (isRunning ? 'green' : 'red') },
@@ -63,8 +63,6 @@ return view.extend({
         var  m, s, o;
         m = new form.Map('watchdog', _('watchdog'), _('This is the security watchdog plugin for OpenWRT, which monitors and guards web login, SSH connections, and other situations.<br /><br />If you encounter any issues while using it, please submit them here:') + '<a href="https://github.com/sirpdboy/luci-app-watchdog" target="_blank">' + _('GitHub Project Address') + '</a>');
 
-
-
         s = m.section(form.TypedSection);
         s.anonymous = true;
         s.render = function() {
@@ -73,8 +71,7 @@ return view.extend({
             ]);
             poll.add(function() {
                 return checkProcess().then(res => {
-                    statusView.innerHTML = renderStatus(res.running).outerHTML +
-                        (res.running && res.pid ? ` <small>(PID: ${res.pid})</small>` : '');
+                    statusView.innerHTML = renderStatus(res.running).outerHTML + (res.running && res.pid ? ` <small>(PID: ${res.pid})</small>` : '');
                 }).catch(err => {
                     statusView.innerHTML = '<span style="color:orange">⚠ ' + _('Status check failed') + '</span>';
                 });
@@ -133,7 +130,7 @@ return view.extend({
         };
         o.write = function (section_id, formvalue) {
             return this.cfgvalue(section_id).then(function (value) {
-                if (value == formvalue) return
+                if (value == formvalue) return;
                 return fs.write('/usr/share/watchdog/api/ip_blacklist', formvalue.trim().replace(/\r\n/g, '\n') + '\n');
             });
         };
@@ -162,6 +159,5 @@ return view.extend({
         o.depends('port_release_enable', '1');
 
         return m.render();
-
     }
 });

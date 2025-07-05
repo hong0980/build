@@ -69,7 +69,7 @@ return view.extend({
 		o.rmempty = false;
 		if (typeof diskList === 'string') {
 			this.parseMountedDisks(diskList, o);
-		}
+		};
 
 		o = s.taboption("settings", form.ListValue, 'language', _('Locale Language'));
 		o.value('zh_CN', _('Simplified Chinese'));
@@ -86,7 +86,7 @@ return view.extend({
 			_("Default password: deluge"));
 		o.password = true;
 		o.default = "deluge";
-		o.datatype = 'and(rangelength(6, 10), string)'
+		o.datatype = 'and(rangelength(6, 10), string)';
 
 		o = s.taboption("settings", form.ListValue, 'https', _('WebUI uses HTTPS'),
 			_("Not used by default"));
@@ -121,7 +121,7 @@ return view.extend({
 
 		o = s.taboption("download", form.Value, 'move_completed_path', _('Path'));
 		o.depends('move_completed', 'true');
-		o.placeholder = "/mnt/sda3/download"
+		o.placeholder = "/mnt/sda3/download";
 
 		o = s.taboption("download", form.Flag, 'copy_torrent_file', _('Copy Torrent File to'));
 		o.rmempty  = false;
@@ -131,7 +131,7 @@ return view.extend({
 
 		o = s.taboption("download", form.Value, 'torrentfiles_location', _('Path'));
 		o.depends('copy_torrent_file', 'true');
-		o.placeholder = "/mnt/sda3/download"
+		o.placeholder = "/mnt/sda3/download";
 
 		o = s.taboption("download", form.Flag, "speed_enable",
 			_("Enable Bandwidth Control"),
@@ -190,7 +190,7 @@ return view.extend({
 				value = parseInt(value);
 				if (isNaN(value)) {
 					return _("Please enter a valid number");
-				}
+				};
 				return (value === -1 || value >= 0) ? true : _("Value must be -1 (no limit) or ≥0");
 			};
 		});

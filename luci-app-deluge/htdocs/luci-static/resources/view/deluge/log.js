@@ -52,7 +52,7 @@ return view.extend({
 					text: _('No log data available'),
 					actualLines: 0
 				};
-			}
+			};
 
 			let linesArray = text.split('\n').filter(line => line.trim() !== '');
 			if (reverse) linesArray = linesArray.reverse();

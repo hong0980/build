@@ -77,7 +77,7 @@ return view.extend({
 		                        textarea.value = self.originalContent || '';
 		                        textarea.readOnly = editToggle?.checked;
 		                        return;
-		                    }
+		                    };
 		                    fs.read_direct(value)
 		                        .then(function(content) {
 		                            textarea.value = content;
@@ -124,7 +124,7 @@ return view.extend({
 						if (!path) {
 							ui.addTimeLimitedNotification(null, E('p', _('Please select a file.')), 5000, 'error');
 							return;
-						}
+						};
 						return self.handleFileSave(path);
 					})
 				}, _('Save')),

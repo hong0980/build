@@ -195,7 +195,7 @@ return view.extend({
 				_('Password for the wireless network, compliant with WPA key requirements.'));
 			o.datatype = 'wpakey';
 			o.password = true;
-		}
+		};
 
 		return m.render();
 	}
