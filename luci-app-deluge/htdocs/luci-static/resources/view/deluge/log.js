@@ -5,15 +5,16 @@
 
 return view.extend({
 	formatLog: function(logStr) {
-		var months = {
+		const months = {
 			Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
 			Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
 		};
 
 		return logStr.split('\n').filter(Boolean).map(line => {
-			var match = line.match(this.log_regex);
+			const match = line.match(/^[A-Z][a-z]{2}\s+([A-Z][a-z]{2})\s+(\d{1,2})\s(\d{2}:\d{2}:\d{2})\s(\d{4})\s(.+)$/);
 			if (!match) return line;
-			var [, month, day, time, year, rest] = match;
+
+			const [, month, day, time, year, rest] = match;
 			return `${year}${_("year")}${months[month] || '??'}${_("month")}${day.padStart(2, '0')}${_("day")} ${time} ${rest}`;
 		}).join('\n');
 	},
@@ -21,39 +22,39 @@ return view.extend({
 	getLogs: function(p) {
 		return Promise.all([
 			fs.exec_direct('/sbin/logread', ['-e', 'deluge'])
-				.then(r => this.formatLog(r.trim())).catch(() => ''),
-			fs.read(p).then(r => r.trim()).catch(() => '')
+				.then(r => this.formatLog(r.trim()))
+				.catch(() => ''),
+			fs.trimmed(p)
 		]);
 	},
 
 	load: async function () {
 		await uci.load('deluge');
-		var profile_dir = uci.get('deluge', 'main', 'profile_dir') || '/etc/deluge';
-		var log_path = profile_dir + '/deluge.log';
-		var [syslogRaw, delugeRaw] = await this.getLogs(log_path);
+		const profile_dir = uci.get('deluge', 'main', 'profile_dir') || '/etc/deluge';
+		const log_path = profile_dir + '/deluge.log';
+		const [syslogRaw, delugeRaw] = await this.getLogs(log_path);
 
 		return {
-			syslogRaw: syslogRaw, delugeRaw: delugeRaw,
-			profile_dir: profile_dir, log_path: log_path
+			syslogRaw: syslogRaw, delugeRaw: delugeRaw, log_path: log_path
 		};
 	},
 
 	render: function (data) {
-		var self = this, linesOptions = [10, 20, 50, 100], currentLines = 50,
-			refreshInterval = 5000, refreshTimer = null, reverseOrder = true;
+		let self = this, currentLines = 50, reverseOrder = true, refreshTimer = null;
 
-		function calculateRows(lines) {
+		const calculateRows = (lines) => {
 			return lines > 0 ? Math.min(lines + 2, 20) : 3;
 		};
 
-		function parseLog(text, lines, reverse) {
+		const parseLog = (text, lines, reverse) => {
 			if (!text || text.trim() === '') {
 				return {
-					text: _('No log data available'), actualLines: 0
+					text: _('No log data available'),
+					actualLines: 0
 				};
 			}
 
-			var linesArray = text.split('\n').filter(line => line.trim() !== '');
+			let linesArray = text.split('\n').filter(line => line.trim() !== '');
 			if (reverse) linesArray = linesArray.reverse();
 
 			return {
@@ -62,19 +63,20 @@ return view.extend({
 			};
 		};
 
-		function refreshLogs() {
-			self.getLogs(data.log_path).then(function([newSyslog, newDeluge]) {
-				data.syslogRaw = newSyslog;
-				data.delugeRaw = newDeluge;
-				updateLogsDisplay();
-			});
+		const refreshLogs = () => {
+			self.getLogs(data.log_path)
+				.then(([newSyslog, newDeluge]) => {
+					data.syslogRaw = newSyslog;
+					data.delugeRaw = newDeluge;
+					updateLogsDisplay();
+				});
 		};
 
-		function updateLogsDisplay() {
-			var syslogResult = parseLog(data.syslogRaw, currentLines, reverseOrder);
-			var delugeResult = parseLog(data.delugeRaw, currentLines, reverseOrder);
-			var syslogTitle = document.getElementById('syslog-title');
-			var delugeTitle = document.getElementById('deluge-title');
+		const updateLogsDisplay = () => {
+			const syslogResult = parseLog(data.syslogRaw, currentLines, reverseOrder);
+			const delugeResult = parseLog(data.delugeRaw, currentLines, reverseOrder);
+			const syslogTitle = document.getElementById('syslog-title');
+			const delugeTitle = document.getElementById('deluge-title');
 
 			syslogTitle.textContent = syslogResult.actualLines > 0
 				? _('Last %s lines of syslog (%s):').format(
@@ -98,49 +100,58 @@ return view.extend({
 
 		function startAutoRefresh() {
 			if (refreshTimer) clearInterval(refreshTimer);
-			refreshTimer = setInterval(refreshLogs, refreshInterval);
+			refreshTimer = setInterval(refreshLogs, 5000);
 		};
 
-		var initialSyslog = parseLog(data.syslogRaw, currentLines, reverseOrder);
-		var initialDeluge = parseLog(data.delugeRaw, currentLines, reverseOrder);
+		const initialSyslog = parseLog(data.syslogRaw, currentLines, reverseOrder);
+		const initialDeluge = parseLog(data.delugeRaw, currentLines, reverseOrder);
 
 		startAutoRefresh();
 
-		var view = E('div', { class: 'cbi-map' }, [
-			E('h2', {}, _('Deluge - Logs')),
+		const view = E('div', {}, [
+			E('h3', {}, _('Deluge - Logs')),
 
 			E('div', { class: 'cbi-section' }, [
-				E('div', {
-					style: 'margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center'
-				}, [
-					E('div', { style: 'display: flex; align-items: center; gap: 5px' }, [
-						_('Lines:'),
+				E('div', { style: 'margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center' }, [
+					E('div', { style: 'display: flex; align-items: center; gap: 5px' }, [ _('Lines:'),
 						E('select', {
 							class: 'cbi-input-select',
 							style: 'width: 100px; margin-left: 5px;',
-							'change': function(ev) {
+							'change': (ev) => {
 								currentLines = parseInt(ev.target.value);
 								updateLogsDisplay();
 							}
-						}, linesOptions.map(function(opt) {
+						},
+						[10, 20, 50, 100].map((opt) => {
 							return E('option', {
 								value: opt, selected: opt === currentLines
 							}, opt);
 						}))
 					]),
 					E('button', {
-						'class': 'cbi-button cbi-button-neutral',
-						'click': function() {
+						class: 'cbi-button cbi-button-neutral',
+						click: function(ev) {
 							reverseOrder = !reverseOrder;
 							updateLogsDisplay();
-							this.textContent = reverseOrder ?
-								_('▽ Show Oldest First') :
-								_('△ Show Newest First');
+							this.textContent = reverseOrder
+								? _('▽ Show Oldest First')
+								: _('△ Show Newest First');
 						}
 					}, reverseOrder ? _('▽ Show Oldest First') : _('△ Show Newest First')),
 					E('button', {
-						'class': 'cbi-button cbi-button-action', 'click': refreshLogs
-					}, _('⟳ Refresh Now'))
+						class: 'cbi-button cbi-button-action', 'click': refreshLogs
+					}, _('⟳ Refresh Now')),
+					E('div', { style: 'display: flex; align-items: center; gap: 5px' }, [
+						E('input', {
+							type: 'checkbox', id: 'wordwrap-toggle',
+							change: (ev) => {
+								document.querySelectorAll('#syslog-textarea, #deluge-textarea').forEach(ta => {
+									ta.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre';
+								});
+							}
+						}),
+						E('label', { for: 'wordwrap-toggle', title: _('Enable automatic line wrapping') }, _('Wrap text'))
+					])
 				])
 			]),
 
@@ -153,9 +164,8 @@ return view.extend({
 					: _('System log: (no data available)')
 				),
 				E('textarea', {
-					id: 'syslog-textarea',
-					style: 'width: 100%',
-					readonly: true, wrap: 'off',
+					id: 'syslog-textarea', wrap: 'off',
+					style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
 					rows: calculateRows(initialSyslog.actualLines)
 				}, initialSyslog.text),
 			]),
@@ -169,9 +179,8 @@ return view.extend({
 					: _('Deluge run log: (no data available)')
 				),
 				E('textarea', {
-					id: 'deluge-textarea',
-					style: 'width: 100%',
-					readonly: true, wrap: 'off',
+					id: 'deluge-textarea', wrap: 'off',
+					style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
 					rows: calculateRows(initialDeluge.actualLines)
 				}, initialDeluge.text)
 			])
@@ -186,6 +195,5 @@ return view.extend({
 
 	handleSave: null,
 	handleReset: null,
-	handleSaveApply: null,
-	log_regex: /^[A-Z][a-z]{2} ([A-Z][a-z]{2}) (\d{1,2}) (\d{2}:\d{2}:\d{2}) (\d{4}) (.+)$/
+	handleSaveApply: null
 });

@@ -115,6 +115,12 @@ msgstr "Deluge - 日志查看"
 msgid "Lines:"
 msgstr "显示行数："
 
+msgid "Wrap text"
+msgstr "自动换行"
+
+msgid "Enable automatic line wrapping"
+msgstr "启用自动换行功能"
+
 msgid "▽ Show Oldest First"
 msgstr "▽ 正序显示(旧在前)"
 
