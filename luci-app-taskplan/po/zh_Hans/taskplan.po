@@ -138,8 +138,8 @@ msgstr "选择后点击验证"
 msgid "verify"
 msgstr "验证"
 
-msgid "Executed"
-msgstr "执行"
+msgid "Save successfully"
+msgstr "保存成功"
 
 msgid "Task Files"
 msgstr "任务文件"

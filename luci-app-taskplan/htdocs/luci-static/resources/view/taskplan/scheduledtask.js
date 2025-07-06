@@ -254,12 +254,14 @@ return view.extend({
         e = s.option(form.Value, 'remarks', _('Remarks'));
         e.editable = true;
 
-        setTimeout(() => this.updateTitles(m), 700);
-
-        return m.render();
+        return m.render().then((el) => {
+            requestAnimationFrame(() => this.updateTitles(m));
+            return el;
+        });
     },
 
     updateTitles: function(m) {
+        // console.time('updateTitles');
         const name = m.config;
         const tasks = m.data.state.values?.[name];
 
@@ -288,6 +290,7 @@ return view.extend({
                 const btn = document.querySelector(`#cbi-${name}-${id}-button .cbi-button-apply`);
                 btn?.setAttribute('title', _("verify"));
             });
+            // console.timeEnd('updateTitles');
     },
 
     defineStypeOptions: function(s) {
