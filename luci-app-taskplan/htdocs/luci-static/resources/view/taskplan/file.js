@@ -41,7 +41,7 @@ return view.extend({
                 }
             })
             .then(() => Promise.all([
-                L.resolveDefault(fs.stat(cfg.filePath), null),
+                fs.stat(cfg.filePath),
                 L.resolveDefault(fs.read_direct(cfg.filePath), ''),
                 uci.load('system')
             ]))
@@ -98,9 +98,9 @@ return view.extend({
                                         if (val !== Level) {
                                             uci.set('system', '@system[0]', 'cronloglevel', val);
                                             uci.save();
-                                            uci.apply().then(() => {
-                                                ui.addTimeLimitedNotification(null, E('p',  _('Save successfully')), 3000);
-                                            });
+                                            uci.apply()
+                                                .then(() => ui.addTimeLimitedNotification(null, E('p',  _('Save successfully')), 3000))
+                                                .catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 3000));
                                         };
                                     }
                                 }, _('Save')),
