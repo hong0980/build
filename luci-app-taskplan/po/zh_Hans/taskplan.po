@@ -69,8 +69,11 @@ msgstr "保留日志数量"
 msgid "Clear Log"
 msgstr "清空日志"
 
-msgid "Display logs in reverse order"
-msgstr "倒序显示日志"
+msgid "▽ Show Oldest First"
+msgstr "▽ 正序显示(旧在前)"
+
+msgid "△ Show Newest First"
+msgstr "△ 倒序显示(新在前)"
 
 msgid "Scheduled Reboot"
 msgstr "重启机器"

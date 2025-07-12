@@ -15,12 +15,12 @@ return view.extend({
 
     render: function ([lines, content]) {
         let reversed = false;
-        const log_length = uci.get('taskplan', 'globals', 'log_length')
-        const textarea = new ui.Textarea(content || _('No log data available'), { rows: content ? 25 : 3 });
+        const log_length = uci.get('taskplan', 'globals', 'log_length');
+        const textarea = new ui.Textarea(content ? content.split('\n').reverse().join('\n') : _('No log data available'), { rows: content ? 25 : 3 });
         const button = content
             ? E('p', {}, [
                 E('button', {
-                    'class': 'btn cbi-button-negative', 'title': _('Clear Log'), 'style': ' margin-left: 10px;',
+                    'class': 'btn cbi-button-negative', 'title': _('Clear Log'), 'style': 'margin-left: 10px;',
                     'click': ui.createHandlerFn(this, () => {
                         Promise.all([
                             fs.write(logPath, ''),
@@ -38,26 +38,28 @@ return view.extend({
                 }, _('Clear Log')),
                 E('button', {
                     'class': 'btn cbi-button-apply', 'style': 'margin-left:10px',
-                    'title': _('Display logs in reverse order'),
-                    'click': ui.createHandlerFn(this, () => {
-                        var newValue = reversed
-                            ? content
-                            : textarea.getValue().split('\n').reverse().join('\n');
+                    'click': ui.createHandlerFn(this, (ev) => {
+                        let newValue = reversed
+                            ? textarea.getValue().split('\n').reverse().join('\n')
+                            : content;
 
                         textarea.setValue(newValue);
+                        ev.target.textContent = reversed
+                            ? _('▽ Show Oldest First')
+                            : _('△ Show Newest First');
                         reversed = !reversed;
                     })
-                }, _('Display logs in reverse order')),
+                }, _('▽ Show Oldest First')),
                 E('span', { 'style': 'margin-left: 20px;' }, [_('Number of logs retained'),
                 E('select', {
-                    'id': 'log_length', 'style': 'width: 80px; margin-left:10px',
-                    'class': 'cbi-input-select'
-                }, [50, 100, 200, 250, 300, 350].map(value =>
-                    E('option', { value: value, selected: log_length == String(value) ? '' : null }, value)
+                    'id': 'log_length', 'class': 'cbi-input-select',
+                    'style': 'width: 80px; margin-left:10px'
+                }, [50, 100, 200, 250, 300, 350].map(v =>
+                    E('option', { value: v, selected: log_length == String(v) ? '' : null }, v)
                 )),
                 E('button', {
                     'style': 'margin-left: 10px;', 'class': 'btn cbi-button-apply',
-                    'click': function (ev) {
+                    'click': () => {
                         const val = document.getElementById('log_length').value;
                         if (val != log_length) {
                             uci.set('taskplan', 'globals', 'log_length', val);
