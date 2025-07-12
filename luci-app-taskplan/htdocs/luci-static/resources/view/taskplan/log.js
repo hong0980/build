@@ -1,6 +1,7 @@
 'use strict';
 'require fs';
 'require ui';
+'require uci';
 'require view';
 
 const logPath = '/etc/taskplan/taskplan.log';
@@ -8,21 +9,23 @@ const logPath = '/etc/taskplan/taskplan.log';
 return view.extend({
     load: () => Promise.all([
         fs.lines(logPath),
-        fs.trimmed(logPath)
+        fs.trimmed(logPath),
+        uci.load('taskplan')
     ]),
 
-    render: function([lines, content]) {
+    render: function ([lines, content]) {
         let reversed = false;
+        const log_length = uci.get('taskplan', 'globals', 'log_length')
         const textarea = new ui.Textarea(content || _('No log data available'), { rows: content ? 25 : 3 });
         const button = content
-            ?  E('p', {}, [
-                    E('button', {
-                        'class': 'btn cbi-button-negative', 'title': _('Clear Log'),
-                        'click': ui.createHandlerFn(this, () => {
-                            Promise.all([
-                                fs.write(logPath, ''),
-                                fs.write('/var/run/taskplan_counter.dat', '0')
-                            ])
+            ? E('p', {}, [
+                E('button', {
+                    'class': 'btn cbi-button-negative', 'title': _('Clear Log'), 'style': ' margin-left: 10px;',
+                    'click': ui.createHandlerFn(this, () => {
+                        Promise.all([
+                            fs.write(logPath, ''),
+                            fs.write('/var/run/taskplan_counter.dat', '0')
+                        ])
                             .then(() => {
                                 textarea.setValue('');
                                 ui.addTimeLimitedNotification(null, E('p', _('Log cleared')), 3000, 'info');
@@ -31,21 +34,42 @@ return view.extend({
                                 ui.addNotification(null, E('p',
                                     _('Failed to clear the log: %s').format(err.message)), 'error');
                             });
-                        })
-                    }, _('Clear Log')),
-                    E('button', {
-                        'class': 'btn cbi-button-apply', 'style': 'margin-left:10px',
-                        'title': _('Display logs in reverse order'),
-                        'click': ui.createHandlerFn(this, () => {
-                            var newValue = reversed
-                                ? content
-                                : textarea.getValue().split('\n').reverse().join('\n');
+                    })
+                }, _('Clear Log')),
+                E('button', {
+                    'class': 'btn cbi-button-apply', 'style': 'margin-left:10px',
+                    'title': _('Display logs in reverse order'),
+                    'click': ui.createHandlerFn(this, () => {
+                        var newValue = reversed
+                            ? content
+                            : textarea.getValue().split('\n').reverse().join('\n');
 
-                            textarea.setValue(newValue);
-                            reversed = !reversed;
-                        })
-                    }, _('Display logs in reverse order')),
-                ])
+                        textarea.setValue(newValue);
+                        reversed = !reversed;
+                    })
+                }, _('Display logs in reverse order')),
+                E('span', { 'style': 'margin-left: 20px;' }, [_('Number of logs retained'),
+                E('select', {
+                    'id': 'log_length', 'style': 'width: 80px; margin-left:10px',
+                    'class': 'cbi-input-select'
+                }, [50, 100, 200, 250, 300, 350].map(value =>
+                    E('option', { value: value, selected: log_length == String(value) ? '' : null }, value)
+                )),
+                E('button', {
+                    'style': 'margin-left: 10px;', 'class': 'btn cbi-button-apply',
+                    'click': function (ev) {
+                        const val = document.getElementById('log_length').value;
+                        if (val != log_length) {
+                            uci.set('taskplan', 'globals', 'log_length', val);
+                            uci.save();
+                            uci.apply()
+                                .then(() => ui.addTimeLimitedNotification(null, E('p', _('Save successfully')), 3000))
+                                .catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 3000));
+                        };
+                    }
+                }, _('Save')),
+                ]),
+            ])
             : [];
 
         return E([

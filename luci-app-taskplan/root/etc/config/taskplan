@@ -77,3 +77,5 @@ config ltime
 	option delay '30'
 	option enable '0'
 
+config globals 'globals'
+	option log_length '300'

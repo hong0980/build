@@ -46,7 +46,7 @@ run_stime() {
     config_get stype "$1" stype "07"
 
     local time_part="$minute $hour $day $month $week /usr/bin/taskplanhandler"
-    local cmd_part="$(task_cmd "$stype") Scheduled_task > /dev/null 2>&1 &"
+    local cmd_part="$(task_cmd "$stype") 'Scheduled task' > /dev/null 2>&1 &"
 
     [ -s "$CR" ] && sed -i "1i\\$time_part $cmd_part" "$CR" || echo "$time_part $cmd_part" > "$CR"
 }
@@ -57,7 +57,7 @@ run_ltime() {
     config_get stype "$1" stype "#"
     config_get delay "$1" delay "10"
 
-    awk -v task="(sleep $delay && /usr/bin/taskplanhandler $(task_cmd "$stype") Startup_task) &" '
+    awk -v task="(sleep $delay && /usr/bin/taskplanhandler $(task_cmd "$stype") 'Startup task') &" '
         $0 ~ /exit 0/ { print task }
         $0 !~ /exit 0/ { print }
         END { print "exit 0" }

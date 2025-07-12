@@ -63,6 +63,9 @@ msgstr "日志已清空"
 msgid "Failed to clear the log: %s"
 msgstr "清空日志失败: %s"
 
+msgid "Number of logs retained"
+msgstr "保留日志数量"
+
 msgid "Clear Log"
 msgstr "清空日志"
 
@@ -116,6 +119,33 @@ msgstr "自定义脚本 1"
 
 msgid "Custom Script 2"
 msgstr "自定义脚本 2"
+
+msgid "Execution"
+msgstr "执行"
+
+msgid "WAN restart successful!"
+msgstr "WAN 重启成功！"
+
+msgid "LAN restart successful!"
+msgstr "LAN 重启成功！"
+
+msgid "Redial successful!"
+msgstr "重新拨号成功！"
+
+msgid "[WARN] Failed to acquire lock, skipping log"
+msgstr "[WARN] 获取锁失败，跳过日志记录"
+
+msgid "Restarting mwan3..."
+msgstr "mwan3 重启中..."
+
+msgid "mwan3 status normal"
+msgstr "mwan3 状态正常"
+
+msgid "mwan3 monitor timeout"
+msgstr "mwan3 监控超时退出"
+
+msgid "Unknown command: "
+msgstr "未知命令: "
 
 msgid "The execution content of the [Scheduled Customscript1] in the task name"
 msgstr "任务名称中【自定义脚本1】执行内容"

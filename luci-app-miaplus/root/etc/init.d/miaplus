@@ -3,8 +3,6 @@
 START=30
 USE_PROCD=1
 
-. /usr/share/libubox/jshn.sh
-
 log_msg() {
 	logger -p daemon.info -t "miaplus" "$*"
 	echo "$*"
@@ -42,11 +40,11 @@ add_rule() {
 	$cmd -t filter -A MIAPLUS \
 		-m mac --mac-source "$mac" \
 		-m time --kerneltz \
-		--timestart "$on" \
-		--timestop "$of" \
+		--timestart "${on}:00" \
+		--timestop "${off}:00" \
 		--weekdays "$weekdays" \
 		-j DROP \
-		-m comment --comment "Block ${mac} ${on}-${of} ${weekdays}"
+		-m comment --comment "Block ${mac} ${on}-${off} ${weekdays}"
 
 	$cmd -t filter -A MIAPLUS \
 		-m mac --mac-source "$mac" \

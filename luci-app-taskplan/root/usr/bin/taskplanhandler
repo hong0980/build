@@ -9,7 +9,7 @@ COUNTER_FILE="/var/run/taskplan_counter.dat"
 log() {
 	(
 		flock -x -n 200 || {
-			echo "$(date +'%m-%d %H:%M:%S') - [WARN] 获取锁失败，跳过日志记录" >> "$LOG"
+			echo "$(date +'%m-%d %H:%M:%S') - $(trf "[WARN] Failed to acquire lock, skipping log")" >> "$LOG"
 			return 1
 		}
 
@@ -42,16 +42,16 @@ remwan3() {
 	count=0
 	while [ $count -lt 10 ]; do
 		if /usr/sbin/mwan3 status | grep -q error; then
-			log "mwan3 重启中..."
+			log $(trf "Restarting mwan3...")
 			/usr/sbin/mwan3 restart
 		else
-			log "mwan3 状态正常"
+			log $(trf "mwan3 status normal")
 			exit 1
 		fi
 		sleep 60
 		count=$((count+1))
 	done
-	log "mwan3 监控超时退出"
+	log $(trf "mwan3 monitor timeout")
 }
 
 trigger() {
@@ -61,11 +61,11 @@ trigger() {
 		closewan) ifdown wan ;;
 		disrereboot) disreconnwan || reboot ;;
 		network) /etc/init.d/network restart ;;
-		restartwan) ifup wan; log "WAN 重启成功！" ;;
+		restartwan) ifup wan; log $(trf "WAN restart successful!") ;;
 		restartmwan3) [ -x /usr/sbin/mwan3 ] && remwan3 ;;
 		clearmem) sync && echo 3 > /proc/sys/vm/drop_caches ;;
-		restartlan) ifdown lan; ifup lan; log "LAN 重启成功！" ;;
-		disreconn) disreconnwan || { ifup wan; log "重新拨号成功！"; } ;;
+		restartlan) ifdown lan; ifup lan; log $(trf "LAN restart successful!") ;;
+		disreconn) disreconnwan || { ifup wan; log $(trf "Redial successful!"); } ;;
 		customscript1) [ -s "$TASKPLAN_DIR/customscript1" ] && . "$TASKPLAN_DIR/customscript1" ;;
 		customscript2) [ -s "$TASKPLAN_DIR/customscript2" ] && . "$TASKPLAN_DIR/customscript2" ;;
 		restartsamba)
@@ -95,36 +95,49 @@ trigger() {
 			reboot
 			;;
 		*)
-			echo "未知命令: $1"
+			echo $(trf "Unknown command: ") $1
 			return 1
 			;;
 	esac
 }
 
-get_task_description() {
-	[ "$(uci -q get luci.main.lang)" = 'zh_cn' ] || return 0
+trf() {
+	if [ "$(uci -q get luci.main.lang)" = "en" ]; then
+		echo  "$@"
+		return
+	fi
 
+	printf '%s\n' \
+		"local i, t = 1, {}" \
+		"for _, v in ipairs(arg) do" \
+		"    t[i] = require('luci.i18n').translate(v)" \
+		"    i = i + 1" \
+		"end" \
+		"print(table.concat(t, ' '))" | \
+	LUA_INIT="require 'luci.i18n'.setlanguage('zh_cn')" lua - "$@"
+}
+
+get_task_description() {
 	case "$1" in
-		reboot)         echo "重启机器" ;;
-		poweroff)       echo "关闭机器" ;;
-		closewan)       echo "关闭网络" ;;
-		disrereboot)    echo "检测断网重启" ;;
-		network)        echo "重启网络" ;;
-		restartwan)     echo "重启WAN" ;;
-		restartmwan3)   echo "检测MWAN3(重启)" ;;
-		clearmem)       echo "释放内存" ;;
-		restartlan)     echo "重启LAN" ;;
-		disreconn)      echo "检测断网重连" ;;
-		customscript1)  echo "自定义脚本 1" ;;
-		customscript2)  echo "自定义脚本 2" ;;
-		restartsamba)   echo "重启网络共享" ;;
-		upwifi)         echo "启用无线网络" ;;
-		downwifi)       echo "关闭无线网络" ;;
-		sysfree)        echo "系统清理(重启)" ;;
+		reboot)         trf "Scheduled Reboot" ;;
+		poweroff)       trf "Scheduled Poweroff" ;;
+		closewan)       trf "Scheduled Closewan" ;;
+		disrereboot)    trf "Scheduled DisRereboot" ;;
+		network)        trf "Scheduled ReNetwork" ;;
+		restartwan)     trf "Scheduled Restartwan" ;;
+		restartmwan3)   trf "Scheduled Restartmwan3" ;;
+		clearmem)       trf "Scheduled Clearmem" ;;
+		restartlan)     trf "Scheduled Restartlan" ;;
+		disreconn)      trf "Scheduled DisReconn" ;;
+		customscript1)  trf "Custom Script 1" ;;
+		customscript2)  trf "Custom Script 2" ;;
+		restartsamba)   trf "Scheduled RestartSamba" ;;
+		upwifi)         trf "Scheduled Wifiup" ;;
+		downwifi)       trf "Scheduled Wifidown" ;;
+		sysfree)        trf "Scheduled Restartmwan3" ;;
 		*)              echo "" ;;
 	esac
 }
 
-task_description=$(get_task_description "$1")
-log "执行计划任务 $2: ${task_description:-$1}" && trigger "$1"
-limit_log 200
+log "$(trf "Execution" "$2"): $(get_task_description "$1")" && trigger "$1"
+limit_log $(uci -q get taskplan.globals.log_length)
