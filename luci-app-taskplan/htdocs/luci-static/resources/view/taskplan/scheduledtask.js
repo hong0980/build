@@ -28,8 +28,9 @@ const CSS = `
 
 const validateCrontabField = (type, value, monthValue) => {
 	const types = {
-		'day': {min: 1, max: 31, label: _('Days'), msg: _('1-31, "*", "*/N", ranges, or lists. E.g.: 1,5,10 or 5-10,*/2'),
-			getMaxDays: function(monthValue) {
+		'day': {
+			min: 1, max: 31, label: _('Days'), msg: _('1-31, "*", "*/N", ranges, or lists. E.g.: 1,5,10 or 5-10,*/2'),
+			getMaxDays: function (monthValue) {
 				if (!monthValue || monthValue === '*') return 31;
 				const monthValidation = validateCrontabField('month', monthValue);
 				if (monthValidation !== true) return 31;
@@ -41,11 +42,12 @@ const validateCrontabField = (type, value, monthValue) => {
 					return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 29 : 28;
 				};
 				return [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
-		}},
-		'hour': {min: 0, max: 23, label: _('hours'), msg: _('0-23, "*", "*/N", ranges, or lists. E.g.: 0,12,18 or 8-17')},
-		'month': {min: 1, max: 12, label: _('months'), msg: _('1-12, "*", "*/N", ranges, or lists. E.g.: 1,6,12 or 3-8,*/2')},
-		'minute': {min: 0, max: 59, label: _('minutes'), msg: _('0-59, "*", "*/N", ranges, or lists. E.g.: 0,15,30,45 or 10-50,*/5')},
-		'week': {min: 0, max: 6, label: _('weeks'), msg: _('0-6 (0/6=Sunday), "*", "*/N", ranges, or lists. E.g.: 0,1,5 or 1-5,*/2')}
+			}
+		},
+		'hour': { min: 0, max: 23, label: _('hours'), msg: _('0-23, "*", "*/N", ranges, or lists. E.g.: 0,12,18 or 8-17') },
+		'month': { min: 1, max: 12, label: _('months'), msg: _('1-12, "*", "*/N", ranges, or lists. E.g.: 1,6,12 or 3-8,*/2') },
+		'minute': { min: 0, max: 59, label: _('minutes'), msg: _('0-59, "*", "*/N", ranges, or lists. E.g.: 0,15,30,45 or 10-50,*/5') },
+		'week': { min: 0, max: 6, label: _('weeks'), msg: _('0-6 (0/6=Sunday), "*", "*/N", ranges, or lists. E.g.: 0,1,5 or 1-5,*/2') }
 	};
 
 	value = (value || '').replace(/\s/g, '');
@@ -126,17 +128,18 @@ const validateCrontabField = (type, value, monthValue) => {
 };
 
 return view.extend({
-	load: function() {
+	load: function () {
 		return uci.load('taskplan');
 	},
 
-	render: function() {
+	render: function () {
 		let m, s, e;
 		m = new form.Map('taskplan', '', [
-			E('style', { 'type': 'text/css' }, [ CSS ]),
+			E('style', { 'type': 'text/css' }, [CSS]),
 			E('div', {}, [
 				_('Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc.'),
-				E('a', { 'target': '_blank', 'style': 'margin-left: 10px;',
+				E('a', {
+					'target': '_blank', 'style': 'margin-left: 10px;',
 					'href': 'https://github.com/sirpdboy/luci-app-taskplan'
 				}, _('GitHub @sirpdboy/luci-app-taskplan'))
 			])
@@ -161,7 +164,7 @@ return view.extend({
 		e.rmempty = false;
 		e.editable = true;
 		e.default = '0';
-		e.validate = function(section_id, value) {
+		e.validate = function (section_id, value) {
 			return validateCrontabField('minute', value);
 		};
 
@@ -169,7 +172,7 @@ return view.extend({
 		e.rmempty = false;
 		e.editable = true;
 		e.default = '*';
-		e.validate = function(section_id, value) {
+		e.validate = function (section_id, value) {
 			return validateCrontabField('hour', value);
 		};
 
@@ -177,7 +180,7 @@ return view.extend({
 		e.rmempty = false;
 		e.editable = true;
 		e.default = '*';
-		e.validate = function(section_id, value) {
+		e.validate = function (section_id, value) {
 			return validateCrontabField('day', value,
 				this.section.formvalue(section_id, 'month'));
 		};
@@ -186,7 +189,7 @@ return view.extend({
 		e.rmempty = false;
 		e.editable = true;
 		e.default = '*';
-		e.validate = function(section_id, value) {
+		e.validate = function (section_id, value) {
 			return validateCrontabField('month', value);
 		};
 
@@ -204,7 +207,7 @@ return view.extend({
 		e.value('4', _('Thursday'));
 		e.value('5', _('Friday'));
 		e.value('6', _('Saturday'));
-		e.validate = function(section_id, value) {
+		e.validate = function (section_id, value) {
 			return validateCrontabField('week', value);
 		};
 
@@ -216,7 +219,7 @@ return view.extend({
 		e = s.option(form.Button, 'button', _('verify'));
 		e.inputstyle = 'apply';
 		e.editable = true;
-		e.onclick = function(ev, section_id) {
+		e.onclick = function (ev, section_id) {
 			const crontab = ['minute', 'hour', 'day', 'month', 'week'].map(f => {
 				const opt = m.lookupOption(`taskplan.${section_id}.${f}`);
 				return opt ? opt[0].formvalue(section_id) : '';
@@ -258,7 +261,7 @@ return view.extend({
 		});
 	},
 
-	updateTitles: function(m) {
+	updateTitles: function (m) {
 		// console.time('updateTitles');
 		const tasks = m.data.state.values?.taskplan;
 		if (!tasks) return;
@@ -288,7 +291,7 @@ return view.extend({
 		// console.timeEnd('updateTitles');
 	},
 
-	defineStypeOptions: function(s) {
+	defineStypeOptions: function (s) {
 		let e = s.option(form.ListValue, 'stype', _('Scheduled Type'));
 		e.default = '10';
 		e.value('01', _('Scheduled Reboot'));
@@ -314,38 +317,40 @@ return view.extend({
 		return e;
 	},
 
-	showScriptEditModal: function(v) {
+	showScriptEditModal: function (v) {
 		const label = v === '16' ? _('Custom Script 2') : _('Custom Script 1');
 		const path = v === '16' ? '/etc/taskplan/customscript2' : '/etc/taskplan/customscript1';
 		fs.stat(path)
 			.catch(() => fs.write(path, '#!/bin/sh\n'))
 			.then(() => fs.read_direct(path))
 			.then(content => {
-				const textarea = new ui.Textarea(content, { rows: 12, wrap: true });
 				ui.showModal(_('Edit %s').format(label), [
 					E('b', { 'style': 'color:red;' },
 						_('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
-					textarea.render(),
+					E('textarea', { 'rows': 12, 'id': v, 'style': 'background-color:#272626; color:#e9e9dd; font-family:Consolas, monospace;' }, content),
 					E('div', { 'class': 'button-row' }, [
-						E('div', { 'class': 'btn cbi-button-neutral',
+						E('div', {
+							'class': 'btn cbi-button-neutral',
 							'click': ui.hideModal, 'title': _('Cancel')
 						}, _('Cancel')),
-						E('div', { 'class': 'btn cbi-button-action',
+						E('div', {
+							'class': 'btn cbi-button-action',
 							'title': _('Click to upload the script to %s').format(path),
 							'click': () => ui.uploadFile(path)
 								.then(() => ui.addTimeLimitedNotification(null, E('p',
 									_('File saved to %s').format(path)), 3000, 'info'))
 								.catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 3000))
 						}, _('Upload')),
-						E('div', { 'class': 'btn cbi-button-positive', 'title': _('Save'),
+						E('div', {
+							'class': 'btn cbi-button-positive', 'title': _('Save'),
 							'click': () => {
-								const value = textarea.getValue().trim().replace(/\r\n/g, '\n') + '\n';
+								const value = document.getElementById(v).value?.trim().replace(/\r\n/g, '\n') + '\n';
 								fs.write(path, value)
 									.then(() => ui.addTimeLimitedNotification(null, E('p',
 										_('Contents of %s have been saved.').format(label)), 3000, 'info'))
 									.catch(err => ui.addTimeLimitedNotification(null, E('p',
 										_('Unable to save contents: %s').format(err.message)), 8000, 'error'));
-									ui.hideModal();
+								ui.hideModal();
 							}
 						}, _('Save')),
 					])
