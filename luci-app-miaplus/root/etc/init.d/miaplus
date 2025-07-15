@@ -2,6 +2,9 @@
 
 START=30
 USE_PROCD=1
+ipv6enable=$(uci -q get miaplus.config.ipv6enable || echo 0)
+cmd="iptables"
+[ "$ipv6enable" = "1" ] && cmd="ip6tables"
 
 log_msg() {
 	logger -p daemon.info -t "miaplus" "$*"
@@ -9,77 +12,106 @@ log_msg() {
 }
 
 add_rule() {
-	config_get_bool enable 'config' enable '0'
 	config_get_bool client "$1" enable '0'
-	[ "$enable" -eq "0" -o "$client" -eq '0' ] && return
-
-	config_get_bool ipv6enable 'config' ipv6enable '0'
-	local cmd="iptables"
-	[ "$ipv6enable" = "1" ] && cmd="ip6tables"
+	config_get_bool enable 'config' enable '0'
 	config_get_bool strict 'config' strict '0'
+	[ "$client" -eq "0" -o "$enable" -eq '0' ] && return
 
+	$cmd -t filter -N MIAPLUS 2>/dev/null
 	$cmd -C INPUT -p udp --dport 53 -j MIAPLUS >/dev/null 2>&1 || \
-		$cmd -I INPUT -p udp --dport 53 -m comment --comment "Rule For Control" -j MIAPLUS
+		$cmd -I INPUT -p udp --dport 53 -m comment --comment "miaplus_control" -j MIAPLUS
 	$cmd -C INPUT -p tcp --dport 53 -j MIAPLUS >/dev/null 2>&1 || \
-		$cmd -I INPUT -p tcp --dport 53 -m comment --comment "Rule For Control" -j MIAPLUS
+		$cmd -I INPUT -p tcp --dport 53 -m comment --comment "miaplus_control" -j MIAPLUS
+
 	[ "$strict" -eq '1' ] && {
 		$cmd -C FORWARD -j MIAPLUS >/dev/null 2>&1 || \
-			$cmd -t filter -I FORWARD -m comment --comment "Rule For Control" -j MIAPLUS
+			$cmd -t filter -I FORWARD -m comment --comment "miaplus_control_forward" -j MIAPLUS
 	}
 
-	$cmd -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "Rule For Control"
-	$cmd -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "Rule For Control"
+	$cmd -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53 >/dev/null 2>&1 || \
+		$cmd -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "miaplus_control"
+	$cmd -t nat -C PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53 >/dev/null 2>&1 || \
+		$cmd -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "miaplus_control"
 
+	add_rule_for_protocol() {
+		local type=$1 identifier=$2
+		case "$type" in
+			ip|ip6) match="-s $identifier" ;;
+			mac)    match="-m mac --mac-source $identifier" ;;
+		esac
+
+		$cmd -C INPUT $match -j DROP >/dev/null 2>&1 || \
+			$cmd -I INPUT $match -j DROP -m comment --comment "miaplus_block_$identifier"
+
+		local time_match=""
+		if [ -n "$weekdays" ]; then
+			time_match="$time_match --weekdays $weekdays"
+		fi
+
+		if [ -n "$on_t" -a -n "$off_t" ]; then
+			time_match="$time_match --timestart ${on_t}:00 --timestop ${off_t}:00"
+		fi
+
+		if [ -n "$day" ]; then
+			time_match="$time_match --monthdays $day"
+		fi
+
+		if [ -n "$on_d" -a -n "$off_d" ]; then
+			time_match="$time_match --datestart $on_d --datestop $off_d"
+		fi
+
+		if [ -n "$time_match" ]; then
+			$cmd -t filter -A MIAPLUS $match \
+				-m time --kerneltz $time_match \
+				-j DROP \
+				-m comment --comment "miaplus_time_$identifier"
+		fi
+
+		$cmd -t filter -A MIAPLUS $match -j ACCEPT \
+			-m comment --comment "miaplus_allow_$identifier"
+	}
+
+	config_get ip "$1" ipaddr ''
 	config_get mac "$1" macaddr ''
-	config_get on "$1" timeon "10:00"
-	config_get off "$1" timeoff "23:00"
-	config_get control "$1" control_date "1 2 3 4 5 6 7"
-	mac=$(echo "$mac" | tr 'A-F' 'a-f')
+	config_get ipv6 "$1" ip6addr ''
+	config_get day "$1" monthdays ""
+	config_get on_d "$1" start_date ""
+	config_get off_d "$1" stop_date ""
+	config_get on_t "$1" start_time "10:00"
+	config_get off_t "$1" stop_time "23:00"
+	config_get weekdays "$1" weekdays "1 2 3 4 5 6 7"
+	weekdays=$(echo "$weekdays" | tr ' ' ',')
 
-	local weekdays=$(echo "$control" | tr ' ' ',' | grep -Eo '[1-7](,[1-7])*')
-	$cmd -t filter -A MIAPLUS \
-		-m mac --mac-source "$mac" \
-		-m time --kerneltz \
-		--timestart "${on}:00" \
-		--timestop "${off}:00" \
-		--weekdays "$weekdays" \
-		-j DROP \
-		-m comment --comment "Block ${mac} ${on}-${off} ${weekdays}"
-
-	$cmd -t filter -A MIAPLUS \
-		-m mac --mac-source "$mac" \
-		-j ACCEPT \
-		-m comment --comment "Allow ${mac} other times"
+	if [ -n "$mac" ]; then
+		add_rule_for_protocol "mac" "$mac"
+	elif [ -n "$ip" ]; then
+		add_rule_for_protocol "ip" "$ip"
+	elif [ -n "$ip6" -a "$ipv6enable" = "1" ]; then
+		add_rule_for_protocol "ip6" "$ip6"
+	fi
 }
 
 start_service() {
 	stop_service
-	iptables -t filter -N MIAPLUS 2>/dev/null
-	iptables -t filter -F MIAPLUS 2>/dev/null
-	ip6tables -t filter -N MIAPLUS 2>/dev/null
-	ip6tables -t filter -F MIAPLUS 2>/dev/null
+	$cmd -t filter -N MIAPLUS 2>/dev/null
+	$cmd -t filter -F MIAPLUS 2>/dev/null
 	config_load miaplus
 	config_foreach add_rule macbind
 }
 
 stop_service() {
-	iptables -t filter -D FORWARD -m comment --comment "Rule For Control" -j MIAPLUS 2>/dev/null
-	iptables -D INPUT -p udp --dport 53 -m comment --comment "Rule For Control" -j MIAPLUS 2>/dev/null
-	iptables -D INPUT -p tcp --dport 53 -m comment --comment "Rule For Control" -j MIAPLUS 2>/dev/null
-	iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "Rule For Control" 2>/dev/null
-	iptables -t nat -D PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "Rule For Control" 2>/dev/null
-	iptables -t filter -F MIAPLUS 2>/dev/null
-	iptables -t filter -X MIAPLUS 2>/dev/null
+	for chain in INPUT FORWARD; do
+		$cmd -L $chain -n --line-numbers 2>/dev/null | \
+			awk '/miaplus_/ {print $1}' | sort -rn | \
+			while read num; do $cmd -D $chain $num 2>/dev/null; done
+	done
 
-	if command -v ip6tables >/dev/null 2>&1; then
-		ip6tables -t filter -D FORWARD -m comment --comment "Rule For Control" -j MIAPLUS 2>/dev/null
-		ip6tables -D INPUT -p udp --dport 53 -m comment --comment "Rule For Control" -j MIAPLUS 2>/dev/null
-		ip6tables -D INPUT -p tcp --dport 53 -m comment --comment "Rule For Control" -j MIAPLUS 2>/dev/null
-		ip6tables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "Rule For Control" 2>/dev/null
-		ip6tables -t nat -D PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "Rule For Control" 2>/dev/null
-		ip6tables -t filter -F MIAPLUS 2>/dev/null
-		ip6tables -t filter -X MIAPLUS 2>/dev/null
-	fi
+	$cmd -t nat -L PREROUTING -n --line-numbers 2>/dev/null | \
+		awk '/miaplus_control/ {print $1}' | sort -rn | \
+		while read num; do $cmd -t nat -D PREROUTING $num 2>/dev/null; done
+
+	$cmd -t filter -F MIAPLUS 2>/dev/null
+	$cmd -t filter -X MIAPLUS 2>/dev/null
 }
 
 service_triggers() {

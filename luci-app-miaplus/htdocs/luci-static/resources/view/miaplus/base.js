@@ -3,104 +3,149 @@
 'require form';
 'require view';
 'require network';
+'require validation';
+'require tools.firewall as fwtool';
 
-var CSS = `<style>
+var CSS = `
 @media (min-width: 768px) {
-	[data-name="timeon"]   .cbi-input-text,
-	[data-name="timeoff"] .cbi-input-text {
-		max-width: 75px !important;
-		width: 100% !important;
+	.cbi-section-table
+	.cbi-input-text {
+		max-width: 65px;
 	}
-	[data-name="macaddr"] .cbi-dropdown {
-		min-width: 200px !important;
-		max-width: 200px !important;
-		width: 100% !important;
+	.table.cbi-section-table
+	.cbi-dropdown {
+		min-width: 160px;
+		max-width: 160px;
+	}
+	.table.cbi-section-table
+	td[data-name="monthdays"]
+	.cbi-dropdown {
+		min-width: 100px;
 	}
 }
-</style>`;
+`;
+var fw4 = L.hasSystemFeature('firewall4');
 
 return view.extend({
-	load: function() {
+	load: function () {
 		return Promise.all([
 			network.getHostHints(),
 			fs.exec_direct('/usr/sbin/iptables', ['-L', 'INPUT'])
-				.then(function(res) {
-					return res.includes('MIAPLUS');
-				})
+				.then((res) => res.includes('MIAPLUS'))
+				.catch(() => false)
 		]);
 	},
 
-	render: function(data) {
-		var hosts = data[0].hosts || {};
-		var status = data[1] || false;
-		var m, s, o;
+	render: function ([data, isRunning]) {
+		const hosts = data.hosts || {};
+		let m, s, o;
 
-		m = new form.Map('miaplus', _('Internet Access Schedule Control Plus') + CSS, [
-			E('dvi', {}, _('Access Schedule Control Description')),
-			E('br'), E('br'),
-			E('font', { 'color': status ? "green" : "red", 'style': "font-weight:bold;"},
-				_(status ? "%s RUNNING" : "%s NOT RUNNING").format(_("Internet Access Schedule Control Plus"))),
+		m = new form.Map('miaplus', _('Internet Access Schedule Control Plus'), [
+			E('style', { 'type': 'text/css' }, CSS),
+			E('div', { 'style': 'margin-bottom: 1em;' }, _('Access Schedule Control Description')),
+			E('font', { 'color': isRunning ? "green" : "red", 'style': "font-weight: bold;" },
+				_(isRunning ? "%s RUNNING" : "%s NOT RUNNING").format(_("Internet Access Schedule Control Plus")))
 		]);
 
-
-		s = m.section(form.TypedSection, 'basic', _('Basic Settings'));
+		s = m.section(form.TypedSection, 'basic');
 		s.anonymous = true;
 
-		o = s.option(form.Flag, 'enable', _('Enabled'));
+		o = s.option(form.Flag, 'enable', _('Enable'));
 		o.rmempty = false;
 
-		o = s.option(form.Flag, 'strict', _('Strict Mode'));
-		o.description = _('Strict Mode will degrade CPU performance, but it can achieve better results');
+		o = s.option(form.Flag, 'strict', _('Strict Mode'),
+			_('Better control but higher CPU usage'));
 		o.rmempty = false;
+		o.default = '1';
 
 		o = s.option(form.Flag, 'ipv6enable', _('IPv6 Enabled'));
 		o.rmempty = false;
 
-		s = m.section(form.TableSection, 'macbind', _('Client Rules'));
+		s = m.section(form.GridSection, 'macbind');
 		s.anonymous = true;
 		s.addremove = true;
 		s.sortable = true;
 
-		o = s.option(form.Flag, 'enable', _('Enabled'));
+		o = s.option(form.Flag, 'enable', _('Enable'));
 		o.rmempty = false;
-		o.default = '1';
+		o.editable = true;
+		o.modalonly = false;
 
-		o = s.option(form.Value, 'macaddr', _('MAC address (Computer Name)'));
-		for (var mac in hosts) {
-			var host = hosts[mac];
-			var ip = host.ipaddrs[0];
-			var hint = host.name ?? ip;
-			o.value(mac, hint ? '%s [ %s ] (%s)'.format(ip, mac, hint) : mac);
+		o = s.option(form.Value, 'macaddr', _('MAC Address'));
+		L.sortedKeys(hosts).forEach(function (mac) {
+			o.value(mac, E([], [mac, ' (', E('strong', {}, [
+				hosts[mac].name ||
+				L.toArray(hosts[mac].ipaddrs || hosts[mac].ipv4)[0] ||
+				L.toArray(hosts[mac].ip6addrs || hosts[mac].ipv6)[0] ||
+				'?'
+			]), ')']));
+		});
+		o.editable = true;
+		o.datatype = 'list(macaddr)';
+
+		o = s.option(form.Value, 'ipaddr', _('IP Address'));
+		var choices = fwtool.transformHostHints('ipv4', hosts);
+		for (var i = 0; i < choices[0].length; i++)
+			o.value(choices[0][i], choices[1][choices[0][i]]);
+		o.editable = true;
+		o.datatype = (fw4 && validation.types.iprange) ? 'list(neg(or(ipmask("true"),iprange)))' : 'list(neg(ipmask("true")))';
+
+		// o = s.option(form.Value, 'ip6addr', 'IP6');
+		// var choices = fwtool.transformHostHints('ipv6', hosts);
+		// for (var i = 0; i < choices[0].length; i++)
+		// 	o.value(choices[0][i], choices[1][choices[0][i]]);
+		// o.editable = true;
+		// o.datatype = 'ip6addr';
+
+		o = s.option(form.MultiValue, 'weekdays', _('Week Days'));
+		o.modalonly = true;
+		o.multiple = true;
+		o.display = 5;
+		o.placeholder = _('Any day');
+		o.value('Mon', _('mon'));
+		o.value('Tue', _('tue'));
+		o.value('Wed', _('wed'));
+		o.value('Thu', _('thu'));
+		o.value('Fri', _('fri'));
+		o.value('Sat', _('sat'));
+		o.value('Sun', _('sun'));
+		o.write = function (section_id, value) {
+			return this.super('write', [section_id, L.toArray(value).join(' ')]);
 		};
-		o.datatype = 'macaddr';
-		// o.datatype = 'or(macaddr,ip4addr)';
-		o.rmempty = false;
 
-		o = s.option(form.Value, "timeon", _("Start time"));
-		o.default = '08:00';
-		o.rmempty  = false;
-		o.validate = function(section_id, value) {
-			return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value) ? true : _('Invalid time format. Use HH:MM.');
+		o = s.option(form.MultiValue, 'monthdays', _('Month Days'));
+		// o.modalonly = true;
+		o.multiple = true;
+		o.editable = true;
+		o.display_size = 15;
+		o.placeholder = _('Any day');
+		o.write = function (section_id, value) {
+			return this.super('write', [section_id, L.toArray(value).join(' ')]);
+		};
+		for (var i = 1; i <= 31; i++)
+			o.value(i);
+
+		o = s.option(form.Value, 'start_time', _('Start time'));
+		// o.modalonly = true;
+		o.editable = true;
+		o.validate = function (section_id, value) {
+			return !value || /^([01]\d|2[0-3]):([0-5]\d)$/.test(value) || _('Invalid time format. Use HH:MM.');
 		};
 
-		o = s.option(form.Value, "timeoff", _("End time"));
-		o.default = '20:00';
-		o.rmempty = false;
-		o.validate = function(section_id, value) {
-			return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value) ? true : _('Invalid time format. Use HH:MM.');
+		o = s.option(form.Value, 'stop_time', _('Stop Time'));
+		// o.modalonly = true;
+		o.editable = true;
+		o.validate = function (section_id, value) {
+			return !value || /^([01]\d|2[0-3]):([0-5]\d)$/.test(value) || _('Invalid time format. Use HH:MM.');
 		};
 
-		o = s.option(form.MultiValue, 'control_date', _('Control date'));
-		o.value('1', _('Monday'));
-		o.value('2', _('Tuesday'));
-		o.value('3', _('Wednesday'));
-		o.value('4', _('Thursday'));
-		o.value('5', _('Friday'));
-		o.value('6', _('Saturday'));
-		o.value('7', _('Sunday'));
-		o.rmempty = false;
-		o.optional = false;
-		o.default = ["1", "2", "3", "4", "5", "6", "7"];
+		o = s.option(form.Value, 'start_date', _('Start Date (yyyy-mm-dd)'));
+		o.modalonly = true;
+		o.datatype = 'dateyyyymmdd';
+
+		o = s.option(form.Value, 'stop_date', _('Stop Date (yyyy-mm-dd)'));
+		o.modalonly = true;
+		o.datatype = 'dateyyyymmdd';
 
 		return m.render();
 	}

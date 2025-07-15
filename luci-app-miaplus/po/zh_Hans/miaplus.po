@@ -4,26 +4,11 @@ msgstr "上网时间控制Plus"
 msgid "Access Schedule Control Description"
 msgstr "设置客户端访问互联网的时间"
 
-msgid "General switch"
-msgstr "开启/关闭"
-
-msgid "Base Setting"
-msgstr "基本设置"
-
-msgid "Advance Setting"
-msgstr "高级设置"
-
 msgid "Strict Mode"
 msgstr "严格模式"
 
-msgid "Strict Mode will degrade CPU performance, but it can achieve better results"
-msgstr "严格模式会损耗部分CPU资源，但可以按照时间规则立即拦截数据包，效果更好"
-
-msgid "Client Rules"
-msgstr "客户端规则"
-
-msgid "Description"
-msgstr "描述"
+msgid "Better control but higher CPU usage"
+msgstr "更好的控制但使用更高的CPU使用"
 
 msgid "%s RUNNING"
 msgstr "%s 运行中"
@@ -31,35 +16,38 @@ msgstr "%s 运行中"
 msgid "%s NOT RUNNING"
 msgstr "%s 未运行"
 
-msgid "MAC address (Computer Name)"
-msgstr "MAC 地址 (主机名)"
+msgid "IP Address"
+msgstr "IP 地址"
+
+msgid "MAC Address"
+msgstr "MAC 地址"
 
 msgid "Start time"
 msgstr "开始时间"
 
-msgid "End time"
+msgid "Stop Time"
 msgstr "结束时间"
 
-msgid "Mon"
-msgstr "星期一"
+msgid "mon"
+msgstr "周一"
 
-msgid "Tue"
-msgstr "星期二"
+msgid "tue"
+msgstr "周二"
 
-msgid "Wed"
-msgstr "星期三"
+msgid "wed"
+msgstr "周三"
 
-msgid "Thu"
-msgstr "星期四"
+msgid "thu"
+msgstr "周四"
 
-msgid "Fri"
-msgstr "星期五"
+msgid "fri"
+msgstr "周五"
 
-msgid "Sat"
-msgstr "星期六"
+msgid "sat"
+msgstr "周六"
 
-msgid "Sun"
-msgstr "星期日"
+msgid "sun"
+msgstr "周日"
 
 msgid "IPv6 Enabled"
 msgstr "启用 IPv6"
