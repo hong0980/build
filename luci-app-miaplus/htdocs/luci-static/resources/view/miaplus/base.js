@@ -156,12 +156,15 @@ return view.extend({
 		o.modalonly = true;
 		o.datatype = 'dateyyyymmdd';
 
-		o = s.option(form.Flag, 'combine_datetime', _('Time Mode'),
-			_('Combined: exact datetime range | Separate: date range + recurring time')
+		o = s.option(form.ListValue, 'time_mode', _('Time Mode'),
+			_('Combined mode: Active throughout the entire specified datetime period<br>Separated mode: Active daily during the specified time slot within the date range')
 		);
 		o.modalonly = true;
+		o.value(1, _('Combined'));
+		o.value(0, _('Separate'));
 		o.depends({ 'stop_date': '', '!reverse': true });
 		o.depends({ 'start_date': '', '!reverse': true });
+		o.default = 1;
 
 		return m.render();
 	}

@@ -43,8 +43,14 @@ msgstr "结束日期"
 msgid "Time Mode"
 msgstr "时间模式"
 
-msgid "Combined: exact datetime range | Separate: date range + recurring time"
-msgstr "组合模式：精确时间点范围 | 分离模式：日期范围+每日重复时段"
+msgid "Combined mode: Active throughout the entire specified datetime period<br>Separated mode: Active daily during the specified time slot within the date range"
+msgstr "组合模式：日期和时间区间持续生效<br>分离模式：日期范围内每日时间段循环生效"
+
+msgid "Combined"
+msgstr "组合模式"
+
+msgid "Separate"
+msgstr "分离模式"
 
 msgid "mon"
 msgstr "周一"
