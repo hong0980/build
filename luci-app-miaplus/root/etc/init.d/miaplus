@@ -7,7 +7,7 @@ cmd="iptables"
 [ "$ipv6enable" = "1" ] && cmd="ip6tables"
 
 log_msg() {
-	logger -p daemon.info -t "miaplus" "$*"
+	logger -p daemon.info -t "miaplus" -- "$*"
 	echo "$*"
 }
 
@@ -43,44 +43,43 @@ add_rule() {
 		$cmd -C INPUT $match -j DROP >/dev/null 2>&1 || \
 			$cmd -I INPUT $match -j DROP -m comment --comment "miaplus_block_$identifier"
 
-		local time_match=""
-		if [ -n "$weekdays" ]; then
-			time_match="$time_match --weekdays $weekdays"
+		local time_match="" nt_time="" ft_time=""
+		[ -n "$weekdays" ] && time_match="$time_match --weekdays ${weekdays// /,}"
+		[ -n "$monthdays" ] && time_match="$time_match --monthdays $monthdays"
+
+		if [ -n "$start_time" -a -n "$stop_time" ]; then
+			if [ -n "$start_date" -a -n "$stop_date" -a "$combine_datetime" = "1" ]; then
+				nt_time="T${start_time}"
+				ft_time="T${stop_time}"
+			else
+				time_match="$time_match --timestart ${start_time} --timestop ${stop_time}"
+			fi
 		fi
 
-		if [ -n "$on_t" -a -n "$off_t" ]; then
-			time_match="$time_match --timestart ${on_t}:00 --timestop ${off_t}:00"
+		if [ -n "$start_date" -a -n "$stop_date" ]; then
+			time_match="$time_match --datestart ${start_date}${nt_time} --datestop ${stop_date}${ft_time}"
 		fi
 
-		if [ -n "$day" ]; then
-			time_match="$time_match --monthdays $day"
-		fi
+		$cmd -t filter -A MIAPLUS $match \
+			-m time --kerneltz $time_match \
+			-j DROP \
+			-m comment --comment "miaplus_time_$identifier_$(date +%s)"
 
-		if [ -n "$on_d" -a -n "$off_d" ]; then
-			time_match="$time_match --datestart $on_d --datestop $off_d"
-		fi
-
-		if [ -n "$time_match" ]; then
-			$cmd -t filter -A MIAPLUS $match \
-				-m time --kerneltz $time_match \
-				-j DROP \
-				-m comment --comment "miaplus_time_$identifier"
-		fi
-
-		$cmd -t filter -A MIAPLUS $match -j ACCEPT \
+		$cmd -t filter -A MIAPLUS $match \
+			-j ACCEPT \
 			-m comment --comment "miaplus_allow_$identifier"
 	}
 
 	config_get ip "$1" ipaddr ''
 	config_get mac "$1" macaddr ''
 	config_get ipv6 "$1" ip6addr ''
-	config_get day "$1" monthdays ""
-	config_get on_d "$1" start_date ""
-	config_get off_d "$1" stop_date ""
-	config_get on_t "$1" start_time "10:00"
-	config_get off_t "$1" stop_time "23:00"
-	config_get weekdays "$1" weekdays "1 2 3 4 5 6 7"
-	weekdays=$(echo "$weekdays" | tr ' ' ',')
+	config_get monthdays "$1" monthdays ''
+	config_get start_date "$1" start_date ''
+	config_get stop_date "$1" stop_date ''
+	config_get start_time "$1" start_time ''
+	config_get stop_time "$1" stop_time ''
+	config_get weekdays "$1" weekdays ''
+	config_get_bool combine_datetime "$1" combine_datetime '0'
 
 	if [ -n "$mac" ]; then
 		add_rule_for_protocol "mac" "$mac"

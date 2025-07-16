@@ -22,11 +22,29 @@ msgstr "IP 地址"
 msgid "MAC Address"
 msgstr "MAC 地址"
 
+msgid "Default MAC priority"
+msgstr "默认 MAC 优先"
+
+msgid "If using IP, the MAC must be left blank"
+msgstr "如果使用 IP，MAC 必须留空"
+
 msgid "Start time"
 msgstr "开始时间"
 
 msgid "Stop Time"
 msgstr "结束时间"
+
+msgid "Start Date"
+msgstr "开始日期"
+
+msgid "Stop Date"
+msgstr "结束日期"
+
+msgid "Time Mode"
+msgstr "时间模式"
+
+msgid "Combined: exact datetime range | Separate: date range + recurring time"
+msgstr "组合模式：精确时间点范围 | 分离模式：日期范围+每日重复时段"
 
 msgid "mon"
 msgstr "周一"

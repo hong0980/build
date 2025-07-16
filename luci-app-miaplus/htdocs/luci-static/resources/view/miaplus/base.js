@@ -10,7 +10,7 @@ var CSS = `
 @media (min-width: 768px) {
 	.cbi-section-table
 	.cbi-input-text {
-		max-width: 65px;
+		max-width: 55px;
 	}
 	.table.cbi-section-table
 	.cbi-dropdown {
@@ -21,6 +21,7 @@ var CSS = `
 	td[data-name="monthdays"]
 	.cbi-dropdown {
 		min-width: 100px;
+		max-width: 100px;
 	}
 }
 `;
@@ -37,7 +38,7 @@ return view.extend({
 	},
 
 	render: function ([data, isRunning]) {
-		const hosts = data.hosts || {};
+		const host = Object.entries(data.hosts);
 		let m, s, o;
 
 		m = new form.Map('miaplus', _('Internet Access Schedule Control Plus'), [
@@ -65,37 +66,45 @@ return view.extend({
 		s.anonymous = true;
 		s.addremove = true;
 		s.sortable = true;
+		s.cloneable = true; //允许用户克隆（复制）现有的条目
+		s.rowcolors = true; // 启用行交替颜色（斑马条纹）
+		s.nodescriptions = true; //不显示每个选项的默认描述文本
 
 		o = s.option(form.Flag, 'enable', _('Enable'));
 		o.rmempty = false;
 		o.editable = true;
 		o.modalonly = false;
 
-		o = s.option(form.Value, 'macaddr', _('MAC Address'));
-		L.sortedKeys(hosts).forEach(function (mac) {
-			o.value(mac, E([], [mac, ' (', E('strong', {}, [
-				hosts[mac].name ||
-				L.toArray(hosts[mac].ipaddrs || hosts[mac].ipv4)[0] ||
-				L.toArray(hosts[mac].ip6addrs || hosts[mac].ipv6)[0] ||
-				'?'
-			]), ')']));
-		});
+		o = s.option(form.Value, 'macaddr', _('MAC Address'), _('Default MAC priority'));
+		host.sort(([a], [b]) => a.localeCompare(b))
+			.forEach(([mac, host]) => {
+				o.value(mac, E([], [mac, ' (', E('strong', {}, [
+					host.name ||
+					(host.ipaddrs?.[0] || host.ipv4?.[0]) ||
+					(host.ip6addrs?.[0] || host.ipv6?.[0]) || '?'
+				]), ')']));
+			});
 		o.editable = true;
 		o.datatype = 'list(macaddr)';
 
-		o = s.option(form.Value, 'ipaddr', _('IP Address'));
-		var choices = fwtool.transformHostHints('ipv4', hosts);
-		for (var i = 0; i < choices[0].length; i++)
-			o.value(choices[0][i], choices[1][choices[0][i]]);
+		o = s.option(form.Value, 'ipaddr', _('IP Address'), _('If using IP, the MAC must be left blank'));
+		host
+			.map(([mac, host]) => ({
+				mac, name: host.name, ip: host.ipaddrs?.[0] || host.ipv4?.[0]
+			}))
+			.filter(entry => entry.ip)
+			.sort((a, b) => a.ip.localeCompare(b.ip, undefined, { numeric: true }))
+			.forEach(({ ip, mac, name }) =>
+				o.value(ip, E([], [ip, ' (', E('strong', {}, [name || mac]), ')'])));
 		o.editable = true;
-		o.datatype = (fw4 && validation.types.iprange) ? 'list(neg(or(ipmask("true"),iprange)))' : 'list(neg(ipmask("true")))';
+		o.datatype = 'list(ip4addr)';
 
 		// o = s.option(form.Value, 'ip6addr', 'IP6');
-		// var choices = fwtool.transformHostHints('ipv6', hosts);
+		// var choices = fwtool.transformHostHints('ipv6', data.hosts);
 		// for (var i = 0; i < choices[0].length; i++)
 		// 	o.value(choices[0][i], choices[1][choices[0][i]]);
 		// o.editable = true;
-		// o.datatype = 'ip6addr';
+		// o.datatype = 'list(ip6addr)';
 
 		o = s.option(form.MultiValue, 'weekdays', _('Week Days'));
 		o.modalonly = true;
@@ -126,26 +135,33 @@ return view.extend({
 			o.value(i);
 
 		o = s.option(form.Value, 'start_time', _('Start time'));
-		// o.modalonly = true;
+		o.placeholder = '08:00';
 		o.editable = true;
 		o.validate = function (section_id, value) {
 			return !value || /^([01]\d|2[0-3]):([0-5]\d)$/.test(value) || _('Invalid time format. Use HH:MM.');
 		};
 
 		o = s.option(form.Value, 'stop_time', _('Stop Time'));
-		// o.modalonly = true;
+		o.placeholder = '20:00';
 		o.editable = true;
 		o.validate = function (section_id, value) {
 			return !value || /^([01]\d|2[0-3]):([0-5]\d)$/.test(value) || _('Invalid time format. Use HH:MM.');
 		};
 
-		o = s.option(form.Value, 'start_date', _('Start Date (yyyy-mm-dd)'));
+		o = s.option(form.Value, 'start_date', _('Start Date'));
 		o.modalonly = true;
 		o.datatype = 'dateyyyymmdd';
 
-		o = s.option(form.Value, 'stop_date', _('Stop Date (yyyy-mm-dd)'));
+		o = s.option(form.Value, 'stop_date', _('Stop Date'));
 		o.modalonly = true;
 		o.datatype = 'dateyyyymmdd';
+
+		o = s.option(form.Flag, 'combine_datetime', _('Time Mode'),
+			_('Combined: exact datetime range | Separate: date range + recurring time')
+		);
+		o.modalonly = true;
+		o.depends({ 'stop_date': '', '!reverse': true });
+		o.depends({ 'start_date': '', '!reverse': true });
 
 		return m.render();
 	}
