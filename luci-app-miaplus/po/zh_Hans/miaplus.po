@@ -16,6 +16,24 @@ msgstr "%s 运行中"
 msgid "%s NOT RUNNING"
 msgstr "%s 未运行"
 
+msgid "LAN Interface"
+msgstr "LAN接口"
+
+msgid "Select interface used for downstream control (LAN)"
+msgstr "选择用于下游控制（LAN）的接口"
+
+msgid "WAN Interface"
+msgstr "WAN接口"
+
+msgid "Select interface used for upstream control (WAN)"
+msgstr "选择用于上游控制（WAN）的接口"
+
+msgid "Rate Limit"
+msgstr "带宽限制"
+
+msgid "Set traffic rate limit in Mbps (e.g. 1 for 1Mbps)"
+msgstr "设置流量带宽上限（例如：1、1Mbps）"
+
 msgid "IP Address"
 msgstr "IP 地址"
 

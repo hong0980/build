@@ -7,7 +7,7 @@
 include $(TOPDIR)/rules.mk
 
 LUCI_TITLE:=LuCI Access Control Configuration
-LUCI_DEPENDS:=+snmpd
+LUCI_DEPENDS:=+snmpd +tc +kmod-sched-core +kmod-ifb +kmod-sched +iptables-mod-filter +iptables-mod-nat-extra
 LUCI_PKGARCH:=all
 
 PKG_NAME:=luci-app-miaplus

@@ -4,7 +4,10 @@ START=30
 USE_PROCD=1
 ipv6enable=$(uci -q get miaplus.config.ipv6enable || echo 0)
 cmd="iptables"
-[ "$ipv6enable" = "1" ] && cmd="ip6tables"
+[ "$ipv6enable" = "1" ] && {
+	cmd="ip6tables"
+	tc="tc -6"
+}
 
 log_msg() {
 	logger -p daemon.info -t "miaplus" -- "$*"
@@ -15,35 +18,70 @@ add_rule() {
 	local var="$1"
 	config_get_bool client "$var" enable '0'
 	config_get_bool enable 'config' enable '0'
-	[ "$client" -eq "0" -o "$enable" -eq '0' ] && return
 	config_get_bool strict 'config' strict '0'
+	[ "$client" -eq "0" -o "$enable" -eq '0' ] && return
 
 	$cmd -t filter -N MIAPLUS 2>/dev/null
-	$cmd -C INPUT -p udp --dport 53 -j MIAPLUS >/dev/null 2>&1 || \
-		$cmd -I INPUT -p udp --dport 53 -m comment --comment "miaplus_control" -j MIAPLUS
-	$cmd -C INPUT -p tcp --dport 53 -j MIAPLUS >/dev/null 2>&1 || \
-		$cmd -I INPUT -p tcp --dport 53 -m comment --comment "miaplus_control" -j MIAPLUS
+	for proto in tcp udp; do
+		$cmd -C INPUT -p $proto --dport 53 -j MIAPLUS >/dev/null 2>&1 || \
+			$cmd -I INPUT -p $proto --dport 53 -m comment --comment "miaplus_control" -j MIAPLUS
+		$cmd -t nat -C PREROUTING -p $proto --dport 53 -j REDIRECT --to-ports 53 >/dev/null 2>&1 || \
+			$cmd -t nat -A PREROUTING -p $proto --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "miaplus_control"
+	done
 
-	[ "$strict" -eq '1' ] && ! $cmd -C FORWARD -j MIAPLUS >/dev/null 2>&1 && \
-		$cmd -t filter -I FORWARD -m comment --comment "miaplus_control_forward" -j MIAPLUS
+	[ "$strict" -eq '1' ] && {
+		$cmd -C FORWARD -j MIAPLUS >/dev/null 2>&1 || \
+			$cmd -t filter -I FORWARD -m comment --comment "miaplus_control_forward" -j MIAPLUS
+	}
 
-	$cmd -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53 >/dev/null 2>&1 || \
-		$cmd -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "miaplus_control"
-	$cmd -t nat -C PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53 >/dev/null 2>&1 || \
-		$cmd -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53 -m comment --comment "miaplus_control"
+	config_get rate "$var" rate ""
+	config_get iface 'config' interface "eth0"         # 出口接口（LAN 或 WAN）
+	config_get wan_if 'config' wan_interface "pppoe-wan"  # 可选：上行限速接口
+
+	# 初始化 TC 根队列（仅执行一次）
+	for dev in $iface $wan_if; do
+		if [ -n "$rate" ] && ! tc qdisc show dev $dev | grep -q htb; then
+			tc qdisc add dev $dev root handle 1: htb default 10
+			tc class add dev $dev parent 1: classid 1:1 htb rate 100mbit ceil 100mbit
+			tc class add dev $dev parent 1:1 classid 1:10 htb rate 100mbit ceil 100mbit
+			tc qdisc add dev $dev parent 1:10 handle 10: sfq perturb 10
+		fi
+	done
 
 	add_rule_core() {
 		local type=$1 identifier=$2 match="" time_args=""
-
 		case "$type" in
 			ip|ip6) match="-s $identifier" ;;
 			mac)    match="-m mac --mac-source $identifier" ;;
 		esac
 
-		[ -n "$day" ] && time_args="$time_args --monthdays $day"
-		[ -n "$wds" ] && time_args="$time_args --weekdays ${wds// /,}"
+		local handle_id=$(printf "%04x" $((0x$(echo -n "$identifier" | md5sum | cut -c1-4))))
 
-		if [ "$tm" -eq "1" -a -n "$on_d" -a -n "$off_d" -a -n "$on_t" -a -n "$off_t" ]; then
+		if [ -n "$rate" ] && echo "$rate" | grep -q '^[0-9]\+\(\.[0-9]\+\)\?$'; then
+			rate="${rate}mbit"
+			tc class add dev $iface parent 1:1 classid 1:$handle_id htb rate $rate ceil $rate prio 2
+			tc qdisc add dev $iface parent 1:$handle_id handle ${handle_id}: sfq perturb 10
+			tc filter add dev $iface parent 1: protocol ip prio 1 handle $handle_id fw flowid 1:$handle_id
+
+			if [ -n "$wan_if" ]; then
+				tc class add dev $wan_if parent 1:1 classid 1:$handle_id htb rate $rate ceil $rate prio 2
+				tc qdisc add dev $wan_if parent 1:$handle_id handle ${handle_id}: sfq perturb 10
+				tc filter add dev $wan_if parent 1: protocol ip prio 1 handle $handle_id fw flowid 1:$handle_id
+			fi
+
+			$cmd -t mangle -A PREROUTING $match -j MARK --set-mark $((0x$handle_id)) \
+				-m comment --comment "miaplus_mark_${identifier}_down"
+			$cmd -t mangle -A POSTROUTING $match -j MARK --set-mark $((0x$handle_id)) \
+				-m comment --comment "miaplus_mark_${identifier}_up"
+		fi
+
+		$cmd -C INPUT $match -j DROP >/dev/null 2>&1 || \
+			$cmd -I INPUT $match -j DROP -m comment --comment "miaplus_block_$identifier"
+
+		[ -n "$wds" ] && time_args="$time_args --weekdays ${wds// /,}"
+		[ -n "$day" ] && time_args="$time_args --monthdays ${day// /,}"
+
+		if [ "$tm" -eq 1 -a -n "$on_t" -a -n "$off_t" -a -n "$on_d" -a -n "$off_d" ]; then
 			time_args="$time_args --datestart ${on_d}T${on_t} --datestop ${off_d}T${off_t}"
 		else
 			[ -n "$on_d" -a -n "$off_d" ] && time_args="$time_args --datestart $on_d --datestop $off_d"
@@ -53,7 +91,7 @@ add_rule() {
 		$cmd -t filter -A MIAPLUS $match \
 			-m time --kerneltz $time_args \
 			-j DROP \
-			-m comment --comment "miaplus_time_${identifier}"
+			-m comment --comment "miaplus_time_$identifier"
 
 		$cmd -t filter -A MIAPLUS $match \
 			-j ACCEPT \
@@ -85,7 +123,7 @@ start_service() {
 	$cmd -t filter -N MIAPLUS 2>/dev/null
 	$cmd -t filter -F MIAPLUS 2>/dev/null
 	config_load miaplus
-	config_foreach add_rule macbind
+	config_foreach add_rule bind
 }
 
 stop_service() {
@@ -101,6 +139,18 @@ stop_service() {
 
 	$cmd -t filter -F MIAPLUS 2>/dev/null
 	$cmd -t filter -X MIAPLUS 2>/dev/null
+
+	for chain in PREROUTING POSTROUTING; do
+		$cmd -t mangle -L $chain -n --line-numbers 2>/dev/null | \
+			awk '/miaplus_/ {print $1}' | sort -rn | \
+			while read num; do $cmd -t mangle -D $chain $num 2>/dev/null; done
+	done
+
+	iface=$(uci -q get miaplus.config.interface || echo "eth0")
+	wan_if=$(uci -q get miaplus.config.wan_interface || echo "pppoe-wan")
+
+	tc qdisc del dev "$iface" root 2>/dev/null
+	[ -n "$wan_if" ] && tc qdisc del dev "$wan_if" root 2>/dev/null
 }
 
 service_triggers() {

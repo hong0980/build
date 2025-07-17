@@ -5,6 +5,7 @@
 'require network';
 'require validation';
 'require tools.firewall as fwtool';
+'require tools.widgets as widgets';
 
 var CSS = `
 @media (min-width: 768px) {
@@ -62,7 +63,27 @@ return view.extend({
 		o = s.option(form.Flag, 'ipv6enable', _('IPv6 Enabled'));
 		o.rmempty = false;
 
-		s = m.section(form.GridSection, 'macbind');
+		// 限速 LAN 接口（通常为 br-lan 或 eth0）
+		o = s.option(widgets.DeviceSelect, 'interface', _('LAN Interface'),
+			_('Select interface used for downstream control (LAN)'));
+		o.nobridges = false;
+		o.rmempty = false;
+		o.optional = false;
+		o.default = 'br-lan';
+		o.filter = function (section_id, value) {
+			return !/^(@|docker0|veth|br-[0-9a-f]+)/.test(value);
+		};
+
+		// 上行限速接口（通常为 pppoe-wan、wan 等）
+		o = s.option(widgets.DeviceSelect, 'wan_interface', _('WAN Interface'),
+			_('Select interface used for upstream control (WAN)'));
+		o.rmempty = true;
+		o.default = 'pppoe-wan';
+		o.filter = function (section_id, value) {
+			return !/^(@|docker0|veth|br-[0-9a-f]+)/.test(value);
+		};
+
+		s = m.section(form.GridSection, 'bind');
 		s.anonymous = true;
 		s.addremove = true;
 		s.sortable = true;
@@ -105,6 +126,47 @@ return view.extend({
 		// 	o.value(choices[0][i], choices[1][choices[0][i]]);
 		// o.editable = true;
 		// o.datatype = 'list(ip6addr)';
+
+		o = s.option(form.Value, 'rate', _('Rate Limit'),
+			_('Set traffic rate limit in Mbps (e.g. 1 for 1Mbps)'));
+		o.rmempty = true;
+		o.placeholder = '1';
+		o.datatype = 'float';
+		o.modalonly = true;
+
+		// o = s.option(form.Value, 'limit', _('Limit matching'),
+		// 	_('Limits traffic matching to the specified rate.'));
+		// o.modalonly = true;
+		// o.rmempty = true;
+		// o.placeholder = _('unlimited');
+		// o.value('10/second');
+		// o.value('60/minute');
+		// o.value('3/hour');
+		// o.value('500/day');
+		// o.validate = function (section_id, value) {
+		// 	if (value == '') return true;
+		// 	var m = String(value).toLowerCase().match(/^(?:0x[0-9a-f]{1,8}|[0-9]{1,10})\/([a-z]+)$/),
+		// 		u = ['second', 'minute', 'hour', 'day'],
+		// 		i = 0;
+
+		// 	if (m)
+		// 		for (i = 0; i < u.length; i++)
+		// 			if (u[i].indexOf(m[1]) == 0)
+		// 				break;
+
+		// 	if (!m || i >= u.length)
+		// 		return _('Invalid limit value');
+
+		// 	return true;
+		// };
+
+		o = s.option(form.Value, 'limit_burst', _('Limit burst'),
+			_('Maximum initial number of packets to match: this number gets recharged by one every time the limit specified above is not reached, up to this number.'));
+		o.modalonly = true;
+		o.rmempty = true;
+		o.placeholder = '5';
+		o.datatype = 'uinteger';
+		o.depends({ limit: null, '!reverse': true });
 
 		o = s.option(form.MultiValue, 'weekdays', _('Week Days'));
 		o.modalonly = true;
