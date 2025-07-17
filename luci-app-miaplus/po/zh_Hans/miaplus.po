@@ -1,5 +1,5 @@
 msgid "Internet Access Schedule Control Plus"
-msgstr "上网时间控制Plus"
+msgstr "上网时间控制 Plus"
 
 msgid "Access Schedule Control Description"
 msgstr "设置客户端访问互联网的时间"

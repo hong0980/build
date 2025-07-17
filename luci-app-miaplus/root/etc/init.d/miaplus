@@ -34,9 +34,12 @@ add_rule() {
 			$cmd -t filter -I FORWARD -m comment --comment "miaplus_control_forward" -j MIAPLUS
 	}
 
-	config_get rate "$var" rate ""
 	config_get iface 'config' interface "eth0"         # 出口接口（LAN 或 WAN）
 	config_get wan_if 'config' wan_interface "pppoe-wan"  # 可选：上行限速接口
+
+	config_get rate "$var" rate ""
+	config_get limit "$var" limit ""
+	config_get limit_burst "$var" limit_burst "5"
 
 	# 初始化 TC 根队列（仅执行一次）
 	for dev in $iface $wan_if; do
@@ -75,9 +78,6 @@ add_rule() {
 				-m comment --comment "miaplus_mark_${identifier}_up"
 		fi
 
-		$cmd -C INPUT $match -j DROP >/dev/null 2>&1 || \
-			$cmd -I INPUT $match -j DROP -m comment --comment "miaplus_block_$identifier"
-
 		[ -n "$wds" ] && time_args="$time_args --weekdays ${wds// /,}"
 		[ -n "$day" ] && time_args="$time_args --monthdays ${day// /,}"
 
@@ -93,9 +93,19 @@ add_rule() {
 			-j DROP \
 			-m comment --comment "miaplus_time_$identifier"
 
-		$cmd -t filter -A MIAPLUS $match \
-			-j ACCEPT \
-			-m comment --comment "miaplus_allow_$identifier"
+		$cmd -C INPUT $match -j DROP >/dev/null 2>&1 || \
+			$cmd -I INPUT $match -j DROP -m comment --comment "miaplus_block_$identifier"
+
+		if [ -n "$limit" ]; then
+			$cmd -A MIAPLUS $match \
+				-m limit --limit "$limit" --limit-burst "${limit_burst:-5}" \
+				-j ACCEPT \
+				-m comment --comment "miaplus_limit_$identifier"
+		else
+			$cmd -A MIAPLUS $match \
+				-j ACCEPT \
+				-m comment --comment "miaplus_allow_$identifier"
+		fi
 	}
 
 	config_get ip "$var" ipaddr ''
