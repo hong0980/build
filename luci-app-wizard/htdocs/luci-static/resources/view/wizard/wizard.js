@@ -7,7 +7,7 @@
 'require tools.widgets as widgets';
 
 return view.extend({
-	load: function() {
+	load: function () {
 		return Promise.all([
 			fs.exec('/etc/init.d/wizard', ['reconfig']),
 			uci.changes(),
@@ -15,11 +15,11 @@ return view.extend({
 		]);
 	},
 
-	validateNonEmptyArray: function(section_id, value) {
+	validateNonEmptyArray: function (section_id, value) {
 		return value.length || _('At least one interface must be selected');
 	},
 
-	render: function(data) {
+	render: function (data) {
 		var m, s, o;
 		var dnsOptions = [
 			{ value: '223.5.5.5', label: _('AliDNS: 223.5.5.5') },
@@ -183,7 +183,7 @@ return view.extend({
 		o.default = '';
 		dnsOptions.forEach(opt => o.value(opt.value, opt.label));
 
-		if (uci.sections('wireless', 'wifi-device').length > 0) {
+		if (L.hasSystemFeature('wifi')) {
 			s.tab('wifisetup', _('Wireless Settings'),
 				_("Set the router's wireless name and password. For more advanced settings, please go to the Network-Wireless page."));
 			o = s.taboption('wifisetup', form.Value, 'wifi_ssid',

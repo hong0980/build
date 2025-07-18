@@ -11,14 +11,12 @@ const CSS = `
 		max-width: 50px;
 	}
 
-	[data-name="remarks"] .cbi-input-text {
-		min-width: 140px !important;
+	.cbi-section-table select {
+		max-width: 80px;
 	}
 
-	.cbi-section-table select,
-	.table.cbi-section-table .cbi-dropdown {
-		min-width: 72px;
-		max-width: 72px;
+	[data-name="remarks"] .cbi-input-text {
+		min-width: 140px !important;
 	}
 
 	td:has(.cbi-button) {
@@ -126,6 +124,7 @@ const validateCrontabField = (type, value, monthValue) => {
 
 	return true;
 };
+const CRON_FIELDS = ['minute', 'hour', 'day', 'month', 'week'];
 
 return view.extend({
 	load: function () {
@@ -154,6 +153,8 @@ return view.extend({
 		s.sortable = true;
 		s.addremove = true;
 		s.anonymous = true;
+		s.rowcolors = true;
+		s.nodescriptions = true;
 
 		e = s.option(form.Flag, 'enable', _('Enable'));
 		e.rmempty = false;
@@ -161,7 +162,6 @@ return view.extend({
 		e.default = '0';
 
 		e = s.option(form.Value, 'minute', _('minutes'));
-		e.rmempty = false;
 		e.editable = true;
 		e.default = '0';
 		e.validate = function (section_id, value) {
@@ -169,7 +169,6 @@ return view.extend({
 		};
 
 		e = s.option(form.Value, 'hour', _('hours'));
-		e.rmempty = false;
 		e.editable = true;
 		e.default = '*';
 		e.validate = function (section_id, value) {
@@ -177,7 +176,6 @@ return view.extend({
 		};
 
 		e = s.option(form.Value, 'day', _('Days'));
-		e.rmempty = false;
 		e.editable = true;
 		e.default = '*';
 		e.validate = function (section_id, value) {
@@ -186,7 +184,6 @@ return view.extend({
 		};
 
 		e = s.option(form.Value, 'month', _('months'));
-		e.rmempty = false;
 		e.editable = true;
 		e.default = '*';
 		e.validate = function (section_id, value) {
@@ -194,19 +191,8 @@ return view.extend({
 		};
 
 		e = s.option(form.Value, 'week', _('weeks'));
-		e.rmempty = false;
 		e.editable = true;
 		e.default = '*';
-		e.value('*', _('Everyday'));
-		e.value('0,6', _('Weekend'));
-		e.value('1-5', _('Workdays'));
-		e.value('0', _('Sunday'));
-		e.value('1', _('Monday'));
-		e.value('2', _('Tuesday'));
-		e.value('3', _('Wednesday'));
-		e.value('4', _('Thursday'));
-		e.value('5', _('Friday'));
-		e.value('6', _('Saturday'));
 		e.validate = function (section_id, value) {
 			return validateCrontabField('week', value);
 		};
@@ -216,21 +202,21 @@ return view.extend({
 		e = s.option(form.Value, 'remarks', _('Remarks'));
 		e.editable = true;
 
-		e = s.option(form.Button, 'button', _('verify'));
+		e = s.option(form.Button, 'button', _('verify'),
+			_('Check this Cron expression at <a target="_blank" href="https://crontab.guru">crontab.guru</a>'));
 		e.inputstyle = 'apply';
 		e.editable = true;
 		e.onclick = function (ev, section_id) {
-			const crontab = ['minute', 'hour', 'day', 'month', 'week'].map(f => {
-				const opt = m.lookupOption(`taskplan.${section_id}.${f}`);
-				return opt ? opt[0].formvalue(section_id) : '';
-			}).filter(Boolean).join(' ').trim();
+			const container = ev.target.closest('.cbi-modal') ? '.cbi-modal ' : '';
+			const values = CRON_FIELDS.map(field => {
+				const selector = `${container}[data-field="cbid.taskplan.${section_id}.${field}"] input`;
+				return document.querySelector(selector)?.value || '';
+			});
+			const crontab = values.filter(Boolean).join(' ').trim();
 
-			if (/^\S+(?:\s\S+){4}$/.test(crontab)) {
-				window.open(`https://crontab.guru/#${crontab.replace(/\s/g, '_')}`);
-			} else {
-				ui.addTimeLimitedNotification(null, E('p',
-					_('Invalid format for %s').format(crontab)), 10000, 'error');
-			};
+			/^\S+(?:\s\S+){4}$/.test(crontab)
+				? window.open(`https://crontab.guru/#${crontab.replace(/\s/g, '_')}`)
+				: ui.addTimeLimitedNotification(null, E('p', _('Invalid format for %s').format(crontab)), 10000, 'error');
 		};
 
 		s = m.section(form.GridSection, 'ltime', _('Startup task'),
@@ -270,9 +256,9 @@ return view.extend({
 			if (task?.[".type"] !== "stime") continue;
 
 			const id = task[".name"];
-			const cron = ['minute', 'hour', 'day', 'month', 'week'].map(f => task[f] || "*").join(" ");
+			const cron = CRON_FIELDS.map(f => task[f] || "*").join(" ");
 
-			for (const f of ['minute', 'hour', 'day', 'month', 'week']) {
+			for (const f of CRON_FIELDS) {
 				document.getElementById(`cbid.taskplan.${id}.${f}`)?.setAttribute('title', cron);
 			};
 

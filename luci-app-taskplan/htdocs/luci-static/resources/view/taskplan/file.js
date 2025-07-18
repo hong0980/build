@@ -47,81 +47,79 @@ return view.extend({
             ]))
     )),
 
-    render: function(data) {
-        const Level = uci.get('system', '@system[0]', 'cronloglevel')
+    render: (data) => {
+        const Level = uci.get('system', '@system[0]', 'cronloglevel');
         const tabs = fileConfigs.map((cfg, idx) => {
             const stat = data[idx][0], content = data[idx][1];
-            const textarea = new ui.Textarea(content, { rows: 18 });
-            const textareaNode = textarea.render();
-            // textarea.setChangeEvents(textareaNode.firstElementChild, 'change');
+            const textarea = new ui.Textarea(content, { rows: 15 });
             return E('div', { 'data-tab': cfg.tab, 'data-tab-title': cfg.label }, [
                 E('p', {}, [
-                    E('span', { 'style': 'margin-right: 1em;' }, cfg.description),
-                    stat
-                        ? E('span', { 'style': 'color:#888;font-size:90%;' },
-                            _('Last modified: %s, Size: %s bytes').format(
-                                new Date(stat.mtime * 1000).toLocaleString(), stat.size
-                            ))
-                        : [],
+                    E('span', {}, cfg.description),
                     cfg.tab.includes('crontab')
                         ? E('span', {}, [
-                            E('select', { 'id': 'cron_option', 'style': 'width: 80px; margin-left: 10px;', 'class': 'cbi-input-select' },
+                            E('select', { id: 'cron_option', style: 'width: 80px; margin-left: 10px;', class: 'cbi-input-select' },
                                 content.split('\n')
                                     .filter(l => l.trim())
                                     .map(l => {
                                         const label = l.split(/\s+/).slice(0, 5).join(' ');
-                                        return E('option', { 'value': label }, label);
+                                        return E('option', { value: label }, label);
                                     })
                             ),
                             E('button', {
-                                'style': 'margin-left: 10px;',
-                                'class': 'btn cbi-button-apply',
-                                'title': _('Click Verify after selecting'),
-                                'click': ui.createHandlerFn(this, () => {
+                                style: 'margin-left: 10px;',
+                                class: 'btn cbi-button-apply',
+                                title: _('Click Verify after selecting'),
+                                click: ui.createHandlerFn(this, () => {
                                     const select = document.getElementById('cron_option');
                                     if (select && select.value) {
                                         window.open(`https://crontab.guru/#${select.value.replace(/\s/g, '_')}`);
                                     }
                                 })
                             }, _('verify')),
-                            E('span', { 'style': 'margin-left: 10px;' }, [ _('Cron Log Level'),
-                                E('select', { 'id': 'cron_loglevel_option', 'style': 'width: 80px; margin-left: 10px;', 'class': 'cbi-input-select' }, [
-                                    E('option', { value: 5, selected: Level == '5' ? '' : null }, _('Debug')),
-                                    E('option', { value: 9, selected: Level == '9' ? '' : null }, _('Disabled')),
-                                    E('option', { value: 7, selected: Level == '7' ? '' : null }, _('Normal')),
-                                ]),
-                                E('button', {
-                                    'style': 'margin-left: 10px;',
-                                    'class': 'btn cbi-button-apply',
-                                    'click': function(ev) {
-                                        const val = document.getElementById('cron_loglevel_option').value;
-                                        if (val !== Level) {
-                                            uci.set('system', '@system[0]', 'cronloglevel', val);
-                                            uci.save();
-                                            uci.apply()
-                                                .then(() => ui.addTimeLimitedNotification(null, E('p',  _('Save successfully')), 3000))
-                                                .catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 3000));
-                                        };
-                                    }
-                                }, _('Save')),
+                            E('span', { style: 'margin-left: 10px;' }, [_('Cron Log Level'),
+                            E('select', { id: 'cron_loglevel_option', style: 'width: 80px; margin-left: 10px;', class: 'cbi-input-select' }, [
+                                E('option', { value: 5, selected: Level == '5' ? '' : null }, _('Debug')),
+                                E('option', { value: 9, selected: Level == '9' ? '' : null }, _('Disabled')),
+                                E('option', { value: 7, selected: Level == '7' ? '' : null }, _('Normal')),
+                            ]),
+                            E('button', {
+                                style: 'margin-left: 10px;',
+                                class: 'btn cbi-button-apply',
+                                click: () => {
+                                    const val = document.getElementById('cron_loglevel_option').value;
+                                    if (val !== Level) {
+                                        uci.set('system', '@system[0]', 'cronloglevel', val);
+                                        uci.save();
+                                        uci.apply()
+                                            .then(() => ui.addTimeLimitedNotification(null, E('p', _('Save successfully')), 3000))
+                                            .catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 3000));
+                                    };
+                                }
+                            }, _('Save')),
                             ])
-                          ])
+                        ])
                         : '',
                     cfg.tab.includes('script')
                         ? E('div', {}, [
-                            E('b', { 'style': 'color:red;' },
+                            E('b', { style: 'color:red;' },
                                 _('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.'))
-                          ])
+                        ])
                         : '',
                 ]),
-                textareaNode,
-                E('div', { 'class': 'cbi-page-actions' }, [
-                    E('button', { 'class': 'btn cbi-button-save',
-                        'click': () => {
+                textarea.render(),
+                stat
+                    ? E('span', { style: 'color:#888;font-size:90%;' },
+                        _('Last modified: %s, Size: %s bytes').format(
+                            new Date(stat.mtime * 1000).toLocaleString(), stat.size
+                        ))
+                    : [],
+                E('div', { class: 'cbi-page-actions' }, [
+                    E('div', {
+                        class: 'btn cbi-button-save',
+                        click: () => {
                             if (!textarea.isChanged()) {
-                                ui.addTimeLimitedNotification(null, E('p',
+                                return ui.addTimeLimitedNotification(null, E('p',
                                     _('No modifications detected. The content remains unchanged.')), 3000, 'info');
-                                return;
                             };
                             const value = textarea.getValue().trim().replace(/\r\n/g, '\n') + '\n';
                             fs.write(cfg.filePath, value)
@@ -130,14 +128,14 @@ return view.extend({
                                     _('Contents have been saved.')), 3000, 'info'))
                                 .catch(e => ui.addTimeLimitedNotification(null, E('p',
                                     _('Unable to save contents: %s').format(e.message), 8000, 'error')));
-                            }
+                        }
                     }, _('Save'))
                 ])
             ]);
         });
 
         const view = E('div', {}, [
-            E('style', { 'type': 'text/css' }, [
+            E('style', { type: 'text/css' }, [
                 `.cbi-input-textarea {
                     font-size:14px; color: #c5c5b2; border: 1px solid #555;
                     background-color: #272626; font-family: Consolas, monospace;

@@ -3,29 +3,26 @@
 'require form';
 'require view';
 'require network';
-'require tools.firewall as fwtool';
 'require tools.widgets as widgets';
 
 var CSS = `
 @media (min-width: 768px) {
 	.cbi-section-table
 	.cbi-input-text {
-		max-width: 55px;
+		max-width: 60px;
 	}
 	.table.cbi-section-table
 	.cbi-dropdown {
-		min-width: 160px;
-		max-width: 160px;
+		min-width: 170px;
+		max-width: 170px;
 	}
 	.table.cbi-section-table
 	td[data-name="monthdays"]
 	.cbi-dropdown {
-		min-width: 100px;
-		max-width: 100px;
+		min-width: 120px;
+		max-width: 120px;
 	}
-}
-`;
-var fw4 = L.hasSystemFeature('firewall4');
+}`;
 
 return view.extend({
 	load: function () {
@@ -62,7 +59,6 @@ return view.extend({
 		o = s.option(form.Flag, 'ipv6enable', _('IPv6 Enabled'));
 		o.rmempty = false;
 
-		// 限速 LAN 接口（通常为 br-lan 或 eth0）
 		o = s.option(widgets.DeviceSelect, 'interface', _('LAN Interface'),
 			_('Select interface used for downstream control (LAN)'));
 		o.nobridges = false;
@@ -73,7 +69,6 @@ return view.extend({
 			return !/^(@|docker0|veth|br-[0-9a-f]+)/.test(value);
 		};
 
-		// 上行限速接口（通常为 pppoe-wan、wan 等）
 		o = s.option(widgets.DeviceSelect, 'wan_interface', _('WAN Interface'),
 			_('Select interface used for upstream control (WAN)'));
 		o.rmempty = true;
@@ -83,12 +78,12 @@ return view.extend({
 		};
 
 		s = m.section(form.GridSection, 'bind');
+		s.sortable = true;
 		s.anonymous = true;
 		s.addremove = true;
-		s.sortable = true;
-		s.cloneable = true; //允许用户克隆（复制）现有的条目
-		s.rowcolors = true; // 启用行交替颜色（斑马条纹）
-		s.nodescriptions = true; //不显示每个选项的默认描述文本
+		// s.cloneable = true; // 克隆条目
+		s.rowcolors = true; // 行交替颜色
+		s.nodescriptions = true; // 隐藏选项描述
 
 		o = s.option(form.Flag, 'enable', _('Enable'));
 		o.rmempty = false;
@@ -118,13 +113,6 @@ return view.extend({
 				o.value(ip, E([], [ip, ' (', E('strong', {}, [name || mac]), ')'])));
 		o.editable = true;
 		o.datatype = 'list(ip4addr)';
-
-		// o = s.option(form.Value, 'ip6addr', 'IP6');
-		// var choices = fwtool.transformHostHints('ipv6', data.hosts);
-		// for (var i = 0; i < choices[0].length; i++)
-		// 	o.value(choices[0][i], choices[1][choices[0][i]]);
-		// o.editable = true;
-		// o.datatype = 'list(ip6addr)';
 
 		o = s.option(form.Value, 'rate', _('Rate Limit'),
 			_('Set traffic rate limit in Mbps (e.g. 1 for 1Mbps)'));
