@@ -9,8 +9,9 @@ config_get wan_if config wan_interface 'pppoe-wan'
 config_get_bool ipv6enable config ipv6enable 0
 
 cmd="iptables"
+tc=$(command -v tc)
 [ "$ipv6enable" -eq 1 ] && {
-	tc="tc -6"
+	tc="$tc -6"
 	cmd="ip6tables"
 }
 
@@ -37,24 +38,24 @@ add_rule_core() {
 	}
 
 	for dev in $iface $wan_if; do
-		if [ -n "$rate" ] && ! tc qdisc show dev $dev | grep -q htb; then
-			tc qdisc add dev $dev root handle 1: htb default 10
-			tc class add dev $dev parent 1: classid 1:1 htb rate 100mbit ceil 100mbit
-			tc class add dev $dev parent 1:1 classid 1:10 htb rate 100mbit ceil 100mbit
-			tc qdisc add dev $dev parent 1:10 handle 10: sfq perturb 10
+		if [ -n "$rate" ] && ! $tc qdisc show dev $dev | grep -q htb; then
+			$tc qdisc add dev $dev root handle 1: htb default 10
+			$tc class add dev $dev parent 1: classid 1:1 htb rate 100mbit ceil 100mbit
+			$tc class add dev $dev parent 1:1 classid 1:10 htb rate 100mbit ceil 100mbit
+			$tc qdisc add dev $dev parent 1:10 handle 10: sfq perturb 10
 		fi
 	done
 
 	if [ -n "$rate" ] && echo "$rate" | grep -q '^[0-9]\+\(\.[0-9]\+\)\?$'; then
 		rate="${rate}mbit"
-		tc class add dev $iface parent 1:1 classid 1:$handle_id htb rate $rate ceil $rate prio 2
-		tc qdisc add dev $iface parent 1:$handle_id handle ${handle_id}: sfq perturb 10
-		tc filter add dev $iface parent 1: protocol ip prio 1 handle $handle_id fw flowid 1:$handle_id
+		$tc class add dev $iface parent 1:1 classid 1:$handle_id htb rate $rate ceil $rate prio 2
+		$tc qdisc add dev $iface parent 1:$handle_id handle ${handle_id}: sfq perturb 10
+		$tc filter add dev $iface parent 1: protocol ip prio 1 handle $handle_id fw flowid 1:$handle_id
 
 		if [ -n "$wan_if" ]; then
-			tc class add dev $wan_if parent 1:1 classid 1:$handle_id htb rate $rate ceil $rate prio 2
-			tc qdisc add dev $wan_if parent 1:$handle_id handle ${handle_id}: sfq perturb 10
-			tc filter add dev $wan_if parent 1: protocol ip prio 1 handle $handle_id fw flowid 1:$handle_id
+			$tc class add dev $wan_if parent 1:1 classid 1:$handle_id htb rate $rate ceil $rate prio 2
+			$tc qdisc add dev $wan_if parent 1:$handle_id handle ${handle_id}: sfq perturb 10
+			$tc filter add dev $wan_if parent 1: protocol ip prio 1 handle $handle_id fw flowid 1:$handle_id
 		fi
 
 		$cmd -t mangle -A PREROUTING $match -j MARK --set-mark $((0x$handle_id)) \
@@ -144,8 +145,8 @@ stop_service() {
 			while read num; do $cmd -t mangle -D $chain $num 2>/dev/null; done
 	done
 
-	tc qdisc del dev "$iface" root 2>/dev/null
-	[ -n "$wan_if" ] && tc qdisc del dev "$wan_if" root 2>/dev/null
+	$tc qdisc del dev "$iface" root 2>/dev/null
+	[ -n "$wan_if" ] && $tc qdisc del dev "$wan_if" root 2>/dev/null
 }
 
 service_triggers() {

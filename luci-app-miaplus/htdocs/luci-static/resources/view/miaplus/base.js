@@ -7,22 +7,40 @@
 
 var CSS = `
 @media (min-width: 768px) {
-	.cbi-section-table
-	.cbi-input-text {
+	.cbi-section-table .cbi-input-text {
 		max-width: 60px;
 	}
-	.table.cbi-section-table
-	.cbi-dropdown {
+	.table.cbi-section-table .cbi-dropdown {
 		min-width: 170px;
 		max-width: 170px;
 	}
-	.table.cbi-section-table
-	td[data-name="monthdays"]
-	.cbi-dropdown {
-		min-width: 120px;
-		max-width: 120px;
-	}
+    .table.cbi-section-table
+    td[data-name$="days"]
+    .cbi-dropdown {
+        min-width: 120px;
+        max-width: 120px;
+    }
 }`;
+
+function date(value) {
+	if (value === '') return true;
+
+	const match = value.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
+	if (!match) return _('Valid formats: YYYY, YYYY-MM, or YYYY-MM-DD');
+
+	const year = +match[1], month = +match[2], day = +match[3];
+
+	if (month && (month < 1 || month > 12)) return _('Month must be between 01-12');
+
+	if (day) {
+		const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+		const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+		const maxDay = (month === 2 && isLeapYear) ? 29 : daysInMonth[month - 1];
+		if (day < 1 || day > maxDay) return _('Day must be between 01-%d for the selected month').format(maxDay);
+	};
+
+	return true;
+};
 
 return view.extend({
 	load: function () {
@@ -39,10 +57,11 @@ return view.extend({
 		let m, s, o;
 
 		m = new form.Map('miaplus', _('Internet Access Schedule Control Plus'), [
-			E('style', { 'type': 'text/css' }, CSS),
-			E('div', { 'style': 'margin-bottom: 1em;' }, _('Access Schedule Control Description')),
-			E('font', { 'color': isRunning ? "green" : "red", 'style': "font-weight: bold;" },
-				_(isRunning ? "%s RUNNING" : "%s NOT RUNNING").format(_("Internet Access Schedule Control Plus")))
+			E('style', { type: 'text/css' }, CSS),
+			E('p', {}, _('Access Schedule Control Description')),
+			E('strong', {}, _('Service Status:')),
+			E('font', { color: isRunning ? "green" : "red", style: "font-weight: bold;" },
+				_(isRunning ? "RUNNING" : "NOT RUNNING"))
 		]);
 
 		s = m.section(form.TypedSection, 'basic');
@@ -151,7 +170,8 @@ return view.extend({
 		o.depends({ limit: null, '!reverse': true });
 
 		o = s.option(form.MultiValue, 'weekdays', _('Week Days'));
-		o.modalonly = true;
+		// o.modalonly = true;
+		o.editable = true;
 		o.multiple = true;
 		o.display = 5;
 		o.placeholder = _('Any day');
@@ -167,7 +187,7 @@ return view.extend({
 		};
 
 		o = s.option(form.MultiValue, 'monthdays', _('Month Days'));
-		// o.modalonly = true;
+		o.modalonly = true;
 		o.multiple = true;
 		o.editable = true;
 		o.display_size = 15;
@@ -194,11 +214,16 @@ return view.extend({
 
 		o = s.option(form.Value, 'start_date', _('Start Date'));
 		o.modalonly = true;
-		o.datatype = 'dateyyyymmdd';
+		o.description = _('Date format: Year (required) → Month (optional) → Day (optional). <br>Examples: "2025", "2025-07", "2025-07-15"');
+		o.validate = function (section_id, value) {
+			return date(value);
+		};
 
 		o = s.option(form.Value, 'stop_date', _('Stop Date'));
 		o.modalonly = true;
-		o.datatype = 'dateyyyymmdd';
+		o.validate = function (section_id, value) {
+			return date(value);
+		};
 
 		o = s.option(form.ListValue, 'time_mode', _('Time Mode'),
 			_('Combined mode: Active throughout the entire specified datetime period<br>Separated mode: Active daily during the specified time slot within the date range')

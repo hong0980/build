@@ -1,5 +1,5 @@
 msgid "Internet Access Schedule Control Plus"
-msgstr "上网时间控制 Plus"
+msgstr "上网控制"
 
 msgid "Access Schedule Control Description"
 msgstr "设置客户端访问互联网的时间"
@@ -10,11 +10,14 @@ msgstr "严格模式"
 msgid "Better control but higher CPU usage"
 msgstr "更好的控制但使用更高的CPU使用"
 
-msgid "%s RUNNING"
-msgstr "%s 运行中"
+msgid "Service Status:"
+msgstr "服务状态："
 
-msgid "%s NOT RUNNING"
-msgstr "%s 未运行"
+msgid "RUNNING"
+msgstr "运行中"
+
+msgid "NOT RUNNING"
+msgstr "未运行"
 
 msgid "LAN Interface"
 msgstr "LAN接口"
@@ -102,3 +105,15 @@ msgstr "管控日期"
 
 msgid "Enabled"
 msgstr "启用"
+
+msgid "Valid formats: YYYY, YYYY-MM, or YYYY-MM-DD"
+msgstr "有效格式：YYYY、YYYY-MM 或 YYYY-MM-DD"
+
+msgid "Month must be between 01-12"
+msgstr "月份必须在 01-12 之间"
+
+msgid "Day must be between 01-%d for the selected month"
+msgstr "日期必须在 01-%d 之间（当前月份）"
+
+msgid "Priority: Year (required) → Month (optional) → Day (optional). <br>Examples: \"2025\", \"2025-07\", \"2025-07-15\""
+msgstr "优先级：年份（必填）→ 月份（可选）→ 日期（可选）。<br>示例：\"2025\"、\"2025-07\"、\"2025-07-15\""
