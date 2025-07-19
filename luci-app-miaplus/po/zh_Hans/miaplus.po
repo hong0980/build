@@ -115,5 +115,5 @@ msgstr "月份必须在 01-12 之间"
 msgid "Day must be between 01-%d for the selected month"
 msgstr "日期必须在 01-%d 之间（当前月份）"
 
-msgid "Priority: Year (required) → Month (optional) → Day (optional). <br>Examples: \"2025\", \"2025-07\", \"2025-07-15\""
-msgstr "优先级：年份（必填）→ 月份（可选）→ 日期（可选）。<br>示例：\"2025\"、\"2025-07\"、\"2025-07-15\""
+msgid "Date format: Year (required) → Month (optional) → Day (optional). <br>Examples: "2025", "2025-07", "2025-07-15""
+msgstr "日期格式：年份（必填）→ 月份（可选）→ 日期（可选）。<br>示例：\"2025\"、\"2025-07\"、\"2025-07-15\""

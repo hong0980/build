@@ -85,7 +85,7 @@ return view.extend({
 		o.optional = false;
 		o.default = 'br-lan';
 		o.filter = function (section_id, value) {
-			return !/^(@|docker0|veth|br-[0-9a-f]+)/.test(value);
+			return !/^(@|docker0|veth|teq|br-[0-9a-f]+)/.test(value);
 		};
 
 		o = s.option(widgets.DeviceSelect, 'wan_interface', _('WAN Interface'),
@@ -93,7 +93,7 @@ return view.extend({
 		o.rmempty = true;
 		o.default = 'pppoe-wan';
 		o.filter = function (section_id, value) {
-			return !/^(@|docker0|veth|br-[0-9a-f]+)/.test(value);
+			return !/^(@|docker0|veth|teq|br-[0-9a-f]+)/.test(value);
 		};
 
 		s = m.section(form.GridSection, 'bind');
@@ -214,7 +214,7 @@ return view.extend({
 
 		o = s.option(form.Value, 'start_date', _('Start Date'));
 		o.modalonly = true;
-		o.description = _('Date format: Year (required) → Month (optional) → Day (optional). <br>Examples: "2025", "2025-07", "2025-07-15"');
+		o.description = _('Priority: Year (required) → Month (optional) → Day (optional). <br>Examples: \"2025\", \"2025-07\", \"2025-07-15\"');
 		o.validate = function (section_id, value) {
 			return date(value);
 		};
