@@ -10,13 +10,8 @@ return view.extend({
 	load: function () {
 		return Promise.all([
 			fs.exec('/etc/init.d/wizard', ['reconfig']),
-			uci.changes(),
-			L.resolveDefault(uci.load(['network', 'firewall', 'wireless']))
+			L.resolveDefault(uci.load('network', 'firewall', 'wireless'), '')
 		]);
-	},
-
-	validateNonEmptyArray: function (section_id, value) {
-		return value.length || _('At least one interface must be selected');
 	},
 
 	render: function (data) {
@@ -107,7 +102,9 @@ return view.extend({
 		o.depends('wan_proto', 'ap');
 		o.multiple = true;
 		o.noaliases = true;
-		o.validate = this.validateNonEmptyArray;
+		o.filter = function (section_id, value) {
+			return !/^(@|docker0|veth|teq|br-[0-9a-f]+)/.test(value);
+		};
 
 		o = s.taboption('wansetup', form.Value, 'siderouter_local_ip', _('Local IP address'),
 			_("IP address assigned to the side router in the main network, which should avoid conflicts with the main router's LAN subnet."));
@@ -157,7 +154,9 @@ return view.extend({
 		o.depends('wan_proto', 'siderouter');
 		o.multiple = true;
 		o.noaliases = true;
-		o.validate = this.validateNonEmptyArray;
+		o.filter = function (section_id, value) {
+			return !/^(@|docker0|veth|teq|br-[0-9a-f]+)/.test(value);
+		};
 
 		o = s.taboption('wansetup', form.DynamicList, 'wan_dns', _('WAN DNS servers'),
 			_('List of custom DNS servers for the WAN interface.'));

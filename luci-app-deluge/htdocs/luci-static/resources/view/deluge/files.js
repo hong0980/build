@@ -1,41 +1,53 @@
 'use strict';
 'require fs';
-'require view';
 'require uci';
+'require view';
 
 return view.extend({
-	load: function() {
-		return uci.load('deluge').then(() => {
-			const dir = uci.get('deluge', 'main', 'profile_dir') || '/etc/deluge';
-			return Promise.all([
-				'/etc/config/deluge',
-				dir + '/core.conf',
-				dir + '/web.conf'
-			].map(f => fs.read(f).then(c => ({
-				file: f,
-				content: c.trim(),
-				rows: Math.min(c.split('\n').length, 20)
-			})).catch(() => '')));
-		});
-	},
+	load: () => uci.load('deluge').then(() => {
+		const dir = uci.get('deluge', 'main', 'profile_dir') || '/etc/deluge';
+		return ['/etc/config/deluge', `${dir}/core.conf`, `${dir}/web.conf`, `${dir}/hostlist.conf`];
+	}),
 
-	render: function(data) {
+	render: (files) => {
 		const view = E('div', { class: 'cbi-map' }, [
 			E('h2', _('Deluge - Files')),
 			E('div', { class: 'cbi-section' }, _('This page is the configuration file content of Deluge.'))
 		]);
 
-		data.filter(f => f.content).forEach(f =>
-			view.appendChild(E('div', { class: 'cbi-section', style: 'margin-top:1em' }, [
-				E('div', _('This is the content of the configuration file under <code>%s</code>:').format(f.file)),
+		files.forEach(file => {
+			const fileContainer = E('div', { class: 'cbi-section' }, [
+				E('div', { style: 'margin-top:1em' },
+					_('This is the content of the configuration file under <code>%s</code>:').format(file)),
 				E('textarea', {
-					style: 'width:100%',
-					readonly: true,
-					wrap: 'off',
-					rows: Math.min(f.rows + 1, 18)
-				}, f.content)
-			]))
-		);
+					readonly: true, rows: 3,
+					style: `font-size: 14px; color: #c5c5b2; border: 1px solid #555;
+					background-color: #272626; font-family: Consolas, monospace; width: 100%;`
+				}, _('Loading...'))
+			]);
+
+			view.appendChild(fileContainer);
+			const textarea = fileContainer.querySelector('textarea');
+
+			fs.stat(file)
+				.then(stat => {
+					if (stat && stat.size > 0) return fs.read(file).then(content => ({ content, stat }));
+				})
+				.then(({ content, stat }) => {
+					textarea.textContent = content;
+					textarea.rows = Math.min(content.split('\n').length, 15);
+					fileContainer.appendChild(
+						E('div', { style: 'color:#888;font-size:90%;margin-top:0.5em;' },
+							_('Last modified: %s, Size: %s bytes').format(
+								new Date(stat.mtime * 1000).toLocaleString(), stat.size
+							)
+						)
+					);
+				})
+				.catch(e => {
+					textarea.textContent = _('File not found %s').format(file);
+				});
+		});
 
 		return view;
 	},
