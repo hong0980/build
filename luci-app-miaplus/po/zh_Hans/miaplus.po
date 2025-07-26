@@ -34,8 +34,8 @@ msgstr "选择用于上游控制（WAN）的接口"
 msgid "Rate Limit"
 msgstr "带宽限制"
 
-msgid "Set traffic rate limit in Mbps (e.g. 1 for 1Mbps)"
-msgstr "设置流量带宽上限（例如：1、1Mbps）"
+msgid "Set the upper limit of traffic bandwidth (unit Mbps)"
+msgstr "设置流量带宽上限（单位 Mbps）"
 
 msgid "IP Address"
 msgstr "IP 地址"
@@ -115,5 +115,5 @@ msgstr "月份必须在 01-12 之间"
 msgid "Day must be between 01-%d for the selected month"
 msgstr "日期必须在 01-%d 之间（当前月份）"
 
-msgid "Date format: Year (required) → Month (optional) → Day (optional). <br>Examples: "2025", "2025-07", "2025-07-15""
+msgid "Date format: Year (required) → Month (optional) → Day (optional). <br>Examples: \"2025\", \"2025-07\", \"2025-07-15\""
 msgstr "日期格式：年份（必填）→ 月份（可选）→ 日期（可选）。<br>示例：\"2025\"、\"2025-07\"、\"2025-07-15\""
