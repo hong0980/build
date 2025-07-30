@@ -10,15 +10,12 @@ const CSS = `
 	.cbi-section-table .cbi-input-text {
 		max-width: 50px;
 	}
-
 	.cbi-section-table select {
 		max-width: 80px;
 	}
-
 	[data-name="remarks"] .cbi-input-text {
 		min-width: 140px !important;
 	}
-
 	td:has(.cbi-button) {
 		width: 22px !important;
 	}
@@ -138,13 +135,13 @@ return view.extend({
 			E('div', {}, [
 				_('Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc.'),
 				E('a', {
-					'target': '_blank', 'style': 'margin-left: 10px;',
-					'href': 'https://github.com/sirpdboy/luci-app-taskplan'
+					target: '_blank', style: 'margin-left: 10px;',
+					href: 'https://github.com/sirpdboy/luci-app-taskplan'
 				}, _('GitHub @sirpdboy/luci-app-taskplan'))
 			])
 		]);
 		s = m.section(form.GridSection, 'stime', _('Scheduled task'), [
-			E('div', { 'style': 'color:#666; margin-top:0.6em;' }, [
+			E('div', { style: 'color:#666; margin-top:0.6em;' }, [
 				_('Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-6, 0 and 6 = Sunday)'), E('br'),
 				_('"*" any value, "," value list separator, "-" range of values, "/" step values'), E('br'),
 				_('Examples: Range 2-5 (means 2 to 5), List 1,3,5 (means 1 and 3 and 5), Step */5 (means every 5 units)')
@@ -212,10 +209,10 @@ return view.extend({
 				const selector = `${container}[data-field="cbid.taskplan.${section_id}.${field}"] input`;
 				return document.querySelector(selector)?.value || '';
 			});
-			const crontab = values.filter(Boolean).join(' ').trim();
+			const crontab = values.filter(Boolean).join('_');
 
-			/^\S+(?:\s\S+){4}$/.test(crontab)
-				? window.open(`https://crontab.guru/#${crontab.replace(/\s/g, '_')}`)
+			crontab.split('_').length === 5
+				? window.open(`https://crontab.guru/#${crontab}`)
 				: ui.addTimeLimitedNotification(null, E('p', _('Invalid format for %s').format(crontab)), 10000, 'error');
 		};
 
@@ -241,7 +238,7 @@ return view.extend({
 		e = s.option(form.Value, 'remarks', _('Remarks'));
 		e.editable = true;
 
-		return m.render().then((el) => {
+		return m.render().then(el => {
 			requestAnimationFrame(() => this.updateTitles(m));
 			return el;
 		});
@@ -249,12 +246,11 @@ return view.extend({
 
 	updateTitles: function (m) {
 		// console.time('updateTitles');
-		const tasks = m.data.state.values?.taskplan;
+		const tasks = m.data.state.values.taskplan;
 		if (!tasks) return;
 
 		for (const task of Object.values(tasks)) {
-			if (task?.[".type"] !== "stime") continue;
-
+			if (task[".type"] !== "stime") continue;
 			const id = task[".name"];
 			const cron = CRON_FIELDS.map(f => task[f] || "*").join(" ");
 
@@ -267,12 +263,12 @@ return view.extend({
 				if (!el) continue;
 
 				el.title = f === "remarks"
-					? task?.[f] || ""
+					? task[f] || ""
 					: el.options[el.selectedIndex]?.text || "";
 			};
 
-			const btn = document.querySelector(`#cbi-taskplan-${id}-button .cbi-button-apply`);
-			btn?.setAttribute('title', _("verify"));
+			document.querySelector(`#cbi-taskplan-${id}-button .cbi-button-apply`)
+				?.setAttribute('title', _("verify"));
 		};
 		// console.timeEnd('updateTitles');
 	},
@@ -300,7 +296,6 @@ return view.extend({
 			if (['15', '16'].includes(value)) this.showScriptEditModal(value);
 		};
 		e.editable = true;
-		return e;
 	},
 
 	showScriptEditModal: function (v) {
@@ -308,42 +303,42 @@ return view.extend({
 		const path = v === '16' ? '/etc/taskplan/customscript2' : '/etc/taskplan/customscript1';
 		fs.stat(path)
 			.catch(() => fs.write(path, '#!/bin/sh\n'))
-			.then(() => fs.read_direct(path))
+			.then(() => fs.read(path))
 			.then(content => {
 				ui.showModal(_('Edit %s').format(label), [
-					E('b', { 'style': 'color:red;' },
+					E('b', { style: 'color:red;' },
 						_('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
-					E('textarea', { 'rows': 12, 'id': v, 'style': 'background-color:#272626; color:#e9e9dd; font-family:Consolas, monospace;' }, content),
-					E('div', { 'class': 'button-row' }, [
+					E('textarea', { rows: 12, id: v, style: 'background-color:#272626; color:#e9e9dd; font-family:Consolas, monospace;' }, [content]),
+					E('div', { class: 'button-row' }, [
 						E('div', {
-							'class': 'btn cbi-button-neutral',
-							'click': ui.hideModal, 'title': _('Cancel')
+							class: 'btn cbi-button-neutral',
+							click: ui.hideModal, title: _('Cancel')
 						}, _('Cancel')),
 						E('div', {
-							'class': 'btn cbi-button-action',
-							'title': _('Click to upload the script to %s').format(path),
-							'click': () => ui.uploadFile(path)
+							class: 'btn cbi-button-action',
+							title: _('Click to upload the script to %s').format(path),
+							click: () => ui.uploadFile(path)
 								.then(() => ui.addTimeLimitedNotification(null, E('p',
 									_('File saved to %s').format(path)), 3000, 'info'))
 								.catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 3000))
 						}, _('Upload')),
 						E('div', {
-							'class': 'btn cbi-button-positive', 'title': _('Save'),
-							'click': () => {
+							class: 'btn cbi-button-positive', title: _('Save'),
+							click: () => {
 								const value = document.getElementById(v).value?.trim().replace(/\r\n/g, '\n') + '\n';
 								fs.write(path, value)
 									.then(() => ui.addTimeLimitedNotification(null, E('p',
 										_('Contents of %s have been saved.').format(label)), 3000, 'info'))
-									.catch(err => ui.addTimeLimitedNotification(null, E('p',
-										_('Unable to save contents: %s').format(err.message)), 8000, 'error'));
+									.catch(e => ui.addTimeLimitedNotification(null, E('p',
+										_('Unable to save contents: %s').format(e.message)), 8000, 'error'));
 								ui.hideModal();
 							}
 						}, _('Save')),
 					])
 				]);
 			})
-			.catch(err => ui.addTimeLimitedNotification(null, E('p', {},
-				_('Unable to read %s: %s').format(label, err.message)), 8000, 'error'));
+			.catch(e => ui.addTimeLimitedNotification(null, E('p', {},
+				_('Unable to read %s: %s').format(label, e.message)), 8000, 'error'));
 	}
 
 });

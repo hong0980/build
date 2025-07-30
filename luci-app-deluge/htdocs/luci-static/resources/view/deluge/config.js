@@ -43,7 +43,7 @@ const speedOptions = [
 ];
 
 return view.extend({
-	parseMountedDisks: function (diskList, option) {
+	parseMountedDisks: (diskList, option) => {
 		var devMap = {};
 		diskList.trim().split('\n').slice(1).forEach(line => {
 			var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
@@ -62,41 +62,38 @@ return view.extend({
 	]),
 
 	render: function ([diskList, status]) {
-		var m, s, o,
+		let m, s, o,
 			host = window.location.hostname,
 			port = uci.get('deluge', 'main', 'port'),
 			proto = uci.get_bool('deluge', 'main', 'https') ? 'https' : 'http';
 
-		m = new form.Map('deluge', _('Deluge Downloader'), [
-			E('p', {}, _('Deluge is a BitTorrent client with a graphical interface built using PyGTK')),
-			E('div', { style: `font-weight:bold; color:${status ? 'green' : 'red'}` }, [
+		m = new form.Map('deluge', _('Deluge Downloader'),
+			_('Deluge is a BitTorrent client with a graphical interface built using PyGTK'));
+
+		s = m.section(form.TypedSection);
+		s.render = () =>
+			E('p', { style: `font-weight:bold; color:${status ? 'green' : 'red'}` }, [
 				_('Deluge ') + (status ? _('RUNNING') : _('NOT RUNNING')),
 				status
 					? E('div', {
-						style: 'margin-left:10px;',
-						class: 'btn cbi-button cbi-button-apply',
+						style: 'margin-left:10px;', class: 'btn cbi-button-apply',
 						click: () => window.open(`${proto}://${host}:${port}`, '_blank')
 					}, _('Open Web Interface'))
 					: []
-			])
-		]);
+			]);
 
 		s = m.section(form.NamedSection, 'main', 'deluge');
 		s.addremove = false;
 		s.anonymous = true;
 
 		s.tab("settings", _('Basic Settings'));
-		s.tab("download", _('Download Settings'));
-		s.tab("other", _('Other Settings'));
-
-		// settings
 		o = s.taboption("settings", form.Flag, 'enabled', _('Enabled'));
 		o.default = "0";
 		o.rmempty = false;
 
 		var user = s.taboption("settings", form.ListValue, 'user', _('Run daemon as user'));
-		user.load = function (section_id) {
-			return fs.read('/etc/passwd').then(data => {
+		user.load = (section_id) =>
+			fs.read('/etc/passwd').then(data => {
 				data.split('\n').forEach(line => {
 					var parts = line.split(':');
 					var name = parts[0];
@@ -105,7 +102,6 @@ return view.extend({
 				});
 				return uci.get('deluge', section_id, 'user');
 			});
-		};
 		user.default = 'root';
 
 		o = s.taboption("settings", form.Value, 'profile_dir', _('Root Path of the Profile'),
@@ -140,7 +136,7 @@ return view.extend({
 		o.default = 0;
 		o.rmempty = false;
 
-		// download
+		s.tab("download", _('Download Settings'));
 		o = s.taboption("download", form.Flag, 'prioritize_first_last_pieces',
 			_('Prioritize First and Last Pieces'));
 		o.rmempty = false;
@@ -191,7 +187,7 @@ return view.extend({
 					'-1';
 			o.depends("speed_enable", '1');
 			o.datatype = 'and(min(-1), integer)';
-			o.validate = function (section, value) {
+			o.validate = (section, value) => {
 				value = parseInt(value);
 				if (isNaN(value)) {
 					return _("Please enter a valid number");
@@ -200,7 +196,7 @@ return view.extend({
 			};
 		});
 
-		// other
+		s.tab("other", _('Other Settings'));
 		o = s.taboption("other", form.Flag, 'show_session_speed', _('Show session speed in titlebar'));
 		o.default = '1';
 		o.rmempty = false;
@@ -234,7 +230,7 @@ return view.extend({
 			_("Disk cache size in 16 KiB blocks (e.g. 16384 = 256 MiB)"));
 		o.default = "16384";
 		o.datatype = "integer";
-		o.validate = function (section_id, value) {
+		o.validate = (section_id, value) => {
 			const size = +value;
 			if (size < 1024) return _("Minimum: 1024 (16 MiB)");
 			if (size > 65536) return _("Maximum: 65536 (1 GiB)");

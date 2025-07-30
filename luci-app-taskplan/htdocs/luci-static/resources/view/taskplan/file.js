@@ -10,7 +10,7 @@ const fileConfigs = [
 		label: _('Scheduled Tasks'),
 		filePath: '/etc/crontabs/root',
 		description: _('This is the system crontab in which scheduled tasks can be defined.'),
-		postSaveCallback: () => fs.exec('/etc/init.d/cron', ['reload'])
+		savecall: () => fs.exec('/etc/init.d/cron', ['reload'])
 	},
 	{
 		tab: 'rc-local',
@@ -35,14 +35,10 @@ const fileConfigs = [
 return view.extend({
 	load: () => Promise.all(fileConfigs.map(cfg =>
 		fs.stat(cfg.filePath)
-			.catch(() => {
-				if (cfg.tab.includes('script')) {
-					return fs.write(cfg.filePath, '#!/bin/sh\n');
-				}
-			})
+			.catch(() => cfg.tab.includes('script') ? fs.write(cfg.filePath, '#!/bin/sh\n') : null)
 			.then(() => Promise.all([
 				fs.stat(cfg.filePath),
-				L.resolveDefault(fs.read_direct(cfg.filePath), ''),
+				L.resolveDefault(fs.read(cfg.filePath), ''),
 				uci.load('system')
 			]))
 	)),
@@ -51,13 +47,13 @@ return view.extend({
 		const Level = uci.get('system', '@system[0]', 'cronloglevel');
 		const tabs = fileConfigs.map((cfg, idx) => {
 			const stat = data[idx][0], content = data[idx][1];
-			const textarea = new ui.Textarea(content, { rows: 15 });
+			if (!stat) return [];
 			return E('div', { 'data-tab': cfg.tab, 'data-tab-title': cfg.label }, [
 				E('p', {}, [
 					E('span', {}, cfg.description),
 					cfg.tab.includes('crontab')
 						? E('span', {}, [
-							E('select', { id: 'cron_option', style: 'width: 80px; margin-left: 10px;', class: 'cbi-input-select' },
+							E('select', { id: 'cron_option', style: 'width: 80px; margin-left: 10px;' },
 								content.split('\n')
 									.filter(l => l.trim())
 									.map(l => {
@@ -75,25 +71,26 @@ return view.extend({
 									}
 								})
 							}, _('verify')),
-							E('span', { style: 'margin-left: 10px;' }, [_('Cron Log Level'),
-							E('select', { id: 'cron_loglevel_option', style: 'width: 80px; margin-left: 10px;', class: 'cbi-input-select' }, [
-								E('option', { value: 5, selected: Level == '5' ? '' : null }, _('Debug')),
-								E('option', { value: 9, selected: Level == '9' ? '' : null }, _('Disabled')),
-								E('option', { value: 7, selected: Level == '7' ? '' : null }, _('Normal')),
-							]),
-							E('div', {
-								style: 'margin-left: 10px;', class: 'btn cbi-button-apply',
-								click: () => {
-									const val = document.getElementById('cron_loglevel_option').value;
-									if (val !== Level) {
-										uci.set('system', '@system[0]', 'cronloglevel', val);
-										uci.save();
-										uci.apply()
-											.then(() => ui.addTimeLimitedNotification(null, E('p', _('Save successfully')), 3000))
-											.catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 3000));
-									};
-								}
-							}, _('Save')),
+							E('span', { style: 'margin-left: 10px;' }, [
+								_('Cron Log Level'),
+								E('select', { id: 'loglevel_option', style: 'width: 80px; margin-left: 10px;', class: 'cbi-input-select' }, [
+									E('option', { value: 5, selected: Level == '5' ? '' : null }, _('Debug')),
+									E('option', { value: 9, selected: Level == '9' ? '' : null }, _('Disabled')),
+									E('option', { value: 7, selected: Level == '7' ? '' : null }, _('Normal')),
+								]),
+								E('div', {
+									style: 'margin-left: 10px;', class: 'btn cbi-button-apply',
+									click: ui.createHandlerFn(this, () => {
+										const val = document.getElementById('loglevel_option').value;
+										if (val !== Level) {
+											uci.set('system', '@system[0]', 'cronloglevel', val);
+											uci.save();
+											uci.apply()
+												.then(() => ui.addTimeLimitedNotification(null, E('p', _('Save successfully')), 3000))
+												.catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 3000));
+										};
+									})
+								}, _('Save')),
 							])
 						])
 						: [],
@@ -104,45 +101,39 @@ return view.extend({
 						])
 						: '',
 				]),
-				textarea.render(),
-				stat
-					? E('span', { style: 'color:#888;font-size:90%;' },
-						_('Last modified: %s, Size: %s bytes').format(
-							new Date(stat.mtime * 1000).toLocaleString(), stat.size
-						))
-					: [],
+				E('textarea', {
+					id: cfg.tab, rows: 13,
+					style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
+				}, [content]),
+				E('div', { style: 'color:#888;font-size:90%;' },
+					_('Last modified: %s, Size: %s bytes').format(
+						new Date(stat.mtime * 1000).toLocaleString(), stat.size)
+				),
 				E('div', { class: 'cbi-page-actions' }, [
 					E('div', {
 						class: 'btn cbi-button-save',
-						click: () => {
-							if (!textarea.isChanged()) {
+						click: ui.createHandlerFn(this, () => {
+							const value = document.getElementById(cfg.tab).value;
+							if (value === content) {
 								return ui.addTimeLimitedNotification(null, E('p',
-									_('No modifications detected. The content remains unchanged.')), 3000, 'info');
+									_('No modifications detected. The content remains unchanged.')), 3000);
 							};
-							const value = textarea.getValue().trim().replace(/\r\n/g, '\n') + '\n';
-							fs.write(cfg.filePath, value)
-								.then(() => cfg.postSaveCallback ? cfg.postSaveCallback() : null)
+							fs.write(cfg.filePath, value.trim().replace(/\r\n/g, '\n') + '\n')
+								.then(() => cfg.savecall?.())
 								.then(() => ui.addTimeLimitedNotification(null, E('p',
 									_('Contents have been saved.')), 3000, 'info'))
 								.catch(e => ui.addTimeLimitedNotification(null, E('p',
-									_('Unable to save contents: %s').format(e.message), 8000, 'error')));
-						}
+									_('Unable to save contents: %s').format(e.message)), 8000, 'error'));
+						})
 					}, _('Save'))
 				])
 			]);
 		});
 
 		const view = E('div', {}, [
-			E('style', { type: 'text/css' }, [
-				`.cbi-input-textarea {
-					font-size:14px; color: #c5c5b2; border: 1px solid #555;
-					background-color: #272626; font-family: Consolas, monospace;
-				}`
-			]),
-			E('div', {}, [
+			E('b', {}, [
 				_('This page can be edited and saved directly. Changes will take effect immediately after saving.'),
-				E('br'),
-				_('Please ensure the syntax is correct, as incorrect syntax may cause the system to malfunction.')
+				_('Please ensure the syntax is correct, as incorrect syntax may cause the system to malfunction.'),
 			]),
 			E('div', {}, tabs)
 		]);

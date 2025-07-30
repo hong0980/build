@@ -4,13 +4,16 @@
 'require view';
 'require network';
 'require tools.widgets as widgets';
+'require tools.firewall as fwtool';
 
-var CSS = `
+const CSS = `
 @media (min-width: 768px) {
-	.cbi-section-table .cbi-input-text {
+	.cbi-section-table
+	.cbi-input-text {
 		max-width: 60px;
 	}
-	.table.cbi-section-table .cbi-dropdown {
+	.table.cbi-section-table
+	.cbi-dropdown {
 		min-width: 170px;
 		max-width: 170px;
 	}
@@ -42,7 +45,7 @@ return view.extend({
 	load: () => Promise.all([
 		network.getHostHints(),
 		fs.exec_direct('/usr/sbin/iptables', ['-L', 'INPUT'])
-			.then((res) => res.includes('MIAPLUS'))
+			.then(res => res.includes('MIAPLUS'))
 			.catch(() => false)
 	]),
 
@@ -104,22 +107,20 @@ return view.extend({
 			const host = hosts[mac];
 			o.value(mac, E([], [mac, ' (', E('strong', {}, [
 				host.name ||
-				(host.ipaddrs?.[0]  || host.ipv4?.[0]) ||
-				(host.ip6addrs?.[0] || host.ipv6?.[0]) || '?'
+				L.toArray(host.ipaddrs  || host.ipv4)[0] ||
+				L.toArray(host.ip6addrs || host.ipv6)[0] || '?'
 			]), ')']));
 		});
 		o.editable = true;
-		o.datatype = 'list(macaddr)';
+		o.datatype = 'macaddr';
 
 		o = s.option(form.Value, 'ipaddr', _('IP Address'), _('If using IP, the MAC must be left blank'));
-		L.sortedKeys(hosts).filter(mac => (hosts[mac].ipaddrs?.[0] || hosts[mac].ipv4?.[0]))
-			.forEach(mac => {
-				const host = hosts[mac];
-				const ip = host.ipaddrs?.[0] || host.ipv4?.[0];
-				o.value(ip, E([], [ip, ' (', E('strong', {}, [host.name || mac]), ')']));
-			});
+		const [ipv4Addrs, ipv4Labels] = fwtool.transformHostHints('ipv4', hosts);
+		ipv4Addrs.forEach(ip => {
+			o.value(ip, ipv4Labels[ip]);
+		});
 		o.editable = true;
-		o.datatype = 'list(ip4addr)';
+		o.datatype = 'ip4addr';
 
 		o = s.option(form.Value, 'rate', _('Rate Limit'),
 			_('Set the upper limit of traffic bandwidth (unit Mbps)'));
