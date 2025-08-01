@@ -1,4 +1,12 @@
 {
+	"admin/control": {
+		"title": "Control",
+		"order": 50,
+		"action": {
+			"type": "firstchild",
+			"recurse": true
+		}
+	},
 	"admin/control/miaplus": {
 		"title": "Internet Access Schedule Control Plus",
 		"order": 30,

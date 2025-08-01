@@ -1,9 +1,18 @@
 {
+	"admin/control": {
+		"title": "Control",
+		"order": 50,
+		"action": {
+			"type": "firstchild",
+			"recurse": true
+		}
+	},
 	"admin/control/taskplan": {
 		"title": "Task Plan Plus+",
-		"order": 20,
+		"order": 10,
 		"action": {
-			"type": "firstchild"
+			"type": "view",
+			"path": "taskplan/scheduledtask"
 		},
 		"depends": {
 			"acl": [ "luci-app-taskplan" ],
