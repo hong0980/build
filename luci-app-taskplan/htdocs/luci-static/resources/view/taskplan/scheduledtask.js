@@ -122,6 +122,9 @@ const validateCrontabField = (type, value, monthValue) => {
 	return true;
 };
 const CRON_FIELDS = ['minute', 'hour', 'day', 'month', 'week'];
+const notification = typeof ui.addTimeLimitedNotification === 'function'
+	? ui.addTimeLimitedNotification
+	: ui.addNotification;
 
 return view.extend({
 	load: function () {
@@ -213,7 +216,7 @@ return view.extend({
 
 			crontab.split('_').length === 5
 				? window.open(`https://crontab.guru/#${crontab}`)
-				: ui.addTimeLimitedNotification(null, E('p', _('Invalid format for %s').format(crontab)), 10000, 'error');
+				: notification(null, E('p', _('Invalid format for %s').format(crontab)), 10000, 'error');
 		};
 
 		s = m.section(form.GridSection, 'ltime', _('Startup task'),
@@ -318,18 +321,18 @@ return view.extend({
 							class: 'btn cbi-button-action',
 							title: _('Click to upload the script to %s').format(path),
 							click: () => ui.uploadFile(path)
-								.then(() => ui.addTimeLimitedNotification(null, E('p',
+								.then(() => notification(null, E('p',
 									_('File saved to %s').format(path)), 3000, 'info'))
-								.catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 3000))
+								.catch((e) => notification(null, E('p', e.message), 3000))
 						}, _('Upload')),
 						E('div', {
 							class: 'btn cbi-button-positive', title: _('Save'),
 							click: () => {
 								const value = document.getElementById(v).value?.trim().replace(/\r\n/g, '\n') + '\n';
 								fs.write(path, value)
-									.then(() => ui.addTimeLimitedNotification(null, E('p',
+									.then(() => notification(null, E('p',
 										_('Contents of %s have been saved.').format(label)), 3000, 'info'))
-									.catch(e => ui.addTimeLimitedNotification(null, E('p',
+									.catch(e => notification(null, E('p',
 										_('Unable to save contents: %s').format(e.message)), 8000, 'error'));
 								ui.hideModal();
 							}
@@ -337,7 +340,7 @@ return view.extend({
 					])
 				]);
 			})
-			.catch(e => ui.addTimeLimitedNotification(null, E('p', {},
+			.catch(e => notification(null, E('p', {},
 				_('Unable to read %s: %s').format(label, e.message)), 8000, 'error'));
 	}
 

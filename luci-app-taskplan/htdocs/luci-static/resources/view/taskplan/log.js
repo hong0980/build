@@ -5,6 +5,9 @@
 'require view';
 
 const logPath = '/etc/taskplan/taskplan.log';
+const notification = typeof ui.addTimeLimitedNotification === 'function'
+	? ui.addTimeLimitedNotification
+	: ui.addNotification;
 
 return view.extend({
 	load: () => Promise.all([
@@ -28,7 +31,7 @@ return view.extend({
 						])
 							.then(() => {
 								textarea.setValue('');
-								ui.addTimeLimitedNotification(null, E('p', _('Log cleared')), 3000, 'info');
+								notification(null, E('p', _('Log cleared')), 3000, 'info');
 							})
 							.catch((e) => {
 								ui.addNotification(null, E('p',
@@ -65,8 +68,8 @@ return view.extend({
 							uci.set('taskplan', 'globals', 'log_length', val);
 							uci.save();
 							uci.apply()
-								.then(() => ui.addTimeLimitedNotification(null, E('p', _('Save successfully')), 3000))
-								.catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 3000));
+								.then(() => notification(null, E('p', _('Save successfully')), 3000))
+								.catch((e) => notification(null, E('p', e.message), 3000));
 						};
 					})
 				}, _('Save')),
