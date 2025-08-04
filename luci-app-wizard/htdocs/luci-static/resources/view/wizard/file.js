@@ -3,7 +3,7 @@
 'require ui';
 'require view';
 
-var configFiles = [
+const configFiles = [
 	{ path: '/etc/config/network', 	title: _('Network configuration (network)') },
 	{ path: '/etc/config/firewall', title: _('Firewall configuration (firewall)') },
 	{ path: '/etc/config/dhcp',		title: _('DHCP configuration (dhcp)') },
@@ -14,6 +14,8 @@ var configFiles = [
 	{ path: '/etc/rc.local',		title: _('Startup script (rc.local)') },
 	{ path: '/etc/crontabs/root',	title: _('Scheduled tasks (crontabs)') }
 ];
+
+const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
 
 return view.extend({
 	load: function () {
@@ -29,7 +31,7 @@ return view.extend({
 	handleFileSave: function (path, value) {
 		return fs.write(path, value)
 			.then(() => {
-				ui.addTimeLimitedNotification(null, E('p',
+				notify(null, E('p',
 					_('Contents of %s have been saved.').format(path)), 5000, 'info');
 
 				var s = path.includes('crontabs') ? 'cron' :
@@ -43,23 +45,17 @@ return view.extend({
 				if (s) {
 					var c = s === 'wifi' ? '/sbin/wifi' : '/etc/init.d/' + s;
 					return fs.exec_direct(c, ['reload'])
-						.then(() => {
-							ui.addTimeLimitedNotification(null, E('p',
-								_('Service %s reloaded successfully.').format(c)), 5000, 'info');
-						})
-						.catch((e) => {
-							ui.addTimeLimitedNotification(null, E('p',
-								_('Service reload failed: %s').format(e.message)), 5000, 'warning');
-						});
+						.then(() => notify(null, E('p',
+							_('Service %s reloaded successfully.').format(c)), 5000, 'info'))
+						.catch((e) => notify(null, E('p',
+							_('Service reload failed: %s').format(e.message)), 5000, 'warning'));
 				}
 			})
-			.catch((e) => {
-				ui.addTimeLimitedNotification(null, E('p',
-					_('Unable to save contents: %s').format(e.message)), 5000, 'error');
-			});
+			.catch((e) => notify(null, E('p',
+				_('Unable to save contents: %s').format(e.message)), 5000, 'error'));
 	},
 
-	render: function(data) {
+	render: function (data) {
 		var fileStatusDiv = E('span', { style: 'color:#888;font-size:90%;' });
 		const textarea = new ui.Textarea(null, { rows: 18, id: 'file_content', readonly: true });
 		this.fileContent = '';
@@ -79,7 +75,7 @@ return view.extend({
 				E('div', { class: 'cbi-value-field', style: 'max-width: 200px;' }, [
 					E('select', {
 						id: 'file_select', class: 'cbi-input-select',
-						change: L.bind(function(ev) {
+						change: L.bind(function (ev) {
 							fileStatusDiv.innerHTML = '';
 							var filePath = ev.target.value;
 							var editToggle = document.getElementById('edit_toggle');
@@ -98,16 +94,14 @@ return view.extend({
 								);
 							}
 
-							fs.read_direct(filePath)
-								.then(L.bind(function(content) {
+							fs.read(filePath)
+								.then(L.bind(function (content) {
 									textarea.setValue(content);
 									this.filePath = filePath;
 									this.fileContent = content;
 								}, this))
-								.catch((e) => {
-									ui.addTimeLimitedNotification(null, E('p',
-										_('Unable to read %s: %s').format(filePath, e.message)), 5000, 'error');
-								});
+								.catch((e) => notify(null, E('p',
+									_('Unable to read %s: %s').format(filePath, e.message)), 5000, 'error'));
 						}, this)
 					}, [
 						E('option', { value: '' }, _('-- Please choose --')),
@@ -135,22 +129,22 @@ return view.extend({
 			E('div', { class: 'cbi-page-actions', style: 'display: none;', id: 'page-actions' }, [
 				E('button', {
 					class: 'btn cbi-button-save', style: 'margin-right: 10px;',
-					click: L.bind(function() {
+					click: L.bind(function () {
 						var path = document.getElementById('file_select').value || this.filePath;
 						if (!path) {
-							return ui.addTimeLimitedNotification(null, E('p', _('Please select a file.')), 5000, 'error');
+							return notify(null, E('p', _('Please select a file.')), 5000, 'error');
 						}
 						if (!textarea.isChanged()) {
-							return ui.addTimeLimitedNotification(null, E('p',
+							return notify(null, E('p',
 								_('No modifications detected. The content remains unchanged.')), 3000, 'info');
 						};
-						const value = textarea.getValue().trim().replace(/\r\n/g, '\n');
+						const value = textarea.getValue().trim().replace(/\r\n/g, '\n') + '\n';
 						return this.handleFileSave(path, value);
 					}, this)
 				}, _('Save')),
 				E('button', {
 					class: 'btn cbi-button-reset',
-					click: L.bind(function() {
+					click: L.bind(function () {
 						textarea.setValue(this.fileContent);
 					}, this)
 				}, _('Reset'))

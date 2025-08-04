@@ -31,6 +31,7 @@ const fileConfigs = [
 		description: _('The execution content of the [Scheduled Customscript2] in the task name')
 	}
 ];
+const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
 
 return view.extend({
 	load: () => Promise.all(fileConfigs.map(cfg =>
@@ -86,8 +87,8 @@ return view.extend({
 											uci.set('system', '@system[0]', 'cronloglevel', val);
 											uci.save();
 											uci.apply()
-												.then(() => ui.addTimeLimitedNotification(null, E('p', _('Save successfully')), 3000))
-												.catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 3000));
+												.then(() => notify(null, E('p', _('Save successfully')), 3000))
+												.catch((e) => notify(null, E('p', e.message), 3000));
 										};
 									})
 								}, _('Save')),
@@ -115,14 +116,14 @@ return view.extend({
 						click: ui.createHandlerFn(this, () => {
 							const value = document.getElementById(cfg.tab).value;
 							if (value === content) {
-								return ui.addTimeLimitedNotification(null, E('p',
+								return notify(null, E('p',
 									_('No modifications detected. The content remains unchanged.')), 3000);
 							};
 							fs.write(cfg.filePath, value.trim().replace(/\r\n/g, '\n') + '\n')
 								.then(() => cfg.savecall?.())
-								.then(() => ui.addTimeLimitedNotification(null, E('p',
+								.then(() => notify(null, E('p',
 									_('Contents have been saved.')), 3000, 'info'))
-								.catch(e => ui.addTimeLimitedNotification(null, E('p',
+								.catch(e => notify(null, E('p',
 									_('Unable to save contents: %s').format(e.message)), 8000, 'error'));
 						})
 					}, _('Save'))

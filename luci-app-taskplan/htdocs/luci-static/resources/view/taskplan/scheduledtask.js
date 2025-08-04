@@ -42,7 +42,7 @@ const validateCrontabField = (type, value, monthValue) => {
 		'hour': { min: 0, max: 23, label: _('hours'), msg: _('0-23, "*", "*/N", ranges, or lists. E.g.: 0,12,18 or 8-17') },
 		'month': { min: 1, max: 12, label: _('months'), msg: _('1-12, "*", "*/N", ranges, or lists. E.g.: 1,6,12 or 3-8,*/2') },
 		'minute': { min: 0, max: 59, label: _('minutes'), msg: _('0-59, "*", "*/N", ranges, or lists. E.g.: 0,15,30,45 or 10-50,*/5') },
-		'week': { min: 0, max: 6, label: _('weeks'), msg: _('0-6 (0/6=Sunday), "*", "*/N", ranges, or lists. E.g.: 0,1,5 or 1-5,*/2') }
+		'week': { min: 0, max: 6, label: _('weeks'), msg: _('0-6 (0=Sunday), "*", "*/N", ranges, or lists. E.g.: 0,1,5 or 1-5,*/2') }
 	};
 
 	value = (value || '').replace(/\s/g, '');
@@ -57,7 +57,6 @@ const validateCrontabField = (type, value, monthValue) => {
 	if (isIncomplete) return true;
 
 	const field = types[type];
-	// const basePattern = /^(?!.*(?:,,|--|\/\/|\*\*|,\/|-\/|\*\/\/))(?:\*(\/\d+)?|\d+(?:-\d+)?(?:\/\d+)?)(?:,(?:\*(\/\d+)?|\d+(?:-\d+)?(?:\/\d+)?))*$/;
 	const basePattern = /^(\*(\/\d+)?|\d+(-\d+)?(\/\d+)?)(,(\*(\/\d+)?|\d+(-\d+)?(\/\d+)?))*$/;
 	if (!basePattern.test(value)) {
 		return _('Invalid format for %s. Example: (%s)').format(field.label, field.msg);
@@ -122,6 +121,7 @@ const validateCrontabField = (type, value, monthValue) => {
 	return true;
 };
 const CRON_FIELDS = ['minute', 'hour', 'day', 'month', 'week'];
+const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
 
 return view.extend({
 	load: function () {
@@ -213,7 +213,7 @@ return view.extend({
 
 			crontab.split('_').length === 5
 				? window.open(`https://crontab.guru/#${crontab}`)
-				: ui.addTimeLimitedNotification(null, E('p', _('Invalid format for %s').format(crontab)), 10000, 'error');
+				: notify(null, E('p', _('Invalid format for %s').format(crontab)), 10000, 'error');
 		};
 
 		s = m.section(form.GridSection, 'ltime', _('Startup task'),
@@ -318,18 +318,18 @@ return view.extend({
 							class: 'btn cbi-button-action',
 							title: _('Click to upload the script to %s').format(path),
 							click: () => ui.uploadFile(path)
-								.then(() => ui.addTimeLimitedNotification(null, E('p',
+								.then(() => notify(null, E('p',
 									_('File saved to %s').format(path)), 3000, 'info'))
-								.catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 3000))
+								.catch((e) => notify(null, E('p', e.message), 3000))
 						}, _('Upload')),
 						E('div', {
 							class: 'btn cbi-button-positive', title: _('Save'),
 							click: () => {
 								const value = document.getElementById(v).value?.trim().replace(/\r\n/g, '\n') + '\n';
 								fs.write(path, value)
-									.then(() => ui.addTimeLimitedNotification(null, E('p',
+									.then(() => notify(null, E('p',
 										_('Contents of %s have been saved.').format(label)), 3000, 'info'))
-									.catch(e => ui.addTimeLimitedNotification(null, E('p',
+									.catch(e => notify(null, E('p',
 										_('Unable to save contents: %s').format(e.message)), 8000, 'error'));
 								ui.hideModal();
 							}
@@ -337,7 +337,7 @@ return view.extend({
 					])
 				]);
 			})
-			.catch(e => ui.addTimeLimitedNotification(null, E('p', {},
+			.catch(e => notify(null, E('p', {},
 				_('Unable to read %s: %s').format(label, e.message)), 8000, 'error'));
 	}
 

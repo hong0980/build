@@ -225,8 +225,8 @@ msgstr "1-12，\"*\"，\"*/N\"，区间或列表。例如：1,6,12 或 3-8,*/2"
 msgid "0-59, \"*\", \"*/N\", ranges, or lists. E.g.: 0,15,30,45 or 10-50,*/5"
 msgstr "0-59，\"*\"，\"*/N\"，区间或列表。例如：0,15,30,45 或 10-50,*/5"
 
-msgid "0-7 (0/7=Sunday), \"*\", \"*/N\", ranges, or lists. E.g.: 0,1,5 or 1-5,*/2"
-msgstr "0-7（0/7=星期日），\"*\"，\"*/N\"，区间或列表。例如：0,1,5 或 1-5,*/2"
+msgid "0-6 (0=Sunday), \"*\", \"*/N\", ranges, or lists. E.g.: 0,1,5 or 1-5,*/2"
+msgstr "0-6（0=星期日），\"*\"，\"*/N\"，区间或列表。例如：0,1,5 或 1-5,*/2"
 
 msgid "Note: Actual days may be limited by specific months"
 msgstr "注意：实际天数可能受具体月份限制"
