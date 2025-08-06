@@ -117,11 +117,11 @@ msgstr "关闭无线网络"
 msgid "Scheduled Wifiup"
 msgstr "启用无线网络"
 
-msgid "Custom Script 1"
-msgstr "自定义脚本 1"
+msgid "Custom Script a"
+msgstr "脚本 a"
 
-msgid "Custom Script 2"
-msgstr "自定义脚本 2"
+msgid "Custom Script b"
+msgstr "脚本 b"
 
 msgid "Execution"
 msgstr "执行"
@@ -151,10 +151,10 @@ msgid "Unknown command: "
 msgstr "未知命令: "
 
 msgid "The execution content of the [Scheduled Customscript1] in the task name"
-msgstr "自定义脚本1 的执行内容"
+msgstr "脚本 a 的执行内容"
 
 msgid "The execution content of the [Scheduled Customscript2] in the task name"
-msgstr "自定义脚本2 的执行内容"
+msgstr "脚本 b 的执行内容"
 
 msgid "Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-6, 0 and 6 = Sunday)"
 msgstr "分钟 (0-59)，小时 (0-23)，日期 (1-31)，月份 (1-12)，星期 (0-6，0=星期日)"

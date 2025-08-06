@@ -20,14 +20,14 @@ const fileConfigs = [
 	},
 	{
 		tab: 'customscript1',
-		label: _('Custom Script 1'),
-		filePath: '/etc/taskplan/customscript1',
+		label: _('Custom Script a'),
+		filePath: '/etc/taskplan/script_a',
 		description: _('The execution content of the [Scheduled Customscript1] in the task name')
 	},
 	{
 		tab: 'customscript2',
-		label: _('Custom Script 2'),
-		filePath: '/etc/taskplan/customscript2',
+		label: _('Custom Script b'),
+		filePath: '/etc/taskplan/script_b',
 		description: _('The execution content of the [Scheduled Customscript2] in the task name')
 	}
 ];
@@ -36,7 +36,10 @@ const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
 return view.extend({
 	load: () => Promise.all(fileConfigs.map(cfg =>
 		fs.stat(cfg.filePath)
-			.catch(() => cfg.tab.includes('script') ? fs.write(cfg.filePath, '#!/bin/sh\n') : null)
+			.catch(() => cfg.tab.includes('script')
+				? fs.exec('/usr/bin/which', ['bash'])
+					.then(res => fs.write(cfg.filePath, `#!/bin/${res.stdout ? 'ba' : ''}sh\n`))
+				: null)
 			.then(() => Promise.all([
 				fs.stat(cfg.filePath),
 				L.resolveDefault(fs.read(cfg.filePath), ''),

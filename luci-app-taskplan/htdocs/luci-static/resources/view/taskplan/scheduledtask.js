@@ -290,26 +290,28 @@ return view.extend({
 		e.value('12', _('Scheduled Restartmwan3'));
 		e.value('13', _('Scheduled Wifiup'));
 		e.value('14', _('Scheduled Wifidown'));
-		e.value('15', _('Custom Script 1'));
-		e.value('16', _('Custom Script 2'));
+		e.value('15', _('Custom Script a'));
+		e.value('16', _('Custom Script b'));
 		e.onchange = (ev, section_id, value) => {
-			if (['15', '16'].includes(value)) this.showScriptEditModal(value);
+			(['15', '16'].includes(value)) && this.showScriptEditModal(value);
 		};
 		e.editable = true;
 	},
 
 	showScriptEditModal: function (v) {
-		const label = v === '16' ? _('Custom Script 2') : _('Custom Script 1');
-		const path = v === '16' ? '/etc/taskplan/customscript2' : '/etc/taskplan/customscript1';
+		const scriptSuffix = v === '16' ? 'b' : 'a';
+		const label = _(`Custom Script ${scriptSuffix}`);
+		const path = `/etc/taskplan/script_${scriptSuffix}`;
 		fs.stat(path)
-			.catch(() => fs.write(path, '#!/bin/sh\n'))
+			.catch(() => fs.exec('/usr/bin/which', ['bash'])
+				.then(res => fs.write(path, `#!/bin/${res.stdout ? 'ba' : ''}sh\n`)))
 			.then(() => fs.read(path))
 			.then(content => {
 				ui.showModal(_('Edit %s').format(label), [
 					E('b', { style: 'color:red;' },
 						_('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
 					E('textarea', { rows: 12, id: v, style: 'background-color:#272626; color:#e9e9dd; font-family:Consolas, monospace;' }, [content]),
-					E('div', { class: 'button-row' }, [
+					E('div', { style: 'display: flex; justify-content: space-between; gap: 0.5em;' }, [
 						E('div', {
 							class: 'btn cbi-button-neutral',
 							click: ui.hideModal, title: _('Cancel')
@@ -325,12 +327,14 @@ return view.extend({
 						E('div', {
 							class: 'btn cbi-button-positive', title: _('Save'),
 							click: () => {
-								const value = document.getElementById(v).value?.trim().replace(/\r\n/g, '\n') + '\n';
-								fs.write(path, value)
-									.then(() => notify(null, E('p',
-										_('Contents of %s have been saved.').format(label)), 3000, 'info'))
-									.catch(e => notify(null, E('p',
-										_('Unable to save contents: %s').format(e.message)), 8000, 'error'));
+								const value = document.getElementById(v).value;
+								if (value.trim() === content.trim()) {
+									notify(null, E('p', _('No modifications detected. The content remains unchanged.')), 3000);
+								} else {
+									fs.write(path, value.trim().replace(/\r\n/g, '\n') + '\n')
+										.then(() => notify(null, E('p', _('Contents of %s have been saved.').format(label)), 3000, 'info'))
+										.catch(e => notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 8000, 'error'));
+								}
 								ui.hideModal();
 							}
 						}, _('Save')),

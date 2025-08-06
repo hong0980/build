@@ -66,8 +66,8 @@ trigger() {
 		clearmem) sync && echo 3 > /proc/sys/vm/drop_caches ;;
 		restartlan) ifdown lan; ifup lan; log $(trf "LAN restart successful!") ;;
 		disreconn) disreconnwan || { ifup wan; log $(trf "Redial successful!"); } ;;
-		customscript1) [ -s "$TASKPLAN_DIR/customscript1" ] && . "$TASKPLAN_DIR/customscript1" ;;
-		customscript2) [ -s "$TASKPLAN_DIR/customscript2" ] && . "$TASKPLAN_DIR/customscript2" ;;
+		script_a) [ -s "$TASKPLAN_DIR/script_a" ] && . "$TASKPLAN_DIR/script_a" ;;
+		script_b) [ -s "$TASKPLAN_DIR/script_b" ] && . "$TASKPLAN_DIR/script_b" ;;
 		restartsamba)
 			for svc in ksmdb samba samba4; do
 				[ -x "/etc/init.d/$svc" ] && /etc/init.d/"$svc" restart
@@ -129,8 +129,8 @@ get_task_description() {
 		clearmem)       trf "Scheduled Clearmem" ;;
 		restartlan)     trf "Scheduled Restartlan" ;;
 		disreconn)      trf "Scheduled DisReconn" ;;
-		customscript1)  trf "Custom Script 1" ;;
-		customscript2)  trf "Custom Script 2" ;;
+		script_a)		trf "Custom Script a" ;;
+		script_b)		trf "Custom Script b" ;;
 		restartsamba)   trf "Scheduled RestartSamba" ;;
 		upwifi)         trf "Scheduled Wifiup" ;;
 		downwifi)       trf "Scheduled Wifidown" ;;
