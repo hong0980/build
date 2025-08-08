@@ -65,7 +65,7 @@ return view.extend({
 		let m, s, o,
 			host = window.location.hostname,
 			port = uci.get('deluge', 'main', 'port'),
-			proto = uci.get_bool('deluge', 'main', 'https') ? 'https' : 'http';
+			proto = uci.get('deluge', 'main', 'https') === '1' ? 'https' : 'http';
 
 		m = new form.Map('deluge', _('Deluge Downloader'),
 			_('Deluge is a BitTorrent client with a graphical interface built using PyGTK'));
