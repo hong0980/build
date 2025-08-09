@@ -4,13 +4,8 @@
 		"read": {
 			"file": {
 				"/bin/df": [ "exec" ],
-				"/etc/group": [ "read" ],
-				"/etc/passwd": [ "read" ],
-				"/usr/share/transmission/public_html/index.html": [ "list" ]
-			},
-			"ubus": {
-				"file": [ "stat" ],
-				"service": [ "list" ]
+				"/usr/bin/pgrep": [ "exec" ],
+				"/usr/share/transmission/*": [ "list" ]
 			},
 			"uci": [ "transmission" ]
 		},
