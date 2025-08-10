@@ -4,11 +4,10 @@
 START=99
 STOP=10
 USE_PROCD=1
-PROG="/usr/bin/transmission-daemon"
-# exec > /tmp/transmission-debug.log 2>&1
+
 LIST_SEP="
 "
-# set -x
+
 log_msg() {
 	logger -p daemon.info -t "transmission" -- "$*"
 }
@@ -49,9 +48,9 @@ transmission() {
 	[ "$enabled" -eq 0 ] && return 1
 
 	config_get nice "$cfg" nice 0
-	config_get user "$cfg" 'user'
-	config_get group "$cfg" 'group'
 	config_get web_home "$cfg" 'web_home'
+	config_get user "$cfg" 'user' 'transmission'
+	config_get group "$cfg" 'group' 'transmission'
 	config_get mem_percentage "$cfg" 'mem_percentage' '50'
 	config_get watch_dir "$cfg" 'watch_dir' '/var/etc/transmission'
 	config_get config_dir "$cfg" 'config_dir' '/var/etc/transmission'
@@ -75,19 +74,19 @@ transmission() {
 		mkdir -p "$config_dir/torrents"
 		mkdir -p "$config_dir/blocklists"
 		[ -e "$config_dir/stats.json" ] || touch "$config_dir/stats.json"
-		[ -z "$user" ] || chown -R "$user:$group" "$config_dir"
+		[ "$user" != 'root' ] && chown -R "$user:$group" "$config_dir"
 	}
 
 	[ -d "$download_dir" ] || {
 		mkdir -p "$download_dir"
 		chmod 0755 "$download_dir"
-		[ -z "$user" ] || chown -R "$user:$group" "$download_dir"
+		[ "$user" != 'root' ] && chown -R "$user:$group" "$download_dir"
 	}
 
 	[ "$incomplete_dir_enabled" = "0" ] || [ -d "$incomplete_dir" ] || {
 		mkdir -p "$incomplete_dir"
 		chmod 0755 "$incomplete_dir"
-		[ -z "$user" ] || chown -R "$user:$group" "$incomplete_dir"
+		[ "$user" != 'root' ] && chown -R "$user:$group" "$incomplete_dir"
 	}
 
 	[ "$config_overwrite" = 0 ] || {
@@ -123,7 +122,7 @@ transmission() {
 	} > "$config_file"
 
 	procd_open_instance
-	procd_set_param command "$PROG"
+	procd_set_param command "/usr/bin/transmission-daemon"
 	procd_append_param command -f -g "$config_dir"
 	procd_set_param user "$user"
 	procd_set_param group "$group"
@@ -167,7 +166,8 @@ start_service() {
 }
 
 reload_service() {
-	procd_send_signal "$PROG"
+	stop
+	start
 }
 
 transmission_mount_triggers() {
