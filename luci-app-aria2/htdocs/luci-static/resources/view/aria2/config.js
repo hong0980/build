@@ -2,59 +2,12 @@
 'require dom';
 'require form';
 'require fs';
-'require poll';
-'require rpc';
-'require tools.widgets as widgets';
 'require ui';
 'require view';
+'require tools.widgets as widgets';
 
-var CBIAria2Status, CBIRpcSecret, CBIRpcUrl;
-
-const callServiceList = rpc.declare({
-	object: 'service',
-	method: 'list',
-	params: [ 'name' ],
-	expect: { '': {} },
-	filter: function (data, args, extra) {
-		var i, res = data[args.name] || {};
-		for (i = 0; (i < extra.length) && (Object.keys(res).length > 0); ++i)
-			res = res[extra[i]] || {};
-		return res;
-	}
-});
-
-CBIAria2Status = form.DummyValue.extend({
-	renderWidget: function() {
-		var extra = ['instances', 'aria2.main'];
-		var node = E('div', {}, E('p', {}, E('em', {}, _('Collecting data...'))));
-		poll.add(function() {
-			return callServiceList('aria2', extra).then(function(res) {
-				var status = E('p', {}, E('em', {}, res.running
-					? _('<b><font color=green>The Aria2 service is running.</b>')
-					: _('<b><font color=red>The Aria2 service is not running.</b>')));
-				if (!res.running) {
-					dom.content(node, status);
-					return;
-				}
-				getWebFrontInstalled()
-				.then(function(installed) {
-					var btns = [E('label'), _('Installed web interface: ')];
-					for (var i in installed) {
-						btns.push(E('button', {
-							'class': 'btn cbi-button cbi-button-apply',
-							'click': openWebInterface.bind(this, i)
-						}, installed[i]));
-					}
-					dom.content(node, btns.length > 2 ? [status, E('p', btns)] : status);
-				});
-			});
-		});
-		return node;
-	}
-});
-
-CBIRpcSecret = form.Value.extend({
-	renderWidget: function(section_id, option_index, cfgvalue) {
+var CBIRpcSecret = form.Value.extend({
+	renderWidget: function (section_id, option_index, cfgvalue) {
 		var node = this.super('renderWidget', [section_id, option_index, cfgvalue]);
 		dom.append(node, [
 			E('br'),
@@ -69,21 +22,21 @@ CBIRpcSecret = form.Value.extend({
 	}
 });
 
-CBIRpcUrl = form.DummyValue.extend({
-	renderWidget: function(section_id, option_index, cfgvalue) {
-		var inputEl = new ui.Textfield('', {'id': this.cbid(section_id), 'readonly': true});
+var CBIRpcUrl = form.DummyValue.extend({
+	renderWidget: function (section_id, option_index, cfgvalue) {
+		var inputEl = new ui.Textfield('', { 'id': this.cbid(section_id), 'readonly': true });
 		return E([inputEl.render(),
-			E('br'),
-			E('span', { 'class': 'control-group' }, [
-				E('button', {
-					'class': 'btn cbi-button cbi-button-neutral',
-					'click': this.clickFn.bind(this, section_id, 0, inputEl)
-				}, 'HTTP(s)'),
-				E('button', {
-					'class': 'btn cbi-button cbi-button-neutral',
-					'click': this.clickFn.bind(this, section_id, 1, inputEl)
-				}, 'WebSocket(s)')
-			])
+		E('br'),
+		E('span', { 'class': 'control-group' }, [
+			E('button', {
+				'class': 'btn cbi-button cbi-button-neutral',
+				'click': this.clickFn.bind(this, section_id, 0, inputEl)
+			}, 'HTTP(s)'),
+			E('button', {
+				'class': 'btn cbi-button cbi-button-neutral',
+				'click': this.clickFn.bind(this, section_id, 1, inputEl)
+			}, 'WebSocket(s)')
+		])
 		]);
 	}
 });
@@ -97,39 +50,33 @@ function getToken(section_id) {
 		len = parseInt(inputLength);
 	}
 
-	while(len - randomStr.length > 0) {
+	while (len - randomStr.length > 0) {
 		randomStr += Math.random().toString(36).substring(2, 2 + len - randomStr.length);
 	}
 	document.getElementById('widget.' + this.cbid(section_id)).value = randomStr;
 };
 
 function getWebFrontInstalled() {
-	var supported = {'ariang': 'AriaNg', 'webui-aria2': 'WebUI-Aria2', 'yaaw': 'YAAW'};
 	var actions = [];
+	var supported = { 'ariang': 'AriaNg', 'webui-aria2': 'WebUI-Aria2', 'yaaw': 'YAAW' };
 
 	for (var s in supported) {
-		actions.push(fs.stat('/www/' + s + '/index.html')
-		.then(L.bind(function(s) { return s; }, this, s))
-		.catch(function(err) { return null; }));
+		actions.push(fs.stat(`/www/${s}/index.html`)
+			.then(L.bind(function (s) { return s; }, this, s))
+			.catch(() => null));
 	}
 
-	return Promise.all(actions).then(function(res) {
-		var installed = {};
-		for (var i = 0; i < res.length; ++i)
-			if (res[i])
-				installed[res[i]] = supported[res[i]];
-		return installed;
-	});
-}
-
-function openWebInterface(path) {
-	var host = window.location.host;
-	var protocol = window.location.protocol;
-	window.open(protocol + '//' + host + '/' + path);
+	return Promise.all(actions)
+		.then(function (res) {
+			var installed = {};
+			for (var i = 0; i < res.length; ++i)
+				if (res[i]) installed[res[i]] = supported[res[i]];
+			return installed;
+		});
 };
 
 function showRPCURL(section_id, useWS, inputEl) {
-	var getOptVal = L.bind(function(opt, default_val) {
+	var getOptVal = L.bind(function (opt, default_val) {
 		default_val = default_val || null;
 		return this.section.formvalue(section_id, opt) || default_val;
 	}, this);
@@ -158,67 +105,77 @@ function showRPCURL(section_id, useWS, inputEl) {
 };
 
 return view.extend({
-	load: function() {
-		return Promise.all([
-			L.resolveDefault(fs.exec_direct('/usr/bin/aria2c', [ '-v' ]))
-			.then(function(res) {
-				var info = {}, lines = res.split(/\r?\n|\r/g);
-				for (var i = 0; i < lines.length; ++i) {
-					if (/^aria2 version/.exec(lines[i])) {
-						info.version = lines[i].match(/(\d+\.){2}\d+/)[0];
-					}
-					else if (/^Enabled Features/.exec(lines[i])) {
-						info.gzip = lines[i].search(/GZip/) >= 0;
-						info.https = lines[i].search(/HTTPS/) >= 0;
-						info.bt = lines[i].search(/BitTorrent/) >= 0;
-						info.sftp = lines[i].search(/SFTP/) >= 0;
-						info.adns = lines[i].search(/Async DNS/) >= 0;
-						info.cookie = lines[i].search(/Firefox3 Cookie/) >= 0;
-					}
-				}
-				return info;
-			}),
-			L.resolveDefault(fs.exec_direct('/bin/df', ['-h']))
-			.then(function(disk) {
-				var result = [], lines = disk.trim().split('\n');
-				const systemMounts = ['/', '/rom', '/tmp', '/dev', '/boot', '/opt', '/overlay'];
-				const preferredMountPrefixes = ['/mnt/', '/media/', '/usb/', '/data/'];
-
-				for (var i = 1; i < lines.length; i++) {
-					var line = lines[i].trim();
-					if (line) {
-						var fields = line.split(/\s+/);
-						if (fields.length >= 6) {
-							if ((fields[0].match(/^\/dev\/sd[a-z]\d*$/) ||
-								 fields[0].match(/^\/dev\/mmcblk\d+p\d*$/)) &&
-								!systemMounts.includes(fields[5]) &&
-								preferredMountPrefixes.some(prefix => fields[5].startsWith(prefix))) {
-								result.push([
-									fields[5], fields[1], fields[2], fields[4]
-								]);
-							}
-						}
-					}
-				}
-				return result;
-			})
-		]);
+	parseMountedDisks: (diskList, option) => {
+		var devMap = {};
+		diskList.trim().split('\n').slice(1).forEach(line => {
+			var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
+			if (!dev?.includes('dev') || !mount?.startsWith('/mnt') || devMap[dev]) return;
+			devMap[dev] = true;
+			option.value(mount + '/download',
+				_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
+		});
 	},
-	render: function(data) {
+	load: function () {
+		return Promise.all([
+			L.resolveDefault(fs.exec_direct('/bin/df', ['-h']), {}),
+			L.resolveDefault(fs.exec_direct('/usr/bin/pgrep', ['aria2c']), {}),
+			L.resolveDefault(fs.exec_direct('/usr/bin/aria2c', ['-v']), '')
+				.then(res => {
+					const info = {};
+					res.split(/\n/).forEach(line => {
+						if (line.startsWith('aria2 version')) {
+							info.version = line.split(' ')[2];
+						} else if (line.startsWith('Enabled Features')) {
+							const l = line.toLowerCase();
+							info.gzip = l.includes('gzip');
+							info.https = l.includes('https');
+							info.bt = l.includes('bittorrent');
+							info.sftp = l.includes('sftp');
+							info.adns = l.includes('async dns');
+							info.cookie = l.includes('firefox3 cookie');
+						}
+					});
+					return info;
+				})
+		])
+	},
+	render: function ([diskList, running, aria2_info]) {
 		let m, s, o;
-		var aria2 = data[0], diskInfo = data[1];
 		m = new form.Map('aria2', '%s - %s'.format(_('Aria2'), _('Settings')),
-			'<p>%s %s</p><br>'.format(
+			'<p>%s %s</p>'.format(
 				_('Aria2 is a lightweight multi-protocol &amp; multi-source, cross platform download utility.'),
-				_("Current version: <b style='color:red'>%s</b>").format(aria2.version ? aria2.version : '$VERSION'
-				))
-			);
+				_("Current version: <b style='color:red'>%s</b>").format(aria2_info.version))
+		);
 
 		s = m.section(form.TypedSection);
 		s.anonymous = true;
-		s.cfgsections = function() { return [ 'status' ] };
+		s.render = () => {
+			const node = E('p', {}, [
+				E('span', {
+					style: `font-weight: bold; color: ${running ? 'green' : 'red'}; margin-right: 10px;`
+				}, _('Aria2 ') + (running ? _('RUNNING') : _('NOT RUNNING'))),
+				running ? E('span', { class: 'btn-container' }) : []
+			]);
 
-		o = s.option(CBIAria2Status);
+			if (running) {
+				getWebFrontInstalled().then(installed => {
+					if (!installed) return;
+
+					const btnContainer = node.querySelector('.btn-container');
+					Object.entries(installed).forEach(([key, value]) => {
+						btnContainer.appendChild(
+							E('div', {
+								class: 'btn cbi-button cbi-button-apply',
+								style: 'margin-left: 5px;',
+								click: () => open(`${location.origin}/${key}`)
+							}, value)
+						);
+					});
+				});
+			}
+
+			return node;
+		};
 
 		s = m.section(form.NamedSection, 'main', 'aria2');
 		s.addremove = false;
@@ -235,9 +192,7 @@ return view.extend({
 		o = s.taboption('basic', form.Value, 'dir', _('Download directory'),
 			_('The directory to store the downloaded file. For example <code>/mnt/sda1</code>.'));
 		o.rmempty = false;
-		diskInfo.forEach(function(item) {
-			o.value(item[0] + "/download", _("%s/download (size: %s) (used: %s/%s)").format(item[0], item[1], item[2], item[3]));
-		});
+		if (typeof diskList === 'string') this.parseMountedDisks(diskList, o);
 
 		o = s.taboption('basic', form.Flag, 'enable_pro', _('Aria2 pro file'),
 			_('When enabled,  the original system configuration directory will be merged.'));
@@ -301,35 +256,35 @@ return view.extend({
 
 		o = s.taboption('rpc', form.Value, 'rpc_passwd', _('RPC password'));
 		o.depends('rpc_auth_method', 'user_pass');
-		o.password  =  true;
+		o.password = true;
 
 		o = s.taboption('rpc', CBIRpcSecret, 'rpc_secret', _('RPC token'));
 		o.depends('rpc_auth_method', 'token');
 		o.btnTitle = _('Generate Randomly');
 		o.clickFn = getToken;
-		o.password  =  true;
+		o.password = true;
 
-		if (aria2.https) {
+		if (aria2_info.https) {
 			o = s.taboption('rpc', form.Flag, 'rpc_secure', _('RPC secure'),
 				_('RPC transport will be encrypted by SSL/TLS. The RPC clients must use https'
-				+ ' scheme to access the server. For WebSocket client, use wss scheme.'));
+					+ ' scheme to access the server. For WebSocket client, use wss scheme.'));
 			o.enabled = 'true';
 			o.disabled = 'false';
 			o.rmempty = false;
 
 			o = s.taboption('rpc', form.Value, 'rpc_certificate', _('RPC certificate'),
 				_('Use the certificate in FILE for RPC server. The certificate must be either'
-				+ ' in PKCS12 (.p12, .pfx) or in PEM format.<br/>PKCS12 files must contain the'
-				+ ' certificate, a key and optionally a chain of additional certificates. Only PKCS12'
-				+ ' files with a blank import password can be opened!<br/>When using PEM, you have to'
-				+ ' specify the "RPC private key" as well.'));
+					+ ' in PKCS12 (.p12, .pfx) or in PEM format.<br/>PKCS12 files must contain the'
+					+ ' certificate, a key and optionally a chain of additional certificates. Only PKCS12'
+					+ ' files with a blank import password can be opened!<br/>When using PEM, you have to'
+					+ ' specify the "RPC private key" as well.'));
 			o.depends('rpc_secure', 'true');
 			o.optional = false;
 			o.rmempty = false;
 
 			o = s.taboption('rpc', form.Value, 'rpc_private_key', _('RPC private key'),
 				_('Use the private key in FILE for RPC server. The private key must be'
-				+ ' decrypted and in PEM format.'));
+					+ ' decrypted and in PEM format.'));
 			o.depends('rpc_secure', 'true');
 			o.optional = false;
 			o.rmempty = false;
@@ -355,7 +310,7 @@ return view.extend({
 		o.depends('enable_proxy', '1');
 		o.password = true;
 
-		if (aria2.https) {
+		if (aria2_info.https) {
 			o = s.taboption('http', form.Flag, 'check_certificate', _('Check certificate'),
 				_('Verify the peer using certificates specified in "CA certificate" option.'));
 			o.enabled = 'true';
@@ -365,26 +320,26 @@ return view.extend({
 
 			o = s.taboption('http', form.Value, 'ca_certificate', _('CA certificate'),
 				_('Use the certificate authorities in FILE to verify the peers. The certificate'
-				+ ' file must be in PEM format and can contain multiple CA certificates.'));
+					+ ' file must be in PEM format and can contain multiple CA certificates.'));
 			o.depends('check_certificate', 'true');
 
 			o = s.taboption('http', form.Value, 'certificate', _('Certificate'),
 				_('Use the client certificate in FILE. The certificate must be either in PKCS12'
-				+ ' (.p12, .pfx) or in PEM format.<br/>PKCS12 files must contain the certificate, a'
-				+ ' key and optionally a chain of additional certificates. Only PKCS12 files with a'
-				+ ' blank import password can be opened!<br/>When using PEM, you have to specify the'
-				+ ' "Private key" as well.'));
+					+ ' (.p12, .pfx) or in PEM format.<br/>PKCS12 files must contain the certificate, a'
+					+ ' key and optionally a chain of additional certificates. Only PKCS12 files with a'
+					+ ' blank import password can be opened!<br/>When using PEM, you have to specify the'
+					+ ' "Private key" as well.'));
 
 			o = s.taboption('http', form.Value, 'private_key', _('Private key'),
 				_('Use the private key in FILE. The private key must be decrypted and in PEM'
-				+ ' format. The behavior when encrypted one is given is undefined.'));
+					+ ' format. The behavior when encrypted one is given is undefined.'));
 		}
 
-		if (aria2.gzip) {
+		if (aria2_info.gzip) {
 			o = s.taboption('http', form.Flag, 'http_accept_gzip', _('HTTP accept gzip'),
 				_('Send <code>Accept: deflate, gzip</code> request header and inflate response'
-				+ ' if remote server responds with <code>Content-Encoding: gzip</code> or'
-				+ ' <code>Content-Encoding: deflate</code>.'));
+					+ ' if remote server responds with <code>Content-Encoding: gzip</code> or'
+					+ ' <code>Content-Encoding: deflate</code>.'));
 			o.enabled = 'true';
 			o.disabled = 'false';
 			o.default = 'false';
@@ -392,8 +347,8 @@ return view.extend({
 
 		o = s.taboption('http', form.Flag, 'http_no_cache', _('HTTP no cache'),
 			_('Send <code>Cache-Control: no-cache</code> and <code>Pragma: no-cache</code>'
-			+ ' header to avoid cached content. If disabled, these headers are not sent and you'
-			+ ' can add Cache-Control header with a directive you like using "Header" option.'));
+				+ ' header to avoid cached content. If disabled, these headers are not sent and you'
+				+ ' can add Cache-Control header with a directive you like using "Header" option.'));
 		o.enabled = 'true';
 		o.disabled = 'false';
 		o.default = 'false';
@@ -403,7 +358,7 @@ return view.extend({
 
 		o = s.taboption('http', form.Value, 'connect_timeout', _('Connect timeout'),
 			_('Set the connect timeout in seconds to establish connection to HTTP/FTP/proxy server.' +
-			' After the connection is established, this option makes no effect and "Timeout" option is used instead.'));
+				' After the connection is established, this option makes no effect and "Timeout" option is used instead.'));
 		o.datatype = 'uinteger';
 		o.placeholder = '60';
 
@@ -414,7 +369,7 @@ return view.extend({
 		o = s.taboption('http', form.Value, 'lowest_speed_limit', _('Lowest speed limit'),
 			'%s %s'.format(
 				_('Close connection if download speed is lower than or equal to this value (bytes per sec). ' +
-			'0 means has no lowest speed limit.'),
+					'0 means has no lowest speed limit.'),
 				_('You can append K or M.')
 			));
 		o.placeholder = '0';
@@ -444,9 +399,9 @@ return view.extend({
 
 		o = s.taboption('http', form.Value, 'user_agent', _('User agent'),
 			_('Set user agent for HTTP(S) downloads.'));
-		o.placeholder = 'aria2/%s'.format(aria2.version ? aria2.version : '$VERSION');
+		o.placeholder = 'aria2/%s'.format(aria2_info.version ? aria2_info.version : '$VERSION');
 
-		if (aria2.bt) {
+		if (aria2_info.bt) {
 			s.tab('bt', _('BitTorrent Options'));
 
 			o = s.taboption('bt', form.Flag, 'enable_dht', _('IPv4 <abbr title="Distributed Hash Table">DHT</abbr> enabled'),
@@ -488,14 +443,14 @@ return view.extend({
 
 			o = s.taboption('bt', form.Flag, 'bt_save_metadata', _('Save metadata'),
 				_('Save meta data as ".torrent" file. This option has effect only when BitTorrent'
-				+ ' Magnet URI is used. The file name is hex encoded info hash with suffix ".torrent".'));
+					+ ' Magnet URI is used. The file name is hex encoded info hash with suffix ".torrent".'));
 			o.enabled = 'true';
 			o.disabled = 'false';
 			o.default = 'false';
 
 			o = s.taboption('bt', form.Flag, 'bt_remove_unselected_file', _('Remove unselected file'),
 				_('Removes the unselected files when download is completed in BitTorrent. Please'
-				+ ' use this option with care because it will actually remove files from your disk.'));
+					+ ' use this option with care because it will actually remove files from your disk.'));
 			o.enabled = 'true';
 			o.disabled = 'false';
 			o.default = 'false';
@@ -508,13 +463,13 @@ return view.extend({
 
 			o = s.taboption('bt', form.Value, 'listen_port', _('BitTorrent listen port'),
 				_('Set TCP port number for BitTorrent downloads. Accept format: "6881,6885",'
-				+ ' "6881-6999" and "6881-6889,6999". Make sure that the specified ports are open'
-				+ ' for incoming TCP traffic.'));
+					+ ' "6881-6999" and "6881-6889,6999". Make sure that the specified ports are open'
+					+ ' for incoming TCP traffic.'));
 			o.placeholder = '6881-6999';
 
 			o = s.taboption('bt', form.Value, 'dht_listen_port', _('DHT Listen port'),
 				_('Set UDP listening port used by DHT (IPv4, IPv6) and UDP tracker. Make sure that the '
-				+ 'specified ports are open for incoming UDP traffic.'));
+					+ 'specified ports are open for incoming UDP traffic.'));
 			o.depends('enable_dht', 'true');
 			o.depends('enable_dht6', 'true');
 			o.placeholder = '6881-6999';
@@ -551,38 +506,38 @@ return view.extend({
 			o = s.taboption('bt', form.Value, 'bt_request_peer_speed_limit', _('Request peer speed limit'),
 				'%s %s'.format(
 					_('If the whole download speed of every torrent is lower than SPEED, aria2'
-					+ ' temporarily increases the number of peers to try for more download speed.'
-					+ ' Configuring this option with your preferred download speed can increase your'
-					+ ' download speed in some cases.'),
+						+ ' temporarily increases the number of peers to try for more download speed.'
+						+ ' Configuring this option with your preferred download speed can increase your'
+						+ ' download speed in some cases.'),
 					_('You can append K or M.')
 				));
 			o.placeholder = '50K';
 
 			o = s.taboption('bt', form.Value, 'bt_stop_timeout', _('Stop timeout'),
 				_('Stop BitTorrent download if download speed is 0 in consecutive N seconds. If 0 is'
-				+ ' given, this feature is disabled.'));
+					+ ' given, this feature is disabled.'));
 			o.datatype = 'uinteger';
 			o.placeholder = '0';
 
 			o = s.taboption('bt', form.Value, 'peer_id_prefix', _('Prefix of peer ID'),
 				_('Specify the prefix of peer ID. The peer ID in BitTorrent is 20 byte length.'
-				+ ' If more than 20 bytes are specified, only first 20 bytes are used. If less than 20'
-				+ ' bytes are specified, random byte data are added to make its length 20 bytes.'));
+					+ ' If more than 20 bytes are specified, only first 20 bytes are used. If less than 20'
+					+ ' bytes are specified, random byte data are added to make its length 20 bytes.'));
 			o.placeholder = 'A2-%s-'.format(
-				aria2.version ? aria2.version.replace(/\./g, '-') : '$MAJOR-$MINOR-$PATCH'
+				aria2_info.version ? aria2_info.version.replace(/\./g, '-') : '$MAJOR-$MINOR-$PATCH'
 			);
 
 			o = s.taboption('bt', form.Value, 'seed_ratio', _('Seed ratio'),
 				_('Specify share ratio. Seed completed torrents until share ratio reaches RATIO.'
-				+ ' You are strongly encouraged to specify equals or more than 1.0 here. Specify 0.0 if'
-				+ ' you intend to do seeding regardless of share ratio.'));
+					+ ' You are strongly encouraged to specify equals or more than 1.0 here. Specify 0.0 if'
+					+ ' you intend to do seeding regardless of share ratio.'));
 			o.datatype = 'ufloat';
 			o.placeholder = '1.0';
 
 			o = s.taboption('bt', form.Value, 'seed_time', _('Seed time'),
 				_('Specify seeding time in minutes. If "Seed ratio" option is'
-				+ ' specified along with this option, seeding ends when at least one of the conditions'
-				+ ' is satisfied. Specifying 0 disables seeding after download completed.'));
+					+ ' specified along with this option, seeding ends when at least one of the conditions'
+					+ ' is satisfied. Specifying 0 disables seeding after download completed.'));
 			o.datatype = 'ufloat';
 
 			o = s.taboption('bt', form.DynamicList, 'bt_tracker', _('Additional BT tracker'),
@@ -594,20 +549,20 @@ return view.extend({
 
 		o = s.taboption('advance', form.Flag, 'disable_ipv6', _('IPv6 disabled'),
 			_('Disable IPv6. This is useful if you have to use broken DNS and want to avoid terribly'
-			+ ' slow AAAA record lookup.'));
+				+ ' slow AAAA record lookup.'));
 		o.enabled = 'true';
 		o.disabled = 'false';
 		o.default = 'false';
 
 		o = s.taboption('advance', form.Value, 'auto_save_interval', _('Auto save interval'),
 			_('Save a control file (*.aria2) every N seconds. If 0 is given, a control file is not'
-			+ ' saved during download.'));
+				+ ' saved during download.'));
 		o.datatype = 'range(0, 600)';
 		o.placeholder = '60';
 
 		o = s.taboption('advance', form.Value, 'save_session_interval', _('Save session interval'),
 			_('Save error/unfinished downloads to session file every N seconds. If 0 is given, file'
-			+ ' will be saved only when aria2 exits.'));
+				+ ' will be saved only when aria2 exits.'));
 		o.datatype = 'uinteger';
 		o.placeholder = '0';
 
@@ -620,11 +575,11 @@ return view.extend({
 
 		o = s.taboption('advance', form.ListValue, 'file_allocation', _('File allocation'),
 			_('Specify file allocation method. If you are using newer file systems such as ext4'
-			+ ' (with extents support), btrfs, xfs or NTFS (MinGW build only), "falloc" is your best choice.'
-			+ ' It allocates large(few GiB) files almost instantly, but it may not be available if your system'
-			+ ' doesn\'t have posix_fallocate(3) function. Don\'t use "falloc" with legacy file systems such as'
-			+ ' ext3 and FAT32 because it takes almost same time as "prealloc" and it blocks aria2 entirely'
-			+ ' until allocation finishes.'));
+				+ ' (with extents support), btrfs, xfs or NTFS (MinGW build only), "falloc" is your best choice.'
+				+ ' It allocates large(few GiB) files almost instantly, but it may not be available if your system'
+				+ ' doesn\'t have posix_fallocate(3) function. Don\'t use "falloc" with legacy file systems such as'
+				+ ' ext3 and FAT32 because it takes almost same time as "prealloc" and it blocks aria2 entirely'
+				+ ' until allocation finishes.'));
 		o.value('none', _('None'));
 		o.value('prealloc', _('prealloc'));
 		o.value('trunc', _('trunc'));
@@ -633,8 +588,8 @@ return view.extend({
 
 		o = s.taboption('advance', form.Flag, 'force_save', _('Force save'),
 			_('Save download to session file even if the download is completed or removed.'
-			+ ' This option also saves control file in that situations. This may be useful to save'
-			+ ' BitTorrent seeding which is recognized as completed state.'));
+				+ ' This option also saves control file in that situations. This may be useful to save'
+				+ ' BitTorrent seeding which is recognized as completed state.'));
 		o.enabled = 'true';
 		o.disabled = 'false';
 		o.default = 'false';

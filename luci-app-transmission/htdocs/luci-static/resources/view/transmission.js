@@ -11,7 +11,7 @@ function setFlagBool(o) {
 };
 
 return view.extend({
-	load: function() {
+	load: function () {
 		return Promise.all([
 			fs.exec('/usr/bin/pgrep', ['-x', '/usr/bin/transmission-daemon'])
 				.then(r => r.code == 0),
@@ -20,12 +20,13 @@ return view.extend({
 			uci.load('transmission')
 		]);
 	},
-	render: function([running, iswebExists, diskList]) {
+	render: function ([running, iswebExists, diskList]) {
 		let m, s, o;
 		var port = uci.get_first('transmission', 'transmission', 'rpc_port') || '9091',
 			webinstalled = iswebExists !== null || !!uci.get_first('transmission', 'transmission', 'web_home');
 
-		m = new form.Map('transmission', 'Transmission', _('Transmission daemon is a simple bittorrent client, here you can configure the settings.'));
+		m = new form.Map('transmission', 'Transmission',
+			_('Transmission daemon is a simple bittorrent client, here you can configure the settings.'));
 
 		s = m.section(form.TypedSection);
 		s.render = () =>
@@ -103,6 +104,7 @@ return view.extend({
 
 		o = s.taboption("Locations", form.Value, 'umask', 'umask');
 		o.default = '18';
+		o.datatype = 'uinteger';
 		o.rmempty = false;
 
 		o = s.taboption("Locations", form.Flag, 'watch_dir_enabled', _('Enable watch directory'));
@@ -138,6 +140,7 @@ return view.extend({
 
 		o = s.taboption("rpc", form.Value, 'rpc_host_whitelist', _('RPC host whitelist'));
 		o.depends('rpc_host_whitelist_enabled', 'true');
+		o.default = '127.0.0.1,192.168.1.*';
 
 		o = s.taboption("rpc", form.Flag, 'rpc_whitelist_enabled', _('RPC whitelist enabled'));
 		setFlagBool(o);
@@ -145,6 +148,7 @@ return view.extend({
 
 		o = s.taboption("rpc", form.Value, 'rpc_whitelist', _('RPC whitelist'));
 		o.depends('rpc_whitelist_enabled', 'true');
+		o.default = '127.0.0.1,192.168.1.*';
 
 		o = s.taboption("rpc", form.Flag, 'rpc_authentication_required', _('RPC authentication required'));
 		setFlagBool(o);
@@ -163,24 +167,28 @@ return view.extend({
 
 		o = s.taboption("bandwidth", form.Value, 'alt_speed_up', _('Alternative upload speed'), 'KB/s');
 		o.depends('alt_speed_enabled', 'true');
+		o.datatype = 'uinteger';
 
 		o = s.taboption("bandwidth", form.Value, 'alt_speed_down', _('Alternative download speed'), 'KB/s');
 		o.depends('alt_speed_enabled', 'true');
+		o.datatype = 'uinteger';
 
 		o = s.taboption("bandwidth", form.Flag, 'speed_limit_down_enabled', _('Speed limit down enabled'));
 		setFlagBool(o);
 
 		o = s.taboption("bandwidth", form.Value, 'speed_limit_down', _('Speed limit down'), 'KB/s');
 		o.depends('speed_limit_down_enabled', 'true');
+		o.datatype = 'uinteger';
 
 		o = s.taboption("bandwidth", form.Flag, 'speed_limit_up_enabled', _('Speed limit up enabled'));
 		setFlagBool(o);
 
 		o = s.taboption("bandwidth", form.Value, 'speed_limit_up', _('Speed limit up'), 'KB/s');
 		o.depends('speed_limit_up_enabled', 'true');
+		o.datatype = 'uinteger';
 
 		o = s.taboption("bandwidth", form.Value, 'upload_slots_per_torrent', _('Upload slots per torrent'));
-
+		o.datatype = 'uinteger';
 
 		o = s.taboption("bandwidth", form.Flag, 'blocklist_enabled', _('Block list enabled'));
 		setFlagBool(o);
@@ -191,6 +199,7 @@ return view.extend({
 
 
 		o = s.taboption("miscellaneous", form.Value, 'cache_size_mb', _('Cache size in MB'));
+		o.datatype = 'uinteger';
 
 		o = s.taboption("miscellaneous", form.Flag, 'dht_enabled', _('DHT enabled'));
 		setFlagBool(o);
@@ -261,10 +270,13 @@ return view.extend({
 			_('This is documented on <a href="https://www.irif.fr/~jch/software/bittorrent/tcp-congestion-control.html" target="_blank" rel="noreferrer noopener">tcp-congestion-control</a>.'));
 
 		o = s.taboption("peer", form.Value, 'peer_id_ttl_hours', _('Recycle peer id after'), _('hours'));
+		o.datatype = 'uinteger';
 
 		o = s.taboption("peer", form.Value, 'peer_limit_global', _('Global peer limit'));
+		o.datatype = 'uinteger';
 
 		o = s.taboption("peer", form.Value, 'peer_limit_per_torrent', _('Peer limit per torrent'));
+		o.datatype = 'uinteger';
 
 		o = s.taboption("peer", form.Value, 'peer_socket_tos', _('Peer socket <abbr title="Type of Service">TOS</abbr>'));
 
@@ -277,15 +289,18 @@ return view.extend({
 
 		o = s.taboption("queueing", form.Value, 'download_queue_size', _('Download queue size'));
 		o.depends('download_queue_enabled', 'true');
+		o.datatype = 'uinteger';
 
 		o = s.taboption("queueing", form.Flag, 'seed_queue_enabled', _('Seed queue enabled'));
 		setFlagBool(o);
 
 		o = s.taboption("queueing", form.Value, 'queue_stalled_minutes', _('Queue stalled minutes'));
 		o.depends('queue_stalled_enabled', 'true');
+		o.datatype = 'uinteger';
 
 		o = s.taboption("queueing", form.Value, 'seed_queue_size', _('Seed queue size'));
 		o.depends('seed_queue_enabled', 'true');
+		o.datatype = 'uinteger';
 
 
 		o = s.taboption("scheduling", form.Flag, 'alt_speed_time_enabled', _('Alternative speed timing enabled'), _('When enabled, this will toggle the <b>alt-speed-enabled</b> setting'));
@@ -293,18 +308,22 @@ return view.extend({
 
 		o = s.taboption("scheduling", form.Value, 'alt_speed_time_begin', _('Alternative speed time begin'), _('in minutes from midnight'));
 		o.depends('alt_speed_time_enabled', 'true');
+		o.datatype = 'uinteger';
 
 		o = s.taboption("scheduling", form.Value, 'alt_speed_time_end', _('Alternative speed time end'), _('in minutes from midnight'));
 		o.depends('alt_speed_time_enabled', 'true');
+		o.datatype = 'uinteger';
 
 		o = s.taboption("scheduling", form.Value, 'alt_speed_time_day', _('Alternative speed time day'), _('Number/bitfield. Start with 0, then for each day you want the scheduler enabled, add a value. For Sunday - 1, Monday - 2, Tuesday - 4, Wednesday - 8, Thursday - 16, Friday - 32, Saturday - 64'));
 		o.depends('alt_speed_time_enabled', 'true');
+		o.datatype = 'uinteger';
 
 		o = s.taboption("scheduling", form.Flag, 'idle_seeding_limit_enabled', _('Idle seeding limit enabled'));
 		setFlagBool(o);
 
 		o = s.taboption("scheduling", form.Value, 'idle_seeding_limit', _('Idle seeding limit'));
 		o.depends('idle_seeding_limit_enabled', 'true');
+		o.datatype = 'uinteger';
 
 		o = s.taboption("scheduling", form.Flag, 'ratio_limit_enabled', _('Ratio limit enabled'));
 		setFlagBool(o);
