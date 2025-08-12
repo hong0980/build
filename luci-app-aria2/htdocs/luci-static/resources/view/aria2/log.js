@@ -1,72 +1,38 @@
 'use strict';
-'require dom';
 'require fs';
-'require poll';
+'require uci';
 'require view';
 
-var css = '				\
-#log_textarea {				\
-	padding: 10px;			\
-	text-align: left;		\
-}					\
-#log_textarea pre {			\
-	padding: .5rem;		\
-	word-break: break-all;		\
-	margin: 0;			\
-}					\
-.description {				\
-	background-color: #33ccff;	\
-}';
-
-function pollLog(e) {
-	return Promise.all([
-			fs.exec_direct('/usr/libexec/aria2-call', [ 'tail' ]).then(function(res) {
-				return res.trim().split(/\n/).reverse().join('\n')
-			}),
-			fs.exec_direct('/sbin/logread', [ '-e', 'aria2' ]).then(function(res) {
-				return res.trim().split(/\n/).reverse().slice(0, 50).join('\n')
-			})
-		]).then(function(data) {
-			var t = E('pre', { 'wrap': 'pre' }, [
-				E('div', { 'class': 'description' }, _('Last 50 lines of log file:')),
-				E('br'),
-				data[0] || _('No log data.'),
-				E('br'),
-				E('br'),
-				E('div', { 'class': 'description' }, _('Last 50 lines of syslog:')),
-				E('br'),
-				data[1] || _('No log data.')
-			]);
-			dom.content(e, t);
-		});
-};
-
 return view.extend({
-	render: function() {
-		var log_textarea = E('div', { 'id': 'log_textarea' },
-			E('img', {
-				'src': L.resource('icons/loading.gif'),
-				'alt': _('Loading'),
-				'style': 'vertical-align:middle'
-			}, _('Collecting data...'))
-		);
+	load: function () {
+		return Promise.all([
+			L.resolveDefault(fs.exec_direct('/sbin/logread', ['-e', 'aria2']), '')
+				.then(res => res.trim().split(/\n/).reverse().slice(0, 50).join('\n')),
 
-		poll.add(pollLog.bind(this, log_textarea));
-		return E([
-			E('style', [ css ]),
-			E('div', {'class': 'cbi-map'}, [
-				E('h2', {'name': 'content'}, '%s - %s'.format(_('Aria2'), _('Log Data'))),
-				E('div', {'class': 'cbi-section'}, [
-					log_textarea,
-					E('div', {'style': 'text-align:right'},
-						E('small', {}, _('Refresh every %s seconds.').format(L.env.pollinterval))
-					)
-				])
-			])
+			uci.load('aria2')
+				.then(() => uci.get('aria2', 'main', 'log') || '/var/log/aria2.log')
+				.then(logPath => L.resolveDefault(fs.read(logPath), _('Failed to read log file')))
+		]);
+	},
+
+	render: function ([syslog, aria2log]) {
+		const textareaOpts = {
+			readonly: 'readonly', wrap: 'off',
+			style: 'width:100%; height:250px; font-size:13px; color:#c5c5b2; background-color:#272626; font-family:Consolas, monospace;'
+		};
+
+		return E('div', { class: 'cbi-section' }, [
+			E('h2', { name: 'content' }, '%s - %s'.format(_('Aria2'), _('Log Data'))),
+			E('br'),
+			E('div', { class: 'description' }, _('Last 50 lines of log file:')),
+			E('div', {}, E('textarea', textareaOpts, aria2log)),
+			E('br'),
+			E('div', { class: 'description' }, _('Last 50 lines of log file:')),
+			E('div', {}, E('textarea', textareaOpts, syslog))
 		]);
 	},
 
 	handleSave: null,
-	handleSaveApply: null,
-	handleReset: null
+	handleReset: null,
+	handleSaveApply: null
 });

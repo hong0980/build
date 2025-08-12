@@ -166,9 +166,9 @@ pro_conf() {
 		files="core aria2.conf clean.sh delete.sh tracker.sh upload.sh move.sh dht.dat dht6.dat script.conf rclone.env"
 		for file in $files; do
 			(
-				wget -qN -t2 -T3 "raw.githubusercontent.com/P3TERX/aria2.conf/master/$file" || \
-				wget -qN -t2 -T3 "cdn.jsdelivr.net/gh/P3TERX/aria2.conf/$file" || \
-				curl -fsSLO "p3terx.github.io/aria2.conf/$file"
+				wget -q "https://p3terx.github.io/aria2.conf/$file" || \
+				wget -q "https://cdn.jsdelivr.net/gh/P3TERX/aria2.conf/$file" || \
+				wget -q "https://raw.githubusercontent.com/P3TERX/aria2.conf/master/$file"
 				[ -s "$file" ] && _info "$file 下载成功！" || _info "$file 下载失败！"
 			) &
 		done

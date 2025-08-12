@@ -3,8 +3,23 @@
 'require form';
 'require fs';
 'require ui';
+'require poll';
+'require rpc';
 'require view';
 'require tools.widgets as widgets';
+
+const callServiceList = rpc.declare({
+	object: 'service',
+	method: 'list',
+	params: ['name'],
+	expect: { '': {} },
+	filter: function (data, args, extra) {
+		var i, res = data[args.name] || {};
+		for (i = 0; (i < extra.length) && (Object.keys(res).length > 0); ++i)
+			res = res[extra[i]] || {};
+		return res;
+	}
+});
 
 var CBIRpcSecret = form.Value.extend({
 	renderWidget: function (section_id, option_index, cfgvalue) {
@@ -118,7 +133,6 @@ return view.extend({
 	load: function () {
 		return Promise.all([
 			L.resolveDefault(fs.exec_direct('/bin/df', ['-h']), {}),
-			L.resolveDefault(fs.exec_direct('/usr/bin/pgrep', ['aria2c']), {}),
 			L.resolveDefault(fs.exec_direct('/usr/bin/aria2c', ['-v']), '')
 				.then(res => {
 					const info = {};
@@ -139,7 +153,7 @@ return view.extend({
 				})
 		])
 	},
-	render: function ([diskList, running, aria2_info]) {
+	render: function ([diskList, aria2_info]) {
 		let m, s, o;
 		m = new form.Map('aria2', '%s - %s'.format(_('Aria2'), _('Settings')),
 			'<p>%s %s</p>'.format(
@@ -150,30 +164,27 @@ return view.extend({
 		s = m.section(form.TypedSection);
 		s.anonymous = true;
 		s.render = () => {
-			const node = E('p', {}, [
-				E('span', {
-					style: `font-weight: bold; color: ${running ? 'green' : 'red'}; margin-right: 10px;`
-				}, _('Aria2 ') + (running ? _('RUNNING') : _('NOT RUNNING'))),
-				running ? E('span', { class: 'btn-container' }) : []
-			]);
-
-			if (running) {
-				getWebFrontInstalled().then(installed => {
-					if (!installed) return;
-
-					const btnContainer = node.querySelector('.btn-container');
-					Object.entries(installed).forEach(([key, value]) => {
-						btnContainer.appendChild(
-							E('div', {
-								class: 'btn cbi-button cbi-button-apply',
-								style: 'margin-left: 5px;',
-								click: () => open(`${location.origin}/${key}`)
-							}, value)
-						);
+			const node = E('div', { style: 'margin-bottom:15px' });
+			poll.add(() => callServiceList('aria2', ['instances', 'aria2.main']).then(res => {
+				const button = E('span', { style: 'display:inline-block' });
+				res.running && getWebFrontInstalled().then(installed => {
+					Object.entries(installed).forEach(([key, val]) => {
+						button.appendChild(E('div', {
+							style: 'margin-left:5px',
+							class: 'btn cbi-button-apply',
+							click: () => open(`${location.origin}/${key}`)
+						}, val));
 					});
 				});
-			}
 
+				node.replaceChildren(E('div', {}, [
+					E('span', {
+						style: `font-weight:bold;color:${res.running ? 'green' : 'red'};margin-right:10px`
+					}, _('Aria2 ') + (res.running ? _('RUNNING') : _('NOT RUNNING'))),
+					button
+				]));
+				return node;
+			}));
 			return node;
 		};
 

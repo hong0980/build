@@ -18,11 +18,6 @@ return view.extend({
 				path: (uci.get('aria2', 'main', 'pro_file') || '/var/etc/aria2') + '/aria2.conf.main',
 				desc: _('Content of config file: <code>%s</code>'),
 				id: 'config_area'
-			},
-			{
-				path: uci.get('aria2', 'main', 'log') || '/var/log/aria2.log',
-				desc: _('Content of session file: <code>%s</code>'),
-				id: 'log_area'
 			}
 		];
 
@@ -44,7 +39,8 @@ return view.extend({
 		)).then(results => {
 			results.forEach(res => {
 				container.appendChild(E('div', { class: 'cbi-section' }, [
-					E('div', { class: 'cbi-section-descr' }, res.desc.format(res.path)),
+					E('br'),
+					E('div', res.desc.format(res.path)),
 					E('div', { id: res.id },
 						E('textarea', {
 							id: 'widget.' + res.id, readonly: true, wrap: 'soft', rows: res.rows,

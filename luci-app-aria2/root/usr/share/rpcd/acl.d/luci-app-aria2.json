@@ -9,9 +9,7 @@
 				"/bin/df": [ "exec" ],
 				"/etc/passwd": [ "read" ],
 				"/sbin/logread": [ "exec" ],
-				"/usr/bin/pgrep": [ "exec" ],
-				"/usr/bin/aria2c": [ "exec" ],
-				"/usr/libexec/aria2-call": [ "exec" ]
+				"/usr/bin/aria2c": [ "exec" ]
 			},
 			"uci": [ "aria2" ]
 		},
