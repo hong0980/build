@@ -33,32 +33,33 @@ return view.extend({
 				const rpath = uci.get(r, 'main', 'RootProfilePath') || '';
 				const logPath = `${path || `${rpath}/qBittorrent/data/logs`}/qbittorrent.log`;
 
-				return L.resolveDefault(fs.read(logPath), _('Failed to read log file'));
+				return L.resolveDefault(fs.read(logPath), _('Failed to read log file'))
+					.then((content) => content.split('\n').reverse().join('\n'));
 			});
 
 		return Promise.all([syslog, appLog]);
 	},
 
 	render: function ([syslog, appLog]) {
-		const container = E('h3', {}, _('qBittorrent - Logs'));
-
-		container.appendChild(
-			E('div', { class: 'cbi-section-node' }, [
-				E('label', { class: 'cbi-label' }, _('System Log')),
-				E('textarea', {
-					readonly: 'off', rows: Math.min(syslog.split('\n').length, 18),
-					style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
-				}, syslog)
-			])
-		);
+		const container = E('h2', {}, _('qBittorrent - Logs'));
 
 		container.appendChild(
 			E('div', { class: 'cbi-section-node' }, [
 				E('label', { class: 'cbi-label' }, _('Application Log')),
 				E('textarea', {
-					readonly: 'off', rows: Math.min(appLog.split('\n').length, 15),
+					readonly: 'off', rows: Math.min(appLog.split('\n').length + 1, 15),
 					style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
 				}, appLog)
+			])
+		);
+
+		container.appendChild(
+			E('div', { class: 'cbi-section-node' }, [
+				E('label', { class: 'cbi-label' }, _('System Log')),
+				E('textarea', {
+					readonly: 'off', rows: Math.min(syslog.split('\n').length + 2, 15),
+					style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
+				}, syslog)
 			])
 		);
 

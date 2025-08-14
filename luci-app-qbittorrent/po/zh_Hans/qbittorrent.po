@@ -1,9 +1,8 @@
-
-msgid "A cross-platform open source BitTorrent client based on QT<br>"
-msgstr "一个基于QT的跨平台的开源BitTorrent客户端<br>"
+msgid "A cross-platform open source BitTorrent client based on QT."
+msgstr "基于QT的跨平台开源BitTorrent客户端。"
 
 msgid "Current version: <b style='color:red'>%s</b>"
-msgstr "当前版本： <b style='color:red'>%s</b>"
+msgstr "当前版本: <b style='color:red'>%s</b>"
 
 msgid "Open Web Interface"
 msgstr "打开 Web 管理界面"
@@ -14,50 +13,32 @@ msgstr "运行中"
 msgid "NOT RUNNING"
 msgstr "未运行"
 
-msgid "Global settings"
-msgstr "全局设置"
-
-msgid "Downloads Settings"
-msgstr "下载设置"
-
-msgid "Bittorrent Settings"
-msgstr "BT设置"
-
-msgid "WebUI Settings"
-msgstr "WebUI设置"
-
-msgid "Advance Settings"
-msgstr "其他设置"
-
-msgid "Log Settings"
-msgstr "日志设置"
-
-msgid "Connection Settings"
-msgstr "连接设置"
-
 msgid "Basic Settings"
 msgstr "基本设置"
+
+msgid "Advanced Settings"
+msgstr "高级设置"
 
 msgid "Enabled"
 msgstr "启用"
 
-msgid "Run daemon as user"
-msgstr "以此用户权限运行"
-
 msgid "Root Path of the Profile"
-msgstr "配置保存目录"
+msgstr "配置文件根路径"
 
-msgid "Specify the root path of all profiles which is equivalent to the commandline parameter: <b>--profile [PATH]</b>. The default value is /tmp."
-msgstr "配置目录保存的路径，默认值是/tmp。"
+msgid "Specify the root path of all profiles"
+msgstr "指定所有配置文件的根路径"
 
 msgid "Save Path"
-msgstr "下载目录"
+msgstr "保存路径"
 
 msgid "The files are stored in the download directory automatically created under the selected mounted disk"
-msgstr "文件存放在所选已挂载磁盘下自动创建的download目录中"
+msgstr "文件将存储在所选挂载磁盘下自动创建的download目录中"
 
 msgid "Locale Language"
-msgstr "语言"
+msgstr "界面语言"
+
+msgid "The supported language codes can be used to customize the setting."
+msgstr "可使用支持的语言代码来自定义设置"
 
 msgid "Simplified Chinese"
 msgstr "简体中文"
@@ -65,592 +46,96 @@ msgstr "简体中文"
 msgid "English"
 msgstr "英文"
 
-msgid "The supported language codes can be used to customize the setting."
-msgstr "WebUI语言的设置。"
-
 msgid "Listening Port"
 msgstr "监听端口"
 
 msgid "The listening port for WebUI."
-msgstr "WebUI的连接端口。"
+msgstr "WebUI的监听端口"
 
-msgid "Username"
-msgstr "用户名"
+msgid "Use default credentials for first login: username: admin password: password<br>If disabled, temporary password can be obtained from system logs for WebUI login"
+msgstr "首次登录使用默认凭据：用户名：admin 密码：password<br>禁用时可以从系统日志获取临时密码登录WebUI"
 
-msgid "The login name for WebUI,Default admin."
-msgstr "WebUI的登录名，默认admin。"
+msgid "Subnet Whitelist"
+msgstr "子网白名单"
 
-msgid "Password"
-msgstr "密码"
+msgid "Bypass authentication for clients in Whitelisted IP Subnets."
+msgstr "对白名单IP子网中的客户端绕过认证"
 
-msgid "The login password for WebUI,Default adminadmin."
-msgstr "WebUI的登录密码，默认adminadmin。"
+msgid "Whitelisted Subnets"
+msgstr "白名单子网"
 
-msgid "The Suffix of the Profile Root Path"
-msgstr "配置文件根路径的后缀"
+msgid "Example: 172.17.32.0/24, fdff:ffff:c8::/40"
+msgstr "例如: 172.17.32.0/24, fdff:ffff:c8::/40"
 
-msgid "Specify the suffix of the profile root path and a new profile root path will be formated as <b>[ROOT_PROFILE_PATH]_[SUFFIX]</b>. This value is empty by default."
-msgstr "指定配置文件根路径的后缀，生成以下格式的新的根路径：<b>[ROOT_PROFILE_PATH]_[SUFFIX]</b>。该值默认为空。"
+msgid "Use UPnP for WebUI"
+msgstr "为WebUI使用UPnP"
 
-msgid "Enable additional qBittorrent"
-msgstr "启用其他 qBittorrent"
+msgid "Using the UPnP / NAT-PMP port of the router for connecting to WebUI."
+msgstr "使用路由器的UPnP/NAT-PMP端口连接WebUI"
 
-msgid "Specify the binary location of qBittorrent."
-msgstr "指定 qBittorrent 二进制文件的绝对路径"
+msgid "CSRF Protection"
+msgstr "CSRF保护"
 
-msgid "Overwrite the settings"
-msgstr "优先设置"
-
-msgid "If this option is enabled, the configuration set in WebUI will be replaced by the one in the LuCI."
-msgstr "如启用，LuCI的配置优先于WebUI配置。"
+msgid "Disable Cross-Site Request Forgery (CSRF) protection"
+msgstr "禁用跨站请求伪造(CSRF)保护"
 
 msgid "Enable Log"
 msgstr "启用日志"
 
 msgid "Enable logger to log file."
-msgstr "将运行日志记录到日志文件"
+msgstr "启用日志记录到文件"
 
 msgid "Log Path"
 msgstr "日志路径"
 
-msgid "Saved in the configuration directory by default"
-msgstr "默认保存在配置目录"
+msgid "Modify the path to save log files"
+msgstr "修改保存日志文件的路径"
 
-msgid "Enable Backup"
-msgstr "启用日志备份"
+msgid "Enable additional qBittorrent"
+msgstr "启用附加qBittorrent"
 
-msgid "Backup log file when oversize the given size."
-msgstr "超过指定大小自动备份日志文件"
+msgid "Specify the binary location of qBittorrent."
+msgstr "指定qBittorrent的二进制文件位置"
 
-msgid "Delete Old Backup"
-msgstr "删除旧备份"
+msgid "%s/download (size: %s) (used: %s/%s)"
+msgstr "%s/下载 (大小: %s) (已用: %s/%s)"
 
-msgid "When enabled, the overdue log files will be deleted after given keep time."
-msgstr "如启用，超过给定的保存时间，过期的日志文件将自动删除。"
+msgid "qBittorrent - Files"
+msgstr "qBittorrent - 文件"
 
-msgid "Log Max Size"
-msgstr "日志最大大小"
+msgid "This page is the configuration file content of qBittorrent."
+msgstr "本页面显示qBittorrent的配置文件内容"
 
-msgid "The max size for qBittorrent log (Unit: Bytes)."
-msgstr "日志文件的最大大小（单位：字节）"
+msgid "This is the content of the configuration file under <code>%s</code>:"
+msgstr "以下是<code>%s</code>路径下的配置文件内容："
 
-msgid "Log Keep Time"
-msgstr "日志保存时间"
+msgid "Loading..."
+msgstr "加载中..."
 
-msgid "Select time unit"
-msgstr "选择时间单位"
+msgid "Last modified: %s, Size: %s bytes"
+msgstr "最后修改: %s, 大小: %s 字节"
 
-msgid "days"
-msgstr "天"
-
-msgid "month"
-msgstr "月"
+msgid "File not found %s"
+msgstr "未找到 %s 文件"
 
 msgid "year"
 msgstr "年"
 
-msgid "Please enter a valid time format, e.g. 1d, 1m, 1y."
-msgstr "请输入有效的时间格式，例如1d、1m、1y。"
+msgid "month"
+msgstr "月"
 
-msgid "Use UPnP for Connections"
-msgstr "启用UPnP"
+msgid "day"
+msgstr "日"
 
-msgid "Use UPnP/ NAT-PMP port forwarding from the router."
-msgstr "使用路由器的UPnP/NAT-PMP进行端口转发。"
+msgid "Failed to read log file"
+msgstr "读取日志文件失败"
 
-msgid "Use Random Port"
-msgstr "使用随机端口"
+msgid "qBittorrent - Logs"
+msgstr "qBittorrent - 日志"
 
-msgid ""
-"Assign a different port randomly every time when qBittorrent starts up,"
-" which will invalidate the customized options."
-msgstr ""
-"每次qBittorrent启动时，随机分配一个不同端口，"
-"这将使自定义选项无效。"
+msgid "System Log"
+msgstr "系统日志"
 
-msgid "PortRangeMin"
-msgstr "连接端口"
+msgid "Application Log"
+msgstr "应用日志"
 
-msgid "Connection Port"
-msgstr "生成端口"
-
-msgid "Global Download Speed"
-msgstr "全局下载速度"
-
-msgid "Global Download Speed Limit(KiB/s)."
-msgstr "全局下载速度限制（KiB/s）， "
-
-msgid "0 means has no limit."
-msgstr "0代表不限制。"
-
-msgid "Global Upload Speed"
-msgstr "全局上传速度"
-
-msgid "Global Upload Speed Limit(KiB/s)."
-msgstr "全局上传速度限制（KiB/s），"
-
-msgid "Alternative Download Speed"
-msgstr "备用下载速度"
-
-msgid "Alternative Download Speed Limit(KiB/s)."
-msgstr "备用下载速度限制（KiB/s），"
-
-msgid "Alternative Upload Speed"
-msgstr "备用上传速度"
-
-msgid "Alternative Upload Speed Limit(KiB/s)."
-msgstr "备用上传速度限制（KiB/s）， "
-
-msgid "Protocol Enabled"
-msgstr "下载连接协议"
-
-msgid "TCP and μTP"
-msgstr "TCP 和 μTP"
-
-msgid "Inet Address"
-msgstr "提交的地址"
-
-msgid "The address that respond to the trackers."
-msgstr "向trackers提交的地址（IP/域名）"
-
-msgid "Create Subfolder"
-msgstr "创建子目录"
-
-msgid "Create subfolder for torrents with multiple files."
-msgstr "为多文件torrents创建子目录"
-
-msgid "Start In Pause"
-msgstr "暂停立即下载"
-
-msgid "Do not start the download automatically."
-msgstr "读入torrent文件时不立即自动下载"
-
-msgid "Auto Delete Torrent File"
-msgstr "自动删除torrent文件"
-
-msgid "The .torrent files will be deleted afterwards."
-msgstr "完成后.torrent文件会被自动删除"
-
-msgid "Pre Allocation"
-msgstr "预分配"
-
-msgid "Pre-allocate disk space for all files."
-msgstr "为所有文件预分配硬盘空间"
-
-msgid "Use Incomplete Extension"
-msgstr "使用未完成扩展名"
-
-msgid "The incomplete tasks will be added the extension of !qB."
-msgstr "为不完整的文件添加扩展名<code>!qB</code>"
-
-msgid "Enable Temp Path"
-msgstr "启用临时文件"
-
-msgid "Temp Path"
-msgstr "临时文件路径"
-
-msgid "The absolute and relative path can be set."
-msgstr "可以设置绝对和相对路径"
-
-msgid "Disk Cache Size"
-msgstr "磁盘缓存大小"
-
-msgid "By default, this value 64. Besides, -1 is auto and 0 is disable. (Unit: MiB)"
-msgstr "默认值是64。此外，-1表示自动设置，0表示禁用缓存。（单位：MiB）"
-
-msgid "Disk Cache TTL"
-msgstr "磁盘缓存TTL"
-
-msgid "By default, this value is 60. (Unit: s)"
-msgstr "默认值是60（单位：秒）"
-
-msgid "Saving Management"
-msgstr "保存管理"
-
-msgid "torrent Management"
-msgstr "torrent 管理"
-
-msgid "Default Torrent Management Mode"
-msgstr "默认torrent管理模式"
-
-msgid "Manual"
-msgstr "手动"
-
-msgid "Auto"
-msgstr "自动"
-
-msgid "Torrent Category Changed"
-msgstr "torrent分类修改时"
-
-msgid "Choose the action when torrent category changed."
-msgstr "选择默认保存路径修改时的行为"
-
-msgid "Switch torrent to Manual Mode"
-msgstr "切换torrent到手动模式"
-
-msgid "Relocate torrent"
-msgstr "重新定位torrent"
-
-msgid "Default Save Path Changed"
-msgstr "默认保存路径修改时"
-
-msgid "Choose the action when default save path changed."
-msgstr "选择默认保存路径修改时的行为"
-
-msgid "Switch affected torrent to Manual Mode"
-msgstr "将受影响的torrent切换到手动模式"
-
-msgid "Relocate affected torrent"
-msgstr "重新定位受影响的torrent"
-
-msgid "Category Save Path Changed"
-msgstr "分类的保存路径修改时"
-
-msgid "Choose the action when category save path changed."
-msgstr "选择分类的保存路径修改时的行为"
-
-msgid "Torrent Export Dir"
-msgstr "未完成torrent文件导出路径"
-
-msgid "The .torrent files will be copied to the target directory."
-msgstr "未完成的.torrent文件会被自动复制到目标目录"
-
-msgid "Finished Torrent Export Dir"
-msgstr "已完成torrent文件导出路径"
-
-msgid "The .torrent files for finished downloads will be copied to the target directory."
-msgstr "已完成的.torrent文件会被自动复制到目标目录"
-
-msgid "Enable DHT"
-msgstr "启用DHT"
-
-msgid "Enable DHT (decentralized network) to find more peers."
-msgstr "启用DHT（分散网络）以找到更多用户"
-
-msgid "Enable PeX"
-msgstr "启用PeX"
-
-msgid "Enable Peer Exchange (PeX) to find more peers."
-msgstr "启用用户交换（PeX）以找到更多用户"
-
-msgid "Enable LSD"
-msgstr "启用LSD"
-
-msgid "Enable Local Peer Discovery to find more peers."
-msgstr "启用本地资源搜索以找到更多用户"
-
-msgid "μTP Rate Limit"
-msgstr "μTP速度限制"
-
-msgid "Apply rate limit to μTP protocol."
-msgstr "对μTP协议进行速度限制"
-
-msgid "Encryption Mode"
-msgstr "加密模式"
-
-msgid "Prefer Encryption"
-msgstr "偏好加密"
-
-msgid "Require Encryption"
-msgstr "强制加密"
-
-msgid "Disable Encryption"
-msgstr "禁用加密"
-
-msgid "Max Connections"
-msgstr "全局最大连接数"
-
-msgid "Max Connections Per Torrent"
-msgstr "每个torrent的最大连接数"
-
-msgid "Max Uploads"
-msgstr "全局最大上传数"
-
-msgid "The max number of connected peers."
-msgstr "全局最大上传线程数"
-
-msgid "Max Uploads Per Torrent"
-msgstr "单torrent最大上传线程数"
-
-msgid "The max number of connected peers per torrent."
-msgstr "每个torrent最大上传线程数"
-
-msgid "Max Ratio"
-msgstr "最大做种分享率"
-
-msgid "The max ratio for seeding. -1 is not to limit the seeding."
-msgstr "做种的最大比率，-1代表不限制。"
-
-msgid "Max Ratio Action"
-msgstr "做种限制"
-
-msgid "The action when reach the max seeding ratio."
-msgstr "达到最大分享率或时长的行为"
-
-msgid "Pause torrent"
-msgstr "暂停 torrent"
-
-msgid "Remove torrent"
-msgstr "删除 torrent"
-
-msgid "Remove torrent and its files"
-msgstr "删除 torrent 及所属文件"
-
-msgid "Enable super seeding for torrent"
-msgstr "为 torrent 启用超级做种"
-
-msgid "Max Seeding Minutes"
-msgstr "最大做种时长"
-
-msgid "Units: minutes"
-msgstr "单位：分钟，-1代表不限制。"
-
-msgid "Queueing Setting"
-msgstr "排队设置"
-
-msgid "Enable Torrent Queueing"
-msgstr "启用种子排队"
-
-msgid "Maximum Active Downloads"
-msgstr "最大活动下载数"
-
-msgid "Max Active Uploads"
-msgstr "最大活动上传数"
-
-msgid "Max Active Torrents"
-msgstr "最大活动的torrent个数"
-
-msgid "Ignore Slow Torrents"
-msgstr "慢速的torrent"
-
-msgid "Do not count slow torrents in these limits."
-msgstr "慢速torrent不计入限制内"
-
-msgid "Download rate threshold"
-msgstr "下载速率阈值"
-
-msgid "Units: KiB/s"
-msgstr "单位：KiB/s"
-
-msgid "Units: s"
-msgstr "单位：秒"
-
-msgid "Upload rate threshold"
-msgstr "上传速率阈值"
-
-msgid "Torrent inactivity timer"
-msgstr "torrent不活动时长"
-
-msgid "Use UPnP for WebUI"
-msgstr "启用UPnP"
-
-msgid "Using the UPnP / NAT-PMP port of the router for connecting to WebUI."
-msgstr "使用路由器的UPnP/NAT-PMP端口转发连接WebUI"
-
-msgid "Listening Address"
-msgstr "监听地址"
-
-msgid "The listening IP address for WebUI."
-msgstr "监听WebUI的IP地址"
-
-msgid "Enable HTTPS"
-msgstr "启用HTTPS"
-
-msgid ""
-"Encrypt the connections with qbittorrent by SSL/TLS. The web clients must use https"
-" scheme to access the WebUI."
-msgstr ""
-"使用SSL/TLS加密与qbittorrent的连接，"
-" web客户端必须使用https接入WebUI。"
-
-msgid "Path to the Certificate"
-msgstr "证书路径"
-
-msgid "Path to the Key"
-msgstr "密钥路径"
-
-msgid "Clickjacking Protection"
-msgstr "点击劫持防护"
-
-msgid "Enable clickjacking protection."
-msgstr "启用“点击劫持”防护"
-
-msgid "CSRF Protection"
-msgstr "CSRF防护"
-
-msgid "Enable Cross-Site Request Forgery (CSRF) protection."
-msgstr "启用跨站点请求伪造(CSRF)防护"
-
-msgid "Cookie Secure flag"
-msgstr "Cookie安全标志"
-
-msgid "Enable cookie secure flag (require HTTPS)."
-msgstr "启用cookie安全标志（需要HTTPS）"
-
-msgid "Host Header Validation"
-msgstr "主机标头验证"
-
-msgid "Validate the host header."
-msgstr "验证主机连接的header"
-
-msgid "Server Domains"
-msgstr "服务器域名"
-
-msgid "Bypass Local Host Authentication"
-msgstr "跳过验证"
-
-msgid "Bypass authentication for clients on localhost."
-msgstr "对本地主机上的客户端跳过身份验证"
-
-msgid "Bypass authentication for clients in Whitelisted IP Subnets."
-msgstr "对 IP 子网白名单中的客户端跳过身份验证"
-
-msgid "Subnet Whitelist"
-msgstr "子网白名单"
-
-msgid "Add Custom HTTP Headers"
-msgstr "添加自定义HTTP头字段"
-
-msgid "Header: value pairs, one per line"
-msgstr "在此输入HTTP头字段，每行一个"
-
-msgid "Anonymous Mode"
-msgstr "匿名模式"
-
-msgid "When enabled, qBittorrent will take certain measures to try to mask its identity."
-msgstr "当启用时, qBittorrent会采用某些手段来隐藏客户端特征，"
-
-msgid "Refer to the"
-msgstr "参考："
-
-msgid "Limit Overhead Usage"
-msgstr "总开销限制"
-
-msgid "The overhead usage is been limitted."
-msgstr "对传送总开销进行速度限制"
-
-msgid "Ignore LAN Limit"
-msgstr "取消LAN限制"
-
-msgid "Ignore the speed limit to LAN."
-msgstr "忽略限制本地用户带宽"
-
-msgid "Use os Cache"
-msgstr "使用系统缓存"
-
-msgid "Max Outgoing Port"
-msgstr "最大端口"
-
-msgid "The max outgoing port."
-msgstr "最大的对外连接端口"
-
-msgid "Min Outgoing Port"
-msgstr "最小端口"
-
-msgid "The min outgoing port."
-msgstr "最小的对外连接端口"
-
-msgid "Choking Algorithm"
-msgstr "上传连接策略"
-
-msgid "The strategy of choking algorithm."
-msgstr "上传连接算法的策略"
-
-msgid "Round Robin"
-msgstr "轮流上传"
-
-msgid "Fastest Upload"
-msgstr "快速上传"
-
-msgid "Anti-Leech"
-msgstr "反吸血"
-
-msgid "Announce To All Trackers"
-msgstr "响应所有Trackers"
-
-msgid "Announce To all trackers of per tier."
-msgstr "响应单层的所有Trackers。"
-
-msgid "Announce To All Tiers"
-msgstr "响应所有层"
-
-msgid "The first tier (0 tier) is announced by default."
-msgstr "默认响应第一个层（0层）"
-
-msgid "This page is the configuration file content of qBittorrent."
-msgstr "本页是qBittorrent的配置文件内容。"
-
-msgid "This is the content of the configuration file under <code>%s</code>:"
-msgstr "这是<code>%s</code>下的配置文件内容："
-
-msgid "Last %s lines of file:"
-msgstr "日志文件最新的 %s 行："
-
-msgid "Last %s lines of syslog:"
-msgstr "系统日志最新的 %s 行："
-
-msgid "Failed to load log data."
-msgstr "无法加载日志数据。"
-
-msgid "Number of lines to display:"
-msgstr "显示行数："
-
-msgid "No log data."
-msgstr "无日志数据"
-
-msgid "Loading"
-msgstr "加载中"
-
-msgid "Collecting data..."
-msgstr "正在收集数据…"
-
-msgid "Log Data"
-msgstr "日志数据"
-
-msgid "Refresh every 5 seconds."
-msgstr "页面以每 5 秒刷新"
-
-msgid "File does not exist."
-msgstr "文件不存在。"
-
-msgid "Empty file."
-msgstr "空的文件。"
-
-msgid "Generate Randomly"
-msgstr "随机生成"
-
-msgid "Example: 172.17.32.0/24, fdff:ffff:c8::/40"
-msgstr "示例：172.17.32.0/24，fdff:ffff:c8::/40"
-
-msgid "configuration file"
-msgstr "配置文件"
-
-msgid "This page is the operation log content of qBittorrent."
-msgstr "本页是qBittorrent的运行日志内容。"
-
-msgid "This is the content of the operation log under <code>%s</code>:"
-msgstr "这是<code>%s</code>下的运行日志内容："
-
-msgid "The current qBittorrent is at"
-msgstr "当前的qBittorrent在"
-
-msgid "qBittorrent Downloader"
-msgstr "qBittorrent 下载器"
-
-msgid "%s/download (size: %s) (used: %s/%s)"
-msgstr "%s/download (大小: %s) (已用: %s/%s)"
-
-msgid "Leave blank to use the default user."
-msgstr "留空以使用默认用户。"
-
-msgid ""
-msgstr "使用备用 Web UI"
-
-msgid "file path"
-msgstr "文件路径"
-
-msgid "Click to randomly generate port"
-msgstr "点击随机生成端口"
-
-msgid ""
-msgstr ""

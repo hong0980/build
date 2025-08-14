@@ -34,8 +34,8 @@ return view.extend({
 					if (stat && stat.size > 0) return fs.read(file).then(content => ({ content, stat }));
 				})
 				.then(({ content, stat }) => {
-					textarea.textContent = content;
-					textarea.rows = Math.min(content.split('\n').length, 15);
+					textarea.textContent = content.trim();
+					textarea.rows = Math.min(content.split('\n').length, 18);
 					fileContainer.appendChild(
 						E('div', { style: 'color:#888;font-size:90%;margin-top:0.5em;' },
 							_('Last modified: %s, Size: %s bytes').format(
