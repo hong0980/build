@@ -9,7 +9,8 @@
 				"/bin/df": [ "exec" ],
 				"/etc/passwd": [ "read" ],
 				"/sbin/logread": [ "exec" ],
-				"/usr/bin/aria2c": [ "exec" ]
+				"/usr/bin/aria2c": [ "exec" ],
+				"/etc/init.d/aria2": [ "exec" ]
 			},
 			"uci": [ "aria2" ]
 		},

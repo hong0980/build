@@ -3,23 +3,9 @@
 'require form';
 'require fs';
 'require ui';
-'require poll';
 'require rpc';
 'require view';
 'require tools.widgets as widgets';
-
-const callServiceList = rpc.declare({
-	object: 'service',
-	method: 'list',
-	params: ['name'],
-	expect: { '': {} },
-	filter: function (data, args, extra) {
-		var i, res = data[args.name] || {};
-		for (i = 0; (i < extra.length) && (Object.keys(res).length > 0); ++i)
-			res = res[extra[i]] || {};
-		return res;
-	}
-});
 
 var CBIRpcSecret = form.Value.extend({
 	renderWidget: function (section_id, option_index, cfgvalue) {
@@ -57,82 +43,54 @@ var CBIRpcUrl = form.DummyValue.extend({
 });
 
 function getToken(section_id) {
-	var len = 32, randomStr = '';
-	var inputLength = prompt(_('Please input token length:'), len);
-	if (inputLength === null || inputLength === '') {
-		return;
-	} else if (/^\d+$/.test(inputLength)) {
-		len = parseInt(inputLength);
+	const inputLength = prompt(_('Please input token length:'), 32);
+	if (inputLength === null || inputLength.trim() === '') return;
+
+	const len = Math.max(1, parseInt(inputLength) || 32);
+	let token = '';
+
+	while (token.length < len) {
+		token += Math.random().toString(36).substring(2, 2 + len - token.length);
 	}
 
-	while (len - randomStr.length > 0) {
-		randomStr += Math.random().toString(36).substring(2, 2 + len - randomStr.length);
-	}
-	document.getElementById('widget.' + this.cbid(section_id)).value = randomStr;
-};
-
-function getWebFrontInstalled() {
-	var actions = [];
-	var supported = { 'ariang': 'AriaNg', 'webui-aria2': 'WebUI-Aria2', 'yaaw': 'YAAW' };
-
-	for (var s in supported) {
-		actions.push(fs.stat(`/www/${s}/index.html`)
-			.then(L.bind(function (s) { return s; }, this, s))
-			.catch(() => null));
-	}
-
-	return Promise.all(actions)
-		.then(function (res) {
-			var installed = {};
-			for (var i = 0; i < res.length; ++i)
-				if (res[i]) installed[res[i]] = supported[res[i]];
-			return installed;
-		});
+	document.getElementById(`widget.${this.cbid(section_id)}`).value = token.slice(0, len);
 };
 
 function showRPCURL(section_id, useWS, inputEl) {
-	var getOptVal = L.bind(function (opt, default_val) {
-		default_val = default_val || null;
-		return this.section.formvalue(section_id, opt) || default_val;
-	}, this);
+	const getOptVal = (opt, default_val = null) =>
+		this.section.formvalue(section_id, opt) || default_val;
 
-	var port = getOptVal('rpc_listen_port', 6800);
-	var authMethod = getOptVal('rpc_auth_method', 'none');
-	var secure = JSON.parse(getOptVal('rpc_secure', false));
+	const protocol = `${useWS
+		? (getOptVal('rpc_secure', 'false') === 'true' ? 'wss' : 'ws')
+		: (getOptVal('rpc_secure', 'false') === 'true' ? 'https' : 'http')}://`;
 
-	var protocol = useWS
-		? (secure ? 'wss' : 'ws')
-		: (secure ? 'https' : 'http');
-	var url = protocol + '://';
+	const auth = {
+		token: () => getOptVal('rpc_secret') && `token:${getOptVal('rpc_secret')}@`,
+		user_pass: () => (getOptVal('rpc_user') && getOptVal('rpc_passwd'))
+			? `${getOptVal('rpc_user')}:${getOptVal('rpc_passwd')}@`
+			: '',
+	}[getOptVal('rpc_auth_method', 'none')]?.() || '';
 
-	if (authMethod == 'token') {
-		var authToken = getOptVal('rpc_secret');
-		if (authToken)
-			url += 'token:' + authToken + '@';
-	} else if (authMethod == 'user_pass') {
-		var authUser = getOptVal('rpc_user');
-		var authPasswd = getOptVal('rpc_passwd');
-		if (authUser && authPasswd)
-			url += authUser + ':' + authPasswd + '@';
-	}
-	url += window.location.hostname + ':' + port + '/jsonrpc';
-	inputEl.setValue(url);
+	inputEl.setValue(`${protocol}${auth}${window.location.hostname}:${getOptVal('rpc_listen_port', 6800)}/jsonrpc`);
+};
+
+function parseMountedDisks(diskList, option) {
+	var devMap = {};
+	diskList.trim().split('\n').slice(1).forEach(line => {
+		var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
+		if (!dev?.includes('dev') || !mount?.startsWith('/mnt') || devMap[dev]) return;
+		devMap[dev] = true;
+		option.value(mount + '/download',
+			_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
+	});
 };
 
 return view.extend({
-	parseMountedDisks: (diskList, option) => {
-		var devMap = {};
-		diskList.trim().split('\n').slice(1).forEach(line => {
-			var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
-			if (!dev?.includes('dev') || !mount?.startsWith('/mnt') || devMap[dev]) return;
-			devMap[dev] = true;
-			option.value(mount + '/download',
-				_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
-		});
-	},
 	load: function () {
 		return Promise.all([
 			L.resolveDefault(fs.exec_direct('/bin/df', ['-h']), {}),
+			L.resolveDefault(fs.exec('/etc/init.d/aria2', ['running']), null)
+				.then(res => res.code === 0),
 			L.resolveDefault(fs.exec_direct('/usr/bin/aria2c', ['-v']), '')
 				.then(res => {
 					const info = {};
@@ -147,16 +105,17 @@ return view.extend({
 							info.sftp = l.includes('sftp');
 							info.adns = l.includes('async dns');
 							info.cookie = l.includes('firefox3 cookie');
-						}
+						};
 					});
 					return info;
-				})
-		])
+				}),
+		]);
 	},
-	render: function ([diskList, aria2_info]) {
+
+	render: function ([diskList, running, aria2_info]) {
 		let m, s, o;
 		m = new form.Map('aria2', '%s - %s'.format(_('Aria2'), _('Settings')),
-			'<p>%s %s</p>'.format(
+			'%s %s'.format(
 				_('Aria2 is a lightweight multi-protocol &amp; multi-source, cross platform download utility.'),
 				_("Current version: <b style='color:red'>%s</b>").format(aria2_info.version))
 		);
@@ -164,27 +123,31 @@ return view.extend({
 		s = m.section(form.TypedSection);
 		s.anonymous = true;
 		s.render = () => {
-			const node = E('div', { style: 'margin-bottom:15px' });
-			poll.add(() => callServiceList('aria2', ['instances', 'aria2.main']).then(res => {
-				const button = E('span', { style: 'display:inline-block' });
-				res.running && getWebFrontInstalled().then(installed => {
-					Object.entries(installed).forEach(([key, val]) => {
-						button.appendChild(E('div', {
-							style: 'margin-left:5px',
-							class: 'btn cbi-button-apply',
-							click: () => open(`${location.origin}/${key}`)
-						}, val));
-					});
+			var node = E('div', { style: 'margin-bottom:10px' }),
+				button = E('span', { style: 'display:inline-block' });
+			running && Promise.all(
+				Object.entries({ 'ariang': 'AriaNg', 'webui-aria2': 'WebUI-Aria2', 'yaaw': 'YAAW' })
+					.map(([key, val]) =>
+						fs.stat(`/www/${key}/index.html`)
+							.then(() => ({ key, val }))
+							.catch(() => null)
+					),
+			).then(installed => {
+				installed.filter(Boolean).forEach(({ key, val }) => {
+					button.appendChild(E('div', {
+						style: 'margin-left:5px',
+						class: 'btn cbi-button-apply',
+						click: () => open(`${location.origin}/${key}`)
+					}, val));
 				});
+			});
 
-				node.replaceChildren(E('div', {}, [
-					E('span', {
-						style: `font-weight:bold;color:${res.running ? 'green' : 'red'};margin-right:10px`
-					}, _('Aria2 ') + (res.running ? _('RUNNING') : _('NOT RUNNING'))),
-					button
-				]));
-				return node;
-			}));
+			node.replaceChildren(E('div', {}, [
+				E('span', { style: `font-weight:bold;color:${running ? 'green' : 'red'};margin-right:10px` },
+					_('Aria2 ') + (running ? _('RUNNING') : _('NOT RUNNING'))),
+				button
+			]));
+
 			return node;
 		};
 
@@ -203,7 +166,7 @@ return view.extend({
 		o = s.taboption('basic', form.Value, 'dir', _('Download directory'),
 			_('The directory to store the downloaded file. For example <code>/mnt/sda1</code>.'));
 		o.rmempty = false;
-		if (typeof diskList === 'string') this.parseMountedDisks(diskList, o);
+		if (typeof diskList === 'string') parseMountedDisks(diskList, o);
 
 		o = s.taboption('basic', form.Flag, 'enable_pro', _('Aria2 pro file'),
 			_('When enabled,  the original system configuration directory will be merged.'));
@@ -299,7 +262,7 @@ return view.extend({
 			o.depends('rpc_secure', 'true');
 			o.optional = false;
 			o.rmempty = false;
-		}
+		};
 
 		o = s.taboption('rpc', CBIRpcUrl, '_rpc_url', _('Json-RPC URL'));
 		o.clickFn = showRPCURL;
@@ -344,7 +307,7 @@ return view.extend({
 			o = s.taboption('http', form.Value, 'private_key', _('Private key'),
 				_('Use the private key in FILE. The private key must be decrypted and in PEM'
 					+ ' format. The behavior when encrypted one is given is undefined.'));
-		}
+		};
 
 		if (aria2_info.gzip) {
 			o = s.taboption('http', form.Flag, 'http_accept_gzip', _('HTTP accept gzip'),
@@ -354,7 +317,7 @@ return view.extend({
 			o.enabled = 'true';
 			o.disabled = 'false';
 			o.default = 'false';
-		}
+		};
 
 		o = s.taboption('http', form.Flag, 'http_no_cache', _('HTTP no cache'),
 			_('Send <code>Cache-Control: no-cache</code> and <code>Pragma: no-cache</code>'
@@ -410,7 +373,7 @@ return view.extend({
 
 		o = s.taboption('http', form.Value, 'user_agent', _('User agent'),
 			_('Set user agent for HTTP(S) downloads.'));
-		o.placeholder = 'aria2/%s'.format(aria2_info.version ? aria2_info.version : '$VERSION');
+		o.placeholder = 'aria2/%s'.format(aria2_info.version);
 
 		if (aria2_info.bt) {
 			s.tab('bt', _('BitTorrent Options'));
@@ -554,7 +517,7 @@ return view.extend({
 			o = s.taboption('bt', form.DynamicList, 'bt_tracker', _('Additional BT tracker'),
 				_('List of additional BitTorrent tracker\'s announce URI.'));
 			o.placeholder = 'http://tracker.example.com/announce';
-		}
+		};
 
 		s.tab('advance', _('Advanced Options'));
 
@@ -629,5 +592,5 @@ return view.extend({
 		o.placeholder = 'option=value';
 
 		return m.render();
-	}
+	},
 });

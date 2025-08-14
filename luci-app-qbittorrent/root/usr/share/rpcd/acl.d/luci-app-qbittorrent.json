@@ -2,6 +2,15 @@
 	"luci-app-qbittorrent": {
 		"description": "Grant UCI access for luci-app-qbittorrent",
 		"read": {
+			"ubus": {
+				"service": [ "list" ]
+			},
+			"file": {
+				"/bin/df": [ "exec" ],
+				"/sbin/logread": [ "exec" ],
+				"/usr/bin/qbittorrent-nox": [ "exec" ],
+				"/etc/init.d/qbittorrent": [ "exec" ]
+			},
 			"uci": [ "qbittorrent" ]
 		},
 		"write": {
