@@ -4,48 +4,38 @@
 'require view';
 
 return view.extend({
-	load: function () {
-		return Promise.all([uci.load('aria2')])
-	},
+	load: () => Promise.all([uci.load('aria2')]),
+
 	render: function (data) {
 		const files = [
-			{
-				path: '/etc/config/aria2',
-				desc: _('Content of config file: <code>%s</code>'),
-				id: 'con_area'
-			},
-			{
-				path: (uci.get('aria2', 'main', 'pro_file') || '/var/etc/aria2') + '/aria2.conf.main',
-				desc: _('Content of config file: <code>%s</code>'),
-				id: 'config_area'
-			}
+			'/etc/config/aria2',
+			(uci.get('aria2', 'main', 'pro_file') || '/var/etc/aria2') + '/aria2.conf.main'
 		];
 
-		const container = E('div', { class: 'cbi-map' }, [
-			E('h2', { name: 'content' }, '%s - %s'.format(_('Aria2'), _('Configuration'))),
-			E('div', { class: 'cbi-map-descr' }, _('Here shows the files used by aria2.'))
+		const container = E('div', {}, [
+			E('h3', { name: 'content' }, '%s - %s'.format(_('Aria2'), _('Configuration'))),
+			E('div', {}, _('Here shows the files used by aria2.'))
 		]);
 
-		Promise.all(files.map(file =>
-			fs.read(file.path)
-				.then(content => ({
-					...file, content: content,
-					rows: Math.min(content.split('\n').length + 1, 16)
-				}))
-				.catch(err => ({
-					...file, content: _('Failed to read: %s').format(err.message),
-					rows: 3
-				}))
+		Promise.all(files.map(path =>
+			fs.stat(path)
+				.then(stat => stat.size > 0 && fs.trimmed(path)
+					.then(content => ({ path, content, stat }))
+				)
+				.catch(() => ({ content: '' }))
 		)).then(results => {
 			results.forEach(res => {
-				container.appendChild(E('div', { class: 'cbi-section' }, [
-					E('br'),
-					E('div', res.desc.format(res.path)),
-					E('div', { id: res.id },
-						E('textarea', {
-							id: 'widget.' + res.id, readonly: true, wrap: 'soft', rows: res.rows,
-							style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
-						}, res.content)
+				res.content && container.appendChild(E('div', { class: 'cbi-section' }, [
+					E('div', { style: 'margin-top:1em' }, _('This is the content of the configuration file under <code>%s</code>:').format(res.path)),
+					E('textarea', {
+						readonly: '', wrap: 'soft',
+						rows: Math.min(res.content.split('\n').length + 1, 18),
+						style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
+					}, res.content),
+					E('div', { style: 'color:#888;font-size:90%;margin-top:0.5em;' },
+						_('Last modified: %s, Size: %s bytes').format(
+							new Date(res.stat.mtime * 1000).toLocaleString(), res.stat.size
+						)
 					)
 				]));
 			});
@@ -53,6 +43,7 @@ return view.extend({
 
 		return container;
 	},
+
 	handleSave: null,
 	handleReset: null,
 	handleSaveApply: null

@@ -18,8 +18,8 @@ function parseMountedDisks(diskList, option) {
 return view.extend({
 	load: () => Promise.all([
 		fs.exec_direct('/bin/df', ['-h']),
-		L.resolveDefault(fs.exec_direct('/usr/bin/pgrep', ['qbittorrent-nox']), null)
-			.then(r => r.trim()),
+		L.resolveDefault(fs.exec('/etc/init.d/qbittorrent', ['running']), null)
+			.then(r => r.code === 0),
 		uci.load('qbittorrent')
 			.then(r => uci.get(r, 'main', 'port') || '8080'),
 		fs.exec_direct('/usr/bin/env', ['HOME=/var/run/qbittorrent', '/usr/bin/qbittorrent-nox', '-v'])
@@ -31,7 +31,7 @@ return view.extend({
 
 		m = new form.Map('qbittorrent', _('qBittorrent'),
 			'%s   %s'.format(
-				_('A cross-platform open source BitTorrent client based on QT，'),
+				_('A cross-platform open source BitTorrent client based on QT.'),
 				_("Current version: <b style='color:red'>%s</b>").format(version)
 			));
 
@@ -74,7 +74,7 @@ return view.extend({
 		o = s.taboption("basic", form.Value, "port", _("Listening Port"),
 			_("The listening port for WebUI."));
 		o.datatype = "port";
-		o.default = 1;
+		o.default = '8080';
 
 		o = s.taboption("basic", form.Flag, "PasswordEnabled", _("Enable"),
 			_("Use default credentials for first login: username: admin password: password<br>If disabled, temporary password can be obtained from system logs for WebUI login"));

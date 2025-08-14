@@ -26,30 +26,29 @@ return view.extend({
 
 			uci.load('aria2')
 				.then(() => uci.get('aria2', 'main', 'log') || '/var/log/aria2.log')
-				.then(logPath => L.resolveDefault(fs.read(logPath), _('Failed to read log file')))
+				.then(logPath => L.resolveDefault(fs.trimmed(logPath)))
 		]);
 	},
 
 	render: function ([syslog, aria2log]) {
-		function textareaOpts(content) {
-			return E('div', {},
-				E('textarea', {
-					readonly: 'readonly', wrap: 'off',
-					rows: Math.min(Math.max(content.trim().split('\n').length, 1) + 1, 16),
-					style: 'width:100%; height:250px; font-size:13px; color:#c5c5b2; background-color:#272626; font-family:Consolas, monospace;'
-				}, content.trim().split(/\n/).reverse().slice(0, 50).join('\n')),
-			)
-		};
-
-		return E('div', { class: 'cbi-section' }, [
-			E('h2', { name: 'content' }, '%s - %s'.format(_('Aria2'), _('Log Data'))),
-			E('br'),
-			E('div', { class: 'description' }, _('Last 50 lines of log file:')),
-			textareaOpts(aria2log),
-			E('br'),
-			E('div', { class: 'description' }, _('Last 50 lines of syslog:')),
-			textareaOpts(syslog)
+		const container = E('div', { class: 'cbi-section' }, [
+			E('h3', { name: 'content' }, '%s - %s'.format(_('Aria2'), _('Log Data')))
 		]);
+
+		const addLogSection = (log, title) => {
+			if (!log) return;
+			container.appendChild(E('div', { style: 'margin-bottom: 1em;' }, [
+				E('div', {}, title),
+				E('textarea', {
+					wrap: 'soft', readonly: '', rows: Math.min(log.split('\n').length + 2, 16),
+					style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
+				}, log.split('\n').reverse().join('\n'))
+			]));
+		};
+		addLogSection(aria2log, _('Last 50 lines of log file:'));
+		addLogSection(syslog, _('Last 50 lines of syslog:'));
+
+		return container;
 	},
 
 	handleSave: null,

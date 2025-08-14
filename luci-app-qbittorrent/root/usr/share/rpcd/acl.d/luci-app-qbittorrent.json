@@ -7,8 +7,8 @@
 			},
 			"file": {
 				"/bin/df": [ "exec" ],
+				"/usr/bin/env": [ "exec" ],
 				"/sbin/logread": [ "exec" ],
-				"/usr/bin/qbittorrent-nox": [ "exec" ],
 				"/etc/init.d/qbittorrent": [ "exec" ]
 			},
 			"uci": [ "qbittorrent" ]
