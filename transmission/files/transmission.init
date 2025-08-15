@@ -49,6 +49,8 @@ transmission() {
 
 	config_get nice "$cfg" nice 0
 	config_get web_home "$cfg" 'web_home'
+	config_get log_file "$cfg" log_file "/var/log/transmission.log"
+	config_get log_level "$cfg" log_level "info"
 	config_get user "$cfg" 'user' 'transmission'
 	config_get group "$cfg" 'group' 'transmission'
 	config_get mem_percentage "$cfg" 'mem_percentage' '50'
@@ -58,6 +60,7 @@ transmission() {
 	config_get incomplete_dir "$cfg" 'incomplete_dir' '/var/etc/transmission'
 
 	config_get_bool ca_bundle "$cfg" ca_bundle 1
+	config_get_bool log_foreground "$cfg" log_foreground 0
 	config_get_bool config_overwrite "$cfg" config_overwrite 1
 	config_get_bool watch_dir_enabled "$cfg" 'watch_dir_enabled' 0
 	config_get_bool incomplete_dir_enabled "$cfg" 'incomplete_dir_enabled' 0
@@ -81,6 +84,15 @@ transmission() {
 		mkdir -p "$download_dir"
 		chmod 0755 "$download_dir"
 		[ "$user" != 'root' ] && chown -R "$user:$group" "$download_dir"
+	}
+
+	[ -n "$log_file" ] && {
+	    log_dir=$(dirname "$log_file")
+	    mkdir -p "$log_dir"
+	    chmod 0755 "$log_dir"
+	    touch "$log_file"
+	    chmod 0644 "$log_file"
+	    [ "$user" != 'root' ] && chown -R "$user:$group" "$log_file"
 	}
 
 	[ "$incomplete_dir_enabled" = "0" ] || [ -d "$incomplete_dir" ] || {
@@ -124,6 +136,9 @@ transmission() {
 	procd_open_instance
 	procd_set_param command "/usr/bin/transmission-daemon"
 	procd_append_param command -f -g "$config_dir"
+	[ -n "$log_file" ] && procd_append_param command --logfile "$log_file"
+	[ -n "$log_level" ] && procd_append_param command --log-level "$log_level"
+	[ "$log_foreground" = "1" ] && procd_append_param command --foreground
 	procd_set_param user "$user"
 	procd_set_param group "$group"
 	procd_set_param nice "$nice"
@@ -152,6 +167,7 @@ transmission() {
 	procd_add_jail_mount_rw "$config_dir/blocklists"
 	procd_add_jail_mount_rw "$config_dir/stats.json"
 	procd_add_jail_mount_rw "$download_dir"
+	[ -f "$log_file" ] && procd_add_jail_mount_rw "$log_file"
 	[ "$incomplete_dir_enabled" = "1" ] && procd_add_jail_mount_rw "$incomplete_dir"
 	[ "$watch_dir_enabled" = "1" ] && procd_add_jail_mount_rw "$watch_dir"
 	web_home="${web_home:-/usr/share/transmission/public_html}"

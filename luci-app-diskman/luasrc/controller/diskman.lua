@@ -19,7 +19,7 @@ function index()
   end
 
   if not executables_all_existed then return end
-  entry({"admin", "nas"}, firstchild(), "NAS", 50).dependent = false
+  entry({"admin", "nas"}, firstchild(), "NAS", 30).dependent = false
   -- entry(path, target, title, order)
   -- set leaf attr to true to pass argument throughe url (e.g. admin/nas/disk/partition/sda)
   entry({"admin", "nas", "diskman"}, alias("admin", "nas", "diskman", "disks"), _("Disk Man"), 55)

@@ -73,6 +73,24 @@ return view.extend({
 			o.value(mount + '/download',
 				_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
 		});
+		o = s.taboption("settings", form.Value, 'log_file', _('Log file path'));
+		o.placeholder = '/var/log/transmission.log';
+		o.description = _('Leave empty to disable file logging');
+
+		o = s.taboption("settings", form.ListValue, 'log_level', _('Log level'));
+		o.value('critical', _('Critical'));
+		o.value('error', _('Error'));
+		o.value('warn', _('Warning'));
+		o.value('info', _('Info'));
+		o.value('debug', _('Debug'));
+		o.value('trace', _('Trace'));
+		o.default = 'info';
+		o.rmempty = false;
+
+		o = s.taboption("settings", form.Flag, 'log_foreground', _('Run in foreground'));
+		o.description = _('Output logs to console instead of running as daemon');
+		o.default = '0';
+		o.rmempty = false;
 
 		o = s.taboption("settings", form.Value, 'web_home', _('Custom Web UI directory'));
 

@@ -4,15 +4,17 @@
 'require view';
 
 return view.extend({
-	load: () => uci.load('deluge').then(() => {
-		const dir = uci.get('deluge', 'main', 'profile_dir') || '/etc/deluge';
-		return ['/etc/config/deluge', `${dir}/core.conf`, `${dir}/web.conf`, `${dir}/hostlist.conf`];
-	}),
+	load: () => Promise.all([uci.load('transmission')]),
 
-	render: (files) => {
-		const view = E('div', { class: 'cbi-map' }, [
-			E('h3', _('Deluge - Files')),
-			E('div', { class: 'cbi-section' }, _('This page is the configuration file content of Deluge.'))
+	render: function (data) {
+		const files = [
+			'/etc/config/transmission',
+			(uci.get('transmission', 'transmission', 'config_dir') || '/etc/transmission') + '/settings.json'
+		];
+
+		const container = E('div', {}, [
+			E('h3', { name: 'content' }, '%s - %s'.format(_('Transmission'), _('Configuration'))),
+			E('div', {}, _('Here shows the files used by transmission.'))
 		]);
 
 		Promise.all(files.map(path =>
@@ -23,7 +25,7 @@ return view.extend({
 				.catch(() => ({ content: '' }))
 		)).then(results => {
 			results.forEach(res => {
-				res.content && view.appendChild(E('div', { class: 'cbi-section' }, [
+				res.content && container.appendChild(E('div', { class: 'cbi-section' }, [
 					E('div', { style: 'margin-top:1em' }, _('This is the content of the configuration file under <code>%s</code>:').format(res.path)),
 					E('textarea', {
 						readonly: '', wrap: 'soft',
@@ -39,7 +41,7 @@ return view.extend({
 			});
 		});
 
-		return view;
+		return container;
 	},
 
 	handleSave: null,

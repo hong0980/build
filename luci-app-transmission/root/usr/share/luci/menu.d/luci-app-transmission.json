@@ -1,13 +1,40 @@
 {
 	"admin/nas/transmission": {
 		"title": "Transmission",
+		"order": 30,
 		"action": {
-			"type": "view",
-			"path": "transmission"
+			"type": "firstchild"
 		},
 		"depends": {
 			"acl": [ "luci-app-transmission" ],
 			"uci": { "transmission": true }
+		}
+	},
+
+	"admin/nas/transmission/config": {
+		"title": "Global settings",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "transmission/config"
+		}
+	},
+
+	"admin/nas/transmission/files": {
+		"title": "configuration file",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "transmission/files"
+		}
+	},
+
+	"admin/nas/transmission/log": {
+		"title": "Log",
+		"order": 30,
+		"action": {
+			"type": "view",
+			"path": "transmission/log"
 		}
 	}
 }
