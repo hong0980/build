@@ -13,20 +13,27 @@ function setFlagBool(o) {
 return view.extend({
 	load: function () {
 		return Promise.all([
-			fs.exec('/usr/bin/pgrep', ['-x', '/usr/bin/transmission-daemon'])
-				.then(r => r.code == 0),
-			L.resolveDefault(fs.stat('/usr/share/transmission'), null),
 			fs.exec_direct('/bin/df', ['-h']),
+			L.resolveDefault(fs.stat('/usr/share/transmission'), null),
+			L.resolveDefault(fs.exec_direct('/usr/bin/transmission-daemon', ['-v']), '')
+				.then(res => res.match(/Transmission\s+([^\s]+)/)?.[1]),
+			L.resolveDefault(fs.exec_direct('/usr/bin/pgrep', ['-x', '/usr/bin/transmission-daemon']), ''),
 			uci.load('transmission')
 		]);
 	},
-	render: function ([running, iswebExists, diskList]) {
+
+	render: function ([diskList, iswebExists, ver, running]) {
+		console.log(location.origin)
 		let m, s, o;
 		var port = uci.get_first('transmission', 'transmission', 'rpc_port') || '9091',
 			webinstalled = iswebExists !== null || !!uci.get_first('transmission', 'transmission', 'web_home');
 
 		m = new form.Map('transmission', 'Transmission',
-			_('Transmission daemon is a simple bittorrent client, here you can configure the settings.'));
+			'%s %s'.format(
+				_('Transmission daemon is a simple bittorrent client, here you can configure the settings.'),
+				_("Current version: <b style='color:red'>%s</b>").format(ver)
+			)
+		);
 
 		s = m.section(form.TypedSection);
 		s.render = () =>
@@ -35,7 +42,7 @@ return view.extend({
 				running && webinstalled
 					? E('div', {
 						style: 'margin-left:10px;', class: 'btn cbi-button-apply',
-						click: () => window.open(`http://${window.location.hostname}:${port}`, '_blank')
+						click: () => open(`${location.origin}:${port}`)
 					}, _('Open Web Interface'))
 					: []
 			]);
@@ -73,6 +80,7 @@ return view.extend({
 			o.value(mount + '/download',
 				_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
 		});
+
 		o = s.taboption("settings", form.Value, 'log_file', _('Log file path'));
 		o.placeholder = '/var/log/transmission.log';
 		o.description = _('Leave empty to disable file logging');

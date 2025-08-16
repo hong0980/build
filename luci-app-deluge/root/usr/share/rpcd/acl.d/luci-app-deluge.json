@@ -6,6 +6,7 @@
 			"file": {
 				"/bin/df": [ "exec" ],
 				"/sbin/logread": [ "exec" ],
+				"/usr/bin/deluge": [ "exec" ],
 				"/usr/bin/pgrep": [ "exec" ]
 			}
 		},

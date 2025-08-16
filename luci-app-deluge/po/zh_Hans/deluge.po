@@ -7,8 +7,8 @@ msgstr "%s/download (大小: %s) (已用: %s/%s)"
 msgid "Deluge Downloader"
 msgstr "Deluge 下载器"
 
-msgid "Deluge is a BitTorrent client with a graphical interface built using PyGTK"
-msgstr "Deluge是一个通过PyGTK建立图形界面的BitTorrent客户端"
+msgid "Deluge is a lightweight BT client based on Python and libtorrent."
+msgstr "Deluge 是基于 Python 和 libtorrent 的轻量级 BT 客户端。"
 
 msgid "Basic Settings"
 msgstr "基本设置"

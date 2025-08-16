@@ -43,41 +43,33 @@ const speedOptions = [
 ];
 
 return view.extend({
-	parseMountedDisks: (diskList, option) => {
-		var devMap = {};
-		diskList.trim().split('\n').slice(1).forEach(line => {
-			var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
-			if (!dev?.includes('dev') || !mount?.startsWith('/mnt') || devMap[dev]) return;
-			devMap[dev] = true;
-			option.value(mount + '/download',
-				_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
-		});
-	},
-
 	load: () => Promise.all([
 		fs.exec_direct('/bin/df', ['-h']),
 		L.resolveDefault(fs.exec_direct('/usr/bin/pgrep', ['deluge']), null)
-			.then(r => r.trim()),
+			.then(r => r.trim() !== ''),
+		L.resolveDefault(fs.exec_direct('/usr/bin/deluge', ['-v']), '')
+			.then(res => res.match(/deluge\s+([^\s]+)/)?.[1]),
 		uci.load('deluge')
 	]),
 
-	render: function ([diskList, status]) {
-		let m, s, o,
-			host = window.location.hostname,
-			port = uci.get('deluge', 'main', 'port'),
-			proto = uci.get('deluge', 'main', 'https') === '1' ? 'https' : 'http';
+	render: function ([diskList, status, ver]) {
+		var m, s, o,
+			port = uci.get('deluge', 'main', 'port') || '8112',
+			proto = uci.get('deluge', 'main', 'https') === 1 ? 'https' : 'http';
 
 		m = new form.Map('deluge', _('Deluge Downloader'),
-			_('Deluge is a BitTorrent client with a graphical interface built using PyGTK'));
+			'%s %s'.format(
+				_('Deluge is a lightweight BT client based on Python and libtorrent.'),
+				_("Current version: <b style='color:red'>%s</b>").format(ver)));
 
 		s = m.section(form.TypedSection);
 		s.render = () =>
 			E('p', { style: `font-weight:bold; color:${status ? 'green' : 'red'}` }, [
-				_('Deluge ') + (status ? _('RUNNING') : _('NOT RUNNING')),
+				'Deluge %s'.format(status ? _('RUNNING') : _('NOT RUNNING')),
 				status
 					? E('div', {
 						style: 'margin-left:10px;', class: 'btn cbi-button-apply',
-						click: () => window.open(`${proto}://${host}:${port}`, '_blank')
+						click: () => open(`${proto}://${location.hostname}:${port}`)
 					}, _('Open Web Interface'))
 					: []
 			]);
@@ -108,11 +100,18 @@ return view.extend({
 			_("Saved by default in /etc/deluge"));
 		o.default = '/etc/deluge';
 
-		o = s.taboption("settings", form.ListValue, 'download_location', _('Download File Path'),
+		o = s.taboption("settings", form.Value, 'download_location', _('Download File Path'),
 			_('The files are stored in the download directory automatically created under the selected mounted disk'));
 		o.default = '/mnt/sda3/download';
 		o.rmempty = false;
-		if (typeof diskList === 'string') this.parseMountedDisks(diskList, o);
+		var devMap = {};
+		diskList?.trim().split('\n').slice(1).forEach(line => {
+			var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
+			if (!dev?.includes('dev') || !mount?.startsWith('/mnt') || devMap[dev]) return;
+			devMap[dev] = true;
+			o.value(mount + '/download',
+				_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
+		});
 
 		o = s.taboption("settings", form.ListValue, 'language', _('Locale Language'));
 		o.value('zh_CN', _('Simplified Chinese'));

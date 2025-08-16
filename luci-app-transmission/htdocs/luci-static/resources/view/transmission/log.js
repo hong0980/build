@@ -1,119 +1,131 @@
 'use strict';
-'require view';
 'require fs';
 'require uci';
+'require view';
+'require poll';
 
 return view.extend({
-	formatLog: function (logStr) {
-		const months = {
+	formatLog: function (logContent) {
+		const monthMapping = {
 			Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
 			Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
 		};
 
-		return logStr.split('\n').filter(Boolean).map(line => {
-			const match = line.match(/^[A-Z][a-z]{2}\s+([A-Z][a-z]{2})\s+(\d{1,2})\s(\d{2}:\d{2}:\d{2})\s(\d{4})\s(.+)$/);
+		return logContent.split('\n').filter(Boolean).map(line => {
+			const pattern = /^[A-Z][a-z]{2}\s+([A-Z][a-z]{2})\s+(\d{1,2})\s(\d{2}:\d{2}:\d{2})\s(\d{4})\s(.+)$/;
+			const match = line.match(pattern);
 			if (!match) return line;
-			const [, month, day, time, year, rest] = match;
-			return `${year}${_("year")}${months[month] || '??'}${_("month")}${day.padStart(2, '0')}${_("day")} ${time} ${rest}`;
+
+			const [, month, day, time, year, content] = match;
+			return `${year}${_("year")}${monthMapping[month] || '??'}${_("month")}${day.padStart(2, '0')}${_("day")} ${time} ${content}`;
 		}).join('\n');
 	},
 
-	getLogs: function (log_path) {
+	fetchLogs: function (logFilePath) {
 		return Promise.all([
 			L.resolveDefault(fs.exec_direct('/sbin/logread', ['-e', 'transmission']), '')
-				.then(r => this.formatLog(r.trim())),
-			fs.trimmed(log_path)
+				.then(result => this.formatLog(result.trim())),
+			fs.trimmed(logFilePath)
 		]);
 	},
 
 	load: function () {
 		return uci.load('transmission').then(() => {
-			const log_path = uci.get('transmission', 'transmission', 'log_file');
-			return this.getLogs(log_path).then(([syslog, trlog]) => ({ syslog, trlog, log_path }));
+			const logFilePath = uci.get('transmission', 'transmission', 'log_file') || '/var/log/transmission.log';
+			return this.fetchLogs(logFilePath)
+				.then(([systemLog, transmissionLog]) => ({ systemLog, transmissionLog, logFilePath }));
 		});
 	},
 
-	render: function (data) {
-		let currentLines = 50, reverseOrder = true, refreshTimer = null;
-		const calculateRows = lines => lines > 0 ? Math.min(lines + 2, 20) : 3;
-		const parseLog = (text, lines, reverse) => {
-			if (!text || text.trim() === '') return { text: '', actualLines: 0 };
-			let linesArray = text.split('\n').filter(line => line.trim() !== '');
-			if (reverse) linesArray = linesArray.reverse();
+	render: function ({ logFilePath, systemLog, transmissionLog }) {
+		var currentLines = 50, shouldReverse = true, logRefreshInterval = 5, logRefreshTask = null;
+		const calculateTextareaRows = (lineCount) =>
+			lineCount > 0 ? Math.min(lineCount + 2, 20) : 3;
+
+		const parseLogContent = (rawLog, lineLimit, reverseOrder) => {
+			if (!rawLog || rawLog.trim() === '') return { content: '', lineCount: 0 };
+			const lines = rawLog.split('\n').filter(line => line.trim() !== '');
+			const processedLines = reverseOrder
+				? [...lines].reverse().slice(0, lineLimit)
+				: lines.slice(0, lineLimit);
+
 			return {
-				text: linesArray.slice(0, lines).join('\n'),
-				actualLines: Math.min(linesArray.length, lines)
+				content: processedLines.join('\n'),
+				lineCount: processedLines.length
 			};
 		};
 
-		const updateLogsDisplay = () => {
-			const syslogResult = parseLog(data.syslog, currentLines, reverseOrder);
-			const delugeResult = parseLog(data.trlog, currentLines, reverseOrder);
-			const syslogTitle = document.getElementById('syslog-title');
-			const delugeTitle = document.getElementById('tr-title');
-			const syslogTextarea = document.getElementById('syslog-textarea');
-			const delugeTextarea = document.getElementById('tr-textarea');
+		const refreshLogDisplay = (systemContent, transmissionContent) => {
+			const updateArea = (id, titleId, content, titleText) => {
+				const title = document.getElementById(titleId);
+				const textarea = document.getElementById(id);
+				if (title && textarea) {
+					title.textContent = titleText;
+					textarea.value = content;
+					textarea.rows = calculateTextareaRows(content.split('\n').length);
+				}
+			};
 
-			syslogTitle.textContent = syslogResult.actualLines > 0
-				? _('Last %s lines of syslog (%s):').format(syslogResult.actualLines, reverseOrder ? _('newest first') : _('oldest first'))
-				: _('System log: (no data available)');
-			delugeTitle.textContent = delugeResult.actualLines > 0
-				? _('Last %s lines of run log (%s):').format(delugeResult.actualLines, reverseOrder ? _('newest first') : _('oldest first'))
-				: _('Deluge run log: (no data available)');
+			const parsedSystem = parseLogContent(systemContent, currentLines, shouldReverse);
+			updateArea(
+				'syslog-textarea', 'syslog-title', parsedSystem.content,
+				_('Last %s lines of syslog (%s):').format(
+					parsedSystem.lineCount, shouldReverse ? _('newest first') : _('oldest first'))
+			);
 
-			syslogTextarea.value = syslogResult.text;
-			delugeTextarea.value = delugeResult.text;
-			syslogTextarea.rows = calculateRows(syslogResult.actualLines);
-			delugeTextarea.rows = calculateRows(delugeResult.actualLines);
+			const parsedTrans = parseLogContent(transmissionContent, currentLines, shouldReverse);
+			updateArea(
+				'transmission-textarea', 'transmission-title', parsedTrans.content,
+				`${logFilePath} ${_('Last %s lines of run log (%s):').format(
+					parsedTrans.lineCount, shouldReverse ? _('newest first') : _('oldest first'))}`
+			);
 		};
 
-		const refreshLogs = () => {
-			this.getLogs(data.log_path)
-				.then(([newSyslog, newtr]) => { data.trlog = newtr; data.syslog = newSyslog; updateLogsDisplay(); });
+		const setupPolling = () => {
+			if (logRefreshTask) poll.remove(logRefreshTask);
+			logRefreshTask = poll.add(() => {
+				return this.fetchLogs(logFilePath).then(([sys, tr]) => {
+					refreshLogDisplay(sys, tr);
+					return logRefreshInterval;
+				});
+			}, logRefreshInterval);
 		};
 
-		const startAutoRefresh = () => {
-			if (refreshTimer) clearInterval(refreshTimer);
-			refreshTimer = setInterval(refreshLogs, 5000);
-		};
-
-		const initialSyslog = parseLog(data.syslog, currentLines, reverseOrder);
-		const initialDeluge = parseLog(data.trlog, currentLines, reverseOrder);
-
-		startAutoRefresh();
-
-		const view = E('div', {}, [
-			E('h3', {}, '%s - %s'.format(_('Transmission'), _('Logs'))),
+		const initialSystemLog = parseLogContent(systemLog, currentLines, shouldReverse);
+		const initialTransmissionLog = parseLogContent(transmissionLog, currentLines, shouldReverse);
+		const view = E('div', { class: 'cbi-map' }, [
+			E('h3', {}, _('Transmission - Logs')),
 			E('div', { style: 'margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center' }, [
 				E('div', { style: 'display: flex; align-items: center; gap: 5px' }, [
 					_('Lines:'),
 					E('select', {
-						class: 'cbi-input-select',
-						style: 'width: 100px; margin-left: 5px;',
-						change: ev => {
-							currentLines = parseInt(ev.target.value);
-							updateLogsDisplay();
-						}
-					}, [10, 20, 50, 100].map(opt => E('option', { value: opt, selected: opt === currentLines }, opt)))
+						class: 'cbi-input-select', style: 'width: 100px; margin-left: 5px;',
+						change: ev => { currentLines = parseInt(ev.target.value); refreshLogDisplay(systemLog, transmissionLog); }
+					}, [10, 20, 50, 100].map(opt =>
+						E('option', { value: opt, selected: opt === currentLines }, opt)))
 				]),
+
 				E('div', {
 					class: 'btn cbi-button-neutral',
 					click: function () {
-						reverseOrder = !reverseOrder;
-						updateLogsDisplay();
-						this.textContent = reverseOrder
+						shouldReverse = !shouldReverse;
+						refreshLogDisplay(systemLog, transmissionLog);
+						this.textContent = shouldReverse
 							? _('▽ Show Oldest First')
 							: _('△ Show Newest First');
 					}
-				}, reverseOrder ? _('▽ Show Oldest First') : _('△ Show Newest First')),
+				}, shouldReverse ? _('▽ Show Oldest First') : _('△ Show Newest First')),
+
 				E('div', {
-					class: 'btn cbi-button-action', click: refreshLogs
+					class: 'btn cbi-button-action',
+					click: () => this.fetchLogs(logFilePath).then(([sys, tr]) => refreshLogDisplay(sys, tr))
 				}, _('⟳ Refresh Now')),
+
 				E('div', { style: 'display: flex; align-items: center; gap: 5px' }, [
 					E('input', {
 						type: 'checkbox', id: 'wordwrap-toggle',
 						change: ev => {
-							document.querySelectorAll('#syslog-textarea, #tr-textarea').forEach(ta => {
+							document.querySelectorAll('#syslog-textarea, #transmission-textarea').forEach(ta => {
 								ta.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre';
 							});
 						}
@@ -121,44 +133,46 @@ return view.extend({
 					E('label', { for: 'wordwrap-toggle', title: _('Enable automatic line wrapping') }, _('Wrap text'))
 				])
 			]),
+
 		]);
 
-		if (initialSyslog.text) {
+		if (initialSystemLog.content) {
 			view.appendChild(
 				E('div', { style: 'margin-top: 1em' }, [
 					E('div', { id: 'syslog-title' },
-						initialSyslog.actualLines > 0
-							? _('Last %s lines of syslog (%s):').format(initialSyslog.actualLines, reverseOrder ? _('newest first') : _('oldest first'))
-							: _('System log: (no data available)')
+						_('Last %s lines of syslog (%s):').format(
+							initialSystemLog.lineCount,
+							shouldReverse ? _('newest first') : _('oldest first'))
 					),
 					E('textarea', {
-						id: 'syslog-textarea', wrap: 'off',
-						style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
-						rows: calculateRows(initialSyslog.actualLines)
-					}, initialSyslog.text)
-				])
-			);
+						id: 'syslog-textarea', readonly: true, wrap: 'off',
+						rows: calculateTextareaRows(initialSystemLog.lineCount),
+						style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;'
+					}, initialSystemLog.content)
+				]))
 		};
 
-		if (initialDeluge.text) {
+		if (initialTransmissionLog.content) {
 			view.appendChild(
 				E('div', { style: 'margin-top: 1em' }, [
-					E('div', { id: 'tr-title' },
-						initialDeluge.actualLines > 0
-							? _('Last %s lines of run log (%s):').format(initialDeluge.actualLines, reverseOrder ? _('newest first') : _('oldest first'))
-							: _('Deluge run log: (no data available)')
+					E('div', { id: 'transmission-title' },
+						`${logFilePath} ${_('Last %s lines of run log (%s):').format(
+							initialTransmissionLog.lineCount,
+							shouldReverse ? _('newest first') : _('oldest first'))}`
 					),
 					E('textarea', {
-						id: 'tr-textarea', wrap: 'off',
-						style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
-						rows: calculateRows(initialDeluge.actualLines)
-					}, initialDeluge.text)
-				])
-			);
+						id: 'transmission-textarea', readonly: true, wrap: 'off',
+						rows: calculateTextareaRows(initialTransmissionLog.lineCount),
+						style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;'
+					}, initialTransmissionLog.content)
+				]))
 		};
 
+		setupPolling();
 		view.addEventListener('destroy', () => {
-			if (refreshTimer) clearInterval(refreshTimer);
+			if (logRefreshTask) {
+				poll.remove(logRefreshTask);
+			}
 		});
 
 		return view;
