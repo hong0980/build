@@ -7,13 +7,16 @@
 			},
 			"file": {
 				"/bin/df": [ "exec" ],
+				"/bin/pidof": [ "exec" ],
 				"/usr/bin/env": [ "exec" ],
-				"/sbin/logread": [ "exec" ],
-				"/etc/init.d/qbittorrent": [ "exec" ]
+				"/sbin/logread": [ "exec" ]
 			},
 			"uci": [ "qbittorrent" ]
 		},
 		"write": {
+			"file": {
+				"/*/qbittorrent.log": [ "write" ]
+			},
 			"uci": [ "qbittorrent" ]
 		}
 	}

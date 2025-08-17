@@ -35,6 +35,7 @@ define Package/$(PKG_NAME)
 	    +python3-setproctitle \
 	    +python3-setuptools \
 	    +python3-twisted
+	USERID:=deluge=666:deluge=666
 endef
 
 define Package/$(PKG_NAME)-ui-web

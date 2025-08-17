@@ -20,15 +20,22 @@ return view.extend({
 		fs.exec_direct('/bin/df', ['-h']),
 		L.resolveDefault(fs.exec('/etc/init.d/qbittorrent', ['running']), null)
 			.then(r => r.code === 0),
-		uci.load('qbittorrent')
-			.then(r => uci.get(r, 'main', 'port') || '8080'),
 		fs.exec_direct('/usr/bin/env', ['HOME=/var/run/qbittorrent', '/usr/bin/qbittorrent-nox', '-v'])
-			.then(r => r.trim().split('v')[1]),
+			.then(r => r.trim().split('v').pop()),
+		fs.exec_direct('/sbin/logread', ['-e', 'qbittorrent-nox'])
+			.then(r => (r.match(/(?:临时密码：|password[^\n]*:\s*)(\w{9})/g) || []).pop()?.match(/\w{9}$/)?.[0] || null),
+		uci.load('qbittorrent')
+			.then((r) => uci.get(r, 'main', 'RootProfilePath') + '/qBittorrent/config/qBittorrent.conf')
+			.then(confPath => {
+				return fs.trimmed(confPath)
+					.then(content => !/^WebUI\\Password_PBKDF2=\s*$/m.test(content))
+					.catch(() => false);
+			})
 	]),
 
-	render([diskList, running, port, version]) {
-		let m, s, o;
-
+	render([diskList, running, version, tempPassword, hasPersistentPassword]) {
+		var m, s, o;
+		var port = uci.get('qbittorrent', 'main', 'port') || '8080';
 		m = new form.Map('qbittorrent', _('qBittorrent'),
 			'%s   %s'.format(
 				_('A cross-platform open source BitTorrent client based on QT.'),
@@ -37,13 +44,22 @@ return view.extend({
 
 		s = m.section(form.TypedSection);
 		s.render = () =>
-			E('p', { style: `font-weight:bold; color:${running ? 'green' : 'red'}` }, [
-				_('qBittorrent ') + (running ? _('RUNNING') : _('NOT RUNNING')),
-				running
-					? E('div', {
-						style: 'margin-left:10px;', class: 'btn cbi-button-apply',
-						click: () => open(`${location.origin}:${port}`)
-					}, _('Open Web Interface'))
+			E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
+				E('div', {
+					style: `font-weight:bold; color:${running ? 'green' : 'red'}`
+				}, [
+					_('qBittorrent ') + (running ? _('RUNNING') : _('NOT RUNNING')),
+					running
+						? E('div', {
+							style: 'margin-left:10px;',
+							class: 'btn cbi-button-apply',
+							click: () => open(`${location.origin}:${port}`)
+						}, _('Open Web Interface'))
+						: []
+				]),
+				tempPassword && !hasPersistentPassword
+					? E('span', { style: 'white-space: nowrap;' },
+						_("Login to WebUI with temporary password <b style='color:red'>%s</b>").format(tempPassword))
 					: []
 			]);
 
@@ -77,8 +93,8 @@ return view.extend({
 		o.default = '8080';
 
 		o = s.taboption("basic", form.Flag, "PasswordEnabled", _("Enable"),
-			_("Use default credentials for first login: username: admin password: password<br>If disabled, temporary password can be obtained from system logs for WebUI login"));
-		o.default = "8080";
+			_("Enable first login default login Username: admin Password: password"));
+		o.rmempty = false;
 
 		o = s.taboption("advanced", form.Flag, "AuthSubnetWhitelistEnabled", _("Subnet Whitelist"),
 			_("Bypass authentication for clients in Whitelisted IP Subnets."));

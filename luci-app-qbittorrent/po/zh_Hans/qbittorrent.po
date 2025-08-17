@@ -7,6 +7,9 @@ msgstr "当前版本: <b style='color:red'>%s</b>"
 msgid "Open Web Interface"
 msgstr "打开 Web 管理界面"
 
+msgid "Login to WebUI with temporary password <b style='color:red'>%s</b>"
+msgstr "用临时密码 <b style='color:red'>%s</b> 登录 WebUI"
+
 msgid "RUNNING"
 msgstr "运行中"
 
@@ -52,8 +55,8 @@ msgstr "监听端口"
 msgid "The listening port for WebUI."
 msgstr "WebUI的监听端口"
 
-msgid "Use default credentials for first login: username: admin password: password<br>If disabled, temporary password can be obtained from system logs for WebUI login"
-msgstr "首次登录使用默认凭据：用户名：admin 密码：password<br>禁用时可以从系统日志获取临时密码登录WebUI"
+msgid "Enable first login default login Username: admin Password: password"
+msgstr "启用首次登录默认登录 用户名：admin 密码：password"
 
 msgid "Subnet Whitelist"
 msgstr "子网白名单"

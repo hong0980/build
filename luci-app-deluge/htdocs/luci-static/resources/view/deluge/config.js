@@ -3,6 +3,7 @@
 'require uci';
 'require form';
 'require view';
+'require tools.widgets as widgets';
 
 const speedOptions = [
 	{
@@ -45,28 +46,23 @@ const speedOptions = [
 return view.extend({
 	load: () => Promise.all([
 		fs.exec_direct('/bin/df', ['-h']),
-		L.resolveDefault(fs.exec_direct('/usr/bin/pgrep', ['deluge']), null)
-			.then(r => r.trim() !== ''),
-		L.resolveDefault(fs.exec_direct('/usr/bin/deluge', ['-v']), '')
-			.then(res => res.match(/deluge\s+([^\s]+)/)?.[1]),
+		L.resolveDefault(fs.exec_direct('/usr/bin/pgrep', ['-f', '/usr/bin/deluged']), ''),
 		uci.load('deluge')
 	]),
 
-	render: function ([diskList, status, ver]) {
+	render: function ([diskList, running]) {
 		var m, s, o,
 			port = uci.get('deluge', 'main', 'port') || '8112',
 			proto = uci.get('deluge', 'main', 'https') === 1 ? 'https' : 'http';
 
 		m = new form.Map('deluge', _('Deluge Downloader'),
-			'%s %s'.format(
-				_('Deluge is a lightweight BT client based on Python and libtorrent.'),
-				_("Current version: <b style='color:red'>%s</b>").format(ver)));
+			_('Deluge is a lightweight BT client based on Python and libtorrent.'));
 
 		s = m.section(form.TypedSection);
 		s.render = () =>
-			E('p', { style: `font-weight:bold; color:${status ? 'green' : 'red'}` }, [
-				'Deluge %s'.format(status ? _('RUNNING') : _('NOT RUNNING')),
-				status
+			E('p', { style: `font-weight:bold; color:${running ? 'green' : 'red'}` }, [
+				'Deluge %s'.format(running ? _('RUNNING') : _('NOT RUNNING')),
+				running
 					? E('div', {
 						style: 'margin-left:10px;', class: 'btn cbi-button-apply',
 						click: () => open(`${proto}://${location.hostname}:${port}`)
@@ -83,18 +79,8 @@ return view.extend({
 		o.default = "0";
 		o.rmempty = false;
 
-		var user = s.taboption("settings", form.ListValue, 'user', _('Run daemon as user'));
-		user.load = (section_id) =>
-			fs.read('/etc/passwd').then(data => {
-				data.split('\n').forEach(line => {
-					var parts = line.split(':');
-					var name = parts[0];
-					var uid = parseInt(parts[2], 10);
-					if (name && (name === 'root' || uid >= 100)) user.value(name);
-				});
-				return uci.get('deluge', section_id, 'user');
-			});
-		user.default = 'root';
+		o = s.taboption("settings", widgets.UserSelect, 'user', _('Run daemon as user'));
+		o.default = 'root';
 
 		o = s.taboption("settings", form.Value, 'profile_dir', _('Root Path of the Profile'),
 			_("Saved by default in /etc/deluge"));
