@@ -1,5 +1,6 @@
 'use strict';
 'require fs';
+'require ui';
 'require uci';
 'require view';
 'require poll';
@@ -39,13 +40,13 @@ return view.extend({
 		var currentLines = 50, refreshTimer = null, reverseOrder = true;
 		const calculateRows = (lines) => lines > 0 ? Math.min(lines + 2, 20) : 3;
 		const parseLog = function (text, lines, reverse) {
-			if (!text || text.trim() === '') return { text: '', lineCount: 0 };
+			if (!text || text.trim() === '') return { text: '', line: 0 };
 			let linesArray = text.split('\n').filter(line => line.trim() !== '');
 			if (reverse) linesArray = linesArray.reverse();
 
 			return {
 				text: linesArray.slice(0, lines).join('\n'),
-				lineCount: Math.min(linesArray.length, lines)
+				line: Math.min(linesArray.length, lines)
 			};
 		};
 
@@ -56,22 +57,24 @@ return view.extend({
 
 		const updateLogsDisplay = function (syslog = null, applog = null) {
 			const syslogTitle = document.getElementById('syslog-title');
-			const delugeTitle = document.getElementById('deluge-title');
-			if (syslogTitle) {
-				const syslogResult = parseLog(syslog, currentLines, reverseOrder);
+			const delugeTitle = document.getElementById('applog-title');
+			if (syslogTitle && syslog) {
+				let text, line;
+				({ text, line } = parseLog(syslog, currentLines, reverseOrder));
 				const syslog_textarea = document.getElementById('syslog-textarea');
 				syslogTitle.textContent = _('Last %s lines of syslog (%s):').format(
-					syslogResult.lineCount, reverseOrder ? _('newest first') : _('oldest first'));
-				syslog_textarea.value = syslogResult.text;
-				syslog_textarea.rows = calculateRows(syslogResult.lineCount);
+					line, reverseOrder ? _('newest first') : _('oldest first'));
+				syslog_textarea.value = text;
+				syslog_textarea.rows = calculateRows(line);
 			};
-			if (delugeTitle) {
-				const delugeResult = parseLog(applog, currentLines, reverseOrder);
-				const deluge_textarea = document.getElementById('deluge-textarea');
+			if (delugeTitle && applog) {
+				let text, line;
+				({ text, line } = parseLog(applog, currentLines, reverseOrder));
+				const applog_textarea = document.getElementById('applog-textarea');
 				delugeTitle.textContent = _('Last %s lines of run log (%s):').format(
-					delugeResult.lineCount, reverseOrder ? _('newest first') : _('oldest first'));
-				deluge_textarea.value = delugeResult.text;
-				deluge_textarea.rows = calculateRows(delugeResult.lineCount);
+					line, reverseOrder ? _('newest first') : _('oldest first'));
+				applog_textarea.value = text;
+				applog_textarea.rows = calculateRows(line);
 			};
 		};
 
@@ -96,7 +99,7 @@ return view.extend({
 							E('option', { value: opt, selected: opt === currentLines ? '' : null }, opt)))
 					]),
 					E('button', {
-						class: 'cbi-button cbi-button-neutral',
+						class: 'btn cbi-button-apply',
 						click: function (ev) {
 							reverseOrder = !reverseOrder;
 							updateLogsDisplay(syslog, applog);
@@ -105,9 +108,23 @@ return view.extend({
 								: _('△ Show Newest First');
 						}
 					}, reverseOrder ? _('▽ Show Oldest First') : _('△ Show Newest First')),
-					E('button', {
-						class: 'cbi-button cbi-button-action', click: refreshLogs
-					}, _('⟳ Refresh Now')),
+					applog
+						? E('div', {
+							class: 'btn cbi-button-negative', title: _('Clear Log'),
+							click: ui.createHandlerFn(this, () => {
+								fs.write(log_path, '')
+									.then(() => {
+										document.querySelector('#applog-textarea').value = '';
+										L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui)
+											(null, E('p', _('Log cleared')), 3000, 'info');
+										view.removeChild(applogLE);
+									})
+									.catch((e) => {
+										ui.addNotification(null, E('p', _('Failed to clear log: %s').format(e.message)), 'error');
+									});
+							})
+						}, _('Clear Log'))
+						: [],
 					E('div', { style: 'display: flex; align-items: center; gap: 5px' }, [
 						E('input', {
 							type: 'checkbox', id: 'wordwrap-toggle',
@@ -123,33 +140,32 @@ return view.extend({
 			]),
 		]);
 
-		const initialSyslog = parseLog(syslog, currentLines, reverseOrder);
-		if (initialSyslog.text) {
+		const { text: appText, line: appLine } = parseLog(applog, currentLines, reverseOrder);
+		const applogLE =
+			E('div', { class: 'cbi-section', style: 'margin-top: 1em' }, [
+				E('div', { id: 'applog-title' }, _('Last %s lines of run log (%s):').format(
+					appLine, reverseOrder ? _('newest first') : _('oldest first')
+				)),
+				E('textarea', {
+					id: 'applog-textarea', wrap: 'off',
+					style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
+					rows: calculateRows(appLine)
+				}, appText)
+			]);
+		if (appText) view.appendChild(applogLE);
+
+		const { text: sysText, line: sysLine } = parseLog(syslog, currentLines, reverseOrder);
+		if (sysText) {
 			view.appendChild(
 				E('div', { class: 'cbi-section', style: 'margin-top: 1em' }, [
 					E('div', { id: 'syslog-title' }, _('Last %s lines of syslog (%s):').format(
-						initialSyslog.lineCount, reverseOrder ? _('newest first') : _('oldest first')
+						sysLine, reverseOrder ? _('newest first') : _('oldest first')
 					)),
 					E('textarea', {
 						id: 'syslog-textarea', wrap: 'off',
 						style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
-						rows: calculateRows(initialSyslog.lineCount)
-					}, initialSyslog.text),
-				]))
-		};
-
-		const initialDeluge = parseLog(applog, currentLines, reverseOrder);
-		if (initialDeluge.text) {
-			view.appendChild(
-				E('div', { class: 'cbi-section', style: 'margin-top: 1em' }, [
-					E('div', { id: 'deluge-title' }, _('Last %s lines of run log (%s):').format(
-						initialDeluge.lineCount, reverseOrder ? _('newest first') : _('oldest first')
-					)),
-					E('textarea', {
-						id: 'deluge-textarea', wrap: 'off',
-						style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
-						rows: calculateRows(initialDeluge.lineCount)
-					}, initialDeluge.text)
+						rows: calculateRows(sysLine)
+					}, sysText),
 				]))
 		};
 

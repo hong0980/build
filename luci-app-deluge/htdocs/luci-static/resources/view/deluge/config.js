@@ -1,6 +1,7 @@
 'use strict';
 'require fs';
 'require uci';
+'require rpc';
 'require form';
 'require view';
 'require tools.widgets as widgets';
@@ -43,28 +44,60 @@ const speedOptions = [
 	}
 ];
 
+const callServiceList = rpc.declare({
+	object: 'service',
+	method: 'list',
+	params: ['name'],
+	expect: { '': {} },
+	filter: (data, { name }, extra) => {
+		const base = data[name] || {};
+		if (!extra || !extra.length) return base;
+		if (extra.length >= 3 && Array.isArray(extra[1])) {
+			const [instancesKey, processNames, statusKey] = extra;
+			return processNames.reduce((res, process) => ({
+				...res, [process]: base[instancesKey]?.[process]?.[statusKey]
+			}), {});
+		}
+
+		if (extra.length === 2 && Array.isArray(extra[1])) {
+			const [instancesKey, processNames] = extra;
+			return processNames.reduce((res, process) => ({
+				...res, [process]: base[instancesKey]?.[process]
+			}), {});
+		}
+
+		return extra.reduce((res, key) => res?.[key], base);
+	}
+});
+
 return view.extend({
 	load: () => Promise.all([
 		fs.exec_direct('/bin/df', ['-h']),
-		L.resolveDefault(fs.exec_direct('/usr/bin/pgrep', ['-f', '/usr/bin/deluged']), ''),
+		L.resolveDefault(callServiceList('deluge', ['instances', ['deluged', 'deluge-web'], 'running']), {})
+			.then(r => !!r.deluged && !!r['deluge-web']),
 		uci.load('deluge')
+			.then(r => {
+				var port = uci.get(r, 'main', 'port') || '8112',
+					proto = uci.get(r, 'main', 'https') === 1 ? 'https' : 'http';
+				return { port, proto };
+			})
 	]),
 
-	render: function ([diskList, running]) {
-		var m, s, o,
-			port = uci.get('deluge', 'main', 'port') || '8112',
-			proto = uci.get('deluge', 'main', 'https') === 1 ? 'https' : 'http';
+	render: function ([diskList, running, config]) {
+		var m, s, o, { port, proto } = config || {};
 
 		m = new form.Map('deluge', _('Deluge Downloader'),
 			_('Deluge is a lightweight BT client based on Python and libtorrent.'));
 
 		s = m.section(form.TypedSection);
 		s.render = () =>
-			E('p', { style: `font-weight:bold; color:${running ? 'green' : 'red'}` }, [
-				'Deluge %s'.format(running ? _('RUNNING') : _('NOT RUNNING')),
+			E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
+				E('b', { style: `color:${running ? 'green' : 'red'}` }, [
+					'Deluge %s'.format(running ? _('RUNNING') : _('NOT RUNNING'))
+				]),
 				running
 					? E('div', {
-						style: 'margin-left:10px;', class: 'btn cbi-button-apply',
+						class: 'btn cbi-button-apply',
 						click: () => open(`${proto}://${location.hostname}:${port}`)
 					}, _('Open Web Interface'))
 					: []

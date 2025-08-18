@@ -11,6 +11,9 @@
 			}
 		},
 		"write": {
+			"file": {
+				"/*/deluge.log": [ "write" ]
+			},
 			"uci": [ "deluge" ]
 		}
 	}
