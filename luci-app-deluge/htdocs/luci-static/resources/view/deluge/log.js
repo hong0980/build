@@ -31,11 +31,11 @@ return view.extend({
 	load: function () {
 		return uci.load('deluge').then(() => {
 			const log_path = (uci.get('deluge', 'main', 'profile_dir') || '/etc/deluge') + '/deluge.log';
-			return this.getLogs(log_path).then(([syslogRaw, delugeRaw]) => ({ delugeRaw, log_path, syslogRaw }))
+			return this.getLogs(log_path).then(([syslog, applog]) => ({ applog, log_path, syslog }))
 		});
 	},
 
-	render: function ({ delugeRaw, log_path, syslogRaw }) {
+	render: function ({ applog, log_path, syslog }) {
 		var currentLines = 50, refreshTimer = null, reverseOrder = true;
 		const calculateRows = (lines) => lines > 0 ? Math.min(lines + 2, 20) : 3;
 		const parseLog = function (text, lines, reverse) {
@@ -51,14 +51,14 @@ return view.extend({
 
 		const refreshLogs = () => {
 			return this.getLogs(log_path)
-				.then(([syslogRaw, delugeRaw]) => updateLogsDisplay(syslogRaw, delugeRaw));
+				.then(([syslog, applog]) => updateLogsDisplay(syslog, applog));
 		};
 
-		const updateLogsDisplay = function (syslogRaw = null, delugeRaw = null) {
+		const updateLogsDisplay = function (syslog = null, applog = null) {
 			const syslogTitle = document.getElementById('syslog-title');
 			const delugeTitle = document.getElementById('deluge-title');
 			if (syslogTitle) {
-				const syslogResult = parseLog(syslogRaw, currentLines, reverseOrder);
+				const syslogResult = parseLog(syslog, currentLines, reverseOrder);
 				const syslog_textarea = document.getElementById('syslog-textarea');
 				syslogTitle.textContent = _('Last %s lines of syslog (%s):').format(
 					syslogResult.lineCount, reverseOrder ? _('newest first') : _('oldest first'));
@@ -66,7 +66,7 @@ return view.extend({
 				syslog_textarea.rows = calculateRows(syslogResult.lineCount);
 			};
 			if (delugeTitle) {
-				const delugeResult = parseLog(delugeRaw, currentLines, reverseOrder);
+				const delugeResult = parseLog(applog, currentLines, reverseOrder);
 				const deluge_textarea = document.getElementById('deluge-textarea');
 				delugeTitle.textContent = _('Last %s lines of run log (%s):').format(
 					delugeResult.lineCount, reverseOrder ? _('newest first') : _('oldest first'));
@@ -85,19 +85,21 @@ return view.extend({
 			E('div', { class: 'cbi-section' }, [
 				E('div', { style: 'margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center' }, [
 					E('div', { style: 'display: flex; align-items: center; gap: 5px' }, [
+						_('Lines:'),
 						E('select', {
 							class: 'cbi-input-select', style: 'width: 100px; margin-left: 5px;',
 							change: (ev) => {
 								currentLines = parseInt(ev.target.value);
-								updateLogsDisplay(syslogRaw, delugeRaw);
+								updateLogsDisplay(syslog, applog);
 							}
-						}, [10, 20, 50, 100].map((opt) => E('option', { value: opt, selected: opt === currentLines }, opt)))
-					], _('Lines:')),
+						}, [10, 20, 50, 100].map((opt) =>
+							E('option', { value: opt, selected: opt === currentLines ? '' : null }, opt)))
+					]),
 					E('button', {
 						class: 'cbi-button cbi-button-neutral',
 						click: function (ev) {
 							reverseOrder = !reverseOrder;
-							updateLogsDisplay(syslogRaw, delugeRaw);
+							updateLogsDisplay(syslog, applog);
 							this.textContent = reverseOrder
 								? _('▽ Show Oldest First')
 								: _('△ Show Newest First');
@@ -121,7 +123,7 @@ return view.extend({
 			]),
 		]);
 
-		const initialSyslog = parseLog(syslogRaw, currentLines, reverseOrder);
+		const initialSyslog = parseLog(syslog, currentLines, reverseOrder);
 		if (initialSyslog.text) {
 			view.appendChild(
 				E('div', { class: 'cbi-section', style: 'margin-top: 1em' }, [
@@ -136,7 +138,7 @@ return view.extend({
 				]))
 		};
 
-		const initialDeluge = parseLog(delugeRaw, currentLines, reverseOrder);
+		const initialDeluge = parseLog(applog, currentLines, reverseOrder);
 		if (initialDeluge.text) {
 			view.appendChild(
 				E('div', { class: 'cbi-section', style: 'margin-top: 1em' }, [

@@ -1,43 +1,43 @@
 'use strict';
 'require fs';
+'require ui';
 'require uci';
+'require rpc';
 'require form';
 'require view';
 
-function parseMountedDisks(diskList, option) {
-	var devMap = {};
-	diskList.trim().split('\n').slice(1).forEach(line => {
-		var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
-		if (!dev?.includes('dev') || !mount?.startsWith('/mnt') || devMap[dev]) return;
-		devMap[dev] = true;
-		option.value(mount + '/download',
-			_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
-	});
-};
+const callServiceList = rpc.declare({
+	object: 'service',
+	method: 'list',
+	params: ['name'],
+	expect: { '': {} },
+	filter: (data, { name }, extra) =>
+		extra.reduce((res, key) =>
+			(res && Object.keys(res).length ? res[key] || {} : {}),
+			data[name] || {}
+		)
+});
 
 return view.extend({
 	load: () => Promise.all([
 		fs.exec_direct('/bin/df', ['-h']),
-		L.resolveDefault(fs.exec('/etc/init.d/qbittorrent', ['running']), null)
-			.then(r => r.code === 0),
+		L.resolveDefault(callServiceList('qbittorrent', ['instances', 'instance1', 'running']), {})
+			.then(r => r === true),
 		fs.exec_direct('/usr/bin/env', ['HOME=/var/run/qbittorrent', '/usr/bin/qbittorrent-nox', '-v'])
 			.then(r => r.trim().split('v').pop()),
 		fs.exec_direct('/sbin/logread', ['-e', 'qbittorrent-nox'])
 			.then(r => (r.match(/(?:临时密码：|password[^\n]*:\s*)(\w{9})/g) || []).pop()?.match(/\w{9}$/)?.[0] || null),
 		uci.load('qbittorrent')
-			.then((r) => uci.get(r, 'main', 'RootProfilePath') + '/qBittorrent/config/qBittorrent.conf')
-			.then(confPath => {
-				return fs.trimmed(confPath)
-					.then(content => !/^WebUI\\Password_PBKDF2=\s*$/m.test(content))
-					.catch(() => false);
-			})
+			.then(() => uci.get('qbittorrent', 'main', 'RootProfilePath') + '/qBittorrent/config/qBittorrent.conf')
+			.then(confPath => fs.trimmed(confPath)
+				.then(content => /^WebUI\\Password_PBKDF2=\s*$/m.test(content)))
 	]),
 
 	render([diskList, running, version, tempPassword, hasPersistentPassword]) {
 		var m, s, o;
 		var port = uci.get('qbittorrent', 'main', 'port') || '8080';
 		m = new form.Map('qbittorrent', _('qBittorrent'),
-			'%s   %s'.format(
+			'%s  %s'.format(
 				_('A cross-platform open source BitTorrent client based on QT.'),
 				_("Current version: <b style='color:red'>%s</b>").format(version)
 			));
@@ -45,21 +45,31 @@ return view.extend({
 		s = m.section(form.TypedSection);
 		s.render = () =>
 			E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
-				E('div', {
-					style: `font-weight:bold; color:${running ? 'green' : 'red'}`
-				}, [
-					_('qBittorrent ') + (running ? _('RUNNING') : _('NOT RUNNING')),
-					running
-						? E('div', {
-							style: 'margin-left:10px;',
-							class: 'btn cbi-button-apply',
-							click: () => open(`${location.origin}:${port}`)
-						}, _('Open Web Interface'))
-						: []
+				E('b', { style: `color:${running ? 'green' : 'red'}` }, [
+					'%s %s'.format(_('qBittorrent'), running ? _('RUNNING') : _('NOT RUNNING')),
 				]),
-				tempPassword && !hasPersistentPassword
-					? E('span', { style: 'white-space: nowrap;' },
-						_("Login to WebUI with temporary password <b style='color:red'>%s</b>").format(tempPassword))
+				running
+					? E('div', {
+						class: 'btn cbi-button-apply',
+						click: ui.createHandlerFn(this, () => open(`${location.origin}:${port}`))
+					}, _('Open Web Interface'))
+					: [],
+				running && tempPassword && hasPersistentPassword
+					? E('div', {
+						class: 'btn cbi-button-apply',
+						title: _("Log in to WebUI with temporary password %s").format(tempPassword),
+						click: ui.createHandlerFn(this, () => {
+							const textarea = document.createElement('textarea');
+							textarea.value = tempPassword;
+							textarea.style.position = 'fixed';
+							textarea.style.opacity = '0';
+							document.body.appendChild(textarea);
+							textarea.select();
+							const success = document.execCommand('copy');
+							document.body.removeChild(textarea);
+							success && L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui)(null, E('p', _('Password %s Copyed to clipboard').format(tempPassword)), 3000, 'info');
+						})
+					}, _("Copy <b style='color:red'>%s</b> temporary password").format(tempPassword))
 					: []
 			]);
 
@@ -79,7 +89,14 @@ return view.extend({
 
 		o = s.taboption("basic", form.Value, "DefaultSavePath", _("Save Path"),
 			_("The files are stored in the download directory automatically created under the selected mounted disk"))
-		if (typeof diskList === 'string') parseMountedDisks(diskList, o);
+		var devMap = {};
+		diskList.trim().split('\n').slice(1).forEach(line => {
+			var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
+			if (!dev?.includes('dev') || !mount?.startsWith('/mnt') || devMap[dev]) return;
+			devMap[dev] = true;
+			o.value(mount + '/download',
+				_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
+		});
 
 		o = s.taboption("basic", form.Value, "Locale", _("Locale Language"),
 			_("The supported language codes can be used to customize the setting."));

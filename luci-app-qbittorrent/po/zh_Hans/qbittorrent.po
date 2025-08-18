@@ -7,8 +7,14 @@ msgstr "当前版本: <b style='color:red'>%s</b>"
 msgid "Open Web Interface"
 msgstr "打开 Web 管理界面"
 
-msgid "Login to WebUI with temporary password <b style='color:red'>%s</b>"
-msgstr "用临时密码 <b style='color:red'>%s</b> 登录 WebUI"
+msgid "Log in to WebUI with temporary password %s"
+msgstr "用临时密码 %s 登录 WebUI"
+
+msgid "Copy <b style='color:red'>%s</b> temporary password"
+msgstr "复制 <b style='color:red'>%s</b> 临时密码"
+
+msgid "Password %s Copyed to clipboard"
+msgstr "密码 %s 已复制到剪贴板"
 
 msgid "RUNNING"
 msgstr "运行中"
