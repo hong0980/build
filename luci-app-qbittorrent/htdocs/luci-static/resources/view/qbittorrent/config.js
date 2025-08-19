@@ -13,8 +13,8 @@ const callServiceList = rpc.declare({
 	expect: { '': {} },
 	filter: (data, { name }, extra) =>
 		extra.reduce((res, key) =>
-			(res && Object.keys(res).length ? res[key] || {} : {}),
-			data[name] || {}
+			(res && typeof res === 'object' ? res[key] : null),
+			data[name] || null
 		)
 });
 

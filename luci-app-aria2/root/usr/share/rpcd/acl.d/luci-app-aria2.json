@@ -9,12 +9,14 @@
 				"/bin/df": [ "exec" ],
 				"/etc/passwd": [ "read" ],
 				"/sbin/logread": [ "exec" ],
-				"/usr/bin/aria2c": [ "exec" ],
-				"/etc/init.d/aria2": [ "exec" ]
+				"/usr/bin/aria2c": [ "exec" ]
 			},
 			"uci": [ "aria2" ]
 		},
 		"write": {
+			"file": {
+				"/*/aria2.log": [ "write" ]
+			},
 			"uci": [ "aria2" ]
 		}
 	}

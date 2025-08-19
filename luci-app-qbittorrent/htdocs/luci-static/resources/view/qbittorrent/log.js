@@ -43,7 +43,6 @@ return view.extend({
 
 	render: function ({ applog, log_path, syslog }) {
 		var currentLines = 30, refreshTimer = null, reverseOrder = true;
-		const calculateRows = (lines) => lines > 0 ? Math.min(lines + 2, 20) : 3;
 		const parseLog = function (text, lines, reverse) {
 			if (!text || text.trim() === '') return { text: '', line: 0 };
 			let linesArray = text.split('\n').filter(line => line.trim() !== '');
@@ -69,7 +68,7 @@ return view.extend({
 				syslogTitle.textContent = _('Last %s lines of syslog (%s):').format(
 					line, reverseOrder ? _('newest first') : _('oldest first'));
 				syslog_textarea.value = text;
-				syslog_textarea.rows = calculateRows(line);
+				syslog_textarea.rows = Math.min(line + 2, 20);
 			}
 
 			if (applogTitle && applog) {
@@ -79,7 +78,7 @@ return view.extend({
 				applogTitle.textContent = _('Last %s lines of run log (%s):').format(
 					line, reverseOrder ? _('newest first') : _('oldest first'));
 				applog_textarea.value = text;
-				applog_textarea.rows = calculateRows(line);
+				applog_textarea.rows = Math.min(line + 2, 20);
 			}
 		};
 
@@ -89,36 +88,27 @@ return view.extend({
 		};
 
 		const view = E('div', {}, [
-			E('h3', {}, _('qBittorrent - Logs')),
-			E('div', { style: 'display: flex; flex-wrap: wrap; gap: 15px;' }, [
-				E('div', {}, [
-					_('Lines:'),
-					E('select', {
-						class: 'cbi-input-select', style: 'width: 100px; margin-left: 5px;',
-						change: (ev) => {
-							currentLines = parseInt(ev.target.value);
-							updateLogsDisplay(syslog, applog);
-						}
-					}, [10, 20, 30, 50, 100].map((opt) =>
-						E('option', { value: opt, selected: opt === currentLines ? '' : null }, opt)))
-				]),
+			E('h3', _('qBittorrent - Logs')),
+			E('div', { style: 'display: flex; align-items: center; gap: 15px;' }, [
+				E('div', _('Lines:')),
+				E('select', {
+					class: 'cbi-input-select', style: 'width: 100px;',
+					change: (ev) => {
+						currentLines = parseInt(ev.target.value);
+						updateLogsDisplay(syslog, applog);
+					}
+				}, [10, 20, 30, 50, 100].map((opt) =>
+					E('option', { value: opt, selected: opt === currentLines ? '' : null }, opt))),
 				E('div', {
 					class: 'btn cbi-button-apply',
 					click: ui.createHandlerFn(this, (ev) => {
-						document.querySelectorAll('#applog-textarea, #syslog-textarea').forEach(ta => {
-							if (ta && ta.value) {
-								ta.value = reverseOrder
-									? ta.value.split('\n').reverse().join('\n')
-									: ta.value.split('\n').reverse().join('\n');
-							}
-						});
-
+						reverseOrder = !reverseOrder;
 						ev.target.textContent = reverseOrder
 							? _('△ Show Newest First')
 							: _('▽ Show Oldest First');
-						reverseOrder = !reverseOrder;
+						updateLogsDisplay(syslog, applog);
 					})
-				}, _('▽ Show Oldest First')),
+				}, _('△ Show Newest First')),
 				applog
 					? E('div', {
 						class: 'btn cbi-button-negative', title: _('Clear Log'),
@@ -140,7 +130,7 @@ return view.extend({
 					E('input', {
 						type: 'checkbox', id: 'wordwrap-toggle',
 						change: ev => {
-							document.querySelectorAll('#applog-textarea, #syslog-textarea').forEach(ta => {
+							document.querySelectorAll('textarea').forEach(ta => {
 								ta.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre';
 							});
 						}
@@ -151,12 +141,12 @@ return view.extend({
 		]);
 		const { text: appText, line: appLine } = parseLog(applog, currentLines, reverseOrder);
 		const applogLE =
-			E('div', { class: 'cbi-section', style: 'margin-top: 1em' }, [
-				E('div', { style: 'margin-top: 1em', id: 'applog-title' }, _('Last %s lines of run log (%s):').format(
-					appLine, reverseOrder ? _('newest first') : _('oldest first'))),
+			E('div', {}, [
+				E('div', { style: 'margin-top: 1em', id: 'applog-title' },
+					_('Last %s lines of run log (%s):').format(
+						appLine, reverseOrder ? _('newest first') : _('oldest first'))),
 				E('textarea', {
-					readonly: '', id: 'applog-textarea', wrap: 'off',
-					rows: calculateRows(appLine),
+					readonly: '', id: 'applog-textarea', wrap: 'off', rows: Math.min(appLine + 2, 20),
 					style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
 				}, appText),
 			]);
@@ -165,12 +155,12 @@ return view.extend({
 		const { text: sysText, line: sysLine } = parseLog(syslog, currentLines, reverseOrder);
 		if (sysText) {
 			view.appendChild(
-				E('div', { class: 'cbi-section', style: 'margin-top: 1em' }, [
-					E('div', { style: 'margin-top: 1em', id: 'syslog-title' }, _('Last %s lines of run log (%s):').format(
-						sysLine, reverseOrder ? _('newest first') : _('oldest first'))),
+				E('div', {}, [
+					E('div', { style: 'margin-top: 1em', id: 'syslog-title' },
+						_('Last %s lines of run log (%s):').format(
+							sysLine, reverseOrder ? _('newest first') : _('oldest first'))),
 					E('textarea', {
-						readonly: '', id: 'syslog-textarea', wrap: 'off',
-						rows: calculateRows(sysLine),
+						readonly: '', id: 'syslog-textarea', wrap: 'off', rows: Math.min(sysLine + 2, 20),
 						style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
 					}, sysText),
 				])

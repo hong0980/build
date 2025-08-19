@@ -74,23 +74,25 @@ function showRPCURL(section_id, useWS, inputEl) {
 	inputEl.setValue(`${protocol}${auth}${window.location.hostname}:${getOptVal('rpc_listen_port', 6800)}/jsonrpc`);
 };
 
-function parseMountedDisks(diskList, option) {
-	var devMap = {};
-	diskList.trim().split('\n').slice(1).forEach(line => {
-		var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
-		if (!dev?.includes('dev') || !mount?.startsWith('/mnt') || devMap[dev]) return;
-		devMap[dev] = true;
-		option.value(mount + '/download',
-			_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
-	});
-};
+const callServiceList = rpc.declare({
+	object: 'service',
+	method: 'list',
+	params: ['name'],
+	expect: { '': {} },
+	filter: function (data, { name }, extra) {
+		if (data[name] == null) return null;
+		return extra.reduce(function (res, key) {
+			return (res && typeof res === 'object' && res !== null) ? res[key] : null;
+		}, data[name]);
+	}
+});
 
 return view.extend({
 	load: function () {
 		return Promise.all([
 			L.resolveDefault(fs.exec_direct('/bin/df', ['-h']), {}),
-			L.resolveDefault(fs.exec('/etc/init.d/aria2', ['running']), null)
-				.then(res => res.code === 0),
+			L.resolveDefault(callServiceList('aria2', ['instances', 'aria2.main', 'running']), null)
+				.then(Boolean),
 			L.resolveDefault(fs.exec_direct('/usr/bin/aria2c', ['-v']), '')
 				.then(res => {
 					const info = {};
@@ -108,7 +110,7 @@ return view.extend({
 						};
 					});
 					return info;
-				}),
+				})
 		]);
 	},
 
@@ -122,34 +124,25 @@ return view.extend({
 
 		s = m.section(form.TypedSection);
 		s.anonymous = true;
-		s.render = () => {
-			var node = E('div', { style: 'margin-bottom:10px' }),
-				button = E('span', { style: 'display:inline-block' });
-			running && Promise.all(
-				Object.entries({ 'ariang': 'AriaNg', 'webui-aria2': 'WebUI-Aria2', 'yaaw': 'YAAW' })
-					.map(([key, val]) =>
-						fs.stat(`/www/${key}/index.html`)
-							.then(() => ({ key, val }))
-							.catch(() => null)
-					),
-			).then(installed => {
-				installed.filter(Boolean).forEach(({ key, val }) => {
-					button.appendChild(E('div', {
-						style: 'margin-left:5px',
-						class: 'btn cbi-button-apply',
-						click: () => open(`${location.origin}/${key}`)
-					}, val));
-				});
-			});
-
-			node.replaceChildren(E('div', {}, [
-				E('span', { style: `font-weight:bold;color:${running ? 'green' : 'red'};margin-right:10px` },
-					_('Aria2 ') + (running ? _('RUNNING') : _('NOT RUNNING'))),
-				button
-			]));
-
-			return node;
-		};
+		s.render = () => E('div', { style: 'margin-bottom:10px' }, [
+			E('div', {}, [
+				E('b', { style: `color:${running ? 'green' : 'red'};margin-right:10px` },
+					'Aria2 %s'.format(running ? _('RUNNING') : _('NOT RUNNING'))),
+				running ? (() => {
+					const b = E('span', {});
+					['ariang:AriaNg', 'webui-aria2:WebUI-Aria2', 'yaaw:YAAW'].map(s => {
+						const [k, v] = s.split(':');
+						fs.stat(`/www/${k}/index.html`)
+							.then(() => b.appendChild(E('div', {
+								style: 'margin-left:5px', class: 'btn cbi-button-apply',
+								click: () => open(`${location.origin}/${k}`)
+							}, v)))
+							.catch(() => []);
+					});
+					return b;
+				})() : []
+			])
+		]);
 
 		s = m.section(form.NamedSection, 'main', 'aria2');
 		s.addremove = false;
@@ -166,7 +159,14 @@ return view.extend({
 		o = s.taboption('basic', form.Value, 'dir', _('Download directory'),
 			_('The directory to store the downloaded file. For example <code>/mnt/sda1</code>.'));
 		o.rmempty = false;
-		if (typeof diskList === 'string') parseMountedDisks(diskList, o);
+		var devMap = {};
+		diskList.trim().split('\n').slice(1).forEach(line => {
+			var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
+			if (!dev?.includes('dev') || !mount?.startsWith('/mnt') || devMap[dev]) return;
+			devMap[dev] = true;
+			o.value(mount + '/download',
+				_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
+		});
 
 		o = s.taboption('basic', form.Flag, 'enable_pro', _('Aria2 pro file'),
 			_('When enabled,  the original system configuration directory will be merged.'));
@@ -186,10 +186,10 @@ return view.extend({
 		o.rmempty = false;
 		o.default = 1;
 
-		o = s.taboption('basic', form.Value, 'log', _('Log file'),
-			_('The file name of the log file.'));
+		o = s.taboption('basic', form.Value, 'log', _('Log directory'),
+			_('Directory where log files will be stored (e.g., /var/log)'));
 		o.depends('enable_logging', '1');
-		o.placeholder = '/var/log/aria2.log';
+		o.default = '/var/log';
 
 		o = s.taboption('basic', form.ListValue, 'log_level', _('Log level'));
 		o.depends('enable_logging', '1');

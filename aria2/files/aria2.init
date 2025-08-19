@@ -249,7 +249,8 @@ aria2_start() {
 	if [ -z "$enable_logging" ]; then
 		append_options "log" "log_level"
 	elif [ "$enable_logging" = "1" ]; then
-		log=${log:-"/var/log/aria2.log"}
+		log=${log:-"/var/log"}/aria2.log
+		log=$(echo "$log" | sed 's#//*#/#g')
 
 		local log_dir
 		log_dir="$(dirname "$log")"

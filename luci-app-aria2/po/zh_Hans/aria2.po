@@ -307,8 +307,8 @@ msgid "Log Data"
 msgstr "日志数据"
 
 #: applications/luci-app-aria2/htdocs/luci-static/resources/view/aria2/config.js:223
-msgid "Log file"
-msgstr "日志文件"
+msgid "Log directory"
+msgstr "日志目录"
 
 #: applications/luci-app-aria2/htdocs/luci-static/resources/view/aria2/config.js:228
 msgid "Log level"
@@ -717,8 +717,8 @@ msgid ""
 msgstr "用于放置下载文件的目录。例如：<code>/mnt/sda1</code>。"
 
 #: applications/luci-app-aria2/htdocs/luci-static/resources/view/aria2/config.js:224
-msgid "The file name of the log file."
-msgstr "日志文件名。"
+msgid "Directory where log files will be stored (e.g., /var/log)"
+msgstr "目录将存储日志文件（例如 /var /log）"
 
 #: applications/luci-app-aria2/htdocs/luci-static/resources/view/aria2/config.js:386
 msgid "The maximum number of connections to one server for each download."
