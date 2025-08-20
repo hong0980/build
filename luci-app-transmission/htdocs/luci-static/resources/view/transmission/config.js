@@ -1,5 +1,6 @@
 'use strict';
 'require fs';
+'require rpc';
 'require uci';
 'require view';
 'require form';
@@ -10,6 +11,18 @@ function setFlagBool(o) {
 	o.disabled = 'false';
 };
 
+const callServiceList = rpc.declare({
+	object: 'service',
+	method: 'list',
+	params: ['name'],
+	expect: { '': {} },
+	filter: (data, { name }, extra) =>
+		extra.reduce((res, key) =>
+			(res && typeof res === 'object' ? res[key] : null),
+			data[name] || null
+		)
+});
+
 return view.extend({
 	load: function () {
 		return Promise.all([
@@ -17,16 +30,16 @@ return view.extend({
 			L.resolveDefault(fs.stat('/usr/share/transmission'), null),
 			L.resolveDefault(fs.exec_direct('/usr/bin/transmission-daemon', ['-v']), '')
 				.then(res => res.match(/Transmission\s+([^\s]+)/)?.[1]),
-			L.resolveDefault(fs.exec_direct('/usr/bin/pgrep', ['-x', '/usr/bin/transmission-daemon']), ''),
+			callServiceList('transmission', ['instances', 'instance1', 'running'])
+				.then(Boolean),
 			uci.load('transmission')
+				.then(r => uci.get_first('transmission', 'transmission', 'rpc_port') || '9091'),
 		]);
 	},
 
-	render: function ([diskList, iswebExists, ver, running]) {
-		console.log(location.origin)
+	render: function ([diskList, iswebExists, ver, running, port]) {
 		let m, s, o;
-		var port = uci.get_first('transmission', 'transmission', 'rpc_port') || '9091',
-			webinstalled = iswebExists !== null || !!uci.get_first('transmission', 'transmission', 'web_home');
+		var webinstalled = iswebExists !== null || !!uci.get_first('transmission', 'transmission', 'web_home');
 
 		m = new form.Map('transmission', 'Transmission',
 			'%s %s'.format(
@@ -36,16 +49,16 @@ return view.extend({
 		);
 
 		s = m.section(form.TypedSection);
-		s.render = () =>
-			E('p', { style: `font-weight:bold; color:${running ? 'green' : 'red'}` }, [
-				_('Transmission ') + (running ? _('RUNNING') : _('NOT RUNNING')),
-				running && webinstalled
-					? E('div', {
-						style: 'margin-left:10px;', class: 'btn cbi-button-apply',
-						click: () => open(`${location.origin}:${port}`)
-					}, _('Open Web Interface'))
-					: []
-			]);
+		s.render = () => E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
+			E('b', { style: `color:${running ? 'green' : 'red'}` },
+				'Transmission %s'.format(running ? _('RUNNING') : _('NOT RUNNING'))),
+			running && webinstalled
+				? E('div', {
+					class: 'btn cbi-button-apply',
+					click: () => open(`${location.origin}:${port}`)
+				}, _('Open Web Interface'))
+				: []
+		]);
 
 		s = m.section(form.NamedSection, 'transmission', 'transmission');
 		s.addremove = false;
@@ -81,11 +94,17 @@ return view.extend({
 				_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
 		});
 
-		o = s.taboption("settings", form.Value, 'log_file', _('Log file path'));
-		o.placeholder = '/var/log/transmission.log';
-		o.description = _('Leave empty to disable file logging');
+		o = s.taboption('settings', form.Flag, 'enable_logging', _('Enable logging'));
+		o.rmempty = false;
+		o.default = 1;
+
+		o = s.taboption("settings", form.Value, 'log_file', _('Log file directory'));
+		o.depends('enable_logging', '1');
+		o.placeholder = '/var/log';
+		o.description = _('Leave blank to record the log file in /var/log');
 
 		o = s.taboption("settings", form.ListValue, 'log_level', _('Log level'));
+		o.depends('enable_logging', '1');
 		o.value('critical', _('Critical'));
 		o.value('error', _('Error'));
 		o.value('warn', _('Warning'));
@@ -97,7 +116,8 @@ return view.extend({
 
 		o = s.taboption("settings", form.Flag, 'log_foreground', _('Run in foreground'));
 		o.description = _('Output logs to console instead of running as daemon');
-		o.default = '0';
+		o.depends('enable_logging', '1');
+		o.default = 0;
 		o.rmempty = false;
 
 		o = s.taboption("settings", form.Value, 'web_home', _('Custom Web UI directory'));

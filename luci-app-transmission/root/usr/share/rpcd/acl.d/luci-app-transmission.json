@@ -4,13 +4,15 @@
 		"read": {
 			"file": {
 				"/bin/df": [ "exec" ],
-				"/usr/bin/pgrep": [ "exec" ],
 				"/usr/share/transmission/*": [ "list" ],
 				"/usr/bin/transmission-daemon": ["exec"]
 			},
 			"uci": [ "transmission" ]
 		},
 		"write": {
+			"file": {
+				"/*/transmission.log": [ "write" ]
+			},
 			"uci": [ "transmission" ]
 		}
 	}

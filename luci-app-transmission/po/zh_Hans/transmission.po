@@ -447,14 +447,17 @@ msgstr "uTP 已启用"
 msgid "Here shows the files used by transmission."
 msgstr "此处显示 Transmission 使用的配置文件。"
 
-msgid "Log file path"
-msgstr "日志文件位置"
+msgid "Log file directory"
+msgstr "日志文件目录"
 
-msgid "Leave empty to disable file logging"
-msgstr "留空则不记录日志文件"
+msgid "Leave blank to record the log file in /var/log"
+msgstr "留空则记录日志文件在/var/log"
 
 msgid "Run in foreground"
 msgstr "在前台运行"
 
 msgid "Output logs to console instead of running as daemon"
 msgstr "将日志输出到控制台而非以守护进程方式运行"
+
+msgid "Refresh time:"
+msgstr "刷新时间："
