@@ -315,8 +315,8 @@ return view.extend({
 		o = s.taboption("peer", form.Value, 'peer_congestion_algorithm', _('Peer congestion algorithm'),
 			_('This is documented on <a href="https://www.irif.fr/~jch/software/bittorrent/tcp-congestion-control.html" target="_blank" rel="noreferrer noopener">tcp-congestion-control</a>.'));
 
-		o = s.taboption("peer", form.Value, 'peer_id_ttl_hours', _('Recycle peer id after'), _('hours'));
-		o.datatype = 'uinteger';
+		// o = s.taboption("peer", form.Value, 'peer_id_ttl_hours', _('Recycle peer id after'), _('hours'));
+		// o.datatype = 'uinteger';
 
 		o = s.taboption("peer", form.Value, 'peer_limit_global', _('Global peer limit'));
 		o.datatype = 'uinteger';
