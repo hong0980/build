@@ -230,8 +230,8 @@ msgid "Header"
 msgstr "请求头"
 
 #: applications/luci-app-aria2/htdocs/luci-static/resources/view/aria2/files.js:46
-msgid "Here shows the files used by aria2."
-msgstr "这里展示了 Aria2 使用的文件。"
+msgid "This page is the configuration file content of %s."
+msgstr "本页是 %s 使用的配置文件内容。"
 
 #: applications/luci-app-aria2/htdocs/luci-static/resources/view/aria2/config.js:415
 msgid "IPv4 <abbr title=\"Distributed Hash Table\">DHT</abbr> enabled"

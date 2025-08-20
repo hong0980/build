@@ -109,11 +109,11 @@ msgstr "指定qBittorrent的二进制文件位置"
 msgid "%s/download (size: %s) (used: %s/%s)"
 msgstr "%s/下载 (大小: %s) (已用: %s/%s)"
 
-msgid "qBittorrent - Files"
-msgstr "qBittorrent - 文件"
+msgid "Files"
+msgstr "文件"
 
-msgid "This page is the configuration file content of qBittorrent."
-msgstr "本页面显示qBittorrent的配置文件内容"
+msgid "This page is the configuration file content of %s."
+msgstr "本页是 %s 使用的配置文件内容。"
 
 msgid "This is the content of the configuration file under <code>%s</code>:"
 msgstr "以下是<code>%s</code>路径下的配置文件内容："

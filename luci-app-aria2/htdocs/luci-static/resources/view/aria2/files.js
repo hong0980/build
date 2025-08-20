@@ -4,44 +4,44 @@
 'require view';
 
 return view.extend({
-	load: () => Promise.all([uci.load('aria2')]),
+	load: () => uci.load('aria2').then((r) => {
+		const conffile = `${uci.get(r, 'main', 'pro_file') || '/var/etc/aria2'}/aria2.conf.main`
+		return ['/etc/config/aria2', `${conffile}`];
+	}),
 
-	render: function (data) {
-		const files = [
-			'/etc/config/aria2',
-			(uci.get('aria2', 'main', 'pro_file') || '/var/etc/aria2') + '/aria2.conf.main'
-		];
-
-		const container = E('div', {}, [
-			E('h3', { name: 'content' }, '%s - %s'.format(_('Aria2'), _('Configuration'))),
-			E('div', {}, _('Here shows the files used by aria2.'))
+	render: (files) => {
+		const view = E('div', {}, [
+			E('h3', 'Aria2 - %s'.format(_('Files'))),
+			E('div', _('This page is the configuration file content of %s.').format('Aria2'))
 		]);
-
 		Promise.all(files.map(path =>
 			fs.stat(path)
-				.then(stat => stat.size > 0 && fs.trimmed(path)
-					.then(content => ({ path, content, stat }))
+				.then(stat => stat.size > 0
+					? fs.trimmed(path).then(content => ({ content, stat, path }))
+					: { content: '' }
 				)
 				.catch(() => ({ content: '' }))
 		)).then(results => {
-			results.forEach(res => {
-				res.content && container.appendChild(E('div', { class: 'cbi-section' }, [
-					E('div', { style: 'margin-top:1em' }, _('This is the content of the configuration file under <code>%s</code>:').format(res.path)),
+			results.forEach(({ content, stat, path }) => {
+				if (!content) return;
+				view.appendChild(E('div', {}, [
+					E('div', { style: 'margin-top:1em' },
+						_('This is the content of the configuration file under <code>%s</code>:').format(path)),
 					E('textarea', {
 						readonly: '', wrap: 'soft',
-						rows: Math.min(res.content.split('\n').length + 1, 18),
-						style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
-					}, res.content),
+						rows: Math.min(content.split('\n').length + 1, 18),
+						style: 'width:100%; font-size:14px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
+					}, content),
 					E('div', { style: 'color:#888;font-size:90%;margin-top:0.5em;' },
 						_('Last modified: %s, Size: %s bytes').format(
-							new Date(res.stat.mtime * 1000).toLocaleString(), res.stat.size
+							new Date(stat.mtime * 1000).toLocaleString(), stat.size
 						)
 					)
 				]));
 			});
 		});
 
-		return container;
+		return view;
 	},
 
 	handleSave: null,

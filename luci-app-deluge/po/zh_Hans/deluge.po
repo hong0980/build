@@ -1,5 +1,5 @@
-msgid "This page is the configuration file content of Deluge."
-msgstr "本页是Deluge的配置文件内容。"
+msgid "This page is the configuration file content of %s."
+msgstr "本页是 %s 使用的配置文件内容。"
 
 msgid "%s/download (size: %s) (used: %s/%s)"
 msgstr "%s/download (大小: %s) (已用: %s/%s)"

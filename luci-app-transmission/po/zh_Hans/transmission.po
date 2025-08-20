@@ -444,8 +444,8 @@ msgstr "uTP 已启用"
 #~ msgid "Peer socket tos"
 #~ msgstr "Peer 套接字 tos 值"
 
-msgid "Here shows the files used by transmission."
-msgstr "此处显示 Transmission 使用的配置文件。"
+msgid "This page is the configuration file content of %s."
+msgstr "本页是 %s 使用的配置文件内容。"
 
 msgid "Log file directory"
 msgstr "日志文件目录"
