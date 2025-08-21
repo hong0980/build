@@ -11,7 +11,7 @@ return view.extend({
 	load: () => Promise.all([
 		fs.trimmed(logPath),
 		uci.load('taskplan')
-			.then(() => uci.get('taskplan', 'globals', 'log_length'))
+			.then(() => uci.get('taskplan', 'globals', 'log_length') || '200')
 	]),
 
 	render: function ([content, log_length]) {
@@ -34,8 +34,7 @@ return view.extend({
 					})
 				}, _('Clear Log')),
 				E('div', {
-					class: 'btn cbi-button-apply',
-					style: 'margin-left:10px',
+					class: 'btn cbi-button-apply', style: 'margin-left:10px',
 					click: ui.createHandlerFn(this, (ev) => {
 						let newValue = reversed
 							? dom.textarea.value.split('\n').reverse().join('\n')

@@ -3,7 +3,10 @@
 		"description": "Grant access for luci-app-taskplan",
 		"read": {
 			"file": {
+				"/bin/sh": ["exec"],
+				"/bin/bash": ["exec"],
 				"/usr/bin/which": [ "exec"],
+				"/etc/taskplan/*": ["exec"],
 				"/etc/taskplan/*": ["read"],
 				"/var/run/taskplan_counter.dat": ["read"]
 			}

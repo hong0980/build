@@ -308,6 +308,7 @@ return view.extend({
 			.then(() => fs.read(path))
 			.then(content => {
 				ui.showModal(_('Edit %s').format(label), [
+					E('style', { type: 'text/css' }, [`.modal{ max-width: 650px;}h4{text-align: center;}`]),
 					E('b', { style: 'color:red;' },
 						_('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
 					E('textarea', { rows: 12, id: v, style: 'background-color:#272626; color:#e9e9dd; font-family:Consolas, monospace;' }, [content]),
@@ -344,5 +345,4 @@ return view.extend({
 			.catch(e => notify(null, E('p', {},
 				_('Unable to read %s: %s').format(label, e.message)), 8000, 'error'));
 	}
-
 });
