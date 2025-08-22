@@ -22,6 +22,21 @@ log() {
 	) 200>"$LOCK_FILE"
 }
 
+execute_script() {
+	script="$1"
+	[ ! -f "$script" ] || [ ! -s "$script" ] && return 1
+
+	read -r first_line < "$script"
+	first_line="${first_line#\#!}"
+
+	if [ -n "$first_line" ]; then
+		first_line=$(echo "$first_line" | xargs)
+		"$first_line" "$script"
+	else
+		. "$script"
+	fi
+}
+
 limit_log() {
 	[ -s "$LOG" ] || return
 	count=$(wc -l < "$LOG")
@@ -66,8 +81,8 @@ trigger() {
 		clearmem) sync && echo 3 > /proc/sys/vm/drop_caches ;;
 		restartlan) ifdown lan; ifup lan; log $(trf "LAN restart successful!") ;;
 		disreconn) disreconnwan || { ifup wan; log $(trf "Redial successful!"); } ;;
-		script_a) [ -s "$TASKPLAN_DIR/script_a" ] && . "$TASKPLAN_DIR/script_a" ;;
-		script_b) [ -s "$TASKPLAN_DIR/script_b" ] && . "$TASKPLAN_DIR/script_b" ;;
+		script_a) execute_script "$TASKPLAN_DIR/script_a" ;;
+		script_b) execute_script "$TASKPLAN_DIR/script_b" ;;
 		restartsamba)
 			for svc in ksmdb samba samba4; do
 				[ -x "/etc/init.d/$svc" ] && /etc/init.d/"$svc" restart

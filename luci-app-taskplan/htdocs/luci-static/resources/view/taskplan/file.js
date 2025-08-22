@@ -4,34 +4,108 @@
 'require uci';
 'require view';
 
-const fileConfigs = [
-	{
-		tab: 'crontab',
-		label: _('Scheduled Tasks'),
-		filepath: '/etc/crontabs/root',
-		description: _('This is the system crontab in which scheduled tasks can be defined.'),
-		savecall: () => fs.exec('/etc/init.d/cron', ['reload'])
-	},
-	{
-		tab: 'rc-local',
-		label: _('Local Startup'),
-		filepath: '/etc/rc.local',
-		description: _('This is the content of /etc/rc.local. Insert your own commands here (in front of \'exit 0\') to execute them at the end of the boot process.')
-	},
-	{
-		tab: 'customscript1',
-		label: _('Custom Script a'),
-		filepath: '/etc/taskplan/script_a',
-		description: _('The execution content of the [Scheduled Customscript1] in the task name')
-	},
-	{
-		tab: 'customscript2',
-		label: _('Custom Script b'),
-		filepath: '/etc/taskplan/script_b',
-		description: _('The execution content of the [Scheduled Customscript2] in the task name')
-	}
-];
+const newfilepath = '/etc/taskplan'
 const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
+
+const createscript = (filestat) => {
+	const existingScripts = filestat.map(script => script.name);
+	return E('div', {
+		class: 'btn cbi-button-add',
+		click: ui.createHandlerFn(this, () => {
+			const scriptOptions = ['c', 'd', 'e', 'f', 'g'].map(c => `script_${c}`);
+			const modalContent = [
+				E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
+					E('div', { style: 'display: flex; align-items: center; gap: 10px;' }, [
+						E('div', _('Script name')),
+						E('select', {
+							id: 'script-select', style: 'width: 130px;', class: 'cbi-input-select'
+						}, scriptOptions.map(name =>
+							E('option', { value: name }, _('Custom Script %s').format(name.split('_')[1]))
+						))
+					]),
+				]),
+
+				E('textarea', {
+					wrap: 'off', rows: 18, id: 'script-content',
+					style: 'width:100%; font-size:14px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
+				}),
+
+				E('div', { id: 'action-buttons', style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
+					E('style', { type: 'text/css' }, [`.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}`]),
+					E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal }, _('Cancel')),
+					E('div', { class: 'btn cbi-button-apply', click: ui.createHandlerFn(this, saveScript) }, _('Save'))
+				])
+			];
+
+			ui.showModal(_('Create/Edit Script'), modalContent);
+
+			const selectEl = document.getElementById('script-select');
+			const textareaEl = document.getElementById('script-content');
+			const buttonsEl = document.getElementById('action-buttons');
+
+			const updateUI = () => {
+				const scriptName = selectEl.value;
+				const exists = existingScripts.includes(scriptName);
+				const oldDeleteBtn = document.getElementById('delete-btn');
+				if (oldDeleteBtn) buttonsEl.removeChild(oldDeleteBtn);
+
+				if (exists) {
+					const deleteBtn = E('div', {
+						id: 'delete-btn', class: 'btn cbi-button-remove', click: ui.createHandlerFn(this, confirmDelete)
+					}, _('Delete'));
+					buttonsEl.insertBefore(deleteBtn, buttonsEl.lastChild);
+				}
+
+				if (exists) {
+					fs.read(`${newfilepath}/${scriptName}`)
+						.then(content => textareaEl.value = content)
+						.catch(() => textareaEl.value = '');
+				} else {
+					textareaEl.value = '';
+				}
+			};
+
+			function saveScript() {
+				const name = selectEl.value;
+				const content = textareaEl.value.trim();
+				if (!content) return;
+
+				fs.write(`${newfilepath}/${name}`, content.replace(/\r\n/g, '\n') + '\n')
+					.then(() => {
+						notify(null, E('p', _('Script saved successfully')), 3000, 'info');
+						ui.hideModal();
+						window.location.reload();
+					})
+					.catch(e => notify(null, E('p', _('Error saving script: %s').format(e)), 5000, 'error'));
+			}
+
+			function confirmDelete() {
+				const name = selectEl.value;
+				ui.showModal(_('Confirm Deletion'), [
+					E('p', _('Are you sure you want to delete script %s?').format(name)),
+					E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em; margin-top: 1em;' }, [
+						E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal }, _('Cancel')),
+						E('div', {
+							class: 'btn cbi-button-remove',
+							click: ui.createHandlerFn(this, () => {
+								fs.remove(`${newfilepath}/${name}`)
+									.then(() => {
+										notify(null, E('p', _('Script deleted successfully')), 3000, 'info');
+										ui.hideModal();
+										window.location.reload();
+									})
+									.catch(e => notify(null, E('p', _('Error deleting script: %s').format(e)), 5000, 'error'));
+							})
+						}, _('Confirm Delete'))
+					])
+				]);
+			}
+
+			updateUI();
+			selectEl.addEventListener('change', updateUI);
+		})
+	}, _('Create Script'));
+};
 
 const executeScript = (filepath, label) =>
 	ui.showModal(_('Are you sure you want to execute the %s script?').format(label), [
@@ -49,7 +123,7 @@ const executeScript = (filepath, label) =>
 								E('style', { type: 'text/css' }, [`.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}`]),
 								E('div', {}, [
 									E('textarea', {
-										readonly: '', wrap: 'off', rows: 18,
+										readonly: '', wrap: 'off', rows: Math.min(response.split('\n').length + 3, 20),
 										style: 'width:100%; font-size:14px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
 									}, response || _('No results were returned for execution'))
 								]),
@@ -89,125 +163,180 @@ const executeScript = (filepath, label) =>
 		])
 	]);
 
+function generateFileConfigs(files) {
+	const staticConfigs = [
+		{
+			tab: 'crontab',
+			label: _('Scheduled Tasks'),
+			filepath: '/etc/crontabs/root',
+			description: _('This is the system crontab in which scheduled tasks can be defined.'),
+			savecall: () => fs.exec('/etc/init.d/cron', ['reload'])
+		},
+		{
+			tab: 'rc-local',
+			label: _('Local Startup'),
+			filepath: '/etc/rc.local',
+			description: _('This is the content of /etc/rc.local. Insert your own commands here (in front of \'exit 0\') to execute them at the end of the boot process.')
+		},
+	];
+
+	const taskplanConfigs = files
+		.filter(file => !['script_a', 'script_b'].includes(file.name))
+		.map((file, index) => {
+			const name = file.name.split('_').pop();
+			return ({
+				tab: _('customscript%s').format(index + 3),
+				label: _('Custom Script %s').format(name),
+				filepath: `${newfilepath}/${file.name}`,
+				description: _('Execution content of script %s').format(name)
+			})
+		});
+
+	return [
+		...staticConfigs,
+		{
+			tab: 'customscript1',
+			label: _('Custom Script %s').format('a'),
+			filepath: `${newfilepath}/script_a`,
+			description: _('Execution content of script %s').format('a')
+		},
+		{
+			tab: 'customscript2',
+			label: _('Custom Script %s').format('b'),
+			filepath: `${newfilepath}/script_b`,
+			description: _('Execution content of script %s').format('b')
+		},
+		...taskplanConfigs
+	];
+};
+
 return view.extend({
-	load: () => Promise.all(fileConfigs.map(({ tab, filepath }) =>
-		fs.stat(filepath)
-			.catch(() =>
-				tab === 'customscript1'
-					? L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
-						.then(sh => fs.write(filepath, `#!${(sh || '/bin/sh\n')}`))
-					: tab === 'customscript2'
-						? L.resolveDefault(fs.exec_direct('/usr/bin/which', ['python3']), null)
-							.then(py => py
-								? fs.write(filepath, `#!${py}`)
-								: L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
-									.then(sh => fs.write(filepath, `#!${(sh || '/bin/sh\n')}`))
-							)
-						: null)
-			.then((stat) => Promise.all([
-				L.resolveDefault(fs.read_direct(filepath), ''),
-				fs.stat(filepath), uci.load('system')
-			])),
-	)),
+	load: () => {
+		return fs.list(newfilepath).then(files => {
+			const dynamicConfigs = generateFileConfigs(files);
+			return Promise.all(dynamicConfigs.map(({ tab, filepath }) =>
+				fs.stat(filepath)
+					.catch(() =>
+						tab === 'customscript1'
+							? L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
+								.then(sh => fs.write(filepath, `#!${(sh || '/bin/sh\n')}`))
+							: tab === 'customscript2'
+								? L.resolveDefault(fs.exec_direct('/usr/bin/which', ['python3']), null)
+									.then(py => py
+										? fs.write(filepath, `#!${py}`)
+										: L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
+											.then(sh => fs.write(filepath, `#!${(sh || '/bin/sh\n')}`)))
+								: null)
+					.then(() => Promise.all([
+						L.resolveDefault(fs.read(filepath), ''),
+						fs.stat(filepath),
+						uci.load('system')
+					]))
+			));
+		});
+	},
 
 	render: (data) => {
 		const Level = uci.get('system', '@system[0]', 'cronloglevel');
-		const tabs = fileConfigs.map((cfg, idx) => {
-			const [content, stat] = data[idx];
-			if (!stat) return;
-			const { description, filepath, label, tab, savecall } = cfg
-			return E('div', { 'data-tab': tab, 'data-tab-title': label }, [
-				E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
-					description,
-					tab.includes('crontab')
-						? E('div', { style: 'display: flex; align-items: center; gap: 10px;' }, [
-							E('select', { id: 'cron_option', style: 'width: 80px;' },
-								content.split('\n')
-									.filter(l => l.trim())
-									.map(l => {
-										const label = l.split(/\s+/).slice(0, 5).join(' ');
-										return E('option', { value: label }, label);
-									})
-							),
-							E('div', {
-								class: 'btn cbi-button-apply',
-								title: _('After selecting, click to crontab.guru to verify'),
-								click: ui.createHandlerFn(this, () => {
-									const select = document.getElementById('cron_option');
-									if (select && select.value) {
-										window.open(`https://crontab.guru/#${select.value.replace(/\s/g, '_')}`);
-									}
-								})
-							}, _('verify')),
-							E('div', _('Cron Log Level')),
-							E('select', { id: 'loglevel_option', style: 'width: 80px;', class: 'cbi-input-select' }, [
-								E('option', { value: 5, selected: Level == '5' ? '' : null }, _('Debug')),
-								E('option', { value: 9, selected: Level == '9' ? '' : null }, _('Disabled')),
-								E('option', { value: 7, selected: Level == '7' ? '' : null }, _('Normal')),
-							]),
-							E('div', {
-								class: 'btn cbi-button-apply',
-								title: _("Save Cron's log level"),
-								click: ui.createHandlerFn(this, () => {
-									const val = document.getElementById('loglevel_option').value;
-									if (val !== Level) {
-										uci.set('system', '@system[0]', 'cronloglevel', val);
-										uci.save();
-										uci.apply()
-											.then(() => notify(null, E('p', _("Cron's log level saved successfully")), 3000))
-											.catch((e) => notify(null, E('p', e.message), 3000));
-									};
-								})
-							}, _('Save')),
-						])
-						: [],
-				]),
-				E('textarea', {
-					id: tab, rows: 13,
-					style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
-				}, [content]),
-				tab.includes('script')
-					? E('div', { class: 'cbi-value-description' }, [
-						E('b', { style: 'color:red;' },
-							_('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.'))
-					])
-					: [],
-				E('div', { style: 'color:#888;font-size:90%;', }, _('Last modified: %s, Size: %s bytes').format(
-					new Date(stat.mtime * 1000).toLocaleString(), stat.size)),
-				E('div', { class: 'cbi-page-actions' }, [
-					E('div', {
-						class: 'btn cbi-button-save',
-						click: ui.createHandlerFn(this, () => {
-							const value = document.getElementById(tab).value;
-							if (value === content) {
-								return notify(null, E('p',
-									_('No modifications detected. The content remains unchanged.')), 3000);
-							};
-							fs.write(filepath, value.trim().replace(/\r\n/g, '\n') + '\n')
-								.then(() => tab.includes('crontab') ? savecall() : [])
-								.then(() => notify(null, E('p', _('%s Contents have been saved.').format(label)), 3000, 'info'))
-								.catch(e => notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 8000, 'error'));
-						})
-					}, _('Save')),
-					tab.includes('script')
-						? E('div', {
-							class: 'btn cbi-button-apply', style: 'margin-left: 6px;',
-							click: ui.createHandlerFn(this, () => executeScript(filepath, label))
-						}, '%s %s'.format(_('Run'), label))
-						: [],
-				])
-			]);
-		}).filter(Boolean);
-
 		const view = E('div', {}, [
 			E('b', {}, [
 				_('This page can be edited and saved directly. Changes will take effect immediately after saving.'),
 				_('Please ensure the syntax is correct, as incorrect syntax may cause the system to malfunction.'),
 			]),
-			E('div', {}, typeof data === 'object' ? tabs : [])
 		]);
 
-		ui.tabs.initTabGroup(view.lastElementChild.childNodes);
+		fs.list(newfilepath).then(files => {
+			const fileConfigs = generateFileConfigs(files);
+			const tabs = fileConfigs.map((cfg, idx) => {
+				const [content, stat] = data[idx];
+				if (!stat) return;
+				const { description, filepath, label, tab, savecall } = cfg
+				return E('div', { 'data-tab': tab, 'data-tab-title': label }, [
+					E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
+						description,
+						tab.includes('crontab')
+							? E('div', { style: 'display: flex; align-items: center; gap: 10px;' }, [
+								E('select', { id: 'cron_option', style: 'width: 80px;' },
+									content.split('\n').filter(l => l.trim())
+										.map(l => {
+											const label = l.split(/\s+/).slice(0, 5).join(' ');
+											return E('option', { value: label }, label);
+										})
+								),
+								E('div', {
+									class: 'btn cbi-button-apply',
+									title: _('After selecting, click to crontab.guru to verify'),
+									click: ui.createHandlerFn(this, () => {
+										const select = document.getElementById('cron_option');
+										if (select && select.value) {
+											window.open(`https://crontab.guru/#${select.value.replace(/\s/g, '_')}`);
+										}
+									})
+								}, _('verify')),
+								E('div', _('Cron Log Level')),
+								E('select', { id: 'loglevel_option', style: 'width: 80px;', class: 'cbi-input-select' }, [
+									E('option', { value: 5, selected: Level == '5' ? '' : null }, _('Debug')),
+									E('option', { value: 9, selected: Level == '9' ? '' : null }, _('Disabled')),
+									E('option', { value: 7, selected: Level == '7' ? '' : null }, _('Normal')),
+								]),
+								E('div', {
+									class: 'btn cbi-button-apply',
+									title: _("Save Cron's log level"),
+									click: ui.createHandlerFn(this, () => {
+										const val = document.getElementById('loglevel_option').value;
+										if (val !== Level) {
+											uci.set('system', '@system[0]', 'cronloglevel', val);
+											uci.save();
+											uci.apply()
+												.then(() => notify(null, E('p', _("Cron's log level saved successfully")), 3000))
+												.catch((e) => notify(null, E('p', e.message), 3000));
+										};
+									})
+								}, _('Save')),
+							])
+							: [],
+					]),
+					E('textarea', {
+						id: tab, rows: Math.min(content.split('\n').length + 1, 20),
+						style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
+					}, [content]),
+					tab.includes('script')
+						? E('div', { class: 'cbi-value-description' }, [
+							E('b', { style: 'color:red;' },
+								_('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.'))
+						])
+						: [],
+					E('div', { style: 'color:#888;font-size:90%;', }, _('Last modified: %s, Size: %s bytes').format(
+						new Date(stat.mtime * 1000).toLocaleString(), stat.size)),
+					E('div', { class: 'cbi-page-actions' }, [
+						E('div', {
+							class: 'btn cbi-button-save',
+							click: ui.createHandlerFn(this, () => {
+								const value = document.getElementById(tab).value;
+								if (value === content) {
+									return notify(null, E('p',
+										_('No modifications detected. The content remains unchanged.')), 3000);
+								};
+								fs.write(filepath, value.trim().replace(/\r\n/g, '\n') + '\n')
+									.then(() => tab.includes('crontab') ? savecall() : [])
+									.then(() => notify(null, E('p', _('%s Contents have been saved.').format(label)), 3000, 'info'))
+									.catch(e => notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 8000, 'error'));
+							})
+						}, _('Save')),
+						tab.includes('script')
+							? E('div', {
+								class: 'btn cbi-button-apply', style: 'margin-left: 6px;',
+								click: ui.createHandlerFn(this, () => executeScript(filepath, label))
+							}, '%s %s'.format(_('Run'), label))
+							: [],
+					])
+				]);
+			}).filter(Boolean);
+
+			view.appendChild(E('div', { style: 'display: inline-block; margin-left: 10px;' }, createscript(files)));
+			view.appendChild(E('div', {}, tabs));
+			ui.tabs.initTabGroup(view.lastElementChild.childNodes);
+		});
 		return view;
 	},
 

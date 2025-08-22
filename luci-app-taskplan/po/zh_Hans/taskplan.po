@@ -117,11 +117,8 @@ msgstr "关闭无线网络"
 msgid "Scheduled Wifiup"
 msgstr "启用无线网络"
 
-msgid "Custom Script a"
-msgstr "脚本 a"
-
-msgid "Custom Script b"
-msgstr "脚本 b"
+msgid "Custom Script %s"
+msgstr "脚本 %s"
 
 msgid "Execution"
 msgstr "执行"
@@ -150,11 +147,8 @@ msgstr "mwan3 监控超时退出"
 msgid "Unknown command: "
 msgstr "未知命令: "
 
-msgid "The execution content of the [Scheduled Customscript1] in the task name"
-msgstr "脚本 a 的执行内容"
-
-msgid "The execution content of the [Scheduled Customscript2] in the task name"
-msgstr "脚本 b 的执行内容"
+msgid "Execution content of script %s"
+msgstr "脚本 %s 的执行代码"
 
 msgid "Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-6, 0 and 6 = Sunday)"
 msgstr "分钟 (0-59)，小时 (0-23)，日期 (1-31)，月份 (1-12)，星期 (0-6，0=星期日)"
@@ -296,3 +290,72 @@ msgstr "无法保存内容：%s"
 
 msgid "Copy the current execution result"
 msgstr "复制当前执行结果"
+
+msgid "Script name"
+msgstr "脚本名称"
+
+msgid "The script is saved successfully"
+msgstr "脚本保存成功"
+
+msgid "Error saving script %s"
+msgstr "脚本保存出错 %s"
+
+msgid "Create Script"
+msgstr "创建脚本"
+
+msgid "Create/Edit Script"
+msgstr "创建/编辑脚本"
+
+msgid "Script name"
+msgstr "脚本名称"
+
+msgid "Custom Script %s"
+msgstr "脚本 %s"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Confirm Deletion"
+msgstr "确认删除"
+
+msgid "Confirm Delete"
+msgstr "确认删除"
+
+msgid "Script saved successfully"
+msgstr "脚本保存成功"
+
+msgid "Error saving script: %s"
+msgstr "保存脚本出错: %s"
+
+msgid "Script deleted successfully"
+msgstr "脚本删除成功"
+
+msgid "Error deleting script: %s"
+msgstr "删除脚本出错: %s"
+
+msgid "Are you sure you want to delete script %s?"
+msgstr "确定要删除脚本 %s 吗？"
+
+msgid "Script does not exist"
+msgstr "脚本不存在"
+
+msgid "Create a new script"
+msgstr "创建新脚本"
+
+msgid "Create a script"
+msgstr "创建脚本"
+
+msgid "Edit script"
+msgstr "编辑脚本"
+
+msgid "New script"
+msgstr "新脚本"
+
+msgid "Existing script"
+msgstr "已有脚本"
