@@ -120,6 +120,8 @@ const validateCrontabField = (type, value, monthValue) => {
 
 	return true;
 };
+const scriptpath = '/etc/taskplan';
+const scriptSuffix = (v) => v.replace('script_', '')
 const CRON_FIELDS = ['minute', 'hour', 'day', 'month', 'week'];
 const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
 
@@ -290,21 +292,29 @@ return view.extend({
 		e.value('12', _('Scheduled Restartmwan3'));
 		e.value('13', _('Scheduled Wifiup'));
 		e.value('14', _('Scheduled Wifidown'));
-		e.value('15', _('Custom Script a'));
-		e.value('16', _('Custom Script b'));
+		e.value('script_a', _('Custom Script a'));
+		e.value('script_b', _('Custom Script b'));
+
+		L.resolveDefault(fs.list(scriptpath), '').then(files => {
+			files.forEach(file => {
+				const scriptName = file.name;
+				if (/^script_[a-z]+$/.test(scriptName) && !['script_a', 'script_b'].includes(scriptName)) {
+					e.value(scriptName, _('Custom Script %s').format(scriptSuffix(scriptName)));
+				}
+			});
+		});
 		e.onchange = (ev, section_id, value) => {
-			(['15', '16'].includes(value)) && this.showScriptEditModal(value);
+			if (value.startsWith('script_')) this.showScriptEditModal(value);
 		};
 		e.editable = true;
 	},
 
 	showScriptEditModal: function (v) {
-		const scriptSuffix = v === '16' ? 'b' : 'a';
-		const label = _(`Custom Script ${scriptSuffix}`);
-		const path = `/etc/taskplan/script_${scriptSuffix}`;
+		const label = _('Custom Script %s').format(scriptSuffix(v));
+		const path = `${scriptpath}/script_${scriptSuffix(v)}`;
 		fs.stat(path)
-			.catch(() => fs.exec('/usr/bin/which', ['bash'])
-				.then(res => fs.write(path, `#!/bin/${res.stdout ? 'ba' : ''}sh\n`)))
+			.catch(() => L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
+				.then(sh => fs.write(path, `#!${(sh || '/bin/sh\n')}`)))
 			.then(() => fs.read(path))
 			.then(content => {
 				ui.showModal(_('Edit %s').format(label), [
@@ -313,31 +323,28 @@ return view.extend({
 						_('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
 					E('textarea', { rows: 12, id: v, style: 'background-color:#272626; color:#e9e9dd; font-family:Consolas, monospace;' }, [content]),
 					E('div', { style: 'display: flex; justify-content: space-between; gap: 0.5em;' }, [
-						E('div', {
-							class: 'btn cbi-button-neutral',
-							click: ui.hideModal, title: _('Cancel')
-						}, _('Cancel')),
+						E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal, title: _('Cancel') }, _('Cancel')),
 						E('div', {
 							class: 'btn cbi-button-action',
 							title: _('Click to upload the script to %s').format(path),
-							click: () => ui.uploadFile(path)
+							click: ui.createHandlerFn(this, () => ui.uploadFile(path)
 								.then(() => notify(null, E('p',
 									_('File saved to %s').format(path)), 3000, 'info'))
-								.catch((e) => notify(null, E('p', e.message), 3000))
+								.catch((e) => notify(null, E('p', e.message), 3000)))
 						}, _('Upload')),
 						E('div', {
 							class: 'btn cbi-button-positive', title: _('Save'),
-							click: () => {
+							click: ui.createHandlerFn(this, () => {
 								const value = document.getElementById(v).value;
 								if (value.trim() === content.trim()) {
-									notify(null, E('p', _('No modifications detected. The content remains unchanged.')), 3000);
-								} else {
-									fs.write(path, value.trim().replace(/\r\n/g, '\n') + '\n')
-										.then(() => notify(null, E('p', _('Contents of %s have been saved.').format(label)), 3000, 'info'))
-										.catch(e => notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 8000, 'error'));
+									ui.hideModal();
+									return notify(null, E('p', _('No modifications detected. The content remains unchanged.')), 3000);
 								}
+								fs.write(path, value.trim().replace(/\r\n/g, '\n') + '\n')
+									.then(() => notify(null, E('p', _('Contents of %s have been saved.').format(label)), 3000, 'info'))
+									.catch(e => notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 8000, 'error'));
 								ui.hideModal();
-							}
+							})
 						}, _('Save')),
 					])
 				]);

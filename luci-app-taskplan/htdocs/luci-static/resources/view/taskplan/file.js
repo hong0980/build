@@ -12,15 +12,14 @@ const createscript = (filestat) => {
 	return E('div', {
 		class: 'btn cbi-button-add',
 		click: ui.createHandlerFn(this, () => {
-			const scriptOptions = ['c', 'd', 'e', 'f', 'g'].map(c => `script_${c}`);
 			const modalContent = [
 				E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
 					E('div', { style: 'display: flex; align-items: center; gap: 10px;' }, [
 						E('div', _('Script name')),
 						E('select', {
 							id: 'script-select', style: 'width: 130px;', class: 'cbi-input-select'
-						}, scriptOptions.map(name =>
-							E('option', { value: name }, _('Custom Script %s').format(name.split('_')[1]))
+						}, ['c', 'd', 'e', 'f', 'g'].map(c =>
+							E('option', { value: `script_${c}` }, _('Custom Script %s').format(c))
 						))
 					]),
 				]),
@@ -33,7 +32,8 @@ const createscript = (filestat) => {
 				E('div', { id: 'action-buttons', style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
 					E('style', { type: 'text/css' }, [`.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}`]),
 					E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal }, _('Cancel')),
-					E('div', { class: 'btn cbi-button-apply', click: ui.createHandlerFn(this, saveScript) }, _('Save'))
+					E('div', { class: 'btn cbi-button-apply', click: ui.createHandlerFn(this, saveScript) }, _('Save')),
+					E('div', { class: 'btn cbi-button-action', click: ui.createHandlerFn(this, upload) }, _('Upload')),
 				])
 			];
 
@@ -54,7 +54,7 @@ const createscript = (filestat) => {
 						id: 'delete-btn', class: 'btn cbi-button-remove', click: ui.createHandlerFn(this, confirmDelete)
 					}, _('Delete'));
 					buttonsEl.insertBefore(deleteBtn, buttonsEl.lastChild);
-				}
+				};
 
 				if (exists) {
 					fs.read(`${newfilepath}/${scriptName}`)
@@ -62,7 +62,18 @@ const createscript = (filestat) => {
 						.catch(() => textareaEl.value = '');
 				} else {
 					textareaEl.value = '';
-				}
+				};
+			};
+
+			function upload() {
+				const name = selectEl.value;
+				ui.uploadFile(`${newfilepath}/${name}`)
+					.then(() => {
+						notify(null, E('p', _('File saved to %s').format(`${newfilepath}/${name}`)), 3000, 'info');
+						ui.hideModal();
+						window.location.reload();
+					})
+					.catch((e) => notify(null, E('p', e.message), 3000))
 			};
 
 			function saveScript() {
@@ -77,7 +88,7 @@ const createscript = (filestat) => {
 						window.location.reload();
 					})
 					.catch(e => notify(null, E('p', _('Error saving script: %s').format(e)), 5000, 'error'));
-			}
+			};
 
 			function confirmDelete() {
 				const name = selectEl.value;
@@ -99,7 +110,7 @@ const createscript = (filestat) => {
 						}, _('Confirm Delete'))
 					])
 				]);
-			}
+			};
 
 			updateUI();
 			selectEl.addEventListener('change', updateUI);
@@ -170,7 +181,7 @@ function generateFileConfigs(files) {
 			label: _('Scheduled Tasks'),
 			filepath: '/etc/crontabs/root',
 			description: _('This is the system crontab in which scheduled tasks can be defined.'),
-			savecall: () => fs.exec('/etc/init.d/cron', ['reload'])
+			savecall: () => fs.exec('/etc/init.d/cron', ['restart'])
 		},
 		{
 			tab: 'rc-local',
@@ -181,9 +192,9 @@ function generateFileConfigs(files) {
 	];
 
 	const taskplanConfigs = files
-		.filter(file => !['script_a', 'script_b'].includes(file.name))
+		.filter(file => !['script_a', 'script_b', 'taskplan.log'].includes(file.name))
 		.map((file, index) => {
-			const name = file.name.split('_').pop();
+			const name = file.name.replace('script_', '');
 			return ({
 				tab: _('customscript%s').format(index + 3),
 				label: _('Custom Script %s').format(name),

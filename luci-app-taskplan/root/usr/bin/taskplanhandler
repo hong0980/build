@@ -24,17 +24,16 @@ log() {
 
 execute_script() {
 	script="$1"
-	[ ! -f "$script" ] || [ ! -s "$script" ] && return 1
+	[ -s "$script" ] || return 1
 
 	read -r first_line < "$script"
-	first_line="${first_line#\#!}"
-
-	if [ -n "$first_line" ]; then
-		first_line=$(echo "$first_line" | xargs)
-		"$first_line" "$script"
-	else
-		. "$script"
-	fi
+	case "$first_line" in
+		\#!*)
+			interpreter=$(echo "$first_line" | cut -c 3- | awk '{print $1}')
+			command -v "$interpreter" >/dev/null && "$interpreter" "$script"
+		;;
+		*) . "$script" ;;
+	esac
 }
 
 limit_log() {
@@ -81,8 +80,7 @@ trigger() {
 		clearmem) sync && echo 3 > /proc/sys/vm/drop_caches ;;
 		restartlan) ifdown lan; ifup lan; log $(trf "LAN restart successful!") ;;
 		disreconn) disreconnwan || { ifup wan; log $(trf "Redial successful!"); } ;;
-		script_a) execute_script "$TASKPLAN_DIR/script_a" ;;
-		script_b) execute_script "$TASKPLAN_DIR/script_b" ;;
+		script*) execute_script "$TASKPLAN_DIR/$1" ;;
 		restartsamba)
 			for svc in ksmdb samba samba4; do
 				[ -x "/etc/init.d/$svc" ] && /etc/init.d/"$svc" restart
@@ -134,6 +132,7 @@ trf() {
 
 get_task_description() {
 	case "$1" in
+		script*)        trf "$1" ;;
 		reboot)         trf "Scheduled Reboot" ;;
 		poweroff)       trf "Scheduled Poweroff" ;;
 		closewan)       trf "Scheduled Closewan" ;;
@@ -144,8 +143,6 @@ get_task_description() {
 		clearmem)       trf "Scheduled Clearmem" ;;
 		restartlan)     trf "Scheduled Restartlan" ;;
 		disreconn)      trf "Scheduled DisReconn" ;;
-		script_a)		trf "Custom Script a" ;;
-		script_b)		trf "Custom Script b" ;;
 		restartsamba)   trf "Scheduled RestartSamba" ;;
 		upwifi)         trf "Scheduled Wifiup" ;;
 		downwifi)       trf "Scheduled Wifidown" ;;

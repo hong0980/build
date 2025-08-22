@@ -9,6 +9,7 @@
 				"/usr/bin/which": [ "exec"],
 				"/etc/taskplan/*": ["exec"],
 				"/etc/taskplan/*": ["read"],
+				"/etc/init.d/cron": [ "exec"],
 				"/var/run/taskplan_counter.dat": ["read"]
 			}
 		},

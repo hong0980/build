@@ -30,8 +30,7 @@ task_cmd() {
         12) echo "restartmwan3" ;;
         13) echo "upwifi" ;;
         14) echo "downwifi" ;;
-        15) echo "script_a" ;;
-        16) echo "script_b" ;;
+        script*) echo "$1" ;;
     esac
 }
 
