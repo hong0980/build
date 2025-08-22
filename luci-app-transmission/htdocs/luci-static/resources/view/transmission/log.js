@@ -25,8 +25,9 @@ return view.extend({
 		return Promise.all([
 			L.resolveDefault(fs.exec_direct('/sbin/logread', ['-e', 'transmission']), '')
 				.then(content => formatLog(content)),
-			L.resolveDefault(fs.read_direct(log_path), '')
-				.then(content => content.trim())
+			fs.stat(log_path)
+				.then(() => fs.read_direct(log_path).then(content => content.trim()))
+				.catch(() => '')
 		]);
 	},
 

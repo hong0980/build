@@ -22,11 +22,12 @@ return view.extend({
 			}).join('\n');
 		};
 
-	return Promise.all([
-		L.resolveDefault(fs.exec_direct('/sbin/logread', ['-e', 'aria2']), '')
+		return Promise.all([
+			L.resolveDefault(fs.exec_direct('/sbin/logread', ['-e', 'aria2']), '')
 				.then(content => formatLog(content.trim())),
-			L.resolveDefault(fs.read_direct(log_path), '')
-				.then(content => content.trim())
+			fs.stat(log_path)
+				.then(() => fs.read_direct(log_path).then(content => content.trim()))
+				.catch(() => '')
 		]);
 	},
 

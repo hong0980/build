@@ -265,7 +265,7 @@ msgid "Invalid format for %s. Example: (%s)"
 msgstr "%s 的格式无效，示例：(%s)"
 
 msgid "Are you sure you want to execute the %s script?"
-msgstr "确定要执行 %s 脚本吗？"
+msgstr "你确定要执行 %s 吗？"
 
 msgid "%s execution result"
 msgstr "%s 执行结果"
@@ -289,10 +289,10 @@ msgid "Run"
 msgstr "运行"
 
 msgid "%s Contents have been saved."
-msgstr "％s 的文档内容已保存。"
+msgstr "%s 的文档内容已保存。"
 
 msgid "Unable to save contents: %s"
-msgstr "无法保存内容：％s"
+msgstr "无法保存内容：%s"
 
 msgid "Copy the current execution result"
 msgstr "复制当前执行结果"

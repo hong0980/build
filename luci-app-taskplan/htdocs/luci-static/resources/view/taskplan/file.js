@@ -35,66 +35,79 @@ const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
 
 const executeScript = (filepath, label) =>
 	ui.showModal(_('Are you sure you want to execute the %s script?').format(label), [
-		E('style', { type: 'text/css' }, [`.modal{max-width: 400px; min-height: 100px; width:auto; margin:17em auto;} h4{text-align: center;color: red;}`]),
-		E('div', { style: 'display: flex; justify-content: space-between; gap: 0.5em;' }, [
+		E('style', { type: 'text/css' }, [`.modal{max-width:400px;min-height:100px;width:auto;margin:17em auto;padding:1em;} h4{text-align:center;color:red;}`]),
+		E('br'),
+		E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
 			E('div', {
 				class: 'btn cbi-button-positive',
-				click: () =>
-					fs.exec_direct('/bin/sh', [filepath])
-						.then(response => ui.showModal(_('%s execution result').format(label), [
-							E('style', { type: 'text/css' }, [`.modal{max-width: 650px;}h4{text-align: center;}`]),
-							E('div', {}, [
-								E('textarea', {
-									readonly: '', wrap: 'off', rows: 18,
-									style: 'width:100%; font-size:14px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
-								}, response || _('No results were returned for execution'))
-							]),
-							E('div', { style: 'display: flex; justify-content: space-between; gap: 0.5em;' }, [
-								E('div', {
-									class: 'btn cbi-button-neutral', click: ui.hideModal, title: _('Cancel')
-								}, _('Cancel')),
-								E('div', { style: 'display: flex; align-items: center; gap: 0.5em;' }, [
-									E('input', {
-										type: 'checkbox', id: 'wordwrap-toggle',
-										change: ev => {
-											const textarea = document.querySelector('.modal textarea');
-											textarea.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre';
-										}
-									}),
-									E('label', { for: 'wordwrap-toggle', title: _('Enable automatic line wrapping') }, _('Wrap text')),
+				click: () => fs.read_direct(filepath)
+					.then(content => {
+						const firstLine = content.split('\n')[0].match(/^#!\s*(.+)/);
+						const interpreter = firstLine ? firstLine[1].trim() : '/bin/sh';
+						return fs.exec_direct(interpreter, [filepath])
+							.then(response => ui.showModal(_('%s execution result').format(label), [
+								E('style', { type: 'text/css' }, [`.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}`]),
+								E('div', {}, [
+									E('textarea', {
+										readonly: '', wrap: 'off', rows: 18,
+										style: 'width:100%; font-size:14px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
+									}, response || _('No results were returned for execution'))
 								]),
-								E('div', {
-									class: 'btn cbi-button-positive', title: _('Copy the current execution result'),
-									click: (ev) => {
-										const textarea = ev.target.closest('.modal').querySelector('textarea');
-										if (textarea) {
-											textarea.select();
-											document.execCommand('copy');
-											notify(null, E('p', _('The execution result has been copied to the clipboard!')), 3000, 'info');
-											ui.hideModal();
+								E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
+									E('div', {
+										class: 'btn cbi-button-neutral', click: ui.hideModal, title: _('Cancel')
+									}, _('Cancel')),
+									E('div', { style: 'display: flex; align-items: center; gap: 0.5em;' }, [
+										E('input', {
+											type: 'checkbox', id: 'wordwrap-toggle',
+											change: ev => {
+												const textarea = document.querySelector('.modal textarea');
+												textarea.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre';
+											}
+										}),
+										E('label', { for: 'wordwrap-toggle', title: _('Enable automatic line wrapping') }, _('Wrap text')),
+									]),
+									E('div', {
+										class: 'btn cbi-button-positive', title: _('Copy the current execution result'),
+										click: (ev) => {
+											const textarea = ev.target.closest('.modal').querySelector('textarea');
+											if (textarea) {
+												textarea.select();
+												document.execCommand('copy');
+												notify(null, E('p', _('The execution result has been copied to the clipboard!')), 3000, 'info');
+												ui.hideModal();
+											}
 										}
-									}
-								}, _('Copy')),
-							])]))
-						.catch(e => {
-							notify(null, E('p', _('Script execution failed: %s').format(e.message)), 8000, 'error');
-						})
+									}, _('Copy')),
+								])]))
+							.catch(e => {
+								notify(null, E('p', _('Script execution failed: %s').format(e.message)), 8000, 'error');
+							})
+					})
 			}, _('Confirm')),
-			E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal }, _('Cancel')),
+			E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal }, _('Cancel'))
 		])
 	]);
 
 return view.extend({
 	load: () => Promise.all(fileConfigs.map(({ tab, filepath }) =>
 		fs.stat(filepath)
-			.catch(() => tab.includes('script')
-				? L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
-					.then(res => fs.write(filepath, `#!${res || '/bin/sh\n'}`))
-				: null)
+			.catch(() =>
+				tab === 'customscript1'
+					? L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
+						.then(sh => fs.write(filepath, `#!${(sh || '/bin/sh\n')}`))
+					: tab === 'customscript2'
+						? L.resolveDefault(fs.exec_direct('/usr/bin/which', ['python3']), null)
+							.then(py => py
+								? fs.write(filepath, `#!${py}`)
+								: L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
+									.then(sh => fs.write(filepath, `#!${(sh || '/bin/sh\n')}`))
+							)
+						: null)
 			.then((stat) => Promise.all([
-				L.resolveDefault(fs.read(filepath), ''),
-				stat, uci.load('system')
-			]))
+				L.resolveDefault(fs.read_direct(filepath), ''),
+				fs.stat(filepath), uci.load('system')
+			])),
 	)),
 
 	render: (data) => {

@@ -5,6 +5,7 @@
 			"file": {
 				"/bin/sh": ["exec"],
 				"/bin/bash": ["exec"],
+				"/usr/bin/python3": ["exec"],
 				"/usr/bin/which": [ "exec"],
 				"/etc/taskplan/*": ["exec"],
 				"/etc/taskplan/*": ["read"],
