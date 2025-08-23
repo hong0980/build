@@ -40,7 +40,7 @@ msgid "Edit %s"
 msgstr "编辑 %s"
 
 msgid "Note: Please use valid syntax. The script runs as root. Avoid destructive commands (e.g., \"rm -rf /\"). The script should not require user interaction."
-msgstr "注意：请使用正确的 sh 语法。脚本是以 root 权限执行，请勿使用破坏性命令（如 \"rm -rf /\"）。脚本是后台自动执行，不会与用户交互。"
+msgstr "注意：请使用正确的语法。脚本是以 root 权限执行，请勿使用破坏性命令（如 \"rm -rf /\"）。脚本是后台自动执行，不会与用户交互。"
 
 msgid "File saved to %s"
 msgstr "文件已保存至 %s"

@@ -7,7 +7,7 @@
 const newfilepath = '/etc/taskplan'
 const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
 
-const createscript = (filestat) => {
+function createscript(filestat) {
 	const existingScripts = filestat.map(script => script.name);
 	return E('div', {
 		class: 'btn cbi-button-add',
@@ -18,7 +18,7 @@ const createscript = (filestat) => {
 						E('div', _('Script name')),
 						E('select', {
 							id: 'script-select', style: 'width: 130px;', class: 'cbi-input-select'
-						}, ['c', 'd', 'e', 'f', 'g'].map(c =>
+						}, ['c', 'd', 'e', 'f', 'g'].map((c) =>
 							E('option', { value: `script_${c}` }, _('Custom Script %s').format(c.toUpperCase()))
 						))
 					]),
@@ -90,10 +90,9 @@ const createscript = (filestat) => {
 
 			function confirmDelete() {
 				const name = selectEl.value;
-				ui.showModal(_('Confirm Deletion'), [
-					E('p', _('Are you sure you want to delete script %s?').format(name)),
+				ui.showModal(_('Are you sure you want to delete script %s?').format(name.replace('script_', '').toUpperCase()), [
+					E('style', { type: 'text/css' }, [`.modal{max-width:400px;min-height:100px;width:auto;margin:17em auto;padding:1em;} h4{text-align:center;color:red;}`]),
 					E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em; margin-top: 1em;' }, [
-						E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal }, _('Cancel')),
 						E('div', {
 							class: 'btn cbi-button-remove',
 							click: ui.createHandlerFn(this, () => {
@@ -105,7 +104,8 @@ const createscript = (filestat) => {
 									})
 									.catch(e => notify(null, E('p', _('Error deleting script: %s').format(e)), 5000, 'error'));
 							})
-						}, _('Confirm Delete'))
+						}, _('Confirm Delete')),
+						E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal }, _('Cancel'))
 					])
 				]);
 			};
@@ -113,64 +113,81 @@ const createscript = (filestat) => {
 			updateUI();
 			selectEl.addEventListener('change', updateUI);
 		})
-	}, _('Create Script'));
+	}, _('Create/Edit Script'));
 };
 
-const executeScript = (filepath, label) =>
+function executescript(filepath, label) {
 	ui.showModal(_('Are you sure you want to execute the %s script?').format(label), [
 		E('style', { type: 'text/css' }, [`.modal{max-width:400px;min-height:100px;width:auto;margin:17em auto;padding:1em;} h4{text-align:center;color:red;}`]),
-		E('br'),
-		E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
+		E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em; margin-top: 1em;' }, [
 			E('div', {
 				class: 'btn cbi-button-positive',
-				click: () => fs.read_direct(filepath)
-					.then(content => {
-						const firstLine = content.split('\n')[0].match(/^#!\s*(.+)/);
-						const interpreter = firstLine ? firstLine[1].trim() : '/bin/sh';
-						return fs.exec_direct(interpreter, [filepath])
-							.then(response => ui.showModal(_('%s execution result').format(label), [
-								E('style', { type: 'text/css' }, [`.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}`]),
-								E('div', {}, [
+				click: ui.createHandlerFn(this, () => {
+					fs.read_direct(filepath)
+						.then(content => {
+							const firstLine = content.split('\n')[0].match(/^#!\s*(.+)/);
+							const interpreter = firstLine ? firstLine[1].trim() : '/bin/sh';
+							fs.exec_direct(interpreter, [filepath])
+								.then(response => ui.showModal(_('%s execution result').format(label), [
+									E('style', { type: 'text/css' }, [`.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}`]),
 									E('textarea', {
 										readonly: '', wrap: 'off', rows: Math.min(response.split('\n').length + 3, 20),
 										style: 'width:100%; font-size:14px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
-									}, response || _('No results were returned for execution'))
-								]),
-								E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
-									E('div', {
-										class: 'btn cbi-button-neutral', click: ui.hideModal, title: _('Cancel')
-									}, _('Cancel')),
-									E('div', { style: 'display: flex; align-items: center; gap: 0.5em;' }, [
-										E('input', {
-											type: 'checkbox', id: 'wordwrap-toggle',
-											change: ev => {
-												const textarea = document.querySelector('.modal textarea');
-												textarea.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre';
-											}
-										}),
-										E('label', { for: 'wordwrap-toggle', title: _('Enable automatic line wrapping') }, _('Wrap text')),
-									]),
-									E('div', {
-										class: 'btn cbi-button-positive', title: _('Copy the current execution result'),
-										click: (ev) => {
-											const textarea = ev.target.closest('.modal').querySelector('textarea');
-											if (textarea) {
-												textarea.select();
-												document.execCommand('copy');
-												notify(null, E('p', _('The execution result has been copied to the clipboard!')), 3000, 'info');
-												ui.hideModal();
-											}
-										}
-									}, _('Copy')),
-								])]))
-							.catch(e => {
-								notify(null, E('p', _('Script execution failed: %s').format(e.message)), 8000, 'error');
-							})
-					})
+									}, response || _('No results were returned for execution')),
+									E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
+										E('div', {
+											class: 'btn cbi-button-neutral', click: ui.hideModal, title: _('Cancel')
+										}, _('Cancel')),
+										E('div', { style: 'display: flex; align-items: center; gap: 0.5em;' }, [
+											E('input', {
+												type: 'checkbox', id: 'wordwrap-toggle',
+												change: (ev) => {
+													const textarea = document.querySelector('.modal textarea');
+													textarea.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre';
+												}
+											}),
+											E('label', { for: 'wordwrap-toggle', title: _('Enable automatic line wrapping') }, _('Wrap text')),
+										]),
+										E('div', {
+											class: 'btn cbi-button-positive', title: _('Copy the current execution result'),
+											click: ui.createHandlerFn(this, (ev) => {
+												const textarea = ev.target.closest('.modal').querySelector('textarea');
+												if (textarea) {
+													textarea.select();
+													document.execCommand('copy');
+													notify(null, E('p', _('The execution result has been copied to the clipboard!')), 3000, 'info');
+													ui.hideModal();
+												};
+											})
+										}, _('Copy')),
+									])]))
+								.catch(e => {
+									notify(null, E('p', _('Script execution failed: %s').format(e.message)), 8000, 'error');
+								})
+						})
+				})
 			}, _('Confirm')),
 			E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal }, _('Cancel'))
 		])
-	]);
+	])
+};
+
+function deletescript(filepath, label) {
+	ui.showModal(_('Are you sure you want to delete script %s?').format(label.replace('script_', '').toUpperCase()), [
+		E('style', { type: 'text/css' }, [`.modal{max-width:400px;min-height:100px;width:auto;margin:17em auto;padding:1em;} h4{text-align:center;color:red;}`]),
+		E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em; margin-top: 1em;' }, [
+			E('div', {
+				class: 'btn cbi-button-remove',
+				click: ui.createHandlerFn(this, () => {
+					fs.remove(filepath)
+						.then(() => window.location.reload())
+						.catch(e => notify(null, E('p', _('Error deleting script: %s').format(e)), 5000, 'error'));
+				})
+			}, _('Confirm Delete')),
+			E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal }, _('Cancel'))
+		])
+	])
+};
 
 function generateFileConfigs(files) {
 	const staticConfigs = [
@@ -278,7 +295,7 @@ return view.extend({
 										const select = document.getElementById('cron_option');
 										if (select && select.value) {
 											window.open(`https://crontab.guru/#${select.value.replace(/\s/g, '_')}`);
-										}
+										};
 									})
 								}, _('verify')),
 								E('div', _('Cron Log Level')),
@@ -316,7 +333,19 @@ return view.extend({
 						: [],
 					E('div', { style: 'color:#888;font-size:90%;', }, _('Last modified: %s, Size: %s bytes').format(
 						new Date(stat.mtime * 1000).toLocaleString(), stat.size)),
-					E('div', { class: 'cbi-page-actions' }, [
+					E('div', { style: 'display:flex;justify-content:flex-end;gap:10px;padding:17px 20px 18px 17px;background:#f8f8f8;border-top:1px solid #e0e0e0;border-radius:0 0 3px 3px;margin-bottom:18px' }, [
+						/_[c-g]/i.test(filepath)
+							? E('div', {
+								class: 'btn cbi-button-remove',
+								click: ui.createHandlerFn(this, () => deletescript(filepath, label))
+							}, '%s %s'.format(_('Delete'), label))
+							: [],
+						tab.includes('script')
+							? E('div', {
+								class: 'btn cbi-button-apply',
+								click: ui.createHandlerFn(this, () => executescript(filepath, label))
+							}, '%s %s'.format(_('Run'), label))
+							: [],
 						E('div', {
 							class: 'btn cbi-button-save',
 							click: ui.createHandlerFn(this, () => {
@@ -330,12 +359,6 @@ return view.extend({
 									.catch(e => notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 8000, 'error'));
 							})
 						}, _('Save')),
-						tab.includes('script')
-							? E('div', {
-								class: 'btn cbi-button-apply', style: 'margin-left: 6px;',
-								click: ui.createHandlerFn(this, () => executeScript(filepath, label))
-							}, '%s %s'.format(_('Run'), label))
-							: [],
 					])
 				]);
 			}).filter(Boolean);
