@@ -11,20 +11,19 @@
 		"title": "Task Plan Plus+",
 		"order": 10,
 		"action": {
-			"type": "view",
-			"path": "taskplan/scheduledtask"
+			"type": "firstchild",
 		},
 		"depends": {
 			"acl": [ "luci-app-taskplan" ],
 			"uci": { "taskplan": true }
 		}
 	},
-	"admin/control/taskplan/scheduledtask": {
+	"admin/control/taskplan/config": {
 		"title": "Task Plan",
 		"order": 10,
 		"action": {
 			"type": "view",
-			"path": "taskplan/scheduledtask"
+			"path": "taskplan/config"
 		}
 	},
 	"admin/control/taskplan/file": {

@@ -115,24 +115,35 @@ trigger() {
 }
 
 trf() {
-	if [ "$(uci -q get luci.main.lang)" = "en" ]; then
-		echo  "$@"
+	local lang=$(uci -q get luci.main.lang)
+	if [ "$lang" = "en" ]; then
+		printf "%s" "$*"
 		return
 	fi
 
-	printf '%s\n' \
-		"local i, t = 1, {}" \
-		"for _, v in ipairs(arg) do" \
-		"    t[i] = require('luci.i18n').translate(v)" \
-		"    i = i + 1" \
-		"end" \
-		"print(table.concat(t, ' '))" | \
-	LUA_INIT="require 'luci.i18n'.setlanguage('zh_cn')" lua - "$@"
+	if printf "%s" "$*" | grep -q '%[[:alpha:]]'; then
+		local format_str="$1"
+		shift
+
+		local translated_template=$(lua -e "
+			require 'luci.i18n'.setlanguage('$lang')
+			print(require('luci.i18n').translate([==[$format_str]==]))
+		")
+		printf "$translated_template" "$@"
+	else
+		printf '%s\n' \
+			"local i, t = 1, {}" \
+			"for _, v in ipairs(arg) do" \
+			"    t[i] = require('luci.i18n').translate(v)" \
+			"    i = i + 1" \
+			"end" \
+			"print(table.concat(t, ' '))" | \
+		LUA_INIT="require 'luci.i18n'.setlanguage('$lang')" lua - "$@"
+	fi
 }
 
 get_task_description() {
 	case "$1" in
-		script*)        trf "$1" ;;
 		reboot)         trf "Scheduled Reboot" ;;
 		poweroff)       trf "Scheduled Poweroff" ;;
 		closewan)       trf "Scheduled Closewan" ;;
@@ -147,6 +158,7 @@ get_task_description() {
 		upwifi)         trf "Scheduled Wifiup" ;;
 		downwifi)       trf "Scheduled Wifidown" ;;
 		sysfree)        trf "Scheduled Restartmwan3" ;;
+		script*)        trf "Custom Script %s" "$(echo "$1" | cut -d _ -f 2)" ;;
 		*)              echo "" ;;
 	esac
 }

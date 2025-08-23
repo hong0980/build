@@ -19,16 +19,14 @@ const createscript = (filestat) => {
 						E('select', {
 							id: 'script-select', style: 'width: 130px;', class: 'cbi-input-select'
 						}, ['c', 'd', 'e', 'f', 'g'].map(c =>
-							E('option', { value: `script_${c}` }, _('Custom Script %s').format(c))
+							E('option', { value: `script_${c}` }, _('Custom Script %s').format(c.toUpperCase()))
 						))
 					]),
 				]),
-
 				E('textarea', {
 					wrap: 'off', rows: 18, id: 'script-content',
 					style: 'width:100%; font-size:14px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
 				}),
-
 				E('div', { id: 'action-buttons', style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
 					E('style', { type: 'text/css' }, [`.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}`]),
 					E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal }, _('Cancel')),
@@ -180,8 +178,7 @@ function generateFileConfigs(files) {
 			tab: 'crontab',
 			label: _('Scheduled Tasks'),
 			filepath: '/etc/crontabs/root',
-			description: _('This is the system crontab in which scheduled tasks can be defined.'),
-			savecall: () => fs.exec('/etc/init.d/cron', ['restart'])
+			description: _('This is the system crontab in which scheduled tasks can be defined.')
 		},
 		{
 			tab: 'rc-local',
@@ -192,9 +189,9 @@ function generateFileConfigs(files) {
 	];
 
 	const taskplanConfigs = files
-		.filter(file => !['script_a', 'script_b', 'taskplan.log'].includes(file.name))
+		.filter(file => !/_a|_b|log/i.test(file.name))
 		.map((file, index) => {
-			const name = file.name.replace('script_', '');
+			const name = file.name.replace('script_', '').toUpperCase();
 			return ({
 				tab: _('customscript%s').format(index + 3),
 				label: _('Custom Script %s').format(name),
@@ -207,15 +204,15 @@ function generateFileConfigs(files) {
 		...staticConfigs,
 		{
 			tab: 'customscript1',
-			label: _('Custom Script %s').format('a'),
+			label: _('Custom Script %s').format('A'),
 			filepath: `${newfilepath}/script_a`,
-			description: _('Execution content of script %s').format('a')
+			description: _('Execution content of script %s').format('A')
 		},
 		{
 			tab: 'customscript2',
-			label: _('Custom Script %s').format('b'),
+			label: _('Custom Script %s').format('B'),
 			filepath: `${newfilepath}/script_b`,
-			description: _('Execution content of script %s').format('b')
+			description: _('Execution content of script %s').format('B')
 		},
 		...taskplanConfigs
 	];
@@ -261,7 +258,7 @@ return view.extend({
 			const tabs = fileConfigs.map((cfg, idx) => {
 				const [content, stat] = data[idx];
 				if (!stat) return;
-				const { description, filepath, label, tab, savecall } = cfg
+				const { description, filepath, label, tab } = cfg
 				return E('div', { 'data-tab': tab, 'data-tab-title': label }, [
 					E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
 						description,
@@ -291,16 +288,16 @@ return view.extend({
 									E('option', { value: 7, selected: Level == '7' ? '' : null }, _('Normal')),
 								]),
 								E('div', {
-									class: 'btn cbi-button-apply',
-									title: _("Save Cron's log level"),
+									class: 'btn cbi-button-apply', title: _("Save Cron's log level"),
 									click: ui.createHandlerFn(this, () => {
 										const val = document.getElementById('loglevel_option').value;
 										if (val !== Level) {
 											uci.set('system', '@system[0]', 'cronloglevel', val);
 											uci.save();
 											uci.apply()
-												.then(() => notify(null, E('p', _("Cron's log level saved successfully")), 3000))
-												.catch((e) => notify(null, E('p', e.message), 3000));
+												.then(() => fs.exec_direct('/etc/init.d/cron', ['restart'])
+													.then(() => notify(null, E('p', _("Cron's log level saved successfully")), 3000))
+													.catch((e) => notify(null, E('p', e.message), 3000)));
 										};
 									})
 								}, _('Save')),
@@ -312,9 +309,9 @@ return view.extend({
 						style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
 					}, [content]),
 					tab.includes('script')
-						? E('div', { class: 'cbi-value-description' }, [
+						? E('div', {}, [
 							E('b', { style: 'color:red;' },
-								_('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.'))
+								_('Note: Please use valid syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.'))
 						])
 						: [],
 					E('div', { style: 'color:#888;font-size:90%;', }, _('Last modified: %s, Size: %s bytes').format(
@@ -329,7 +326,6 @@ return view.extend({
 										_('No modifications detected. The content remains unchanged.')), 3000);
 								};
 								fs.write(filepath, value.trim().replace(/\r\n/g, '\n') + '\n')
-									.then(() => tab.includes('crontab') ? savecall() : [])
 									.then(() => notify(null, E('p', _('%s Contents have been saved.').format(label)), 3000, 'info'))
 									.catch(e => notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 8000, 'error'));
 							})

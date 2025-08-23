@@ -292,15 +292,13 @@ return view.extend({
 		e.value('12', _('Scheduled Restartmwan3'));
 		e.value('13', _('Scheduled Wifiup'));
 		e.value('14', _('Scheduled Wifidown'));
-		e.value('script_a', _('Custom Script a'));
-		e.value('script_b', _('Custom Script b'));
+		e.value('script_a', _('Custom Script %s').format('A'));
+		e.value('script_b', _('Custom Script %s').format('B'));
 
 		L.resolveDefault(fs.list(scriptpath), '').then(files => {
 			files.forEach(file => {
-				const scriptName = file.name;
-				if (/^script_[a-z]+$/.test(scriptName) && !['script_a', 'script_b'].includes(scriptName)) {
-					e.value(scriptName, _('Custom Script %s').format(scriptSuffix(scriptName)));
-				}
+				if (!/_a|_b|log/i.test(file.name))
+					e.value(file.name, _('Custom Script %s').format(scriptSuffix(file.name).toUpperCase()));
 			});
 		});
 		e.onchange = (ev, section_id, value) => {
@@ -310,7 +308,7 @@ return view.extend({
 	},
 
 	showScriptEditModal: function (v) {
-		const label = _('Custom Script %s').format(scriptSuffix(v));
+		const label = _('Custom Script %s').format(scriptSuffix(v).toUpperCase());
 		const path = `${scriptpath}/script_${scriptSuffix(v)}`;
 		fs.stat(path)
 			.catch(() => L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
@@ -318,9 +316,9 @@ return view.extend({
 			.then(() => fs.read(path))
 			.then(content => {
 				ui.showModal(_('Edit %s').format(label), [
-					E('style', { type: 'text/css' }, [`.modal{ max-width: 650px;}h4{text-align: center;}`]),
+					E('style', { type: 'text/css' }, [`.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}`]),
 					E('b', { style: 'color:red;' },
-						_('Note: Please use valid sh syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
+						_('Note: Please use valid syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
 					E('textarea', { rows: 12, id: v, style: 'background-color:#272626; color:#e9e9dd; font-family:Consolas, monospace;' }, [content]),
 					E('div', { style: 'display: flex; justify-content: space-between; gap: 0.5em;' }, [
 						E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal, title: _('Cancel') }, _('Cancel')),
