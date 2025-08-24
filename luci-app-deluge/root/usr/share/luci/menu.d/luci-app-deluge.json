@@ -12,7 +12,7 @@
 	},
 
 	"admin/nas/deluge/config": {
-		"title": "Global settings",
+		"title": "Configuration",
 		"order": 10,
 		"action": {
 			"type": "view",
@@ -21,7 +21,7 @@
 	},
 
 	"admin/nas/deluge/files": {
-		"title": "configuration file",
+		"title": "Files",
 		"order": 20,
 		"action": {
 			"type": "view",

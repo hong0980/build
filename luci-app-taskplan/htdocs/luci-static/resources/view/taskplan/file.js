@@ -18,7 +18,7 @@ function createscript(filestat) {
 						E('div', _('Script name')),
 						E('select', {
 							id: 'script-select', style: 'width: 130px;', class: 'cbi-input-select'
-						}, ['c', 'd', 'e', 'f', 'g'].map((c) =>
+						}, ['c', 'd', 'e', 'f', 'g'].map(c =>
 							E('option', { value: `script_${c}` }, _('Custom Script %s').format(c.toUpperCase()))
 						))
 					]),
@@ -190,7 +190,7 @@ function deletescript(filepath, label) {
 };
 
 function generateFileConfigs(files) {
-	const staticConfigs = [
+	return [
 		{
 			tab: 'crontab',
 			label: _('Scheduled Tasks'),
@@ -203,63 +203,41 @@ function generateFileConfigs(files) {
 			filepath: '/etc/rc.local',
 			description: _('This is the content of /etc/rc.local. Insert your own commands here (in front of \'exit 0\') to execute them at the end of the boot process.')
 		},
-	];
-
-	const taskplanConfigs = files
-		.filter(file => !/_a|_b|log/i.test(file.name))
-		.map((file, index) => {
-			const name = file.name.replace('script_', '').toUpperCase();
-			return ({
-				tab: _('customscript%s').format(index + 3),
-				label: _('Custom Script %s').format(name),
-				filepath: `${newfilepath}/${file.name}`,
-				description: _('Execution content of script %s').format(name)
-			})
-		});
-
-	return [
-		...staticConfigs,
-		{
-			tab: 'customscript1',
-			label: _('Custom Script %s').format('A'),
-			filepath: `${newfilepath}/script_a`,
-			description: _('Execution content of script %s').format('A')
-		},
-		{
-			tab: 'customscript2',
-			label: _('Custom Script %s').format('B'),
-			filepath: `${newfilepath}/script_b`,
-			description: _('Execution content of script %s').format('B')
-		},
-		...taskplanConfigs
+		...[
+			{ name: 'script_a', display: 'A' },
+			{ name: 'script_b', display: 'B' },
+			...files.filter(f => !/script_[ab]|log/i.test(f.name))
+				.map(f => ({ name: f.name, display: f.name.replace('script_', '').toUpperCase() }))
+		].map((s, i) => ({
+			tab: `customscript${i + 1}`,
+			filepath: `${newfilepath}/${s.name}`,
+			label: _('Custom Script %s').format(s.display),
+			description: _('Execution content of script %s').format(s.display)
+		}))
 	];
 };
+const has = (s = '', sub = '') => String(s).includes(String(sub));
 
 return view.extend({
-	load: () => {
-		return fs.list(newfilepath).then(files => {
-			const dynamicConfigs = generateFileConfigs(files);
-			return Promise.all(dynamicConfigs.map(({ tab, filepath }) =>
-				fs.stat(filepath)
-					.catch(() =>
-						tab === 'customscript1'
-							? L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
-								.then(sh => fs.write(filepath, `#!${(sh || '/bin/sh\n')}`))
-							: tab === 'customscript2'
-								? L.resolveDefault(fs.exec_direct('/usr/bin/which', ['python3']), null)
-									.then(py => py
-										? fs.write(filepath, `#!${py}`)
-										: L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
-											.then(sh => fs.write(filepath, `#!${(sh || '/bin/sh\n')}`)))
-								: null)
-					.then(() => Promise.all([
-						L.resolveDefault(fs.read(filepath), ''),
-						fs.stat(filepath),
-						uci.load('system')
-					]))
-			));
-		});
-	},
+	load: () => fs.list(newfilepath).then(files =>
+		Promise.all(generateFileConfigs(files).map(({ tab, filepath }) => fs.stat(filepath)
+			.catch(() => has(tab, 'script1')
+				? L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
+					.then(sh => fs.write(filepath, `#!${(sh || '/bin/sh\n')}`))
+				: has(tab, 'script2')
+					? L.resolveDefault(fs.exec_direct('/usr/bin/which', ['python3']), null)
+						.then(py => py
+							? fs.write(filepath, `#!${py}`)
+							: L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
+								.then(sh => fs.write(filepath, `#!${(sh || '/bin/sh\n')}`)))
+					: null)
+			.then(() => Promise.all([
+				L.resolveDefault(fs.read(filepath), ''),
+				fs.stat(filepath),
+				uci.load('system')
+			]))
+		))
+	),
 
 	render: (data) => {
 		const Level = uci.get('system', '@system[0]', 'cronloglevel');
@@ -271,15 +249,14 @@ return view.extend({
 		]);
 
 		fs.list(newfilepath).then(files => {
-			const fileConfigs = generateFileConfigs(files);
-			const tabs = fileConfigs.map((cfg, idx) => {
+			const tabs = generateFileConfigs(files).map((cfg, idx) => {
 				const [content, stat] = data[idx];
 				if (!stat) return;
-				const { description, filepath, label, tab } = cfg
+				const { description, filepath, label, tab } = cfg;
 				return E('div', { 'data-tab': tab, 'data-tab-title': label }, [
 					E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
 						description,
-						tab.includes('crontab')
+						has(tab, 'crontab')
 							? E('div', { style: 'display: flex; align-items: center; gap: 10px;' }, [
 								E('select', { id: 'cron_option', style: 'width: 80px;' },
 									content.split('\n').filter(l => l.trim())
@@ -295,7 +272,7 @@ return view.extend({
 										const select = document.getElementById('cron_option');
 										if (select && select.value) {
 											window.open(`https://crontab.guru/#${select.value.replace(/\s/g, '_')}`);
-										};
+										}
 									})
 								}, _('verify')),
 								E('div', _('Cron Log Level')),
@@ -325,22 +302,20 @@ return view.extend({
 						id: tab, rows: Math.min(content.split('\n').length + 1, 20),
 						style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
 					}, [content]),
-					tab.includes('script')
-						? E('div', {}, [
-							E('b', { style: 'color:red;' },
-								_('Note: Please use valid syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.'))
-						])
+					has(tab, 'script')
+						? E('b', { style: 'color:red;' },
+							_('Note: Please use valid syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.'))
 						: [],
 					E('div', { style: 'color:#888;font-size:90%;', }, _('Last modified: %s, Size: %s bytes').format(
 						new Date(stat.mtime * 1000).toLocaleString(), stat.size)),
 					E('div', { style: 'display:flex;justify-content:flex-end;gap:10px;padding:17px 20px 18px 17px;background:#f8f8f8;border-top:1px solid #e0e0e0;border-radius:0 0 3px 3px;margin-bottom:18px' }, [
-						/_[c-g]/i.test(filepath)
+						/script_[c-g]/i.test(filepath)
 							? E('div', {
 								class: 'btn cbi-button-remove',
 								click: ui.createHandlerFn(this, () => deletescript(filepath, label))
 							}, '%s %s'.format(_('Delete'), label))
 							: [],
-						tab.includes('script')
+						has(tab, 'script')
 							? E('div', {
 								class: 'btn cbi-button-apply',
 								click: ui.createHandlerFn(this, () => executescript(filepath, label))
