@@ -289,9 +289,9 @@ return view.extend({
 											uci.set('system', '@system[0]', 'cronloglevel', val);
 											uci.save();
 											uci.apply()
-												.then(() => fs.exec_direct('/etc/init.d/cron', ['restart'])
-													.then(() => notify(null, E('p', _("Cron's log level saved successfully")), 3000))
-													.catch((e) => notify(null, E('p', e.message), 3000)));
+												.then(() => fs.exec('/etc/init.d/cron', ['restart'])
+													.then((res) => !res.stdout && notify(null, E('p', _("Cron's log level saved successfully")), 3000))
+													.catch((e) => notify(null, E('p', e.message), 8000)));
 										};
 									})
 								}, _('Save')),

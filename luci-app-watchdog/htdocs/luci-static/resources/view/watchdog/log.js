@@ -1,110 +1,59 @@
-
 'use strict';
-'require dom';
+'require ui';
 'require fs';
 'require poll';
-'require uci';
 'require view';
-'require form';
 
-var css = `
-    /* 日志框文本区域 */
-    #log_textarea pre {
-        padding: 10px; /* 内边距 */
-        border-bottom: 1px solid #ddd; /* 边框颜色 */
-        font-size: small;
-        line-height: 1.3; /* 行高 */
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        overflow-y: auto;
-    }
-    /* 5s 自动刷新文字 */
-    .cbi-section small {
-        margin-left: 1rem;
-        font-size: small;
-        color: #666; /* 深灰色文字 */
-    }
-`;
+const logpath = '/tmp/watchdog/watchdog.log';
+const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
 
 return view.extend({
-    render: function () {
-        var lastLogContent = '';
-        var log_textarea = E('div', { 'id': 'log_textarea' },
-            E('img', {
-                'src': L.resource(['icons/loading.gif']),
-                'alt': _('Loading...'),
-                'style': 'vertical-align:middle'
-            }, _('Collecting data ...'))
-        );
-        var clear_log_button = E('div', {}, [
-            E('button', {
-                'class': 'cbi-button cbi-button-remove',
-                'click': function (ev) {
-                    ev.preventDefault();
-                    var button = ev.target;
-                    button.disabled = true;
-                    button.textContent = _('Clear Logs...');
-                    fs.exec_direct('/usr/libexec/watchdog-call', ['clear_log'])
-                        .then(function () {
-                            button.textContent = _('Logs cleared successfully!');
-                            button.disabled = false;
-                            button.textContent = _('Clear Logs');
-                            // 立即刷新日志显示框
-                            var log = E('pre', { 'wrap': 'pre' }, [_('Log is clean.')]);
-                            dom.content(log_textarea, log);
-                            lastLogContent = '';
-                        })
-                        .catch(function () {
-                            button.textContent = _('Failed to clear log.');
-                            button.disabled = false;
-                            button.textContent = _('Clear Logs');
-                        });
-                }
-            }, _('Clear Logs'))
-        ]);
-
-        poll.add(L.bind(function () {
-            return fs.read_direct('/tmp/watchdog/watchdog.log', 'text')
-                .then(function (res) {
-                    var newContent = res.trim() || _('Log is clean.');
-
-                    if (newContent !== lastLogContent) {
-                        var log = E('pre', { 'wrap': 'pre' }, [newContent]);
-                        dom.content(log_textarea, log);
-                        log.scrollTop = log.scrollHeight;
-                        lastLogContent = newContent;
-                    }
-                }).catch(function (err) {
-                    var message = err.toString().includes('NotFoundError')
-                        ? _('Log file does not exist.')
-                        : _('Unknown error: %s').format(err);
-                    dom.content(log_textarea,
-                        E('pre', { 'wrap': 'pre' }, [message]));
-                });
-        }));
-
-        return E('div', { 'class': 'cbi-map' }, [
-            E('style', [css]),
-            E('div', { 'class': 'cbi-section' }, [
-                clear_log_button,
-                log_textarea,
-                E('small', {}, _('Refresh every 5 seconds.').format(L.env.pollinterval)),
-                E('div', { 'class': 'cbi-section-actions cbi-section-actions-right' })
-            ]),
-            // E('div', { 'style': 'text-align: right;  font-style: italic;' }, [
-            //     E('span', {}, [
-            //         _('© github '),
-            //         E('a', {
-            //             'href': 'https://github.com/sirpdboy/luci-app-watchdog',
-            //             'target': '_blank',
-            //             'style': 'text-decoration: none;'
-            //         }, 'by sirpdboy')
-            //     ])
-            // ])
-        ]);
+    load: function () {
+        return L.resolveDefault(fs.stat(logpath), null);
     },
 
-    handleSaveApply: null,
+    render: function (stat) {
+        let lastLogContent = '', newContent = '';
+        const logDisplay = E('div', {}, E('pre', { style: 'margin: 0;' }));
+
+        poll.add(L.bind(() => L.resolveDefault(fs.read(logpath, 'text'), '')
+            .then(res => {
+                newContent = stat ? res ? res.trim() : _('Log is clean.') : _('Log file does not exist.');
+                if (newContent !== lastLogContent) {
+                    logDisplay.firstChild.textContent = newContent;
+                    logDisplay.firstChild.scrollTop = logDisplay.firstChild.scrollHeight;
+                    lastLogContent = newContent;
+                }
+            })
+        ));
+
+        const view = E('div', {}, [
+            E('small', {}, _('Refresh every %s seconds.').format(L.env.pollinterval)),
+            logDisplay,
+            stat.size > 0
+                ? E('div', {}, [
+                    E('div', { style: 'color:#888;font-size:90%;' }, _('Last modified: %s, Size: %s bytes').format(
+                        new Date(stat.mtime * 1000).toLocaleString(), stat.size
+                    )),
+                    E('div', {
+                        class: 'btn cbi-button-remove',
+                        click: ui.createHandlerFn(this, () => fs.write(logpath, '')
+                            .then(() => {
+                                notify(null, E('p', _('Log cleared')), 3000, 'info');
+                                lastLogContent = '';
+                            })
+                            .catch(e =>
+                                notify(null, E('p', _('Failed to clear log: %s').format(e)), 5000, 'error')
+                            )
+                        )
+                    }, _('Clear Logs')),
+                ])
+                : [],
+        ]);
+        return view;
+    },
+
     handleSave: null,
-    handleReset: null
+    handleReset: null,
+    handleSaveApply: null
 });

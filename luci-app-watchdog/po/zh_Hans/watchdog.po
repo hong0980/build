@@ -192,8 +192,8 @@ msgstr "日志清除成功！"
 msgid "Clear Logs"
 msgstr "清除日志"
 
-msgid "Refresh every 5 seconds."
-msgstr "每 5 秒刷新"
+msgid "Refresh every %s seconds."
+msgstr "每 %s 秒刷新"
 
 msgid "Content 1"
 msgstr "内容1"
