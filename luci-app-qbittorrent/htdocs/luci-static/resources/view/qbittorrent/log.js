@@ -43,6 +43,7 @@ return view.extend({
 	},
 
 	render: function ([syslog, applog, log_path]) {
+		let sysText, appText, sysLine, appLine;
 		let ris = 5, Lines = 30, isreverse = true, refreshTask = null;
 		const parseLog = (content, lines, reverse) => {
 			const linesArray = content?.trim() ? content.split('\n').filter(line => line.trim()) : [];
@@ -86,8 +87,19 @@ return view.extend({
 			poll.add(refreshTask, ris);
 		};
 
-		const view = E('div', {}, [
-			E('h3', {}, _('Logs')),
+		const view = E('div', {}, [E('h3', {}, _('Logs'))]);
+		const applogLE = E('div', {}, [
+			E('div', { style: 'margin-top: 1em', id: 'applog-title' }),
+			E('textarea', {
+				readonly: '', wrap: 'off', id: 'applog-textarea', rows: Math.min(appLine + 2, 20),
+				style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
+			}, appText),
+		]);
+
+		({ content: appText, line: appLine } = parseLog(applog, Lines, isreverse));
+		({ content: sysText, line: sysLine } = parseLog(syslog, Lines, isreverse));
+
+		if (sysText || appText) view.appendChild(
 			E('div', { style: 'display: flex; align-items: center; gap: 10px;' }, [
 				E('div', _('Lines:')),
 				E('select', {
@@ -140,32 +152,23 @@ return view.extend({
 					}
 				}),
 				E('label', { for: 'wordwrap-toggle', title: _('Enable automatic line wrapping') }, _('Wrap text')),
-			]),
-		]);
-
-		const { content: appText, line: appLine } = parseLog(applog, Lines, isreverse);
-		const applogLE =
-			E('div', {}, [
-				E('div', { style: 'margin-top: 1em', id: 'applog-title' }),
-				E('textarea', {
-					readonly: '', wrap: 'off', id: 'applog-textarea', rows: Math.min(appLine + 2, 20),
-					style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
-				}, appText),
-			]);
+			])
+		);
 		if (appText && appLine > 0) view.appendChild(applogLE);
-
-		const { content: sysText, line: sysLine } = parseLog(syslog, Lines, isreverse);
-		if (sysText) {
-			view.appendChild(
-				E('div', {}, [
-					E('div', { style: 'margin-top: 1em', id: 'syslog-title' }),
-					E('textarea', {
-						readonly: '', wrap: 'off', id: 'syslog-textarea', rows: Math.min(sysLine + 2, 20),
-						style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
-					}, sysText),
-				])
-			);
-		};
+		if (sysText) view.appendChild(
+			E('div', {}, [
+				E('div', { style: 'margin-top: 1em', id: 'syslog-title' }),
+				E('textarea', {
+					readonly: '', wrap: 'off', id: 'syslog-textarea', rows: Math.min(sysLine + 2, 20),
+					style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
+				}, sysText),
+			])
+		);
+		if (!sysText && !appText) view.appendChild(
+			E('pre', {
+				style: 'margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: monospace;'
+			}, _('No log data available'))
+		);
 
 		startRefresh();
 		view.addEventListener('destroy', () => {

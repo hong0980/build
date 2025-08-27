@@ -30,8 +30,8 @@ function createscript(filestat) {
 				E('div', { id: 'action-buttons', style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
 					E('style', { type: 'text/css' }, [`.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}`]),
 					E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal }, _('Cancel')),
+					E('div', { class: 'btn cbi-button-action important', click: ui.createHandlerFn(this, upload) }, _('Upload')),
 					E('div', { class: 'btn cbi-button-apply', click: ui.createHandlerFn(this, saveScript) }, _('Save')),
-					E('div', { class: 'btn cbi-button-action', click: ui.createHandlerFn(this, upload) }, _('Upload')),
 				])
 			];
 

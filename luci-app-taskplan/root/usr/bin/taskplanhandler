@@ -38,8 +38,12 @@ execute_script() {
 
 limit_log() {
 	[ -s "$LOG" ] || return
+	local limit=$(uci -q get taskplan.globals.log_length)
 	count=$(wc -l < "$LOG")
-	[ "$count" -gt "${1:-500}" ] && sed -i "1,$((count-${1:-500}))d" $LOG
+	[ "$count" -gt "$limit" ] && {
+		echo > "$LOG"
+		[ -s "$COUNTER_FILE" ] && echo 0 > "$COUNTER_FILE"
+	}
 }
 
 disreconnwan() {
@@ -164,4 +168,4 @@ get_task_description() {
 }
 
 log "$(trf "Execution" "$2"): $(get_task_description "$1")" && trigger "$1"
-limit_log $(uci -q get taskplan.globals.log_length)
+limit_log

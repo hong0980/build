@@ -273,6 +273,9 @@ msgstr "执行结果已复制到剪贴板！"
 msgid "Script execution failed: %s"
 msgstr "脚本执行失败: %s"
 
+msgid "Save successfully"
+msgstr "成功保存"
+
 msgid "Cancel"
 msgstr "取消"
 

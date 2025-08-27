@@ -320,10 +320,10 @@ return view.extend({
 					E('b', { style: 'color:red;' },
 						_('Note: Please use valid syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
 					E('textarea', { rows: 12, id: v, style: 'background-color:#272626; color:#e9e9dd; font-family:Consolas, monospace;' }, [content]),
-					E('div', { style: 'display: flex; justify-content: space-between; gap: 0.5em;' }, [
+					E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
 						E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal, title: _('Cancel') }, _('Cancel')),
 						E('div', {
-							class: 'btn cbi-button-action',
+							class: 'btn cbi-button-action important',
 							title: _('Click to upload the script to %s').format(path),
 							click: ui.createHandlerFn(this, () => ui.uploadFile(path)
 								.then(() => notify(null, E('p',
