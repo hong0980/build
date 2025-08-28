@@ -126,14 +126,10 @@ const CRON_FIELDS = ['minute', 'hour', 'day', 'month', 'week'];
 const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
 
 return view.extend({
-	load: function () {
-		return uci.load('taskplan');
-	},
-
 	render: function () {
 		let m, s, e;
 		m = new form.Map('taskplan', '', [
-			E('style', { 'type': 'text/css' }, [CSS]),
+			E('style', [CSS]),
 			E('div', {}, [
 				_('Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc.'),
 				E('a', {
@@ -142,6 +138,7 @@ return view.extend({
 				}, _('GitHub @sirpdboy/luci-app-taskplan'))
 			])
 		]);
+
 		s = m.section(form.GridSection, 'stime', _('Scheduled task'), [
 			E('div', { style: 'color:#666; margin-top:0.6em;' }, [
 				_('Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-6, 0 and 6 = Sunday)'), E('br'),
@@ -240,7 +237,7 @@ return view.extend({
 		e = s.option(form.Value, 'remarks', _('Remarks'));
 		e.editable = true;
 
-		return m.render().then(el => {
+		return m.render().then((el) => {
 			requestAnimationFrame(() => this.updateTitles(m));
 			return el;
 		});
@@ -295,21 +292,18 @@ return view.extend({
 		e.value('script_a', _('Custom Script %s').format('A'));
 		e.value('script_b', _('Custom Script %s').format('B'));
 
-		L.resolveDefault(fs.list(scriptpath), '').then(files => {
-			files.forEach(file => {
-				if (!/_a|_b|log/i.test(file.name))
-					e.value(file.name, _('Custom Script %s').format(scriptSuffix(file.name).toUpperCase()));
-			});
-		});
-		e.onchange = (ev, section_id, value) => {
-			if (value.startsWith('script_')) this.showScriptEditModal(value);
-		};
+		L.resolveDefault(fs.list(scriptpath), '').then(files => files.forEach(file =>
+			(!/_a|_b|log/i.test(file.name)) &&
+			e.value(file.name, _('Custom Script %s').format(scriptSuffix(file.name).toUpperCase()))
+		));
+		e.onchange = (ev, section_id, value) =>
+			(value.startsWith('script_')) && this.showScriptEditModal(value);
 		e.editable = true;
 	},
 
 	showScriptEditModal: function (v) {
-		const label = _('Custom Script %s').format(scriptSuffix(v).toUpperCase());
 		const path = `${scriptpath}/script_${scriptSuffix(v)}`;
+		const label = _('Custom Script %s').format(scriptSuffix(v).toUpperCase());
 		fs.stat(path)
 			.catch(() => L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
 				.then(sh => fs.write(path, `#!${(sh || '/bin/sh\n')}`)))
@@ -319,7 +313,7 @@ return view.extend({
 					E('style', { type: 'text/css' }, [`.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}`]),
 					E('b', { style: 'color:red;' },
 						_('Note: Please use valid syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
-					E('textarea', { rows: 12, id: v, style: 'background-color:#272626; color:#e9e9dd; font-family:Consolas, monospace;' }, [content]),
+					E('textarea', { rows: 12, id: v, style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace; white-space: pre; overflow-x: auto;' }, [content]),
 					E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
 						E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal, title: _('Cancel') }, _('Cancel')),
 						E('div', {
@@ -337,7 +331,7 @@ return view.extend({
 								if (value.trim() === content.trim()) {
 									ui.hideModal();
 									return notify(null, E('p', _('No modifications detected. The content remains unchanged.')), 3000);
-								}
+								};
 								fs.write(path, value.trim().replace(/\r\n/g, '\n') + '\n')
 									.then(() => notify(null, E('p', _('Contents of %s have been saved.').format(label)), 3000, 'info'))
 									.catch(e => notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 8000, 'error'));

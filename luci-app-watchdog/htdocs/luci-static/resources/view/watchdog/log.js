@@ -30,7 +30,7 @@ return view.extend({
         const view = E('div', {}, [
             E('small', {}, _('Refresh every %s seconds.').format(L.env.pollinterval)),
             logDisplay,
-            stat.size > 0
+            stat?.size > 0
                 ? E('div', {}, [
                     E('div', { style: 'color:#888;font-size:90%;' }, _('Last modified: %s, Size: %s bytes').format(
                         new Date(stat.mtime * 1000).toLocaleString(), stat.size

@@ -362,3 +362,6 @@ msgstr "新脚本"
 
 msgid "Existing script"
 msgstr "已有脚本"
+
+msgid "Create/Edit"
+msgstr "创建/编辑"

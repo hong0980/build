@@ -26,8 +26,10 @@ return view.extend({
 			L.resolveDefault(fs.exec_direct('/sbin/logread', ['-e', 'deluge']), '')
 				.then(content => formatLog(content.trim())),
 			fs.stat(log_path)
-				.then(() => fs.read_direct(log_path).then(content => content.trim()))
-				.catch(() => '')
+				.then((stat) => fs.read_direct(log_path)
+					.then(content => ({ content: content.trim(), stat }))
+					.catch(() => ''))
+				.catch(() => ({ content: '', stat: null }))
 		]);
 	},
 
@@ -35,13 +37,13 @@ return view.extend({
 		return uci.load('deluge').then((r) => {
 			const log_path = `${uci.get(r, 'main', 'profile_dir') || '/etc/deluge'}/deluge.log`.replace(/\/+/g, '/');
 			return this.getlog(log_path)
-				.then(([syslog, applog]) => [syslog, applog, log_path]);
+				.then(([syslog, data]) => [syslog, data.content, log_path, data.stat]);
 		});
 	},
 
-	render: function ([syslog, applog, log_path]) {
-		let sysText, appText, sysLine, appLine;
-		let ris = 5, Lines = 30, isreverse = true, refreshTask = null;
+	render: function ([syslog, applog, log_path, stat]) {
+		const refreshTask = L.bind(() => refreshLogs());
+		let sysText, appText, sysLine, appLine, Lines = 30, isreverse = true;
 		const parseLog = (content, lines, reverse) => {
 			const linesArray = content?.trim() ? content.split('\n').filter(line => line.trim()) : [];
 			if (reverse) linesArray.reverse();
@@ -51,7 +53,7 @@ return view.extend({
 			};
 		};
 		const refreshLogs = () => this.getlog(log_path)
-			.then(([syslog, applog]) => updateLogsDisplay(syslog, applog));
+			.then(([syslog, data]) => updateLogsDisplay(syslog, data.content));
 
 		const updateLogsDisplay = (syslog = null, applog = null) => {
 			const syslogTitle = document.getElementById('syslog-title');
@@ -78,12 +80,6 @@ return view.extend({
 			};
 		};
 
-		const startRefresh = () => {
-			if (refreshTask) poll.remove(refreshTask);
-			refreshTask = () => refreshLogs().then(() => ris);
-			poll.add(refreshTask, ris);
-		};
-
 		const view = E('div', {}, [E('h3', {}, _('Logs'))]);
 		const applogLE = E('div', {}, [
 			E('div', { style: 'margin-top: 1em', id: 'applog-title' }),
@@ -91,6 +87,10 @@ return view.extend({
 				readonly: '', wrap: 'off', id: 'applog-textarea', rows: Math.min(appLine + 2, 20),
 				style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
 			}, appText),
+			stat
+				? E('div', { style: 'color:#888;font-size:90%;', }, _('Last modified: %s, Size: %s bytes').format(
+					new Date(stat.mtime * 1000).toLocaleString(), stat.size))
+				: []
 		]);
 
 		({ content: appText, line: appLine } = parseLog(applog, Lines, isreverse));
@@ -111,11 +111,11 @@ return view.extend({
 				E('select', {
 					class: 'cbi-input-select', style: 'width: auto; min-width: 50px;',
 					change: ui.createHandlerFn(this, (ev) => {
-						ris = parseInt(ev.target.value);
-						startRefresh();
+						poll.remove(refreshTask);
+						poll.add(refreshTask, parseInt(ev.target.value));
 					})
 				}, [3, 5, 7, 10].map((opt) =>
-					E('option', { value: opt, selected: opt === ris ? '' : null }, opt))),
+					E('option', { value: opt, selected: opt === L.env.pollinterval ? '' : null }, opt))),
 				E('div', {
 					class: 'btn cbi-button-apply',
 					click: ui.createHandlerFn(this, (ev) => {
@@ -167,13 +167,7 @@ return view.extend({
 			}, _('No log data available'))
 		);
 
-		startRefresh();
-		view.addEventListener('destroy', () => {
-			if (refreshTask) {
-				poll.remove(refreshTask);
-				refreshTask = null;
-			};
-		});
+		poll.add(refreshTask);
 		return view;
 	},
 
