@@ -6,25 +6,24 @@
 return view.extend({
 	load: () => uci.load('transmission').then((r) => {
 		const conffile = `${uci.get(r, 'transmission', 'config_dir') || '/etc/transmission'}/settings.json`
-		return ['/etc/config/transmission', `${conffile}`];
+		const paths = ['/etc/config/transmission', `${conffile}`];
+		return Promise.all(paths.map(path =>
+			fs.stat(path)
+				.then(stat => fs.trimmed(path).then(content => ({ content, stat, path })))
+				.catch(() => ({ content: '' }))
+		));
 	}),
 
-	render: (files) => {
+	render: (results) => {
 		const view = E('div', {}, [
-			E('h3', 'Transmission - %s'.format(_('Files'))),
+			E('h3', _('Files')),
 			E('div', _('This page is the configuration file content of %s.').format('Transmission'))
 		]);
-		Promise.all(files.map(path =>
-			fs.stat(path)
-				.then(stat => stat.size > 0
-					? fs.trimmed(path).then(content => ({ content, stat, path }))
-					: { content: '' }
-				)
-				.catch(() => ({ content: '' }))
-		)).then(results => {
-			results.forEach(({ content, stat, path }) => {
-				if (!content) return;
-				view.appendChild(E('div', {}, [
+
+		results.forEach(({ content, path, stat }) => {
+			if (!content) return;
+			view.appendChild(
+				E('div', {}, [
 					E('div', { style: 'margin-top:1em' },
 						_('This is the content of the configuration file under <code>%s</code>:').format(path)),
 					E('textarea', {
@@ -34,11 +33,10 @@ return view.extend({
 					}, content),
 					E('div', { style: 'color:#888;font-size:90%;margin-top:0.5em;' },
 						_('Last modified: %s, Size: %s bytes').format(
-							new Date(stat.mtime * 1000).toLocaleString(), stat.size
-						)
-					)
-				]));
-			});
+							new Date(stat.mtime * 1000).toLocaleString(), stat.size)
+					),
+				])
+			);
 		});
 
 		return view;

@@ -4,27 +4,26 @@
 'require view';
 
 return view.extend({
-	load: () => uci.load('aria2').then((r) => {
-		const conffile = `${uci.get(r, 'main', 'pro_file') || '/var/etc/aria2'}/aria2.conf.main`
-		return ['/etc/config/aria2', `${conffile}`];
+	load: () => uci.load('aria2').then(() => {
+		const conffile = `${uci.get('aria2', 'main', 'pro_file') || '/var/etc/aria2'}/aria2.conf.main`
+		const paths = ['/etc/config/aria2', `${conffile}`];
+		return Promise.all(paths.map(path =>
+			fs.stat(path)
+				.then(stat => fs.trimmed(path).then(content => ({ content, stat, path })))
+				.catch(() => ({ content: '' }))
+		));
 	}),
 
-	render: (files) => {
+	render: (results) => {
 		const view = E('div', {}, [
-			E('h3', 'Aria2 - %s'.format(_('Files'))),
+			E('h3', _('Files')),
 			E('div', _('This page is the configuration file content of %s.').format('Aria2'))
 		]);
-		Promise.all(files.map(path =>
-			fs.stat(path)
-				.then(stat => stat.size > 0
-					? fs.trimmed(path).then(content => ({ content, stat, path }))
-					: { content: '' }
-				)
-				.catch(() => ({ content: '' }))
-		)).then(results => {
-			results.forEach(({ content, stat, path }) => {
-				if (!content) return;
-				view.appendChild(E('div', {}, [
+
+		results.forEach(({ content, path, stat }) => {
+			if (!content) return;
+			view.appendChild(
+				E('div', {}, [
 					E('div', { style: 'margin-top:1em' },
 						_('This is the content of the configuration file under <code>%s</code>:').format(path)),
 					E('textarea', {
@@ -34,11 +33,10 @@ return view.extend({
 					}, content),
 					E('div', { style: 'color:#888;font-size:90%;margin-top:0.5em;' },
 						_('Last modified: %s, Size: %s bytes').format(
-							new Date(stat.mtime * 1000).toLocaleString(), stat.size
-						)
-					)
-				]));
-			});
+							new Date(stat.mtime * 1000).toLocaleString(), stat.size)
+					),
+				])
+			);
 		});
 
 		return view;

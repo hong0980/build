@@ -112,7 +112,13 @@ function createscript(filestat, filepath) {
 			E('style', [`.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}`]),
 			E('div', {
 				class: 'btn cbi-button-action important', click: ui.createHandlerFn(this, () =>
-					upload(`${scriptfilepath}/${selectEl.value}`))
+					ui.uploadFile(filepath)
+						.then(() => {
+							notify(null, E('p', _('File saved to %s').format(filepath)), 3000, 'info');
+							ui.hideModal();
+							window.location.reload();
+						})
+						.catch((e) => notify(null, E('p', e.message), 3000)))
 			}, _('Upload')),
 			E('div', {
 				class: 'btn cbi-button-apply', click: ui.createHandlerFn(this, () =>
@@ -128,6 +134,7 @@ function createscript(filestat, filepath) {
 	const updateUI = () => {
 		resultTextarea.value = '';
 		const scriptName = selectEl.value;
+		const filePath = `${scriptfilepath}/${scriptName}`
 		const scriptDisplayName = _('Custom Script %s').format(scriptName.replace('script_', '').toUpperCase());
 
 		const oldDeleteBtn = document.getElementById('delete-btn');
@@ -138,28 +145,18 @@ function createscript(filestat, filepath) {
 		if (existingScripts.includes(scriptName)) {
 			const executeBtn = E('div', {
 				id: 'execute-btn', class: 'btn cbi-button-positive',
-				click: ui.createHandlerFn(this, () => executescript(filepath, scriptDisplayName))
+				click: ui.createHandlerFn(this, () => executescript(filePath, scriptDisplayName))
 			}, _('Run'));
 
 			const deleteBtn = E('div', {
 				id: 'delete-btn', class: 'btn cbi-button-remove',
-				click: ui.createHandlerFn(this, () => deletescript(filepath, scriptName))
+				click: ui.createHandlerFn(this, () => deletescript(filePath, scriptName))
 			}, _('Delete'));
 
 			// buttonsEl.insertBefore(executeBtn, buttonsEl.children[0]);
 			buttonsEl.insertBefore(deleteBtn, buttonsEl.children[1]);
-			fs.read_direct(filepath).then(content => resultTextarea.value = content);
+			fs.read_direct(filePath).then(content => resultTextarea.value = content);
 		};
-	};
-
-	function upload(filepath) {
-		ui.uploadFile(filepath)
-			.then(() => {
-				notify(null, E('p', _('File saved to %s').format(filepath)), 3000, 'info');
-				ui.hideModal();
-				window.location.reload();
-			})
-			.catch((e) => notify(null, E('p', e.message), 3000))
 	};
 
 	updateUI();
