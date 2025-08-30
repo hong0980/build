@@ -21,7 +21,7 @@
 		var img = document.createElement('img');
 		img.onload = ok;
 		img.onerror = check;
-		img.src = '<%=resource%>/icons/loading.gif?' + Math.random();
+		// img.src = '<%=resource%>/icons/loading.gif?' + Math.random();
 		document.getElementById('poweroff-message').innerHTML = '<%:Waiting for device...%>';
 	}
 	function poweroff(button) {
@@ -32,7 +32,7 @@
 //]]></script>
 <input class="cbi-button cbi-button-negative important" type="button" value="<%:Perform PowerOff%>" onclick="poweroff(this)" />
 <p class="alert-message" style="display:none">
-	<img src="<%=resource%>/icons/loading.gif" alt="<%:Loading%>" style="vertical-align:middle" />
+	<!-- <img src="<%=resource%>/icons/loading.gif" alt="<%:Loading%>" style="vertical-align:middle" /> -->
 	<span id="poweroff-message"><%:Router is shutting down...%></span>
 </p>
 <%+footer%>

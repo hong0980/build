@@ -242,7 +242,13 @@ return view.extend({
 		o.default = 'error';
 
 		o = s.taboption("other", form.Value, 'geoip_db_location', _('GeoIP Database Path'));
-		o.default = '/usr/share/GeoIP';
+		o.placeholder = '/usr/share/GeoIP/GeoIP.dat';
+		// o.write = function (section_id, formvalue) {
+		// 	if (formvalue) {
+		// 		formvalue = formvalue.replace(/\/?$/, '') + '/GeoIP.dat';
+		// 	}
+		// 	return this.super('write', section_id, formvalue);
+		// };
 
 		o = s.taboption("other", form.Value, "cache_size", _("Cache Size"),
 			_("Disk cache size in 16 KiB blocks (e.g. 16384 = 256 MiB)"));

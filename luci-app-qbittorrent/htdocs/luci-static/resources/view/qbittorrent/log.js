@@ -44,35 +44,36 @@ return view.extend({
 	},
 
 	render: function ([syslog, applog, log_path, stat]) {
-		const refreshTask = L.bind(() => refreshLogs());
 		let sysText, appText, sysLine, appLine, Lines = 30, isreverse = true;
 		const parseLog = (content, lines, reverse) => {
 			const linesArray = content?.trim() ? content.split('\n').filter(line => line.trim()) : [];
 			if (reverse) linesArray.reverse();
 			return {
-				content: linesArray.slice(0, lines).join('\n'),
-				line: Math.min(linesArray.length, lines)
+				line: Math.min(linesArray.length, lines),
+				content: linesArray.slice(0, lines).join('\n')
 			};
 		};
+
 		const refreshLogs = () => this.getlog(log_path)
 			.then(([syslog, data]) => updateLogsDisplay(syslog, data.content));
 
 		const updateLogsDisplay = (syslog = null, applog = null) => {
-			const syslogTitle = document.getElementById('syslog-title');
+			let content, line;
 			const applogTitle = document.getElementById('applog-title');
-			const syslogTextarea = document.getElementById('syslog-textarea');
-			const applogTextarea = document.getElementById('applog-textarea');
+			const syslogTitle = document.getElementById('syslog-title');
 
-			if (syslogTitle && syslogTextarea && syslog) {
-				const { content, line } = parseLog(syslog, Lines, isreverse);
+			if (syslogTitle && syslog) {
+				const syslogTextarea = document.getElementById('syslog-textarea');
+				({ content, line } = parseLog(syslog, Lines, isreverse));
 				syslogTitle.textContent = _('Last %s lines of syslog (%s):').format(
 					line, isreverse ? _('newest first') : _('oldest first'));
 				syslogTextarea.value = content;
 				syslogTextarea.rows = Math.min(line + 2, 20);
 			};
 
-			if (applogTitle && applogTextarea && applog) {
-				const { content, line } = parseLog(applog, Lines, isreverse);
+			if (applogTitle && applog) {
+				const applogTextarea = document.getElementById('applog-textarea');
+				({ content, line } = parseLog(applog, Lines, isreverse));
 				applogTitle.textContent = '%s %s'.format(
 					log_path, _('Last %s lines of run log (%s):').format(
 						line, isreverse ? _('newest first') : _('oldest first'))
@@ -82,8 +83,11 @@ return view.extend({
 			};
 		};
 
-		const view = E('div', {}, [E('h3', {}, _('Logs'))]);
-		const applogLE = E('div', {}, [
+		({ content: appText, line: appLine } = parseLog(applog, Lines, isreverse));
+		({ content: sysText, line: sysLine } = parseLog(syslog, Lines, isreverse));
+
+		const body = E('div', [E('h3', {}, _('Logs'))]);
+		const applogLE = E('div', [
 			E('div', { style: 'margin-top: 1em', id: 'applog-title' }),
 			E('textarea', {
 				readonly: '', wrap: 'off', id: 'applog-textarea', rows: Math.min(appLine + 2, 20),
@@ -95,26 +99,23 @@ return view.extend({
 				: []
 		]);
 
-		({ content: appText, line: appLine } = parseLog(applog, Lines, isreverse));
-		({ content: sysText, line: sysLine } = parseLog(syslog, Lines, isreverse));
-
-		if (sysText || appText) view.appendChild(
-			E('div', { style: 'display: flex; align-items: center; gap: 10px;' }, [
+		if (sysText || appText) body.appendChild(
+			E('div', { style: 'display: flex; align-items: center; gap: 15px;' }, [
 				E('div', _('Lines:')),
 				E('select', {
-					class: 'cbi-input-select', style: 'width: auto; min-width: 50px;',
+					class: 'cbi-input-select', style: 'width: 50px;',
 					change: ui.createHandlerFn(this, (ev) => {
-						Lines = parseInt(ev.target.value);
+						Lines = ev.target.value;
 						updateLogsDisplay(syslog, applog);
 					})
 				}, [10, 20, 30, 50, 100].map((opt) =>
 					E('option', { value: opt, selected: opt === Lines ? '' : null }, opt))),
 				E('div', _('Refresh time:')),
 				E('select', {
-					class: 'cbi-input-select', style: 'width: auto; min-width: 50px;',
+					class: 'cbi-input-select', style: 'width: 50px;',
 					change: ui.createHandlerFn(this, (ev) => {
-						poll.remove(refreshTask);
-						poll.add(refreshTask, parseInt(ev.target.value));
+						poll.active() && poll.remove(refreshLogs);
+						poll.add(refreshLogs, ev.target.value);
 					})
 				}, [3, 5, 7, 10].map((opt) =>
 					E('option', { value: opt, selected: opt === L.env.pollinterval ? '' : null }, opt))),
@@ -124,17 +125,17 @@ return view.extend({
 						isreverse = !isreverse;
 						updateLogsDisplay(syslog, applog);
 						ev.target.textContent = isreverse
-							? _('△ Show Newest First')
-							: _('▽ Show Oldest First');
+							? _('▽ Show Oldest First')
+							: _('△ Show Newest First');
 					})
-				}, _('△ Show Newest First')),
+				}, _('▽ Show Oldest First')),
 				applog
 					? E('div', {
 						class: 'btn cbi-button-negative', id: 'clear-btn', title: _('Clear Log'),
 						click: ui.createHandlerFn(this, () => {
 							fs.write(log_path, '')
 								.then(() => {
-									view.removeChild(applogLE);
+									body.removeChild(applogLE);
 									document.getElementById('clear-btn').style.display = 'none';
 								})
 								.catch(e =>
@@ -144,18 +145,16 @@ return view.extend({
 					: [],
 				E('input', {
 					type: 'checkbox', id: 'wordwrap-toggle',
-					change: ev => {
-						document.querySelectorAll('textarea').forEach(ta => {
-							ta.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre';
-						});
-					}
+					change: ui.createHandlerFn(this, (ev) => document.querySelectorAll('textarea')
+						.forEach(ta => ta.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre'))
 				}),
-				E('label', { for: 'wordwrap-toggle', title: _('Enable automatic line wrapping') }, _('Wrap text')),
+				E('label', { for: 'wordwrap-toggle', title: _('Enable automatic line wrapping') }, _('Wrap text'))
 			])
 		);
-		if (appText && appLine > 0) view.appendChild(applogLE);
-		if (sysText) view.appendChild(
-			E('div', {}, [
+
+		if (appText && appLine > 0) body.appendChild(applogLE);
+		if (sysText) body.appendChild(
+			E('div', [
 				E('div', { style: 'margin-top: 1em', id: 'syslog-title' }),
 				E('textarea', {
 					readonly: '', wrap: 'off', id: 'syslog-textarea', rows: Math.min(sysLine + 2, 20),
@@ -163,14 +162,14 @@ return view.extend({
 				}, sysText),
 			])
 		);
-		if (!sysText && !appText) view.appendChild(
+		if (!sysText && !appText) body.appendChild(
 			E('pre', {
 				style: 'margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: monospace;'
 			}, _('No log data available'))
 		);
 
-		poll.add(refreshTask);
-		return view;
+		poll.add(refreshLogs);
+		return body;
 	},
 
 	handleSave: null,

@@ -60,6 +60,7 @@ def main():
     core_updates = {
         "send_info": False, #发送匿名统计
         "new_release_check": False, #自动报告新版本/定期检查更新
+        "geoip_db_location": uci_config.get("geoip_db_location", ""),
         "download_location": uci_config.get("download_location", ""),
         "move_completed_path": uci_config.get("move_completed_path", ""),
         "torrentfiles_location": uci_config.get("torrentfiles_location", ""),
@@ -92,10 +93,6 @@ def main():
 
         "https": str_to_bool(uci_config.get("https", False)),
         "show_session_speed": str_to_bool(uci_config.get("show_session_speed", True)),
-        "geoip_db_location": os.path.join(
-            uci_config.get("geoip_db_location", "/usr/share/GeoIP"),
-            "GeoIP.dat"
-        )
     }
     web_changed = update_config(web_config, web_updates)
 

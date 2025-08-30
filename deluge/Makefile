@@ -23,18 +23,18 @@ define Package/$(PKG_NAME)
 	$(call Package/deluge/Default)
 	TITLE+= (console UI & daemon)
 	DEPENDS:= \
-	    +python3-chardet \
-	    +python3-libtorrent \
-	    +python3-mako \
-	    +python3-markupsafe \
-	    +python3-pillow \
-	    +python3-pyopenssl \
-	    +python3-pyxdg \
-	    +python3-rencode \
-	    +python3-service-identity \
-	    +python3-setproctitle \
-	    +python3-setuptools \
-	    +python3-twisted
+		+python3-chardet \
+		+python3-libtorrent \
+		+python3-mako \
+		+python3-markupsafe \
+		+python3-pillow \
+		+python3-pyopenssl \
+		+python3-pyxdg \
+		+python3-rencode \
+		+python3-service-identity \
+		+python3-setproctitle \
+		+python3-setuptools \
+		+python3-twisted
 	USERID:=deluge=666:deluge=666
 endef
 
@@ -58,6 +58,16 @@ define Package/$(PKG_NAME)/install
 		$(1)/usr/bin/deluge-web \
 		$(1)$(PYTHON3_PKG_DIR)/deluge/ui/web \
 		$(1)$(PYTHON3_PKG_DIR)/deluge/ui/gtk3
+
+	find $(1)$(PYTHON3_PKG_DIR)/deluge/i18n -mindepth 1 -maxdepth 1 \
+		! -name 'zh_CN' \
+		! -name 'en_GB' \
+		! -name '__init__.py' \
+		! -name 'languages.py' \
+		! -name 'util.py' \
+		! -name '__pycache__' \
+		-exec rm -rf {} +
+
 	$(call Python3/FixShebang,$(1)/usr/bin/* \
 	$(1)$(PYTHON3_PKG_DIR)/deluge/path_*.py)
 endef
