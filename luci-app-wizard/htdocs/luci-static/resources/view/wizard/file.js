@@ -3,6 +3,7 @@
 'require ui';
 'require view';
 
+const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
 const configFiles = [
 	{ path: '/etc/config/network', 	title: _('Network configuration (network)') },
 	{ path: '/etc/config/firewall', title: _('Firewall configuration (firewall)') },
@@ -15,141 +16,115 @@ const configFiles = [
 	{ path: '/etc/crontabs/root',	title: _('Scheduled tasks (crontabs)') }
 ];
 
-const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
-
 return view.extend({
-	load: function () {
-		return Promise.all(
-			configFiles.map((r) =>
-				fs.stat(r.path)
-					.then((stat) => stat.size > 0 ? { ...r, stat } : null)
-					.catch(() => null)
-			))
-			.then((p) => p.filter(Boolean))
-	},
-
-	handleFileSave: function (path, value) {
-		return fs.write(path, value)
-			.then(() => {
-				notify(null, E('p',
-					_('Contents of %s have been saved.').format(path)), 5000, 'info');
-
-				var s = path.includes('crontabs') ? 'cron' :
-						path.includes('dhcp') ? 'dnsmasq' :
-						path.includes('hosts') ? 'dnsmasq' :
-						path.includes('wireless') ? 'wifi' :
-						path.includes('uhttpd') ? 'uhttpd' :
-						path.includes('network') ? 'network' :
-						path.includes('dnsmasq') ? 'dnsmasq' :
-						path.includes('firewall') ? 'firewall' : null;
-				if (s) {
-					var c = s === 'wifi' ? '/sbin/wifi' : '/etc/init.d/' + s;
-					return fs.exec_direct(c, ['reload'])
-						.then(() => notify(null, E('p',
-							_('Service %s reloaded successfully.').format(c)), 5000, 'info'))
-						.catch((e) => notify(null, E('p',
-							_('Service reload failed: %s').format(e.message)), 5000, 'warning'));
-				}
-			})
-			.catch((e) => notify(null, E('p',
-				_('Unable to save contents: %s').format(e.message)), 5000, 'error'));
-	},
+	load: () => Promise.all(
+		configFiles.map((res) =>
+			fs.stat(res.path)
+				.then((stat) => ({ ...res, stat }))
+				.catch(() => null)
+		))
+		.then((data) => Object.fromEntries(data.filter(Boolean).map(c => [c.path, c]))),
 
 	render: function (data) {
-		var fileStatusDiv = E('span', { style: 'color:#888;font-size:90%;' });
-		const textarea = new ui.Textarea(null, { rows: 18, id: 'file_content', readonly: true });
-		this.fileContent = '';
-		this.filePath = '';
-
-		return E('div', {}, [
-			E('style', { type: 'text/css' }, [
-				`.cbi-input-textarea {
-					font-size:14px; color: #c5c5b2; border: 1px solid #555;
-					background-color: #272626; font-family: Consolas, monospace;
-				}`
-			]),
+		this.path = '';
+		this.content = '';
+		const dom = {};
+		const fileStatusDiv = E('span', { style: 'color:#888;font-size:90%;' });
+		const view = E('div', {}, [
 			E('font', { color: 'red', style: 'font-weight: bold;' },
 				_('The configuration file is directly edited and saved! Unless you know what you are doing, please do not modify these configuration files. Incorrect configurations may cause issues such as failure to boot or network errors.')),
-			E('div', { class: 'cbi-value' }, [
+			E('div', { class: 'cbi-value', style: 'align-items: center;' }, [
 				E('label', { class: 'cbi-value-title' }, _('Choose File')),
 				E('div', { class: 'cbi-value-field', style: 'max-width: 200px;' }, [
 					E('select', {
-						id: 'file_select', class: 'cbi-input-select',
-						change: L.bind(function (ev) {
+						class: 'cbi-input-select',
+						change: ui.createHandlerFn(this, (ev) => {
 							fileStatusDiv.innerHTML = '';
-							var filePath = ev.target.value;
-							var editToggle = document.getElementById('edit_toggle');
-
-							if (!filePath) {
-								textarea.setValue(this.fileContent);
-								textarea.node.firstElementChild.readOnly = editToggle.checked;
-								return;
-							}
-
-							var selectedConfig = data.find(c => c.path === filePath);
-							if (selectedConfig.stat) {
-								fileStatusDiv.innerHTML = _('Last modified: %s, Size: %s bytes').format(
-									new Date(selectedConfig.stat.mtime * 1000).toLocaleString(),
-									selectedConfig.stat.size
-								);
-							}
-
-							fs.read(filePath)
-								.then(L.bind(function (content) {
-									textarea.setValue(content);
-									this.filePath = filePath;
-									this.fileContent = content;
-								}, this))
-								.catch((e) => notify(null, E('p',
-									_('Unable to read %s: %s').format(filePath, e.message)), 5000, 'error'));
-						}, this)
+							const filepath = ev.target.value;
+							filepath && fs.read(filepath).then(content => {
+								const selectedset = data[filepath];
+								if (selectedset) {
+									fileStatusDiv.innerHTML = _('Last modified: %s, Size: %s bytes').format(
+										new Date(selectedset.stat.mtime * 1000).toLocaleString(), selectedset.stat.size);
+								};
+								this.path = filepath;
+								this.content = content;
+								dom.textarea.value = content;
+							})
+						})
 					}, [
 						E('option', { value: '' }, _('-- Please choose --')),
-						...data.map(config => E('option', { value: config.path }, config.title))
+						...Object.values(data).map(config => E('option', { value: config.path }, config.title))
 					])
 				]),
-				E('div', { style: 'display: flex; align-items: center; white-space: nowrap; margin-left: 25px;' }, [
+				E('div', { style: 'display: flex; align-items: center; margin-left: 25px;' }, [
 					E('label', { style: 'color: red; cursor: pointer;' }, _('Readonly')),
 					E('input', {
-						type: 'checkbox', id: 'edit_toggle', style: 'margin-left: 12px;',
-						checked: true, change: (ev) => {
+						type: 'checkbox', style: 'margin-left: 12px;', checked: true,
+						change: ui.createHandlerFn(this, (ev) => {
 							var isChecked = ev.target.checked;
-							textarea.node.firstElementChild.readOnly = isChecked;
-							document.getElementById('page-actions').style.display = isChecked ? 'none' : 'block';
-						}
+							dom.textarea.readOnly = isChecked;
+							document.getElementById('page_actions').style.display = isChecked ? 'none' : 'block';
+						})
 					})
 				])
 			]),
-			textarea.render(),
+			E('textarea', {
+				readonly: '', wrap: 'off', rows: 20,
+				style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;',
+			}),
 			E('div', { class: 'cbi-value-description' }, [
 				E('font', { color: 'green', style: 'font-weight: bold;' },
 					_('It is recommended to back up the file before making changes. Comments can be added by starting a line with #.')),
 				fileStatusDiv,
 			]),
-			E('div', { class: 'cbi-page-actions', style: 'display: none;', id: 'page-actions' }, [
-				E('button', {
+			E('div', { class: 'cbi-page-actions', style: 'display: none;', id: 'page_actions' }, [
+				E('div', {
 					class: 'btn cbi-button-save', style: 'margin-right: 10px;',
-					click: L.bind(function () {
-						var path = document.getElementById('file_select').value || this.filePath;
-						if (!path) {
-							return notify(null, E('p', _('Please select a file.')), 5000, 'error');
-						}
-						if (!textarea.isChanged()) {
-							return notify(null, E('p',
-								_('No modifications detected. The content remains unchanged.')), 3000, 'info');
+					click: ui.createHandlerFn(this, () => {
+						const path = dom.select.value || this.path;
+						const value = dom.textarea.value;
+						if (value === this.content) {
+							notify(null, E('p', _('No modifications detected. The content remains unchanged.')), 3000);
+						} else {
+							this.handleFileSave(path, value.trim().replace(/\r\n/g, '\n') + '\n');
 						};
-						const value = textarea.getValue().trim().replace(/\r\n/g, '\n') + '\n';
-						return this.handleFileSave(path, value);
-					}, this)
+					})
 				}, _('Save')),
-				E('button', {
+				E('div', {
 					class: 'btn cbi-button-reset',
-					click: L.bind(function () {
-						textarea.setValue(this.fileContent);
-					}, this)
+					click: ui.createHandlerFn(this, () => dom.textarea.value = this.content)
 				}, _('Reset'))
 			])
 		]);
+		setTimeout(() => {
+			dom.select = document.querySelector('select');
+			dom.textarea = document.querySelector('textarea');
+		}, 0);
+		return view;
+	},
+
+	handleFileSave: (path, value) => {
+		fs.write(path, value).then(() => {
+			notify(null, E('p', '%s %s'.format(path, _('Contents have been saved.'))), 5000, 'info');
+			const serviceMap = {
+				wireless: { cmd: '/sbin/wifi', args: ['reload'] },
+				dhcp: { cmd: '/etc/init.d/dnsmasq', args: ['reload'] },
+				crontabs: { cmd: '/etc/init.d/cron', args: ['reload'] },
+				hosts: { cmd: '/etc/init.d/dnsmasq', args: ['reload'] },
+				uhttpd: { cmd: '/etc/init.d/uhttpd', args: ['reload'] },
+				network: { cmd: '/etc/init.d/network', args: ['reload'] },
+				dnsmasq: { cmd: '/etc/init.d/dnsmasq', args: ['reload'] },
+				firewall: { cmd: '/etc/init.d/firewall', args: ['reload'] }
+			};
+
+			const service = Object.entries(serviceMap).find(([key]) => path.includes(key));
+			if (service) fs.exec(service[1].cmd, service[1].args).then(res =>
+				res.code === 0
+					? notify(null, E('p', _('Service %s reloaded successfully.').format(service[1].cmd)), 5000, 'info')
+					: notify(null, E('p', _('Service reload failed: %s').format(e.message)), 5000, 'warning'));
+		}).catch(e =>
+			notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 5000, 'error'));
 	},
 
 	handleSave: null,
