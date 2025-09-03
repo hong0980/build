@@ -1,20 +1,15 @@
 'use strict';
-'require view';
-'require uci';
-'require form';
 'require fs';
-'require network';
+'require view';
+'require form';
 'require tools.widgets as widgets';
 
 return view.extend({
 	load: function () {
-		return Promise.all([
-			fs.exec('/etc/init.d/wizard', ['reconfig']),
-			L.resolveDefault(uci.load('network', 'firewall', 'wireless'), '')
-		]);
+		fs.exec('/etc/init.d/wizard', ['reconfig'])
 	},
 
-	render: function (data) {
+	render: function () {
 		var m, s, o;
 		var dnsOptions = [
 			{ value: '223.5.5.5', label: _('AliDNS: 223.5.5.5') },
