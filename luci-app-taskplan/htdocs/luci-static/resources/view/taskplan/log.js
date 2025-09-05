@@ -2,7 +2,6 @@
 'require fs';
 'require ui';
 'require uci';
-'require poll';
 'require view';
 
 const logpath = '/etc/taskplan/taskplan.log';
@@ -16,27 +15,23 @@ return view.extend({
 
 	render: ([content, log_length]) => {
 		let reversed = false;
-		const textarea = content ? E('textarea', {
-			readonly: true, rows: Math.min(content.split('\n').length + 2, 20),
-			style: 'width:100%; background:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas,monospace; font-size:14px;'
-		}, content.split('\n').reverse().join('\n')) : [];
-
+		const textarea = content
+			? E('textarea', {
+				readonly: true, rows: Math.min(content.split('\n').length + 2, 20),
+				style: 'width:100%; background:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas,monospace; font-size:14px;'
+			}, content.split('\n').reverse().join('\n'))
+			: [];
 		const refreshLogs = () =>
-			fs.trimmed(logpath).then(newContent => {
-				if (newContent && textarea) {
-					if (textarea.rows < 18)
-						textarea.rows = Math.min(newContent.split('\n').length + 2, 20);
-					textarea.value = reversed
-						? newContent
-						: newContent.split('\n').reverse().join('\n');
-				}
+			fs.trimmed(logpath).then(content => {
+				if (textarea.rows < 18) textarea.rows = Math.min(content.split('\n').length + 2, 20);
+				textarea.value = reversed
+					? content
+					: content.split('\n').reverse().join('\n');
 			});
-
 		const logLengthSelect = E('select', { class: 'cbi-input-select', style: 'width:80px;' },
-			[50, 100, 200, 250, 300, 350].map(v =>
-				E('option', { value: v, selected: String(log_length) == v ? '' : null }, v))
+			[50, 100, 200, 250, 300, 350].map(val =>
+				E('option', { value: val, selected: +log_length === val ? '' : null }, val))
 		);
-
 		const body = E('div', [
 			E('h3', _('Logs')),
 			content
@@ -60,16 +55,16 @@ return view.extend({
 						E('label', _('Refresh time:')),
 						E('select', {
 							class: 'cbi-input-select', style: 'width:80px;',
-							change: ui.createHandlerFn(this, ev => {
+							change: ui.createHandlerFn(this, (ev) => {
 								const val = +ev.target.value;
-								poll.active() && poll.remove(refreshLogs);
-								val > 0 && poll.add(refreshLogs, val);
+								L.Poll.active() && L.Poll.remove(refreshLogs);
+								val > 0 && L.Poll.add(refreshLogs, val);
 							})
 						}, [0, 5, 10, 30, 60].map((opt) =>
 							E('option', { value: opt, selected: opt === 30 ? '' : null }, opt === 0 ? _('Paused') : opt))),
 						E('div', {
 							class: 'btn cbi-button-apply',
-							click: ui.createHandlerFn(this, ev => {
+							click: ui.createHandlerFn(this, (ev) => {
 								reversed = !reversed;
 								refreshLogs();
 								ev.target.textContent = reversed
@@ -95,9 +90,7 @@ return view.extend({
 					textarea])
 				: E('pre', { style: 'margin:0;white-space:pre-wrap;font-family:monospace;' }, _('No log data available'))
 		]);
-
-		content && poll.add(refreshLogs, 30);
-
+		content && L.Poll.add(refreshLogs, 30);
 		return body;
 	},
 

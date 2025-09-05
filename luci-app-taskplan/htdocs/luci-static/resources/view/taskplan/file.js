@@ -1,7 +1,6 @@
 'use strict';
 'require fs';
 'require ui';
-'require dom';
 'require uci';
 'require view';
 
@@ -37,7 +36,7 @@ function modalnotify(title, children, timeout, ...classes) {
 		])
 	]);
 
-	dom.append(msg.firstElementChild, children);
+	L.dom.append(msg.firstElementChild, children);
 	msg.classList.add(...classes);
 	modalContainer.insertBefore(msg, modalContainer.firstChild);
 	if (typeof timeout === 'number' && timeout > 0) {
@@ -61,7 +60,7 @@ function executescript(filepath, label) {
 							const textarea = E('textarea', {
 								readonly: '', class: 'cbi-input-textarea', rows: Math.min(response.split('\n').length + 3, 20)
 							}, response || _('No results were returned for execution'));
-							dom.attr(textarea, 'style', 'white-space: pre;');
+							L.dom.attr(textarea, 'style', 'white-space: pre;');
 							ui.showModal(_('%s execution result').format(label), [
 								E('style', ['.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}']),
 								textarea,
@@ -251,9 +250,9 @@ return view.extend({
 
 	render: (data) => {
 		const Level = uci.get('system', '@system[0]', 'cronloglevel');
-		const view = E('div', {}, [
+		const view = E('div', [
 			E('style', ['.cbi-input-textarea {width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace; white-space: pre;}']),
-			E('b', {}, [
+			E('b', [
 				_('This page can be edited and saved directly. Changes will take effect immediately after saving.'),
 				_('Please ensure the syntax is correct, as incorrect syntax may cause the system to malfunction.'),
 			]),
@@ -345,7 +344,7 @@ return view.extend({
 				]);
 			}).filter(Boolean);
 
-			view.appendChild(E('div', {}, tabs));
+			view.appendChild(E('div', tabs));
 			ui.tabs.initTabGroup(view.lastElementChild.childNodes);
 		});
 		return view;

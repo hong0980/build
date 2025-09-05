@@ -66,7 +66,7 @@ const validateCrontabField = (type, value, monthValue) => {
 		field.max = types.day.getMaxDays(monthValue);
 		if (monthValue && !/^\d+$/.test(monthValue)) {
 			field.msg += _(' (Note: Actual days may be limited by specific months)');
-		}
+		};
 	};
 
 	for (const part of parts) {
@@ -120,6 +120,43 @@ const validateCrontabField = (type, value, monthValue) => {
 
 	return true;
 };
+
+function modalnotify(title, children, timeout, ...classes) {
+	function fadeOut(element) {
+		element?.classList.replace('fade-in', 'fade-out');
+		setTimeout(() => element?.remove());
+	};
+
+	const modalContainer = document.querySelector('div.modal[role="dialog"]');
+	if (!modalContainer) return;
+	const msg = E('div', {
+		class: 'alert-message fade-in',
+		style: 'display:flex; margin: 10px 0;',
+		transitionend: function (ev) {
+			const node = ev.currentTarget;
+			if (node.parentNode && node.classList.contains('fade-out')) {
+				node.parentNode.removeChild(node);
+			};
+		}
+	}, [
+		E('div', { style: 'flex:10' }),
+		E('div', { style: 'flex:1 1 auto; display:flex' }, [
+			E('button', {
+				class: 'btn', style: 'margin-left:auto; margin-top:auto',
+				click: () => fadeOut(msg)
+			}, _('Dismiss'))
+		])
+	]);
+
+	L.dom.append(msg.firstElementChild, children);
+	msg.classList.add(...classes);
+	modalContainer.insertBefore(msg, modalContainer.firstChild);
+	if (typeof timeout === 'number' && timeout > 0) {
+		setTimeout(() => fadeOut(msg), timeout);
+	};
+	return msg;
+};
+
 const scriptpath = '/etc/taskplan';
 const scriptSuffix = (v) => v.replace('script_', '')
 const CRON_FIELDS = ['minute', 'hour', 'day', 'month', 'week'];
@@ -130,7 +167,7 @@ return view.extend({
 		let m, s, e;
 		m = new form.Map('taskplan', '', [
 			E('style', [CSS]),
-			E('div', {}, [
+			E('div', [
 				_('Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc.'),
 				E('a', {
 					target: '_blank', style: 'margin-left: 10px;',
@@ -211,7 +248,7 @@ return view.extend({
 			const crontab = values.filter(Boolean).join('_');
 
 			crontab.split('_').length === 5
-				? window.open(`https://crontab.guru/#${crontab}`)
+				? open(`https://crontab.guru/#${crontab}`)
 				: notify(null, E('p', _('Invalid format for %s').format(crontab)), 10000, 'error');
 		};
 
@@ -315,33 +352,31 @@ return view.extend({
 						_('Note: Please use valid syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
 					E('textarea', { rows: 12, id: v, style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace; white-space: pre; overflow-x: auto;' }, [content]),
 					E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
-						E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal, title: _('Cancel') }, _('Cancel')),
+						E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal, title: _('Dismiss') }, _('Dismiss')),
 						E('div', {
 							class: 'btn cbi-button-action important',
 							title: _('Click to upload the script to %s').format(path),
 							click: ui.createHandlerFn(this, () => ui.uploadFile(path)
-								.then(() => notify(null, E('p',
+								.then(() => modalnotify(null, E('p',
 									_('File saved to %s').format(path)), 3000, 'info'))
-								.catch((e) => notify(null, E('p', e.message), 3000)))
+								.catch((e) => modalnotify(null, E('p', e.message), 3000)))
 						}, _('Upload')),
 						E('div', {
 							class: 'btn cbi-button-positive', title: _('Save'),
 							click: ui.createHandlerFn(this, () => {
 								const value = document.getElementById(v).value;
 								if (value.trim() === content.trim()) {
-									ui.hideModal();
-									return notify(null, E('p', _('No modifications detected. The content remains unchanged.')), 3000);
+									return modalnotify(null, E('p', _('No modifications detected. The content remains unchanged.')), 3000);
 								};
 								fs.write(path, value.trim().replace(/\r\n/g, '\n') + '\n')
-									.then(() => notify(null, E('p', _('Contents of %s have been saved.').format(label)), 3000, 'info'))
-									.catch(e => notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 8000, 'error'));
-								ui.hideModal();
+									.then(() => modalnotify(null, E('p', _('Contents of %s have been saved.').format(label)), 3000, 'info'))
+									.catch(e => modalnotify(null, E('p', _('Unable to save contents: %s').format(e.message)), 8000, 'error'));
 							})
 						}, _('Save')),
 					])
 				]);
 			})
-			.catch(e => notify(null, E('p', {},
+			.catch(e => modalnotify(null, E('p', {},
 				_('Unable to read %s: %s').format(label, e.message)), 8000, 'error'));
 	}
 });

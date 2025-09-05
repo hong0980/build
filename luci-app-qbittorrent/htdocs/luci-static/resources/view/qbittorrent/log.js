@@ -98,7 +98,7 @@ return view.extend({
 			E('div', { style: 'display: flex; align-items: center; gap: 15px;' }, [
 				E('div', _('Lines:')),
 				E('select', {
-					class: 'cbi-input-select', style: 'width: 50px;',
+					class: 'cbi-input-select', style: 'width: 60px;',
 					change: ui.createHandlerFn(this, (ev) => {
 						Lines = +ev.target.value;
 						updateLogsDisplay(syslog, applog);

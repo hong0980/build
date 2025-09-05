@@ -15,15 +15,14 @@ return view.extend({
 	}),
 
 	render: (results) => {
-		const view = E('div', {}, [
+		const body = E('div', [
 			E('h3', _('Files')),
 			E('div', _('This page is the configuration file content of %s.').format('qBittorrent'))
 		]);
 
-		results.forEach(({ content, path, stat }) => {
-			if (!content) return;
-			view.appendChild(
-				E('div', {}, [
+		results.forEach(({ content, path, stat }) =>
+			content && body.appendChild(
+				E('div', [
 					E('div', { style: 'margin-top:1em' },
 						_('This is the content of the configuration file under <code>%s</code>:').format(path)),
 					E('textarea', {
@@ -36,10 +35,10 @@ return view.extend({
 							new Date(stat.mtime * 1000).toLocaleString(), stat.size)
 					),
 				])
-			);
-		});
+			)
+		);
 
-		return view;
+		return body;
 	},
 
 	handleSave: null,

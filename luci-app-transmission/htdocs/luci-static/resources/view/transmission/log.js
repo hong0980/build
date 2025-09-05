@@ -96,9 +96,9 @@ return view.extend({
 			E('div', { style: 'display: flex; align-items: center; gap: 15px;' }, [
 				E('div', _('Lines:')),
 				E('select', {
-					class: 'cbi-input-select', style: 'width: 50px;',
+					class: 'cbi-input-select', style: 'width: 60px;',
 					change: ui.createHandlerFn(this, (ev) => {
-						Lines = ev.target.value;
+						Lines = +ev.target.value;
 						updateLogsDisplay(syslog, applog);
 					})
 				}, [10, 20, 30, 50, 100].map((opt) =>
@@ -107,12 +107,12 @@ return view.extend({
 				E('select', {
 					class: 'cbi-input-select', style: 'width: 60px;',
 					change: ui.createHandlerFn(this, (ev) => {
-						const value = ev.target.value;
+						const val = +ev.target.value;
 						poll.active() && poll.remove(refreshLogs);
-						if (value !== '*') poll.add(refreshLogs, value);
+						val > 0 && poll.add(refreshLogs, val);
 					})
-				}, [3, 5, 7, 10, '*'].map((opt) =>
-					E('option', { value: opt, selected: opt === L.env.pollinterval ? '' : null }, opt === '*' ? _('Paused') : opt))),
+				}, [0, 5, 10, 30, 60].map((opt) =>
+					E('option', { value: opt, selected: opt === 10 ? '' : null }, opt !== 0 ? opt : _('Paused')))),
 				E('div', {
 					class: 'btn cbi-button-apply',
 					click: ui.createHandlerFn(this, (ev) => {
@@ -149,7 +149,7 @@ return view.extend({
 			}, _('No log data available'))
 		);
 
-		if (sysText || appText) poll.add(refreshLogs);
+		if (sysText || appText) poll.add(refreshLogs, 10);
 		return body;
 	},
 
