@@ -17,7 +17,13 @@ const configFiles = [
 ];
 
 return view.extend({
-	dom: {},
+	dom: {
+		textarea: E('textarea', {
+			readonly: '', wrap: 'off', rows: 10,
+			style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;'
+		})
+	},
+
 	load: function () {
 		return Promise.all(
 			configFiles.map((res) => fs.stat(res.path)
@@ -28,10 +34,6 @@ return view.extend({
 	},
 
 	render: function (data) {
-		this.dom.textarea = E('textarea', {
-			readonly: '', wrap: 'off', rows: 10,
-			style: 'width:100%; background-color:#272626; color:#c5c5b2; border:1px solid #555; font-family:Consolas, monospace; font-size:14px;'
-		});
 		const filestatus = E('div', { style: 'color:#888;font-size:90%;' });
 		const view = E('div', [
 			E('font', { color: 'red', style: 'font-weight: bold;' },
@@ -45,15 +47,15 @@ return view.extend({
 					change: ui.createHandlerFn(this, (ev) => {
 						const filepath = ev.target.value;
 						const config = data.find((c) => c.path === filepath);
-						config.stat && fs.read(filepath).then((content) => {
+						fs.read(filepath).then((content) => {
 							this.dom.path = filepath;
 							this.dom.cmd = config.cmd;
 							this.dom.oldcontent = content;
 							this.dom.textarea.value = content;
-							this.dom.textarea.rows = Math.min(content.split('\n').length + 3, 20),
-								filestatus.textContent = _('Last modified: %s, Size: %s bytes').format(
-									new Date(config.stat.mtime * 1000).toLocaleString(), config.stat.size);
-						});
+							this.dom.textarea.rows = Math.min(content.split('\n').length + 3, 20);
+							filestatus.textContent = _('Last modified: %s, Size: %s bytes').format(
+								new Date(config.stat.mtime * 1000).toLocaleString(), config.stat.size);
+						}).catch(() => this.dom.path = '');
 					})
 				}, [
 					E('option', { value: '' }, _('-- Please choose --')),
@@ -79,37 +81,24 @@ return view.extend({
 		return view;
 	},
 
-	handleSaveApply: function () {
-		const content = this.dom.textarea.value.trim().replace(/\r\n/g, '\n');
-		if (this.dom.oldcontent === content)
+	save: function (cmd = null) {
+		if (this.dom.oldcontent === this.dom.textarea.value)
 			return notify(null, E('p', _('No modifications detected. The content remains unchanged.')), 3000);
 
-		this.dom.path && fs.write(this.dom.path, content + '\n')
+		this.dom.path && fs.write(this.dom.path, this.dom.textarea.value.trim().replace(/\r\n/g, '\n') + '\n')
 			.then(() => {
-				notify(null, E('p', '%s %s'.format(this.dom.path, _('Contents have been saved.'))), 5000, 'info');
-				if (this.dom.cmd) {
-					fs.exec(this.dom.cmd, ['reload']).then((res) =>
-						res.code === 0
-							? notify(null, E('p', _('Service %s reloaded successfully.').format(this.dom.cmd)), 5000, 'info')
-							: notify(null, E('p', _('Service reload failed: %s').format(e.message)), 5000, 'warning')
-					);
-				};
+				notify(null, E('p', `${this.dom.path} ${_('Contents have been saved.')}`), 5000, 'info');
+				return cmd && fs.exec(cmd, ['reload']).then((res) =>
+					res.code === 0
+						? notify(null, E('p', _('Service %s reloaded successfully.').format(this.dom.cmd)), 3000, 'info')
+						: notify(null, E('p', _('Service reload failed: %s').format(e.message)), 5000, 'warning')
+				);
 			}).catch((e) =>
 				notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 5000, 'error')
 			);
 	},
 
-	handleSave: function () {
-		const content = this.dom.textarea.value.trim().replace(/\r\n/g, '\n');
-		if (this.dom.oldcontent === content)
-			return notify(null, E('p', _('No modifications detected. The content remains unchanged.')), 3000);
-
-		this.dom.path && fs.write(this.dom.path, content + '\n')
-			.then(() => notify(null, E('p', '%s %s'.format(this.dom.path, _('Contents have been saved.'))), 5000, 'info'))
-			.catch(e => notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 5000, 'error'));
-	},
-
-	handleReset: function () {
-		this.dom.path && (this.dom.textarea.value = this.dom.oldcontent);
-	}
+	handleSave: function () { this.save() },
+	handleSaveApply: function () { this.save(this.dom.cmd) },
+	handleReset: function () { this.dom.path && (this.dom.textarea.value = this.dom.oldcontent) }
 });
