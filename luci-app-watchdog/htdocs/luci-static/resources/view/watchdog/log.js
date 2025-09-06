@@ -15,7 +15,7 @@ return view.extend({
         const getIPLocation = (ip) => {
             if (ipCache[ip]) return Promise.resolve(ipCache[ip]);
             if ((ipFailCount[ip] ?? 0) >= 3) {
-                return Promise.resolve(ipCache[ip] = { ip, isp: '未知ISP' });
+                return Promise.resolve(ipCache[ip] = { ip, isp: _('Unknown ISP') });
             };
 
             return L.Request.get(`http://ip-api.com/json/${ip}`, { timeout: 5000 })
@@ -29,9 +29,9 @@ return view.extend({
                 .catch(() => {
                     ipFailCount[ip] = (ipFailCount[ip] ?? 0) + 1;
                     if (ipFailCount[ip] >= 3) {
-                        return ipCache[ip] = { ip, isp: '未知ISP' };
+                        return ipCache[ip] = { ip, isp: _('Unknown ISP') };
                     };
-                    return { ip, isp: '未知ISP' };
+                    return { ip, isp: _('Unknown ISP') };
                 });
         };
 
@@ -41,9 +41,9 @@ return view.extend({
 
             const ip = ipMatch[1];
             const isLan = /^(10|192\.168|172\.(1[6-9]|2\d|3[01])|127)\./.test(ip);
-            if (isLan) return Promise.resolve({ ip, tag: '(局域网)' });
+            if (isLan) return Promise.resolve({ ip, tag: _('(LAN)') });
 
-            return getIPLocation(ip).then(info => ({ ip, tag: `(外网) ${info.isp}` }));
+            return getIPLocation(ip).then(info => ({ ip, tag: _('(External) %s').format(info.isp) }));
         };
 
         const formatLogTime = (line) => {
@@ -58,47 +58,47 @@ return view.extend({
                 regex: /Password auth succeeded for/i, type: 'ssh_success',
                 text: (ip, tag, t, line) => {
                     const user = line.match(/Password auth succeeded for '([^']+)'/)?.[1] || '?';
-                    return _("%s - 用户 %s %s (%s) 通过 SSH 登录成功").format(t, ip, tag, user);
+                    return _("%s - User %s %s (%s) logged in via SSH successfully").format(t, ip, tag, user);
                 }
             },
             {
                 regex: /Exit\s+\(.+?\)\s+from/i, type: 'ssh_exit',
                 text: (ip, tag, t, line) => {
                     const user = line.match(/Exit\s+\(([^)]+)\)\s+from/)?.[1] || '?';
-                    return _("%s - 用户 %s %s (%s) 的 SSH 会话已退出").format(t, ip, tag, user);
+                    return _("%s - SSH session for user %s %s (%s) exited").format(t, ip, tag, user);
                 }
             },
             {
                 regex: /Bad password attempt/i, type: 'ssh_fail',
                 text: (ip, tag, t, line) => {
                     const user = line.match(/for '([^']+)'/)?.[1] || '?';
-                    return _("%s - 用户 %s %s 尝试以账户 %s 登录 SSH 失败").format(t, ip, user, tag);
+                    return _("%s - User %s %s attempted to log in via SSH with account %s failed").format(t, ip, user, tag);
                 }
             },
             {
                 regex: /Login attempt for nonexistent user/i, type: 'ssh_fail',
                 text: (ip, tag, t, line) => {
                     const user = line.match(/user '([^']+)'/)?.[1] || '?';
-                    return _("%s - 来自 %s %s 的 SSH 登录尝试失败（用户 %s 不存在）").format(t, ip, user, tag);
+                    return _("%s - SSH login attempt from %s %s failed (user %s does not exist)").format(t, ip, user, tag);
                 }
             },
             {
                 regex: /Child connection from/i, type: 'ssh_connect',
                 text: (ip, tag, t) =>
-                    _("%s - 用户 %s %s 建立了 SSH 连接").format(t, ip, tag)
+                    _("%s - User %s %s established SSH connection").format(t, ip, tag)
             },
             {
                 regex: /accepted login on/i, type: 'web_success',
                 text: (ip, tag, t, line) => {
                     const path = line.match(/accepted login on (\S+)/i)?.[1] || '/';
-                    const pathDisplay = path === '/' ? '首页' : path;
-                    return _("%s - 用户 %s 通过 Web (%s) 登录成功 %s").format(t, ip, pathDisplay, tag);
+                    const pathDisplay = path === '/' ? _('Homepage') : path;
+                    return _("%s - User %s logged in via Web (%s) successfully %s").format(t, ip, pathDisplay, tag);
                 }
             },
             {
                 regex: /failed login on/i, type: 'web_fail',
                 text: (ip, tag, t) =>
-                    _("%s - 用户 %s %s 尝试 Web 登录失败").format(t, ip, tag)
+                    _("%s - User %s %s attempted Web login failed").format(t, ip, tag)
             },
         ];
 
@@ -109,7 +109,7 @@ return view.extend({
                 if (!formattedTime) return null;
 
                 return extractIP(line).then(({ ip, tag }) => {
-                    const ipDisplay = ip || '未知IP';
+                    const ipDisplay = ip || _('Unknown IP');
                     for (const { regex, type, text } of patterns) {
                         if (regex.test(line)) {
                             return { ip, type, time: formattedTime, text: text(ipDisplay, tag, formattedTime, line) };
@@ -133,7 +133,7 @@ return view.extend({
                 return filtered
                     .sort((a, b) => new Date(b.time) - new Date(a.time))
                     .map(e => e.text)
-                    .join('\n') || '暂无日志数据';
+                    .join('\n') || _('No log data available');
             });
         };
 
@@ -148,12 +148,12 @@ return view.extend({
         };
 
         const logDisplay = E('div', { style: 'max-height: 60vh; overflow-y: auto; border: 1px solid #eee; padding: 8px;' },
-            E('pre', { style: 'margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: monospace;' }, '日志为空')
+            E('pre', { style: 'margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: monospace;' }, _('Log is empty'))
         );
 
         const body = E('div', {}, [
             E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
-                E('div', _("每类最多显示")),
+                E('div', _("Maximum entries per type")),
                 E('select', {
                     style: 'width: 60px;', class: 'cbi-input-select', id: 'script_select',
                 }, [1, 2, 3, 4, 5, 10].map(c =>

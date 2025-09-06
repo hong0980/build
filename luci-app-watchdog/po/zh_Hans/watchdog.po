@@ -265,3 +265,56 @@ msgstr "[封禁信息]添加黑名单IP：%s 尝试次数: %s 时间：%s"
 msgid "Failed to add to blacklist, invalid IP format: %s (removed from list)"
 msgstr "黑名单添加失败，IP %s 格式错误，已从列表中移除"
 
+msgid "Unknown ISP"
+msgstr "未知ISP"
+
+msgid "(LAN)"
+msgstr "(局域网)"
+
+msgid "(External) %s"
+msgstr "(外网) %s"
+
+msgid "%s - User %s %s (%s) logged in via SSH successfully"
+msgstr "%s - 用户 %s %s (%s) 通过 SSH 登录成功"
+
+msgid "%s - SSH session for user %s %s (%s) exited"
+msgstr "%s - 用户 %s %s (%s) 的 SSH 会话已退出"
+
+msgid "%s - User %s %s attempted to log in via SSH with account %s failed"
+msgstr "%s - 用户 %s %s 尝试以账户 %s 登录 SSH 失败"
+
+msgid "%s - SSH login attempt from %s %s failed (user %s does not exist)"
+msgstr "%s - 来自 %s %s 的 SSH 登录尝试失败（用户 %s 不存在）"
+
+msgid "%s - User %s %s established SSH connection"
+msgstr "%s - 用户 %s %s 建立了 SSH 连接"
+
+msgid "Homepage"
+msgstr "首页"
+
+msgid "%s - User %s logged in via Web (%s) successfully %s"
+msgstr "%s - 用户 %s 通过 Web (%s) 登录成功 %s"
+
+msgid "%s - User %s %s attempted Web login failed"
+msgstr "%s - 用户 %s %s 尝试 Web 登录失败"
+
+msgid "Unknown IP"
+msgstr "未知IP"
+
+msgid "No log data available"
+msgstr "暂无日志数据"
+
+msgid "Log is empty"
+msgstr "日志为空"
+
+msgid "Maximum entries per type"
+msgstr "每类最多显示"
+
+msgid "Refresh time:"
+msgstr "刷新时间:"
+
+msgid "Refresh every %s seconds."
+msgstr "每 %s 秒刷新一次。"
+
+msgid "Paused"
+msgstr "暂停"
