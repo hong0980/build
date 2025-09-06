@@ -313,13 +313,16 @@ return view.extend({
 							}, _('Create/Edit Script'))
 							: [],
 					]),
+					E('div', { class: 'right' }, [
+						E('small', _('Last modified: %s, Size: %s bytes').format(
+							new Date(stat.mtime * 1000).toLocaleString(), stat.size)
+						)
+					]),
 					E('textarea', { id: tab, class: 'cbi-input-textarea', rows: Math.min(content.split('\n').length + 3, 20) }, content),
 					has(tab, 'script')
 						? E('b', { style: 'color:red;' },
 							_('Note: Please use valid syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.'))
 						: [],
-					E('div', { style: 'color:#888;font-size:90%;', }, _('Last modified: %s, Size: %s bytes').format(
-						new Date(stat.mtime * 1000).toLocaleString(), stat.size)),
 					E('div', { style: 'display:flex;justify-content:flex-end;gap:10px;padding:17px 20px 18px 17px;background:#f8f8f8;border-top:1px solid #e0e0e0;border-radius:0 0 3px 3px;margin-bottom:18px' }, [
 						/script_[c-g]/i.test(filepath)
 							? E('div', {

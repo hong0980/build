@@ -24,14 +24,16 @@ const callServiceList = rpc.declare({
 });
 
 return view.extend({
+	getStatus: () =>
+		callServiceList('transmission', ['instances', 'instance1', 'running']).then(Boolean),
+
 	load: function () {
 		return Promise.all([
 			fs.exec_direct('/bin/df', ['-h']),
 			L.resolveDefault(fs.stat('/usr/share/transmission'), null),
 			L.resolveDefault(fs.exec_direct('/usr/bin/transmission-daemon', ['-v']), '')
 				.then(res => res.match(/Transmission\s+([^\s]+)/)?.[1]),
-			callServiceList('transmission', ['instances', 'instance1', 'running'])
-				.then(Boolean),
+			L.resolveDefault(this.getStatus(), null),
 			uci.load('transmission')
 				.then(r => uci.get_first('transmission', 'transmission', 'rpc_port') || '9091'),
 		]);
@@ -47,18 +49,16 @@ return view.extend({
 				_("Current version: <b style='color:red'>%s</b>").format(ver)
 			)
 		);
+		var statusEl = E('b', { style: `color:${running ? 'green' : 'red'}` }, [
+			'Transmission ' + (running ? _('RUNNING') : _('NOT RUNNING')),
+		]);
+		var btnEl = E('div', {
+			class: 'btn cbi-button-apply', style: running ? '' : 'display:none',
+			click: () => open(`${location.origin}:${port}`)
+		}, _('Open Web Interface'));
 
 		s = m.section(form.TypedSection);
-		s.render = () => E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
-			E('b', { style: `color:${running ? 'green' : 'red'}` },
-				'Transmission %s'.format(running ? _('RUNNING') : _('NOT RUNNING'))),
-			running && webinstalled
-				? E('div', {
-					class: 'btn cbi-button-apply',
-					click: () => open(`${location.origin}:${port}`)
-				}, _('Open Web Interface'))
-				: []
-		]);
+		s.render = () => E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [statusEl, btnEl]);
 
 		s = m.section(form.NamedSection, 'transmission', 'transmission');
 		s.addremove = false;
@@ -376,6 +376,14 @@ return view.extend({
 
 		o = s.taboption("scheduling", form.Value, 'ratio_limit', _('Ratio limit'));
 		o.depends('ratio_limit_enabled', 'true');
+
+		L.Poll.add(L.bind(() => this.getStatus().then((running) => {
+			if (statusEl) {
+				statusEl.style.color = running ? 'green' : 'red';
+				statusEl.textContent = 'Transmission ' + (running ? _('RUNNING') : _('NOT RUNNING'));
+			};
+			if (btnEl) btnEl.style.display = running ? '' : 'none';
+		}), this));
 
 		return m.render();
 	}

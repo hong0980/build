@@ -19,19 +19,23 @@ const callServiceList = rpc.declare({
 });
 
 return view.extend({
-	load: () => Promise.all([
-		fs.exec_direct('/bin/df', ['-h']),
-		L.resolveDefault(callServiceList('qbittorrent', ['instances', 'instance1', 'running']), {})
-			.then(r => r === true),
-		fs.exec_direct('/usr/bin/env', ['HOME=/var/run/qbittorrent', '/usr/bin/qbittorrent-nox', '-v'])
-			.then(r => r.trim().split('v').pop()),
-		fs.exec_direct('/sbin/logread', ['-e', 'qbittorrent-nox'])
-			.then(r => (r.match(/(?:临时密码：|password[^\n]*:\s*)(\w{9})/g) || []).pop()?.match(/\w{9}$/)?.[0] || null),
-		uci.load('qbittorrent')
-			.then(() => uci.get('qbittorrent', 'main', 'RootProfilePath') + '/qBittorrent/config/qBittorrent.conf')
-			.then(confPath => fs.trimmed(confPath)
-				.then(content => /^WebUI\\Password_PBKDF2=\s*$/m.test(content)))
-	]),
+	getStatus: () =>
+		callServiceList('qbittorrent', ['instances', 'instance1', 'running']).then(Boolean),
+
+	load: function () {
+		return Promise.all([
+			fs.exec_direct('/bin/df', ['-h']),
+			L.resolveDefault(this.getStatus(), false),
+			fs.exec_direct('/usr/bin/env', ['HOME=/var/run/qbittorrent', '/usr/bin/qbittorrent-nox', '-v'])
+				.then(r => r.trim().split('v').pop()),
+			fs.exec_direct('/sbin/logread', ['-e', 'qbittorrent-nox'])
+				.then(r => (r.match(/(?:临时密码：|password[^\n]*:\s*)(\w{9})/g) || []).pop()?.match(/\w{9}$/)?.[0] || null),
+			uci.load('qbittorrent')
+				.then(() => uci.get('qbittorrent', 'main', 'RootProfilePath') + '/qBittorrent/config/qBittorrent.conf')
+				.then(confPath => fs.trimmed(confPath)
+					.then(content => /^WebUI\\Password_PBKDF2=\s*$/m.test(content)))
+		])
+	},
 
 	render([diskList, running, version, tempPassword, hasPersistentPassword]) {
 		var m, s, o;
@@ -41,19 +45,18 @@ return view.extend({
 				_('A cross-platform open source BitTorrent client based on QT.'),
 				_("Current version: <b style='color:red'>%s</b>").format(version)
 			));
+		var statusEl = E('b', { style: `color:${running ? 'green' : 'red'}` }, [
+			'qBittorrent ' + (running ? _('RUNNING') : _('NOT RUNNING')),
+		]);
+		var btnEl = E('div', {
+			class: 'btn cbi-button-apply', style: running ? '' : 'display:none',
+			click: ui.createHandlerFn(this, () => open(`${location.origin}:${port}`))
+		}, _('Open Web Interface'));
 
 		s = m.section(form.TypedSection);
 		s.render = () =>
 			E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
-				E('b', { style: `color:${running ? 'green' : 'red'}` }, [
-					'%s %s'.format(_('qBittorrent'), running ? _('RUNNING') : _('NOT RUNNING')),
-				]),
-				running
-					? E('div', {
-						class: 'btn cbi-button-apply',
-						click: ui.createHandlerFn(this, () => open(`${location.origin}:${port}`))
-					}, _('Open Web Interface'))
-					: [],
+				statusEl, btnEl,
 				running && tempPassword && hasPersistentPassword
 					? E('div', {
 						class: 'btn cbi-button-apply',
@@ -155,6 +158,14 @@ return view.extend({
 			_("Enable additional qBittorrent"),
 			_("Specify the binary location of qBittorrent."));
 		o.placeholder = "/usr/sbin/qbittorrent-nox";
+
+		L.Poll.add(L.bind(() => this.getStatus().then((running) => {
+			if (statusEl) {
+				statusEl.style.color = running ? 'green' : 'red';
+				statusEl.textContent = 'qBittorrent ' + (running ? _('RUNNING') : _('NOT RUNNING'));
+			};
+			if (btnEl) btnEl.style.display = running ? '' : 'none';
+		}), this));
 
 		return m.render();
 	}

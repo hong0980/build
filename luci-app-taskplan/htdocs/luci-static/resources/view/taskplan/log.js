@@ -23,10 +23,9 @@ return view.extend({
 			: [];
 		const refreshLogs = () =>
 			fs.trimmed(logpath).then(content => {
-				if (textarea.rows < 18) textarea.rows = Math.min(content.split('\n').length + 2, 20);
-				textarea.value = reversed
-					? content
-					: content.split('\n').reverse().join('\n');
+				const lines = content.split('\n').filter(Boolean);
+				if (lines.length < textarea.rows) textarea.rows = Math.min(lines.length + 2, 20);
+				textarea.value = reversed ? content : lines.reverse().join('\n');
 			});
 		const logLengthSelect = E('select', { class: 'cbi-input-select', style: 'width:80px;' },
 			[50, 100, 200, 250, 300, 350].map(val =>

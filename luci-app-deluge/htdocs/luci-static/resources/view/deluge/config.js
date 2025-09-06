@@ -71,37 +71,37 @@ const callServiceList = rpc.declare({
 });
 
 return view.extend({
-	load: () => Promise.all([
-		fs.exec_direct('/bin/df', ['-h']),
-		L.resolveDefault(callServiceList('deluge', ['instances', ['deluged', 'deluge-web'], 'running']), {})
-			.then(r => !!r.deluged && !!r['deluge-web']),
-		uci.load('deluge')
-			.then(r => {
-				var port = uci.get(r, 'main', 'port') || '8112',
-					proto = uci.get(r, 'main', 'https') === 1 ? 'https' : 'http';
-				return { port, proto };
-			})
-	]),
+	getStatus: function () {
+		return callServiceList('deluge', ['instances', ['deluged', 'deluge-web'], 'running'])
+			.then(r => !!r.deluged && !!r['deluge-web']);
+	},
+
+	load: function () {
+		return Promise.all([
+			fs.exec_direct('/bin/df', ['-h']),
+			L.resolveDefault(this.getStatus(), false),
+			uci.load('deluge').then(r => ({
+				port: uci.get(r, 'main', 'port') || '8112',
+				proto: uci.get(r, 'main', 'https') === 1 ? 'https' : 'http'
+			}))
+		])
+	},
 
 	render: function ([diskList, running, config]) {
 		var m, s, o, { port, proto } = config || {};
 
 		m = new form.Map('deluge', _('Deluge Downloader'),
 			_('Deluge is a lightweight BT client based on Python and libtorrent.'));
+		var statusEl = E('b', { style: `color:${running ? 'green' : 'red'}` },
+			'Deluge ' + (running ? _('RUNNING') : _('NOT RUNNING'))
+		);
+		var btnEl = E('div', {
+			class: 'btn cbi-button-apply', style: running ? '' : 'display:none',
+			click: () => open(`${proto}://${location.hostname}:${port}`)
+		}, _('Open Web Interface'));
 
 		s = m.section(form.TypedSection);
-		s.render = () =>
-			E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
-				E('b', { style: `color:${running ? 'green' : 'red'}` }, [
-					'Deluge %s'.format(running ? _('RUNNING') : _('NOT RUNNING'))
-				]),
-				running
-					? E('div', {
-						class: 'btn cbi-button-apply',
-						click: () => open(`${proto}://${location.hostname}:${port}`)
-					}, _('Open Web Interface'))
-					: []
-			]);
+		s.render = () => E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [statusEl, btnEl]);
 
 		s = m.section(form.NamedSection, 'main', 'deluge');
 		s.addremove = false;
@@ -265,6 +265,14 @@ return view.extend({
 		o = s.taboption("other", form.Value, 'cache_expiry', _('Cache Expiry (seconds)'));
 		o.default = "60";
 		o.datatype = 'integer';
+
+		L.Poll.add(L.bind(() => this.getStatus().then((running) => {
+			if (statusEl) {
+				statusEl.style.color = running ? 'green' : 'red';
+				statusEl.textContent = 'Deluge ' + (running ? _('RUNNING') : _('NOT RUNNING'));
+			};
+			if (btnEl) btnEl.style.display = running ? '' : 'none';
+		}), this));
 
 		return m.render();
 	}

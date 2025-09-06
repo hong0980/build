@@ -89,8 +89,10 @@ return view.extend({
 		const applogLE = E('div', [
 			d.applogtitle, d.apptextarea,
 			stat
-				? E('div', { style: 'color:#888;font-size:90%;', }, _('Last modified: %s, Size: %s bytes').format(
-					new Date(stat.mtime * 1000).toLocaleString(), stat.size))
+				? E('div', { class: 'right' }, [
+					E('small', _('Last modified: %s, Size: %s bytes').format(
+						new Date(stat.mtime * 1000).toLocaleString(), stat.size)
+					)])
 				: []
 		]);
 

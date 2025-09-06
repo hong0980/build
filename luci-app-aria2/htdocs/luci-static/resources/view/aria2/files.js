@@ -30,10 +30,11 @@ return view.extend({
 						rows: Math.min(content.split('\n').length + 1, 18),
 						style: 'width:100%; font-size:14px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace;'
 					}, content),
-					E('div', { style: 'color:#888;font-size:90%;margin-top:0.5em;' },
-						_('Last modified: %s, Size: %s bytes').format(
+					E('div', { class: 'right' }, [
+						E('small', _('Last modified: %s, Size: %s bytes').format(
 							new Date(stat.mtime * 1000).toLocaleString(), stat.size)
-					),
+						)
+					]),
 				])
 			)
 		);

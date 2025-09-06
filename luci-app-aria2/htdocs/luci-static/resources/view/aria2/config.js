@@ -88,11 +88,12 @@ const callServiceList = rpc.declare({
 });
 
 return view.extend({
+	getStatus: () => callServiceList('aria2', ['instances', 'aria2.main', 'running']).then(Boolean),
+
 	load: function () {
 		return Promise.all([
 			L.resolveDefault(fs.exec_direct('/bin/df', ['-h']), {}),
-			L.resolveDefault(callServiceList('aria2', ['instances', 'aria2.main', 'running']), null)
-				.then(Boolean),
+			L.resolveDefault(this.getStatus(), false),
 			L.resolveDefault(fs.exec_direct('/usr/bin/aria2c', ['-v']), '')
 				.then(res => {
 					const info = {};
@@ -121,27 +122,29 @@ return view.extend({
 				_('Aria2 is a lightweight multi-protocol &amp; multi-source, cross platform download utility.'),
 				_("Current version: <b style='color:red'>%s</b>").format(aria2_info.version))
 		);
+		var statusEl = E('b', { style: `color:${running ? 'green' : 'red'}` }, [
+			'Aria2 ' + (running ? _('RUNNING') : _('NOT RUNNING')),
+		]);
 
 		s = m.section(form.TypedSection);
 		s.anonymous = true;
 		s.render = () => E('div', { style: 'margin-bottom:10px' }, [
-			E('div', {}, [
-				E('b', { style: `color:${running ? 'green' : 'red'};margin-right:10px` },
-					'Aria2 %s'.format(running ? _('RUNNING') : _('NOT RUNNING'))),
-				running ? (() => {
-					const b = E('span', {});
-					['ariang:AriaNg', 'webui-aria2:WebUI-Aria2', 'yaaw:YAAW'].map(s => {
-						const [k, v] = s.split(':');
-						fs.stat(`/www/${k}/index.html`)
-							.then(() => b.appendChild(E('div', {
-								style: 'margin-left:5px', class: 'btn cbi-button-apply',
+			statusEl,
+			running ? (function () {
+				const btn = E('span');
+				['ariang:AriaNg', 'webui-aria2:WebUI-Aria2', 'yaaw:YAAW'].forEach(s => {
+					const [k, v] = s.split(':');
+					fs.stat(`/www/${k}/index.html`)
+						.then(() => btn.appendChild(
+							E('div', {
+								class: 'btn cbi-button-apply',
+								id: v, style: 'margin-left:5px',
 								click: () => open(`${location.origin}/${k}`)
 							}, v)))
-							.catch(() => []);
-					});
-					return b;
-				})() : []
-			])
+						.catch(() => []);
+				});
+				return btn;
+			})() : []
 		]);
 
 		s = m.section(form.NamedSection, 'main', 'aria2');
@@ -590,6 +593,18 @@ return view.extend({
 		o = s.option(form.DynamicList, 'extra_settings', _('Settings list'),
 			_('List of extra settings. Format: option=value, eg. <code>netrc-path=/tmp/.netrc</code>.'));
 		o.placeholder = 'option=value';
+
+		L.Poll.add(L.bind(() => this.getStatus().then((running) => {
+			if (statusEl) {
+				statusEl.style.color = running ? 'green' : 'red';
+				statusEl.textContent = 'Aria2 ' + (running ? _('RUNNING') : _('NOT RUNNING'));
+			};
+
+			for (const id of ['AriaNg', 'WebUI-Aria2', 'YAAW']) {
+				var el = document.getElementById(id);
+				if (el) el.style.display = running ? '' : 'none';
+			};
+		}), this));
 
 		return m.render();
 	},
