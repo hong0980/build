@@ -1,0 +1,58 @@
+#!/bin/sh
+. /lib/functions.sh
+
+SYNC_LOCK="/tmp/.docker-fw-sync.lock"
+
+mark_sync() {
+	touch "$SYNC_LOCK"
+}
+
+run_sync() {
+	rm -f "$SYNC_LOCK"
+
+	clean_rules() {
+		local name
+		config_get name "$1" name
+		case "$name" in
+			Docker-*) uci delete "firewall.$1" ;;
+		esac
+	}
+
+	config_load firewall
+	config_foreach clean_rules redirect
+
+	docker ps --format '{{.Names}}' | while read name; do
+		[ -z "$name" ] && continue
+		ip=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$name" 2>/dev/null)
+		[ -z "$ip" ] && continue
+
+		docker port "$name" 2>/dev/null | grep '0.0.0.0:' | while read line; do
+			hostport=$(echo "$line" | cut -d: -f2 | cut -d/ -f1)
+			proto=$(echo "$line" | cut -d/ -f2 | cut -d' ' -f1)
+			contport=$(echo "$line" | cut -d/ -f1)
+			[ -n "$hostport" ] || continue
+
+			cfg=$(uci add firewall redirect)
+			uci batch <<-EOF
+			set firewall.$cfg.name=Docker-$name-$hostport
+			set firewall.$cfg.src=wan
+			set firewall.$cfg.src_dport=$hostport
+			set firewall.$cfg.dest=lan
+			set firewall.$cfg.dest_ip=$ip
+			set firewall.$cfg.dest_port=$contport
+			set firewall.$cfg.proto=$proto
+			EOF
+		done
+	done
+
+	uci changes firewall > /dev/null && {
+		uci commit firewall
+		/etc/init.d/firewall reload
+	}
+}
+
+mark_sync
+
+sleep 3
+
+[ -f "$SYNC_LOCK" ] && run_sync

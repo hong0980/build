@@ -1,5 +1,5 @@
 #!/bin/sh
-
+chmod +x /usr/bin/docker-fw-redirect
 . $IPKG_INSTROOT/lib/functions.sh
 
 [ -x "$(command -v dockerd)" ] && chmod +x /etc/init.d/dockerman && /etc/init.d/dockerman enable >/dev/null 2>&1
