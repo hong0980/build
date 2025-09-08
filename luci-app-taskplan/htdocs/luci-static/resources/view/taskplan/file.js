@@ -15,7 +15,7 @@ function modalnotify(title, children, timeout, ...classes) {
 		setTimeout(() => element?.remove());
 	};
 
-	const modalContainer = document.querySelector('div.modal[role="dialog"]');
+	const modalContainer = document.querySelector('#modal_overlay .modal');
 	if (!modalContainer) return;
 	const msg = E('div', {
 		class: 'alert-message fade-in',
@@ -56,11 +56,12 @@ function executescript(filepath, label) {
 						const firstLine = content.split('\n')[0].match(/^#!\s*(.+)/);
 						const interpreter = firstLine ? firstLine[1].trim() : '/bin/sh';
 
-						fs.exec_direct(interpreter, [filepath]).then(response => {
+						fs.exec(interpreter, [filepath]).then(res => {
+							const content = res.stdout || res.stderr || '';
 							const textarea = E('textarea', {
-								readonly: '', class: 'cbi-input-textarea', rows: Math.min(response.split('\n').length + 3, 20)
-							}, response || _('No results were returned for execution'));
-							L.dom.attr(textarea, 'style', 'white-space: pre;');
+								readonly: '', class: 'cbi-input-textarea', rows: Math.min(content.split('\n').length + 5, 20)
+							}, content || _('No results were returned for execution'));
+							L.dom.attr(textarea, 'style', 'white-space: pre;font-size:14px;');
 							ui.showModal(_('%s execution result').format(label), [
 								E('style', ['.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}']),
 								textarea,
@@ -88,7 +89,8 @@ function executescript(filepath, label) {
 									}, _('Copy')),
 								])
 							]);
-						}).catch(e => notify(null, E('p', _('Script execution failed: %s').format(e.message)), 8000, 'error'));
+							if (res.stderr) modalnotify(null, E('p', _('Script execution failed: %s').format(filepath)), 8000, 'error');
+						}).catch(e => modalnotify(null, E('p', _('execution failed: %s').format(e.message)), 8000, 'error'));
 					}))
 			}, _('Confirm')),
 			E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal }, _('Dismiss'))

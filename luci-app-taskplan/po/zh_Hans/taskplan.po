@@ -271,7 +271,10 @@ msgid "The execution result has been copied to the clipboard!"
 msgstr "执行结果已复制到剪贴板！"
 
 msgid "Script execution failed: %s"
-msgstr "脚本执行失败: %s"
+msgstr "%s 脚本执行失败"
+
+msgid "execution failed: %s"
+msgstr "执行失败： %s"
 
 msgid "Save successfully"
 msgstr "成功保存"

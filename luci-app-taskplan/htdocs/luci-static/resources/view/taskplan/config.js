@@ -127,7 +127,7 @@ function modalnotify(title, children, timeout, ...classes) {
 		setTimeout(() => element?.remove());
 	};
 
-	const modalContainer = document.querySelector('div.modal[role="dialog"]');
+	const modalContainer = document.querySelector('#modal_overlay .modal');
 	if (!modalContainer) return;
 	const msg = E('div', {
 		class: 'alert-message fade-in',
@@ -158,7 +158,7 @@ function modalnotify(title, children, timeout, ...classes) {
 };
 
 const scriptpath = '/etc/taskplan';
-const scriptSuffix = (v) => v.replace('script_', '')
+const scriptSuffix = (v) => v.replace('script_', '').toUpperCase();
 const CRON_FIELDS = ['minute', 'hour', 'day', 'month', 'week'];
 const notify = L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui);
 
@@ -329,44 +329,47 @@ return view.extend({
 		e.value('script_a', _('Custom Script %s').format('A'));
 		e.value('script_b', _('Custom Script %s').format('B'));
 
-		L.resolveDefault(fs.list(scriptpath), '').then(files => files.forEach(file =>
-			(!/_a|_b|log/i.test(file.name)) &&
-			e.value(file.name, _('Custom Script %s').format(scriptSuffix(file.name).toUpperCase()))
-		));
+		fs.list(scriptpath).then(files =>
+			files.forEach(file =>
+				(!/_[ab]|log/i.test(file.name)) &&
+				e.value(file.name, _('Custom Script %s').format(scriptSuffix(file.name)))
+			));
 		e.onchange = (ev, section_id, value) =>
 			(value.startsWith('script_')) && this.showScriptEditModal(value);
 		e.editable = true;
 	},
 
 	showScriptEditModal: function (v) {
-		const path = `${scriptpath}/script_${scriptSuffix(v)}`;
-		const label = _('Custom Script %s').format(scriptSuffix(v).toUpperCase());
+		const path = `${scriptpath}/${v}`;
+		const label = _('Custom Script %s').format(scriptSuffix(v));
 		fs.stat(path)
-			.catch(() => L.resolveDefault(fs.exec_direct('/usr/bin/which', ['bash']), null)
+			.catch(() => fs.exec_direct('/usr/bin/which', ['bash'])
 				.then(sh => fs.write(path, `#!${(sh || '/bin/sh\n')}`)))
-			.then(() => fs.read(path))
-			.then(content => {
+			.then(() => fs.read(path)).then(content => {
 				ui.showModal(_('Edit %s').format(label), [
-					E('style', { type: 'text/css' }, [`.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}`]),
+					E('style', ['.modal{max-width: 650px;padding:.5em;}h4{text-align: center;}']),
 					E('b', { style: 'color:red;' },
 						_('Note: Please use valid syntax. The script runs as root. Avoid destructive commands (e.g., "rm -rf /"). The script should not require user interaction.')),
-					E('textarea', { rows: 12, id: v, style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace; white-space: pre; overflow-x: auto;' }, [content]),
+					E('textarea', {
+						rows: 12, id: v,
+						style: 'width:100%; font-size:13px; color: #c5c5b2; background-color: #272626; font-family: Consolas, monospace; white-space: pre; overflow-x: auto;'
+					}, content),
 					E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
 						E('div', { class: 'btn cbi-button-neutral', click: ui.hideModal, title: _('Dismiss') }, _('Dismiss')),
 						E('div', {
 							class: 'btn cbi-button-action important',
 							title: _('Click to upload the script to %s').format(path),
 							click: ui.createHandlerFn(this, () => ui.uploadFile(path)
-								.then(() => modalnotify(null, E('p',
-									_('File saved to %s').format(path)), 3000, 'info'))
+								.then(() => modalnotify(null, E('p', _('File saved to %s').format(path)), 3000, 'info'))
 								.catch((e) => modalnotify(null, E('p', e.message), 3000)))
 						}, _('Upload')),
 						E('div', {
 							class: 'btn cbi-button-positive', title: _('Save'),
 							click: ui.createHandlerFn(this, () => {
 								const value = document.getElementById(v).value;
-								if (value.trim() === content.trim()) {
-									return modalnotify(null, E('p', _('No modifications detected. The content remains unchanged.')), 3000);
+								if (value === content) {
+									return modalnotify(null, E('p',
+										_('No modifications detected. The content remains unchanged.')), 3000);
 								};
 								fs.write(path, value.trim().replace(/\r\n/g, '\n') + '\n')
 									.then(() => modalnotify(null, E('p', _('Contents of %s have been saved.').format(label)), 3000, 'info'))
@@ -376,7 +379,7 @@ return view.extend({
 					])
 				]);
 			})
-			.catch(e => modalnotify(null, E('p', {},
+			.catch(e => modalnotify(null, E('p',
 				_('Unable to read %s: %s').format(label, e.message)), 8000, 'error'));
 	}
 });
