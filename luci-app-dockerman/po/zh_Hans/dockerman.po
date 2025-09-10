@@ -1322,5 +1322,5 @@ msgstr "防火墙设置"
 msgid "Proxy Settings"
 msgstr "代理设置"
 
-msgid "Add Docker network to WAN, resolve compatibility with firewall4"
-msgstr "Docker 网络添加到 WAN，解决 firewall4 的兼容性"
+msgid "Add Docker device to LAN zone"
+msgstr "将 Docker 添加到 LAN 区域"

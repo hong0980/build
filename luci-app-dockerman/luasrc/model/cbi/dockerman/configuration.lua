@@ -111,59 +111,46 @@ if isremote_endpoint then
 
 	if isiptables then
 		s = m:section(NamedSection, "firewall", "section", translate("Firewall Settings"))
-		-- if isfw4 then
-		-- 	o = s:option(Flag, "fw4",
-		-- 		translate("Enable"),
-		-- 		translate("Add Docker network to WAN, resolve compatibility with firewall4"))
-		-- 	o.rmempty = false
-		-- 	function o.write(self, section, value)
-		-- 		if not value or value == "" then
-		-- 			return
-		-- 		end
+		if isfw4 then
+			o = s:option(Flag, "fw4",
+				translate("Enable"),
+				translate("Add Docker device to LAN zone"))
+			o.rmempty = false
+			function o.write(self, section, value)
+				if not value or value == "" then return end
+				local lan_zone_section
+				uci:foreach("firewall", "zone", function(s)
+					if s.name == "lan" then
+						lan_zone_section = s[".name"]
+					end
+				end)
 
-		-- 		local modified = false
-		-- 		local if_name = "docker"
-		-- 		local function filter_networks(networks)
-		-- 			local filtered = {}
-		-- 			for _, net in ipairs(networks) do
-		-- 				if net ~= if_name then
-		-- 					filtered[#filtered + 1] = net
-		-- 				end
-		-- 			end
-		-- 			return filtered
-		-- 		end
+				if not lan_zone_section then return end
+				local current_devices = uci:get_list("firewall", lan_zone_section, "device") or {}
+				local device_exists = util.contains(current_devices, "docker0")
+				local modified = false
+				if value == "1" and not device_exists then
+					current_devices[#current_devices + 1] = "docker0"
+					uci:set_list("firewall", lan_zone_section, "device", current_devices)
+					modified = true
+				elseif value == "0" and device_exists then
+					local new_devices = {}
+					for _, dev in ipairs(current_devices) do
+						if dev ~= "docker0" then
+							new_devices[#new_devices + 1] = dev
+						end
+					end
+					uci:set_list("firewall", lan_zone_section, "device", new_devices)
+					modified = true
+				end
 
-		-- 		uci:foreach("firewall", "zone", function(s)
-		-- 			local changed = false
-		-- 			local networks = uci:get_list("firewall", s[".name"], "network")
-
-		-- 			if value == "1" then
-		-- 				if not util.contains(networks, if_name) then
-		-- 					networks[#networks + 1] = if_name
-		-- 					changed = true
-		-- 				end
-		-- 			elseif value == "0" then
-		-- 				local new_networks = filter_networks(networks)
-		-- 				if #new_networks ~= #networks then
-		-- 					networks = new_networks
-		-- 					changed = true
-		-- 				end
-		-- 			end
-
-		-- 			if changed then
-		-- 				uci:set_list("firewall", s[".name"], "network", networks)
-		-- 				modified = true
-		-- 			end
-		-- 		end)
-
-		-- 		if modified then
-		-- 			uci:commit("firewall")
-		-- 			util.exec("/etc/init.d/firewall reload &")
-		-- 		end
-
-		-- 		uci:set("dockerd", "firewall", "fw4", value)
-		-- 	end
-		-- end
+				if modified then
+					uci:commit("firewall")
+					util.exec("/etc/init.d/firewall reload &")
+				end
+				uci:set("dockerd", "firewall", "fw4", value)
+			end
+		end
 
 		o = s:option(Value, "device",
 			translate("Docker Network Interface"),
