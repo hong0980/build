@@ -40,40 +40,43 @@ return view.extend({
 	render([diskList, running, version, tempPassword, hasPersistentPassword]) {
 		var m, s, o;
 		var port = uci.get('qbittorrent', 'main', 'port') || '8080';
+		const statusEl = E('b', { style: `color:${running ? 'green' : 'red'}` }, [
+			'qBittorrent ' + (running ? _('RUNNING') : _('NOT RUNNING')),
+		]);
+
+		const btnEl = E('div', [
+			E('div', {
+				class: 'btn cbi-button-apply', style: running ? '' : 'display:none',
+				click: ui.createHandlerFn(this, () => open(`${location.origin}:${port}`))
+			}, _('Open Web Interface'))
+		]);
+
+		const temppasswordEL = E('div', {
+			class: 'btn cbi-button-apply', style: 'margin-left: 10px;',
+			title: _("Log in to WebUI with temporary password %s").format(tempPassword),
+			click: ui.createHandlerFn(this, () => {
+				const textarea = document.createElement('textarea');
+				textarea.value = tempPassword;
+				textarea.style.position = 'fixed';
+				textarea.style.opacity = '0';
+				document.body.appendChild(textarea);
+				textarea.select();
+				const success = document.execCommand('copy');
+				document.body.removeChild(textarea);
+				success && L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui)(null, E('p', _('Password %s Copyed to clipboard').format(tempPassword)), 3000, 'info');
+			})
+		}, _("Copy <b style='color:red'>%s</b> temporary password").format(tempPassword));
+
 		m = new form.Map('qbittorrent', _('qBittorrent'),
 			'%s  %s'.format(
 				_('A cross-platform open source BitTorrent client based on QT.'),
 				_("Current version: <b style='color:red'>%s</b>").format(version)
 			));
-		var statusEl = E('b', { style: `color:${running ? 'green' : 'red'}` }, [
-			'qBittorrent ' + (running ? _('RUNNING') : _('NOT RUNNING')),
-		]);
-		var btnEl = E('div', {
-			class: 'btn cbi-button-apply', style: running ? '' : 'display:none',
-			click: ui.createHandlerFn(this, () => open(`${location.origin}:${port}`))
-		}, _('Open Web Interface'));
 
 		s = m.section(form.TypedSection);
 		s.render = () =>
 			E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
 				statusEl, btnEl,
-				running && tempPassword && hasPersistentPassword
-					? E('div', {
-						class: 'btn cbi-button-apply',
-						title: _("Log in to WebUI with temporary password %s").format(tempPassword),
-						click: ui.createHandlerFn(this, () => {
-							const textarea = document.createElement('textarea');
-							textarea.value = tempPassword;
-							textarea.style.position = 'fixed';
-							textarea.style.opacity = '0';
-							document.body.appendChild(textarea);
-							textarea.select();
-							const success = document.execCommand('copy');
-							document.body.removeChild(textarea);
-							success && L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui)(null, E('p', _('Password %s Copyed to clipboard').format(tempPassword)), 3000, 'info');
-						})
-					}, _("Copy <b style='color:red'>%s</b> temporary password").format(tempPassword))
-					: []
 			]);
 
 		s = m.section(form.NamedSection, 'main', 'qbittorrent');
@@ -100,6 +103,7 @@ return view.extend({
 			o.value(mount + '/download',
 				_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
 		});
+		o.rmempty = false;
 
 		o = s.taboption("basic", form.Value, "Locale", _("Locale Language"),
 			_("The supported language codes can be used to customize the setting."));
@@ -165,6 +169,7 @@ return view.extend({
 				statusEl.textContent = 'qBittorrent ' + (running ? _('RUNNING') : _('NOT RUNNING'));
 			};
 			if (btnEl) btnEl.style.display = running ? '' : 'none';
+			if (running && tempPassword && hasPersistentPassword) { return btnEl.appendChild(temppasswordEL) };
 		}), this));
 
 		return m.render();

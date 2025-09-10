@@ -85,6 +85,7 @@ return view.extend({
 		o.default = 'root';
 
 		o = s.taboption("settings", form.Value, 'download_dir', _('Download directory'));
+		o.rmempty = false;
 		var devMap = {};
 		diskList?.trim().split('\n').slice(1).forEach(line => {
 			var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
