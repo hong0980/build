@@ -19,27 +19,28 @@ const callServiceList = rpc.declare({
 });
 
 return view.extend({
-	getStatus: () =>
+	status: () => Promise.all([
 		callServiceList('qbittorrent', ['instances', 'instance1', 'running']).then(Boolean),
+		fs.exec_direct('/sbin/logread', ['-e', 'qbittorrent-nox'])
+			.then(r => (r.match(/(?:临时密码：|password[^\n]*:\s*)(\w{9})/g) || []).pop()?.match(/\w{9}$/)?.[0] || null),
+		uci.load('qbittorrent')
+			.then(() => uci.get('qbittorrent', 'main', 'RootProfilePath') + '/qBittorrent/config/qBittorrent.conf')
+			.then(confPath => fs.trimmed(confPath)
+				.then(content => /^WebUI\\Password_PBKDF2=\s*$/m.test(content)))
+	]),
 
 	load: function () {
 		return Promise.all([
 			fs.exec_direct('/bin/df', ['-h']),
-			L.resolveDefault(this.getStatus(), false),
 			fs.exec_direct('/usr/bin/env', ['HOME=/var/run/qbittorrent', '/usr/bin/qbittorrent-nox', '-v'])
 				.then(r => r.trim().split('v').pop()),
-			fs.exec_direct('/sbin/logread', ['-e', 'qbittorrent-nox'])
-				.then(r => (r.match(/(?:临时密码：|password[^\n]*:\s*)(\w{9})/g) || []).pop()?.match(/\w{9}$/)?.[0] || null),
-			uci.load('qbittorrent')
-				.then(() => uci.get('qbittorrent', 'main', 'RootProfilePath') + '/qBittorrent/config/qBittorrent.conf')
-				.then(confPath => fs.trimmed(confPath)
-					.then(content => /^WebUI\\Password_PBKDF2=\s*$/m.test(content)))
+			L.resolveDefault(this.status(), '').then(res => res),
 		])
 	},
 
-	render([diskList, running, version, tempPassword, hasPersistentPassword]) {
-		var m, s, o;
-		var port = uci.get('qbittorrent', 'main', 'port') || '8080';
+	render([diskList, version, [running, tempPassword, hasPersistentPassword]]) {
+		let m, s, o;
+		const port = uci.get('qbittorrent', 'main', 'port') || '8080';
 		const statusEl = E('b', { style: `color:${running ? 'green' : 'red'}` }, [
 			'qBittorrent ' + (running ? _('RUNNING') : _('NOT RUNNING')),
 		]);
@@ -163,13 +164,15 @@ return view.extend({
 			_("Specify the binary location of qBittorrent."));
 		o.placeholder = "/usr/sbin/qbittorrent-nox";
 
-		L.Poll.add(L.bind(() => this.getStatus().then((running) => {
+		L.Poll.add(L.bind(() => this.status().then((data) => {
+			[running, tempPassword, hasPersistentPassword] = data || [];
 			if (statusEl) {
 				statusEl.style.color = running ? 'green' : 'red';
 				statusEl.textContent = 'qBittorrent ' + (running ? _('RUNNING') : _('NOT RUNNING'));
 			};
 			if (btnEl) btnEl.style.display = running ? '' : 'none';
-			if (running && tempPassword && hasPersistentPassword) { return btnEl.appendChild(temppasswordEL) };
+			if (running && tempPassword && hasPersistentPassword) btnEl.appendChild(temppasswordEL)
+			if (!hasPersistentPassword && btnEl.contains(temppasswordEL)) btnEl.removeChild(temppasswordEL)
 		}), this));
 
 		return m.render();

@@ -152,16 +152,16 @@ if isremote_endpoint then
 			end
 		end
 
-		o = s:option(Value, "device",
-			translate("Docker Network Interface"),
-			translate('By default, the firewall associates the docker0 interface with the Docker zone'))
-		o.default = 'docker0'
+		-- o = s:option(Value, "device",
+		-- 	translate("Docker Network Interface"),
+		-- 	translate('By default, the firewall associates the docker0 interface with the Docker zone'))
+		-- o.default = 'docker0'
 
-		o = s:option(DynamicList, "blocked_interfaces",
-			translate("Blocked Networks for Docker Access"),
-			translate("Setting 'wan' means Docker containers cannot directly initiate connections to WAN interfaces (e.g., pppoe-wan or eth1)."))
-		local wa = require "luci.tools.webadmin"
-		wa.cbi_add_networks(o)
+		-- o = s:option(DynamicList, "blocked_interfaces",
+		-- 	translate("Blocked Networks for Docker Access"),
+		-- 	translate("Setting 'wan' means Docker containers cannot directly initiate connections to WAN interfaces (e.g., pppoe-wan or eth1)."))
+		-- local wa = require "luci.tools.webadmin"
+		-- wa.cbi_add_networks(o)
 
 		o = s:option(Value, "extra_iptables_args",
 			translate("Firewall Rules"),
