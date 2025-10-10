@@ -116,6 +116,7 @@ if isremote_endpoint then
 				translate("Enable"),
 				translate("Add Docker device to LAN zone"))
 			o.rmempty = false
+			o.default = 1
 			function o.write(self, section, value)
 				if not value or value == "" then return end
 				local lan_zone_section
