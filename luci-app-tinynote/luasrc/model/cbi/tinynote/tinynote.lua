@@ -12,10 +12,7 @@ local function new_write_file(path, note_suffix, value)
     local note_suffix_array = {
         sh  = "#!/bin/sh /etc/rc.common\n",
         py  = "#!/usr/bin/env python\n" ..
-              "import os\n" ..
-              "import re\n" ..
-              "import sys\n" ..
-              "import time\n",
+              "import os, re, sys, time\n",
         lua = "#!/usr/bin/env lua\n" ..
               "local fs   = require 'nixio.fs'\n" ..
               "local sys  = require 'luci.sys'\n" ..
