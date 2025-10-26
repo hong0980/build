@@ -6,10 +6,10 @@
 
 return view.extend({
 	load: function () {
-		fs.exec('/etc/init.d/wizard', ['reconfig'])
+		return fs.stat('/etc/config/wireless').catch(() => '');
 	},
 
-	render: function () {
+	render: function (stat) {
 		var m, s, o;
 		var dnsOptions = [
 			{ value: '223.5.5.5', label: _('AliDNS: 223.5.5.5') },
@@ -177,7 +177,7 @@ return view.extend({
 		o.default = '';
 		dnsOptions.forEach(opt => o.value(opt.value, opt.label));
 
-		if (L.hasSystemFeature('wifi')) {
+		if (stat?.size > 0) {
 			s.tab('wifisetup', _('Wireless Settings'),
 				_("Set the router's wireless name and password. For more advanced settings, please go to the Network-Wireless page."));
 			o = s.taboption('wifisetup', form.Value, 'wifi_ssid',

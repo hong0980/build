@@ -3,6 +3,7 @@
 START=99
 XBOOT=0
 extra_command "reconfig" ""
+. /lib/config/uci.sh
 
 reconfig() {
 	local dhcp_action
