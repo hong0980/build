@@ -1023,8 +1023,8 @@ msgstr "哪些接口可以访问桥接网络下的容器，请填写接口名称
 #~ msgstr ""
 #~ "桥接网络下哪些容器可以访问，即使是不允许从接口访问，也要填写容器 ID 或名称"
 
-#~ msgid "Connect to remote endpoint"
-#~ msgstr "连接到远程终端"
+msgid "Open Container Terminal"
+msgstr "打开容器终端"
 
 #~ msgid "Global settings"
 #~ msgstr "全局设定"

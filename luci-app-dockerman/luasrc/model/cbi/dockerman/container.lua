@@ -286,8 +286,6 @@ if action == "info" then
 	else
 		return
 	end
-	m.submit = false
-	m.reset  = false
 	table_info = {
 		["01name"] = {
 			_key = translate("Name"),
@@ -530,6 +528,8 @@ if action == "info" then
 		end
 		luci.http.redirect(luci.dispatcher.build_url("admin/services/docker/container/%s/info" %container_id))
 	end
+	m.submit = false
+	m.reset  = false
 elseif action == "resources" then
 	s = m:section(SimpleSection)
 	o = s:option( Value, "cpus",
@@ -599,12 +599,12 @@ elseif action == "resources" then
 		end
 	end
 elseif action == "file" then
-	m.submit = false
-	m.reset  = false
 	s = m:section(SimpleSection)
 	s.template = "dockerman/container_file_manager"
 	s.container = container_id
 	m.redirect = nil
+	m.submit = false
+	m.reset  = false
 elseif action == "inspect" then
 	s = m:section(SimpleSection)
 	s.syslog = luci.jsonc.stringify(container_info, true)
@@ -627,22 +627,19 @@ elseif action == "logs" then
 	m.submit = false
 	m.reset  = false
 elseif action == "console" then
-	m.submit = false
-	m.reset  = false
 	local cmd_ttyd = util.exec("command -v ttyd"):match("^.+ttyd") or nil
 	local cmd_docker = util.exec("command -v docker"):match("^.+docker") or nil
 
 	if cmd_docker and cmd_ttyd and lost_state then
-		local cmd = "/bin/sh"
-		local uid
+		local uid, cmd = nil, "/bin/sh"
 
 		s = m:section(SimpleSection)
 
 		o = s:option(Value, "command", translate("Command"))
+		o.default = "/bin/sh"
 		o:value("/bin/sh", "/bin/sh")
 		o:value("/bin/bash", "/bin/bash")
 		o:value("/bin/ash", "/bin/ash")
-		o.default = "/bin/sh"
 		o.forcewrite = true
 		o.write = function(self, section, value)
 			cmd = value
@@ -658,24 +655,12 @@ elseif action == "console" then
 		o.render = function(self, section, scope)
 			self.inputstyle = "add"
 			self.title = " "
-			self.inputtitle = translate("Connect")
+			self.inputtitle = translate("Open Container Terminal")
 			Button.render(self, section, scope)
 		end
 		o.write = function(self, section)
 			local uci = require "luci.model.uci".cursor()
-			local ttyd_ssl = uci:get("ttyd", "@ttyd[0]", "ssl")
-			local ttyd_ssl_key = uci:get("ttyd", "@ttyd[0]", "ssl_key")
-			local ttyd_ssl_cert = uci:get("ttyd", "@ttyd[0]", "ssl_cert")
-
-			if ttyd_ssl == "1" and ttyd_ssl_cert and ttyd_ssl_key then
-				cmd_ttyd = '%s -S -C %s -K %s' %{cmd_ttyd, ttyd_ssl_cert, ttyd_ssl_key}
-			end
-
-			local pid = util.trim(util.exec("netstat -lnpt | grep :7682 | grep ttyd | tr -s ' ' | cut -d ' ' -f7 | cut -d'/' -f1"))
-			if is_empty(pid) then
-				util.exec("kill -9 %s" %pid)
-			end
-
+			uid = is_empty(uid) and "-u %s" %uid or ""
 			local function getDockerHost()
 				local con = uci:get_all("dockerd", "dockerman")
 				if con.remote_endpoint == '1' then
@@ -688,7 +673,18 @@ elseif action == "console" then
 			local hosts = getDockerHost()
 			if not hosts then return end
 
-			uid = is_empty(uid) and "-u " .. uid or ""
+			local ttyd_ssl, ttyd_ssl_key, ttyd_ssl_cert =
+				uci:get_first("ttyd", "ttyd", "ssl", false),
+				uci:get_first("ttyd", "ttyd", "ssl_key", nil),
+				uci:get_first("ttyd", "ttyd", "ssl_cert", nil)
+			if ttyd_ssl and ttyd_ssl_key and ttyd_ssl_cert then
+				cmd_ttyd = '%s -S -C %s -K %s' %{cmd_ttyd, ttyd_ssl_cert, ttyd_ssl_key}
+			end
+
+			local pid = util.exec("pgrep ttyd")
+			if is_empty(pid) then
+				util.exec("kill -9 %s" %pid)
+			end
 
 			local start_cmd = '%s -d 2 --once -p 7682 -W %s -H "%s" exec -it %s %s %s&' %{cmd_ttyd, cmd_docker, hosts, uid, container_id, cmd}
 			util.exec(start_cmd)
@@ -698,6 +694,8 @@ elseif action == "console" then
 			o.template = "dockerman/container_console"
 		end
 	end
+	m.submit = false
+	m.reset  = false
 elseif action == "stats" then
 	local response = dk.containers:top({id = container_id, query = {ps_args = "-aux"}})
 	local container_top

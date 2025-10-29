@@ -34,6 +34,12 @@ msgstr "默认保存在/etc/deluge"
 msgid "Download File Path"
 msgstr "下载文件路径"
 
+msgid "This page is the configuration file content of %s."
+msgstr "本页是 %s 使用的配置文件内容。"
+
+msgid "This is the content of the configuration file under <code>%s</code>:"
+msgstr "以下是<code>%s</code>路径下的配置文件内容："
+
 msgid "The files are stored in the download directory automatically created under the selected mounted disk"
 msgstr "文件存放在所选已挂载磁盘下自动创建的download目录中"
 

@@ -870,3 +870,8 @@ msgstr "启用后，系统配置文件的目录合并此处。"
 #~ msgid "Use WebSocket"
 #~ msgstr "使用 WebSocket"
 
+msgid "This page is the configuration file content of %s."
+msgstr "本页是 %s 使用的配置文件内容。"
+
+msgid "This is the content of the configuration file under <code>%s</code>:"
+msgstr "以下是<code>%s</code>路径下的配置文件内容："
