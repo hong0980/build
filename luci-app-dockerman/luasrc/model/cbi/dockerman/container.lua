@@ -690,7 +690,7 @@ elseif action == "console" then
 
 			uid = is_empty(uid) and "-u " .. uid or ""
 
-			local start_cmd = '%s -d 2 --once -p 7682 %s -H "%s" exec -it %s %s %s&' %{cmd_ttyd, cmd_docker, hosts, uid, container_id, cmd}
+			local start_cmd = '%s -d 2 --once -p 7682 -W %s -H "%s" exec -it %s %s %s&' %{cmd_ttyd, cmd_docker, hosts, uid, container_id, cmd}
 			util.exec(start_cmd)
 
 			o = s:option(DummyValue, "console")

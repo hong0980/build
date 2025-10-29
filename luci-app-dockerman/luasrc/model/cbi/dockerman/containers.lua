@@ -80,9 +80,8 @@ function get_containers()
 				local ip_obj = ip.new(v2.IP or "0.0.0.0")
 				if ip_obj:is4() then
 					local link = ''
-
 					if v2.PublicPort and v2.Type == "tcp" then
-						link = '<a href="javascript:void(0);" title=\'%s\' onclick="window.open((window.location.origin.match(/^(.+):\\d+$/) && window.location.origin.match(/^(.+):\\d+$/)[1] || window.location.origin) + \':\' + \'%s\' , \'_blank\');">' %{translate("Open the container"), v2.PublicPort}
+						link = [[<a href="javascript:void(0);" title='%s' onclick="window.open((window.location.origin.match(/^(.+):\d+$/) && window.location.origin.match(/^(.+):\d+$/)[1] || window.location.origin) + ':' + '%s' , '_blank');">]] %{translate("Open the container"), v2.PublicPort}
 					end
 
 					data[index]["_ports"] = (data[index]["_ports"] or "") .. "%s%s%s%s%s" %{
@@ -104,15 +103,13 @@ function get_containers()
 		end
 		data[index]["_id_name"] = [[<a href="%s" class="dockerman_link" title="%s">%s</a><br>
 									<font color="#9f9f9f">ID: %s</font><br>
-									Image: %s<br>
 									<font color="#9f9f9f" class="container_size_%s"></font>
 									]] %
 			{
 				luci.dispatcher.build_url("admin/services/docker/container/%s" %v.Id),
 				translate("Container detail"),
-				data[index]["_id"],
 				data[index]["_name"],
-				data[index]["_image"] or "&lt;none&gt;",
+				data[index]["_id"],
 				v.Id
 			}
 
@@ -207,7 +204,7 @@ o.width="5%"
 o.rawhtml = true
 
 o = s:option(DummyValue, "_mounts", translate("Mounts"))
-o.width="25%"
+o.width="15%"
 o.rawhtml = true
 
 o = s:option(DummyValue, "_image", translate("Image"))
