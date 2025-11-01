@@ -93,22 +93,6 @@ if isremote_endpoint then
 	o:value("fatal", translate("Fatal"))
 	o.rmempty = true
 
-	s = m:section(NamedSection, "proxies", "section", translate("Proxy Settings"))
-	o = s:option(Value, "http_proxy",
-		translate("HTTP Proxy Server"),
-		translate("Set the HTTP proxy server for Docker"))
-	o.placeholder = "http://proxy.example.com:3128"
-
-	o = s:option(Value, "https_proxy",
-		translate("HTTPS Proxy Server"),
-		translate("Set the HTTPS proxy server for Docker"))
-	o.placeholder = "https://proxy.example.com:3129"
-
-	o = s:option(Value, "no_proxy",
-		translate("Specify Addresses and Networks Not to Use Proxy"),
-		translate('Exclude internal network addresses, specific domains, or local addresses from being accessed through the proxy.'))
-	o.placeholder = '*.test.example.com,.example.org,127.0.0.0/8'
-
 	if isiptables then
 		s = m:section(NamedSection, "firewall", "section", translate("Firewall Settings"))
 		if isfw4 then
@@ -169,6 +153,22 @@ if isremote_endpoint then
 			translate("Add extra parameters to the generated iptables rules. Restart Docker after modification"))
 		o.placeholder = '--match conntrack ! --ctstate RELATED,ESTABLISHED'
 	end
+
+	s = m:section(NamedSection, "proxies", "section", translate("Proxy Settings"))
+	o = s:option(Value, "http_proxy",
+		translate("HTTP Proxy Server"),
+		translate("Set the HTTP proxy server for Docker"))
+	o.placeholder = "http://proxy.example.com:3128"
+
+	o = s:option(Value, "https_proxy",
+		translate("HTTPS Proxy Server"),
+		translate("Set the HTTPS proxy server for Docker"))
+	o.placeholder = "https://proxy.example.com:3129"
+
+	o = s:option(Value, "no_proxy",
+		translate("Specify Addresses and Networks Not to Use Proxy"),
+		translate('Exclude internal network addresses, specific domains, or local addresses from being accessed through the proxy.'))
+	o.placeholder = '*.test.example.com,.example.org,127.0.0.0/8'
 end
 
 s = m:section(NamedSection, "dockerman", "section", translate("DockerMan settings"))
