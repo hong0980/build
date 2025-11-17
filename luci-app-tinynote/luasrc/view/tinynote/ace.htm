@@ -15,10 +15,10 @@
         background-color: rgba(0, 0, 0, 0.8);      /* 背景颜色为黑色，透明度为0.8 */
     }
 </style>
-<script src="/luci-static/tinynote/jquery.min.js"></script>
 <link rel="stylesheet" href="/luci-static/tinynote/bulma.css"/>
-<script src="/luci-static/tinynote/clipboard.min.js"></script>
-<script type="text/javascript" charset="utf-8" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.3/ace.js"></script>
+<script src="https://cdn.staticfile.net/ace/1.32.3/ace.min.js"></script>
+<script src="https://cdn.staticfile.net/jquery/2.2.4/jquery.min.js"></script>
+<script src="https://cdn.staticfile.net/clipboard.js/2.0.0/clipboard.min.js"></script>
 <script>
     $(document).ready(function() {
         <%  local con = require "luci.model.uci".cursor():get_all("luci", "tinynote")

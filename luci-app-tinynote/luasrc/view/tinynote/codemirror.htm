@@ -23,46 +23,45 @@
     .CodeMirror-selection-highlight-scrollbar {background-color: rgb(192, 23, 23)}
 </style>
 <!-- theme -->
-<link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/codemirror/5.65.13/theme/<%=con.theme%>.min.css">
 <link rel="stylesheet" href="/luci-static/tinynote/bulma.css" />
-<link rel="stylesheet" href="/luci-static/tinynote/codemirror/codemirror.min.css">
-<link rel="stylesheet" href="/luci-static/tinynote/codemirror/theme/monokai.min.css">
-<link rel="stylesheet" href="/luci-static/tinynote/codemirror/addon/dialog/dialog.min.css">
-<link rel="stylesheet" href="/luci-static/tinynote/codemirror/addon/fold/foldgutter.min.css">
-<link rel="stylesheet" href="/luci-static/tinynote/codemirror/addon/display/fullscreen.min.css">
-<link rel="stylesheet" href="/luci-static/tinynote/codemirror/addon/search/matchesonscrollbar.min.css">
+<script src="https://cdn.staticfile.net/jquery/2.2.4/jquery.min.js"></script>
+<link rel="stylesheet" href="https://cdn.staticfile.net/codemirror/5.65.13/codemirror.min.css">
+<link rel="stylesheet" href="https://cdn.staticfile.net/codemirror/5.65.13/theme/monokai.min.css">
+<link rel="stylesheet" href="https://cdn.staticfile.net/codemirror/5.65.13/addon/dialog/dialog.min.css">
+<link rel="stylesheet" href="https://cdn.staticfile.net/codemirror/5.65.13/theme/<%=con.theme%>.min.css">
+<link rel="stylesheet" href="https://cdn.staticfile.net/codemirror/5.65.13/addon/fold/foldgutter.min.css">
+<link rel="stylesheet" href="https://cdn.staticfile.net/codemirror/5.65.13/addon/display/fullscreen.min.css">
+<link rel="stylesheet" href="https://cdn.staticfile.net/codemirror/5.65.13/addon/search/matchesonscrollbar.min.css">
 
-<script src="/luci-static/tinynote/jquery.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/codemirror.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/keymap/emacs.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/keymap/sublime.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/codemirror.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/keymap/emacs.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/keymap/sublime.min.js"></script>
 
-<script src="/luci-static/tinynote/codemirror/addon/dialog/dialog.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/fold/xml-fold.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/fold/foldcode.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/fold/indent-fold.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/fold/foldgutter.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/fold/brace-fold.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/fold/markdown-fold.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/dialog/dialog.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/fold/xml-fold.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/fold/foldcode.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/fold/foldgutter.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/fold/brace-fold.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/fold/indent-fold.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/fold/markdown-fold.min.js"></script>
 
-<script src="/luci-static/tinynote/codemirror/addon/search/search.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/search/jump-to-line.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/search/searchcursor.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/search/match-highlighter.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/search/matchesonscrollbar.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/search/search.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/search/jump-to-line.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/search/searchcursor.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/search/match-highlighter.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/search/matchesonscrollbar.min.js"></script>
 
-<script src="/luci-static/tinynote/codemirror/addon/selection/active-line.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/selection/mark-selection.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/scroll/annotatescrollbar.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/selection/active-line.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/selection/mark-selection.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/scroll/annotatescrollbar.min.js"></script>
 
-<script src="/luci-static/tinynote/codemirror/addon/display/fullscreen.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/display/autorefresh.min.js"></script>
 
-<script src="/luci-static/tinynote/codemirror/addon/edit/closetag.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/edit/matchtags.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/edit/matchbrackets.min.js"></script>
-<script src="/luci-static/tinynote/codemirror/addon/edit/closebrackets.min.js"></script>
-
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/edit/closetag.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/edit/matchtags.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/display/fullscreen.min.js"></script>
+<script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/display/autorefresh.min.js"></script>
 <!-- mode -->
 <%
 local keys = {}
@@ -82,16 +81,16 @@ for v, k in pairs(con) do
             k = k == 'sh' and 'shell' or 'python'
           end
 %>
-          <script src="https://cdn.bootcdn.net/ajax/libs/codemirror/5.65.13/mode/<%=k%>/<%=k%>.min.js"></script>
+          <script src="https://cdn.staticfile.net/codemirror/5.65.13/mode/<%=k%>/<%=k%>.min.js"></script>
 <%        keys[k] = true
         end
         if languages[k] then
 %>
-          <script src="https://cdn.bootcdn.net/ajax/libs/codemirror/5.65.13/addon/lint/lint.js"></script>
-          <script src="https://cdn.bootcdn.net/ajax/libs/codemirror/5.65.13/addon/hint/show-hint.min.js"></script>
-          <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/codemirror/5.65.13/addon/lint/lint.css">
-          <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/codemirror/5.65.13/addon/hint/show-hint.min.css">
-          <script src="https://cdn.bootcdn.net/ajax/libs/codemirror/5.65.13/addon/lint/<%=k%>-lint.min.js"></script>
+          <script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/lint/lint.min.js"></script>
+          <script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/hint/show-hint.min.js"></script>
+          <script src="https://cdn.staticfile.net/codemirror/5.65.13/addon/lint/<%=k%>-lint.min.js"></script>
+          <link rel="stylesheet" href="https://cdn.staticfile.net/codemirror/5.65.13/addon/lint/lint.min.css">
+          <link rel="stylesheet" href="https://cdn.staticfile.net/codemirror/5.65.13/addon/hint/show-hint.min.css">
 <%      end
     end
 end

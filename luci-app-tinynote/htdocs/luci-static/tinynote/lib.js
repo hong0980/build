@@ -284,7 +284,10 @@ function formatShCode(content, indentSize) {
         else if (casestack.length && line.match(/^;;$/) && indentLevel > 0) indentLevel--;
 
         var isCat = line.match(catregex);
-        if (isCat) isInCat = true, identifier = isCat[1];
+        if (isCat) {
+            isInCat = true;
+            identifier = isCat[1];
+        }
         else if (line.startsWith(identifier)) isInCat = false;
         else if (isInCat) spaces = createIndentation('\t');
 
@@ -300,7 +303,7 @@ function formatShCode(content, indentSize) {
 function JsCompression(a) {
     var content = getContent().content;
     if (!content) return;
-    loadScripts(["/luci-static/tinynote/format.js", "/luci-static/tinynote/beautifier.js"])
+    loadScripts(["/luci-static/tinynote/format.js", "https://cdn.staticfile.net/js-beautify/1.14.11/beautifier.min.js"])
         .then(function() {
             var packer = new Packer();
             if (a === "minify") output = packer.minify(content);
@@ -330,7 +333,7 @@ function examineJavaScript() {
     var content = getContent().content;
     if (!content) return;
     editor1.session.setMode("ace/mode/javascript");
-    loadScripts("https://cdnjs.cloudflare.com/ajax/libs/jshint/2.13.6/jshint.js")
+    loadScripts("https://cdn.staticfile.net/jshint/2.13.6/jshint.min.js")
         .then(function() {
             var output = JSHINT(content, { asi: true, esversion: 8 });
             if (output) showSuccessMessage("语法通过");
@@ -349,7 +352,7 @@ function examineJavaScript() {
 function CSSFormat(a) {
     var content = getContent().content;
     if (!content) return;
-    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/beautifier.js"])
+    loadScripts(["/luci-static/tinynote/vkbeautify.js", "https://cdn.staticfile.net/js-beautify/1.14.11/beautifier.min.js"])
         .then(function() {
             if (a === "format") output = beautifier.css(content, {
                 // indent_size: 指定每一级缩进的空格数，默认值为4。
@@ -430,7 +433,7 @@ function jsonFormat(a) {
 function FormatHTML(a) {
     var content = getContent().content;
     if (!content) return;
-    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/beautifier.js"])
+    loadScripts(["/luci-static/tinynote/vkbeautify.js", "https://cdn.staticfile.net/js-beautify/1.14.11/beautifier.min.js"])
         .then(function() {
             try {
                 editor1.session.setMode("ace/mode/html");
@@ -469,7 +472,7 @@ function FormatHTML(a) {
 function FormatYAML(a) {
     var content = getContent().content;
     if (!content) return;
-    loadScripts(["/luci-static/tinynote/vkbeautify.js", "https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"])
+    loadScripts(["/luci-static/tinynote/vkbeautify.js", "https://cdn.staticfile.net/js-yaml/4.1.0/js-yaml.min.js"])
         .then(function() {
             try {
                 editor1.session.setMode("ace/mode/yaml");
@@ -499,9 +502,9 @@ function FormatYAML(a) {
 function yamlToxml() {
     var content = getContent().content;
     if (!content) return;
-    loadScripts(["/luci-static/tinynote/ObjTree.min.js", "/luci-static/tinynote/vkbeautify.js", "https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"])
+    loadScripts(["/luci-static/tinynote/ObjTree.min.js", "/luci-static/tinynote/vkbeautify.js", "https://cdn.staticfile.net/js-yaml/4.1.0/js-yaml.min.js"])
         .then(function () {
-            var xmlData = (new XML.ObjTree).writeXML(jsyaml.load(content));
+            var xmlData = new XML.ObjTree().writeXML(jsyaml.load(content));
             xmlData = xmlData.substr(0, 39) + "<root>" + xmlData.substr(39) + "</root>";
             output = vkbeautify.xml(xmlData);
             editor2.session.setMode("ace/mode/xml");
@@ -536,8 +539,8 @@ function jsonToXML() {
         .then(function() {
             try {
                 var x = content.replace(/([ :$&]+)(?=[(\w* *]*":)/g, "_"),
-                    xml = (new XML.ObjTree()).writeXML(JSON.parse(x)),
-                    xml = xml.substr(0, 39) + "<root>" + xml.substr(39) + "</root>";
+                    xml = new XML.ObjTree().writeXML(JSON.parse(x));
+                xml = xml.substr(0, 39) + "<root>" + xml.substr(39) + "</root>";
                 output = vkbeautify.xml(xml);
                 editor1.session.setMode("ace/mode/json");
                 editor2.session.setMode("ace/mode/xml");
@@ -556,7 +559,7 @@ function downloadFile(event) {
     event.preventDefault();
     var content = getContent(editor2).content;
     if (!content) return;
-    loadScripts("/luci-static/tinynote/FileSaver.js")
+    loadScripts("https://cdn.staticfile.net/FileSaver.js/2.0.5/FileSaver.min.js")
         .then(function() {
             var blob = new Blob(["" + content], {
                 type: "text/plain; charset=utf-8"
@@ -582,7 +585,7 @@ $(document).on("keydown", function(event) {
 });
 
 function toggleFullScreen(editor) {
-    loadScripts("/luci-static/tinynote/screenfull.js")
+    loadScripts("https://cdn.staticfile.net/screenfull.js/5.2.0/screenfull.min.js")
         .then(function() {
             if (screenfull.isEnabled) screenfull.toggle(editor);
         });
@@ -669,22 +672,16 @@ function updateDisplay(editor, sizeOutput, lineColumnOutput) {
 var loadedScripts = [];
 
 function loadScripts(scripts) {
-    scripts = typeof scripts === 'string' ? [scripts] : scripts;
-    var promises = scripts.map(function(script) {
-        if (loadedScripts.indexOf(script) === -1) {
-            return new Promise(function(resolve, reject) {
-                $.getScript(script).done(function() {
-                    loadedScripts.push(script);
-                    resolve();
-                }).fail(function(error) {
-                    reject(error);
-                });
+    scripts = $.isArray(scripts) ? scripts : [scripts];
+
+    return $.when.apply($,
+        scripts.map(function(src) {
+            if (loadedScripts.includes(src)) return $.Deferred().resolve();
+            return $.getScript(src).done(function() {
+                loadedScripts.push(src);
             });
-        } else {
-            return Promise.resolve();
-        }
-    });
-    return Promise.all(promises);
+        })
+    );
 }
 
 function clearAll(event, a) {

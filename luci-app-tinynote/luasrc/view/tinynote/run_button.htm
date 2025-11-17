@@ -239,8 +239,7 @@
         displayError(errorMessage);
     }
 
-    async function jQRequest(command = '', file_path = '') {
-        const url = '<%=url("admin/nas/tinynote/action_run")%>';   // 请求地址
+    async function jQRequest(command = '', file_path = '', url) {
         const data = { command, file_path };                       // 请求参数
         try {
             const response = await $.post(url, data, 'json');
@@ -250,9 +249,8 @@
         }
     }
 
-    async function xhrRequest(command = '', file_path = '') {
+    async function xhrRequest(command = '', file_path = '', url) {
         const xhr = new XMLHttpRequest();                           // 创建XMLHttpRequest对象
-        const url = '<%=url("admin/nas/tinynote/action_run")%>';    // 请求地址
         const params = new URLSearchParams({ command, file_path }); // 请求参数
         xhr.open('POST', url, true);                                // 打开请求
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded'); // 设置请求头
@@ -266,8 +264,7 @@
         xhr.send(params.toString());                                // 发送请求
     }
 
-    async function fetchRequest(command = '', file_path = '') {
-        const url = '<%=url("admin/nas/tinynote/action_run")%>';    // 请求地址
+    async function fetchRequest(command = '', file_path = '', url) {
         const data = new URLSearchParams({ command, file_path });   // 请求参数
         try {
             const response = await fetch(url, {
@@ -283,12 +280,13 @@
     }
 
     function handleCommandRequest( file_path = '', command = '',requestType = '') {
+        const url = '<%=url("admin/nas/tinynote/action_run")%>';   // 请求地址
         if (requestType === 'fetch') {
-            fetchRequest(command, file_path);
+            fetchRequest(command, file_path, url);
         } else if (requestType === 'xhr') {
-            xhrRequest(command, file_path);
+            xhrRequest(command, file_path, url);
         } else if (requestType === 'jQuery') {
-            jQRequest(command, file_path);
+            jQRequest(command, file_path, url);
         }
     }
 
