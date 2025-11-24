@@ -8,6 +8,47 @@
 const tableTypeMap = { gpt: 'GPT', dos: 'MBR', msdos: 'MBR', iso9660: 'ISO' };
 const interfaceMap = { sata: 'SATA', nvme: 'NVMe', usb: 'USB', scsi: 'SCSI', ata: 'ATA', sas: 'SAS' };
 
+function getTemperature(smartData) {
+	if (!smartData || smartData.error) return '-';
+
+	if (smartData.nvme_temperature) {
+		return Math.round(smartData.nvme_temperature) + ' °C';
+	};
+
+	if (smartData.temperature && smartData.temperature.current !== undefined) {
+		return Math.round(smartData.temperature.current) + ' °C';
+	};
+
+	let ataTemp = smartData.ata_smart_attributes?.attributes?.find(attr =>
+		attr.name === 'Temperature_Celsius' || attr.id === 194
+	);
+	if (ataTemp && ataTemp.raw && ataTemp.raw.value) {
+		return ataTemp.raw.value + ' °C';
+	};
+
+	return '-';
+};
+
+function getInterfaceSpeed(smartData) {
+	let speeds = [];
+
+	if (smartData.sata_version?.string) {
+		speeds.push(smartData.sata_version.string);
+	};
+	if (smartData.interface_speed?.max?.string) {
+		speeds.push('Max: ' + smartData.interface_speed.max.string);
+	};
+	if (smartData.interface_speed?.current?.string) {
+		speeds.push('Current: ' + smartData.interface_speed.current.string);
+	};
+
+	if (smartData.nvme_pci_vendor?.id) {
+		speeds.push('NVMe');
+	};
+
+	return speeds.length > 0 ? speeds.join(' | ') : '-';
+};
+
 function modalnotify(title, children, timeout, ...classes) {
 	function fadeOut(element) {
 		element?.classList.replace('fade-in', 'fade-out');
@@ -128,7 +169,7 @@ function createMountedTable(df, mount) {
 	return table.render();
 };
 
-function editdev(lsblk) {
+function editdev(lsblk, smart) {
 	const path = lsblk.path;
 	let cachedDiskObj = null;
 
@@ -142,10 +183,10 @@ function editdev(lsblk) {
 
 	ui.showModal(null, E('div', { class: 'spinning' }, _('加载分区信息…')));
 
-	function disktable(parted) {
+	function disktable(parted, smart) {
 		if (!parted || !parted[0] || !parted[0].disk) {
 			return E('em', _('无磁盘信息'));
-		}
+		};
 
 		const disk = parted[0].disk;
 		const sectors = parseInt(disk.total_sectors) || 0;
@@ -153,18 +194,21 @@ function editdev(lsblk) {
 		const size = (bytes / 1e9).toFixed(1) + 'GB';
 
 		const info = {
-			model: disk.model || '-',
+			model: smart.model_name || '-',
 			path: disk.device || '-',
 			name: disk.device ? disk.device.replace('/dev/', '') : '-',
 			size: size,
 			sectorSize: `${disk.sector_size.logical}B/${disk.sector_size.physical}B`,
 			pttype: disk.partition_table || '-',
+			Temp: getTemperature(smart),
+			number: smart.serial_number,
+			sata: getInterfaceSpeed(smart),
 		};
 
 		const table = new L.ui.Table([
 			_('路径'), _('型号'), _('序号'), _('大小'),
 			_('扇区大小'), _('分区表'), _('温度'),
-			_('SATA 版本'), _('转速'), _('状态'), _('健康')
+			_('转速'), _('状态'), _('健康')
 		], {
 			id: 'diskman-table',
 			sortable: true,
@@ -174,11 +218,11 @@ function editdev(lsblk) {
 		table.update([[
 			info.path,
 			info.model,
-			info.name,
+			info.number,
 			info.size,
 			info.sectorSize,
 			tableTypeMap[info.pttype],
-			'-', '-', '-', _('正常'), _('良好')
+			info.Temp, '-', '-', _('正常'), _('良好')
 		]]);
 
 		return table.render();
@@ -310,7 +354,6 @@ function editdev(lsblk) {
 		const partitions = (parted && parted[0] && parted[0].partitions) ? parted[0].partitions : [];
 		const diskDevice = (parted && parted[0] && parted[0].disk) ? parted[0].disk.device : '/dev/sdb';
 
-		console.log(partitions)
 		const rows = partitions.map(entry => {
 			const bytes = (parseInt(entry.size) || 0) * sectorSize;
 			const fullDev = entry.number !== null ? `${diskDevice}${entry.number}` : null;
@@ -359,7 +402,6 @@ function editdev(lsblk) {
 											.then(r => {
 												ui.hideModal();
 												const output = (typeof r === 'object' ? (r.stdout || '') : r) || '';
-												console.log(output);
 												if (output.includes('格式化完成')) {
 													ui.addTimeLimitedNotification(null, E('p', output), 5000, 'success');
 													editdev(dev);  // 刷新
@@ -765,7 +807,6 @@ function editdev(lsblk) {
 							throw new Error('无法确定文件系统工具');
 						}
 
-						console.log('Formatting', path, 'with', fsTool.cmd); // 可选：调试用
 						return fs.exec_direct(fsTool.cmd, [...fsTool.args, path]);
 					}));
 				})
@@ -802,7 +843,7 @@ function editdev(lsblk) {
 			E('style', ['.modal{max-width: 1000px;padding:.5em;}h4 {text-align:center;padding:9px;background-color: #f0f0f0;color:red;}']),
 			freeNote || E('span'),
 			E('h5', {}, _('设备信息')),
-			disktable(parted),
+			disktable(parted, smart),
 			E('h5', {}, _('分区信息')),
 			musttable(parted, mount, df),
 			E('div', { style: 'display: flex; justify-content: space-around; gap: 0.5em;' }, [
@@ -1055,7 +1096,7 @@ return view.extend({
 
 			const editButton = E('button', {
 				class: 'btn cbi-button cbi-button-edit',
-				click: ui.createHandlerFn(this, () => editdev(dev))
+				click: ui.createHandlerFn(this, () => editdev(dev, smart))
 			}, _('Edit'));
 
 			tableData.push([
@@ -1065,8 +1106,8 @@ return view.extend({
 				size,
 				tableTypeMap[dev.pttype] || tableTypeMap[ptable],
 				interfaceMap[dev.tran] || dev.tran || '-',
-				hasSMART ? this.getTemperature(smart) : '-',
-				hasSMART ? this.getInterfaceSpeed(smart) : '-',
+				hasSMART ? getTemperature(smart) : '-',
+				hasSMART ? getInterfaceSpeed(smart) : '-',
 				healthElement,
 				hasSMART ? (smart.rotation_rate || '-') : '-',
 				hasSMART ? (smart.power_on_time?.hours || smart.nvme_smart_health_information_log?.power_on_hours || '-') : '-',
@@ -1161,47 +1202,6 @@ return view.extend({
 			E('div', { id: 'diskman-editContainer' }, [editContainer]),
 
 		]);
-	},
-
-	getTemperature: function (smartData) {
-		if (!smartData || smartData.error) return '-';
-
-		if (smartData.nvme_temperature) {
-			return Math.round(smartData.nvme_temperature) + ' °C';
-		};
-
-		if (smartData.temperature && smartData.temperature.current !== undefined) {
-			return Math.round(smartData.temperature.current) + ' °C';
-		};
-
-		let ataTemp = smartData.ata_smart_attributes?.attributes?.find(attr =>
-			attr.name === 'Temperature_Celsius' || attr.id === 194
-		);
-		if (ataTemp && ataTemp.raw && ataTemp.raw.value) {
-			return ataTemp.raw.value + ' °C';
-		};
-
-		return '-';
-	},
-
-	getInterfaceSpeed: function (smartData) {
-		let speeds = [];
-
-		if (smartData.sata_version?.string) {
-			speeds.push(smartData.sata_version.string);
-		};
-		if (smartData.interface_speed?.max?.string) {
-			speeds.push('Max: ' + smartData.interface_speed.max.string);
-		};
-		if (smartData.interface_speed?.current?.string) {
-			speeds.push('Current: ' + smartData.interface_speed.current.string);
-		};
-
-		if (smartData.nvme_pci_vendor?.id) {
-			speeds.push('NVMe');
-		};
-
-		return speeds.length > 0 ? speeds.join(' | ') : '-';
 	},
 
 	handleSaveApply: null,
