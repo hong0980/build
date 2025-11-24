@@ -1,0 +1,255 @@
+#!/bin/sh
+
+. "$IPKG_INSTROOT/usr/share/libubox/jshn.sh"
+
+action="$1"
+shift
+
+case "$action" in
+    smartctl)
+        /usr/sbin/smartctl -ja "$1"
+    ;;
+    lsblk)
+        /usr/bin/lsblk -fJo NAME,PATH,TYPE,SIZE,MODEL,TRAN,FSTYPE,VENDOR,ROTA,PTTYPE,MOUNTPOINT
+    ;;
+    mount_dev)
+        dev="$1"
+        mp="$2"
+        mkdir -p "$mp"
+
+        fstype=$(lsblk -no FSTYPE "$dev" 2>/dev/null | head -1)
+
+        if echo "$fstype" | grep -qE 'vfat|fat|exfat'; then
+            mount -o rw,noatime,utf8=1,flush,uid=0,gid=0,dmask=000,fmask=111 "$dev" "$mp"
+        else
+            mount -o rw,noatime "$dev" "$mp"
+        fi
+
+        if [ $? -eq 0 ]; then
+            echo "成功挂载 $dev → $mp"
+            exit 0
+        else
+            rmdir "$mp" 2>/dev/null
+            echo "错误：挂载失败"
+            exit 1
+        fi
+    ;;
+    df)
+        /bin/df -h | awk '
+        NR==1 {for(i=1;i<=NF;i++) h[i]=$i; print "["; next}
+        NF>=6 {
+            printf "%s{\n", (NR>2 ? "," : "")
+            mount=$6; for(i=7;i<=NF;i++) mount=mount" "$i
+            gsub(/"/, "\\\"", mount)
+            printf "  \"%s\":\"%s\",\n  \"%s\":\"%s\",\n  \"%s\":\"%s\",\n  \"%s\":\"%s\",\n  \"%s\":\"%s\",\n  \"%s\":\"%s\"\n}", h[1],$1,h[2],$2,h[3],$3,h[4],$4,h[5],$5,h[6],mount
+        }
+        END {print "]"}'
+    ;;
+    mount_info)
+        /bin/mount | awk '
+        BEGIN {print "["; first=1}
+        {
+            options = ""
+            for (i=6;i<=NF;i++) options = options (i==6?"":" ") $i
+            gsub(/^\(|\)$/, "", options)
+            gsub(/"/, "\\\"", options)
+
+            if (!first) printf ","
+            printf "{\n  \"device\":\"%s\",\n  \"mount_point\":\"%s\",\n  \"filesystem\":\"%s\",\n  \"options\":\"%s\"\n}", $1, $3, $5, options
+            first=0
+        }
+        END {print "]"}'
+    ;;
+    parted)
+        /sbin/parted "$1" unit s print free | awk '
+        BEGIN {print "[{"; disk_printed = 0; first_part = 1}
+
+        /^Model:/ {
+            model = substr($0, 7)
+            sub(/^ /, "", model)
+        }
+
+        /^Disk \/dev\// {
+            device = $2
+            sub(/:$/, "", device)
+            total_sectors = $3
+            sub(/s$/, "", total_sectors)
+        }
+
+        /Sector size/ {
+            if (match($0, /([0-9]+)B\/([0-9]+)B/)) {
+                logical = substr($0, RSTART, RLENGTH)
+                split(logical, arr, "/")
+                logical = arr[1]
+                physical = arr[2]
+                sub(/B/, "", logical)
+                sub(/B/, "", physical)
+            }
+        }
+
+        /Partition Table:/ {
+            pt = $3
+        }
+
+        /Disk Flags:/ {
+            flags = substr($0, 12)
+            sub(/^[ ]*/, "", flags)
+            if (flags == "") flags = ""
+
+            # 输出磁盘信息
+            print "  \"disk\": {"
+            printf "    \"model\": \"%s\",\n", model
+            printf "    \"device\": \"%s\",\n", device
+            printf "    \"total_sectors\": %s,\n", total_sectors
+            print "    \"sector_size\": {"
+            printf "      \"logical\": %s,\n", logical
+            printf "      \"physical\": %s\n", physical
+            print "    },"
+            printf "    \"partition_table\": \"%s\",\n", pt
+            printf "    \"flags\": \"%s\"\n", flags
+            print "  },"
+            print "  \"partitions\": ["
+            disk_printed = 1
+        }
+
+        # 只在磁盘信息输出后处理分区
+        disk_printed && (/^[[:space:]]*[0-9]+s/ || /^[[:space:]]*[0-9]+[[:space:]]+[0-9]+s/) {
+            if (!first_part) {
+                printf ",\n"
+            }
+            first_part = 0
+
+            if ($1 ~ /^[0-9]+$/) {
+                # 正常分区
+                number = $1
+                start = $2; end = $3; size = $4
+                type = ($5 == "" ? "primary" : $5)
+                fs = ($6 == "" ? "" : $6)
+                flags_val = ($7 == "" ? "" : $7)
+
+                # 移除's'后缀
+                sub(/s$/, "", start)
+                sub(/s$/, "", end)
+                sub(/s$/, "", size)
+
+                printf "    {\"number\": %d, \"start\": \"%s\", \"end\": \"%s\", \"size\": \"%s\", \"type\": \"%s\", \"fileSystem\": \"%s\", \"flags\": \"%s\"}", number, start, end, size, type, fs, flags_val
+            } else {
+                # Free Space
+                start = $1; end = $2; size = $3
+
+                # 移除's'后缀
+                sub(/s$/, "", start)
+                sub(/s$/, "", end)
+                sub(/s$/, "", size)
+
+                printf "    {\"number\": null, \"start\": \"%s\", \"end\": \"%s\", \"size\": \"%s\", \"type\": \"Free Space\", \"fileSystem\": \"\", \"flags\": \"\"}", start, end, size
+            }
+        }
+
+        END {
+            if (disk_printed) {
+                print "\n  ]\n}]"
+            } else {
+                print "}]"
+            }
+        }'
+    ;;
+    rescandisks)
+        echo '- - -' | tee /sys/class/scsi_host/host*/scan > /dev/null && return 0 || return 1
+        /usr/bin/which mdadm > /dev/null && mdadm --assemble --scan
+    ;;
+    reject)
+        json_load "$1"
+        json_get_var device_name name
+        json_get_var devpath     path
+        json_get_var devtype     type
+
+        if grep "^$devpath" /proc/mounts | grep -qvE ' squashfs .* /rom | vfat | exfat | ntfs | fuseblk | iso9660 '; then
+            echo "错误：设备 $devpath 正被内核真正占用，无法弹出！"
+            # echo "挂载情况："
+            # grep "^$devpath" /proc/mounts | awk '{print "  "$1" -> "$2" ("$3")"}'
+            exit 1
+        fi
+
+        if [ "$devtype" = "disk" ]; then
+            if echo 1 > "/sys/block/$device_name/device/delete" 2>/dev/null; then
+                echo "磁盘 $device_name 已安全弹出"
+            else
+                echo "磁盘 $device_name 弹出失败（可能为系统盘或仍在使用）"
+                exit 1
+            fi
+            exit 0
+        fi
+        if echo "$device_name" | grep -Eq '^md[0-9]+'; then
+            mdadm --stop "/dev/$device_name" 2>/dev/null
+            mdadm --remove "/dev/$device_name" 2>/dev/null || true
+            echo "RAID 阵列 /dev/$device_name 已停止并移除"
+            exit 0
+        fi
+
+        echo "不支持的设备类型：$devtype"
+        exit 1
+    ;;
+    format)
+        device="$1"
+        fstype="${2:-ext4}"
+        label="$3"
+
+        # OpenWrt安全检查
+        [ ! -b "$device" ] && echo "错误：设备不存在" && exit 1
+        [[ "$device" == /dev/root* || "$device" == /dev/mtd* ]] && echo "错误：系统设备禁止格式化" && exit 1
+
+        # 卸载设备
+        umount -f "$device" 2>/dev/null
+        grep "^$device" /proc/mounts | cut -d' ' -f2 | while read mp; do
+            umount -l "$mp" 2>/dev/null
+        done
+
+        echo "正在格式化 $device 为 $fstype..."
+
+        # 格式化
+        case "$fstype" in
+            ext4|ext2|ext3)
+                opts="-F"
+                [ -n "$label" ] && opts="$opts -L $label"
+                if mkfs.$fstype $opts "$device" 2>/dev/null; then
+                    echo "格式化完成：$fstype${label:+ (标签: $label)}"
+                else
+                    echo "错误：格式化失败，请检查设备"
+                    exit 1
+                fi
+                ;;
+            vfat|fat32)
+                opts="-F 32"
+                [ -n "$label" ] && opts="$opts -n $label"
+                if mkfs.vfat $opts "$device" 2>/dev/null; then
+                    echo "格式化完成：FAT32${label:+ (标签: $label)}"
+                else
+                    echo "错误：FAT32格式化失败"
+                    exit 1
+                fi
+                ;;
+            ntfs)
+                [ -n "$label" ] && opts="-f -L $label" || opts="-f"
+                if mkfs.ntfs $opts "$device" 2>/dev/null; then
+                    echo "格式化完成：NTFS${label:+ (标签: $label)}"
+                else
+                    echo "错误：NTFS格式化失败，请安装ntfs-3g"
+                    exit 1
+                fi
+                ;;
+            xfs)
+                [ -n "$label" ] && opts="-f -L $label" || opts="-f"
+                if mkfs.xfs $opts "$device" 2>/dev/null; then
+                    echo "格式化完成：XFS${label:+ (标签: $label)}"
+                else
+                    echo "错误：XFS格式化失败"
+                    exit 1
+                fi
+                ;;
+            *) echo "错误：不支持的文件系统: $fstype" && exit 1 ;;
+        esac
+
+        exit 0
+    ;;
+esac

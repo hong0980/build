@@ -1,0 +1,5 @@
+#!/bin/sh
+chmod +x /usr/libexec/diskman
+
+rm -rf /tmp/luci-*
+exit 0

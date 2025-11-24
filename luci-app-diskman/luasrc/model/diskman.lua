@@ -3,24 +3,20 @@ LuCI - Lua Configuration Interface
 Copyright 2019 lisaac <https://github.com/lisaac/luci-app-diskman>
 ]]--
 
-require "luci.util"
+local util = require "luci.util"
 local ver = require "luci.version"
-
-local CMD = {"parted", "mdadm", "blkid", "smartctl", "df", "btrfs", "lsblk"}
+local CMD = {"parted", "mdadm", "blkid", "smartctl", "df", "btrfs", "lsblk", "mount", "umount"}
 
 local d = {command ={}}
 for _, cmd in ipairs(CMD) do
-  local command = luci.sys.exec("/usr/bin/which " .. cmd)
+  local command = util.exec("/usr/bin/which " .. cmd)
     d.command[cmd] = command:match("^.+"..cmd) or nil
 end
 
-d.command.mount = nixio.fs.access("/usr/bin/mount") and "/usr/bin/mount" or "/bin/mount"
-d.command.umount = nixio.fs.access("/usr/bin/umount") and "/usr/bin/umount" or "/bin/umount"
-
-local proc_mounts = nixio.fs.readfile("/proc/mounts") or ""
-local mounts = luci.util.exec(d.command.mount .. " 2>/dev/null") or ""
 local swaps = nixio.fs.readfile("/proc/swaps") or ""
-local df = luci.sys.exec(d.command.df .. " 2>/dev/null") or ""
+local proc_mounts = nixio.fs.readfile("/proc/mounts") or ""
+local df = util.exec("%s 2>/dev/null" %d.command.df) or ""
+local mounts = util.exec("%s 2>/dev/null" %d.command.mount) or ""
 
 function byte_format(byte)
   local suff = {"B", "KB", "MB", "GB", "TB"}
@@ -28,15 +24,15 @@ function byte_format(byte)
     if byte > 1024 and i < 5 then
       byte = byte / 1024
     else
-      return string.format("%.2f %s", byte, suff[i]) 
-    end 
+      return string.format("%.2f %s", byte, suff[i])
+    end
   end
 end
 
 local get_smart_info = function(device)
   local section
   local smart_info = {}
-  for _, line in ipairs(luci.util.execl(d.command.smartctl .. " -H -A -i -n standby -f brief /dev/" .. device)) do
+  for _, line in ipairs(util.execl("%s -HAi /dev/%s" %{d.command.smartctl, device})) do
     local attrib, val
     if section == 1 then
         attrib, val = line:match "^(.-):%s+(.+)"
@@ -106,7 +102,7 @@ end
 local is_raid_member = function(partition)
   -- check if inuse as raid member
   if nixio.fs.access("/proc/mdstat") then
-    for _, result in ipairs(luci.util.execl("grep md /proc/mdstat | sed 's/[][]//g'")) do
+    for _, result in ipairs(util.execl("grep md /proc/mdstat | sed 's/[][]//g'")) do
       local md, buf
       md, buf = result:match("(md.-):(.+)")
       if buf:match(partition) then
@@ -123,11 +119,11 @@ local get_mount_point = function(partition)
     mount_point = (mount_point and (mount_point .. " ")  or "") .. m
   end
   if mount_point then return mount_point end
-  -- result = luci.sys.exec('cat /proc/mounts | awk \'{if($1=="/dev/'.. partition ..'") print $2}\'')
+  -- result = util.exec('cat /proc/mounts | awk \'{if($1=="/dev/'.. partition ..'") print $2}\'')
   -- if result ~= "" then return result end
 
   if swaps:match("\n/dev/" .. partition .."%s") then return "swap" end
-  -- result = luci.sys.exec("cat /proc/swaps | grep /dev/" .. partition)
+  -- result = util.exec("cat /proc/swaps | grep /dev/" .. partition)
   -- if result ~= "" then return "swap" end
 
   return is_raid_member(partition)
@@ -155,8 +151,8 @@ local get_parted_info = function(device)
   local partitions_temp = {}
   local disk_temp
 
-  for line in luci.util.execi(d.command.parted .. " -s -m /dev/" .. device .. " unit s print free", "r") do
-    if line:find("^/dev/"..device..":.+") then
+  for line in util.execi("%s -s -m /dev/%s unit s print free" %{d.command.parted, device}, "r") do
+    if line:find("^/dev/%s:.+" %device) then
       disk_temp = parse_parted_info(DEVICE_INFO_KEYS, line)
       disk_temp.partitions = {}
       if disk_temp["size"] then
@@ -189,7 +185,7 @@ local get_parted_info = function(device)
         partition_temp["name"] = device.."p"..partition_temp["number"]
       end
       if partition_temp["number"] > 0 and partition_temp["fs"] == "" and d.command.lsblk then
-        partition_temp["fs"] = (luci.util.exec(d.command.lsblk .. " /dev/" .. partition_temp["name"] .. " -no fstype") or ""):match("([^%s]+)") or ""
+        partition_temp["fs"] = (util.exec(d.command.lsblk .. " /dev/" .. partition_temp["name"] .. " -no fstype") or ""):match("([^%s]+)") or ""
       end
       partition_temp["fs"] = partition_temp["fs"] == "" and "raw" or partition_temp["fs"]
       partition_temp["sec_start"] = partition_temp["sec_start"] and partition_temp["sec_start"]:sub(1,-2)
@@ -255,19 +251,19 @@ local get_parted_info = function(device)
 end
 
 local mddetail = function(mdpath)
-	local detail = {}
-	local path = mdpath:match("^/dev/md%d+$")
-	if path then
-		local mdadm = io.popen(d.command.mdadm .. " --detail "..path, "r")
-		for line in mdadm:lines() do
-			local key, value = line:match("^%s*(.+) : (.+)")
-			if key then
-				detail[key] = value
-			end
-		end
-		mdadm:close()
-	end
-	return detail
+  local detail = {}
+  local path = mdpath:match("^/dev/md%d+$")
+  if path then
+    local mdadm = io.popen("%s --detail %s" %{d.command.mdadm, path}, "r")
+    for line in mdadm:lines() do
+      local key, value = line:match("^%s*(.+) : (.+)")
+      if key then
+        detail[key] = value
+      end
+    end
+    mdadm:close()
+  end
+  return detail
 end
 
 -- return {{device="", mount_points="", fs="", mount_options="", dump="", pass=""}..}
@@ -361,8 +357,8 @@ d.list_raid_devices = function()
         level = table.remove(members, 1)
       end
 
-      local size = tonumber(fs.readfile(string.format("/sys/class/block/%s/size", mdpath)))
-      local ss = tonumber(fs.readfile(string.format("/sys/class/block/%s/queue/logical_block_size", mdpath)))
+      local size = tonumber(fs.readfile("/sys/class/block/%s/size" %mdpath))
+      local ss = tonumber(fs.readfile("/sys/class/block/%s/queue/logical_block_size" %mdpath))
 
       device_info["path"] = "/dev/"..mdpath
       device_info["size"] = size*ss
@@ -389,7 +385,7 @@ end
   {
     sda={
       path, model, inuse, size_formated,
-      partitions={ 
+      partitions={
         { name, inuse, size_formated }
         ...
       }
@@ -417,9 +413,9 @@ d.list_devices = function()
   for i, bname in pairs(target_devnames) do
     local device_info = {}
     local device = "/dev/" .. bname
-    local size = tonumber(fs.readfile(string.format("/sys/class/block/%s/size", bname)) or "0")
-    local ss = tonumber(fs.readfile(string.format("/sys/class/block/%s/queue/logical_block_size", bname)) or "0")
-    local model = fs.readfile(string.format("/sys/class/block/%s/device/model", bname))
+    local model = fs.readfile("/sys/class/block/%s/device/model" %bname)
+    local size = tonumber(fs.readfile("/sys/class/block/%s/size" %bname) or "0")
+    local ss = tonumber(fs.readfile("/sys/class/block/%s/queue/logical_block_size" %bname) or "0")
     local partitions = {}
     for part in nixio.fs.glob("/sys/block/" .. bname .."/" .. bname .. "*") do
       local pname = nixio.fs.basename(part)
@@ -429,16 +425,16 @@ d.list_devices = function()
       table.insert(partitions, {name = pname, size_formated = psize, inuse = mount_point})
     end
 
-      device_info["path"] = device
-      device_info["size_formated"] = byte_format(size*ss)
       device_info["model"] = model
+      device_info["path"] = device
       device_info["partitions"] = partitions
+      device_info["size_formated"] = byte_format(size*ss)
       -- true or false
       device_info["inuse"] = device_info["inuse"] or get_mount_point(bname)
 
       local udevinfo = {}
-      if luci.sys.exec("which udevadm") ~= "" then
-        local udevadm = io.popen("udevadm info --query=property --name="..device)
+      if util.exec("which udevadm") ~= "" then
+        local udevadm = io.popen("udevadm info --query=property --name=%s" %device)
         for attr in udevadm:lines() do
           local k, v = attr:match("(%S+)=(%S+)")
           udevinfo[k] = v
@@ -450,26 +446,26 @@ d.list_devices = function()
       end
       devices[bname] = device_info
   end
-  -- luci.util.perror(luci.util.serialize_json(devices))
+  -- util.perror(util.serialize_json(devices))
   return devices
 end
 
 -- get formart cmd
 d.get_format_cmd = function()
   local AVAILABLE_FMTS = {
+    swap = { cmd = "mkswap", option = "" },
+    hfsplus = { cmd = "mkhfs", option = "-f" },
+    exfat = { cmd = "mkfs.exfat", option = "" },
+    ntfs = { cmd = "mkfs.ntfs", option = "-f" },
+    btrfs = { cmd = "mkfs.btrfs", option = "-f" },
+    fat32 = { cmd = "mkfs.fat", option = "-F 32" },
     ext2 = { cmd = "mkfs.ext2", option = "-F -E lazy_itable_init=1" },
     ext3 = { cmd = "mkfs.ext3", option = "-F -E lazy_itable_init=1" },
-    ext4 = { cmd = "mkfs.ext4", option = "-F -E lazy_itable_init=1" },
-    fat32 = { cmd = "mkfs.fat", option = "-F 32" },
-    exfat = { cmd = "mkfs.exfat", option = "" },
-    hfsplus = { cmd = "mkhfs", option = "-f" },
-    ntfs = { cmd = "mkfs.ntfs", option = "-f" },
-    swap = { cmd = "mkswap", option = "" },
-    btrfs = { cmd = "mkfs.btrfs", option = "-f" }
+    ext4 = { cmd = "mkfs.ext4", option = "-F -E lazy_itable_init=1" }
   }
   result = {}
   for fmt, obj in pairs(AVAILABLE_FMTS) do
-    local cmd = luci.sys.exec("/usr/bin/which " .. obj["cmd"])
+    local cmd = util.exec("/usr/bin/which " .. obj["cmd"])
     if cmd:match(obj["cmd"]) then
       result[fmt] = { cmd = cmd:match("^.+"..obj["cmd"]) ,option = obj["option"] }
     end
@@ -521,7 +517,7 @@ d.create_raid = function(rname, rlevel, rmembers)
   end
   if #rmembers < 2 then return "ERR: Not enough members" end
   local cmd = d.command.mdadm .. " --create "..rname.." --run --assume-clean --homehost=any --level=" .. rlevel .. " --raid-devices=" .. #rmembers .. " " .. table.concat(rmembers, " ")
-  local res = luci.util.exec(cmd)
+  local res = util.exec(cmd)
   return res
 end
 
@@ -534,7 +530,7 @@ d.gen_mdadm_config = function()
   local cmd = d.command.mdadm .. " -D -s"
   --ARRAY /dev/md1 metadata=1.2 name=any:1 UUID=f998ae14:37621b27:5c49e850:051f6813
   --ARRAY /dev/md3 metadata=1.2 name=any:3 UUID=c068c141:4b4232ca:f48cbf96:67d42feb
-  for _, v in ipairs(luci.util.execl(cmd)) do
+  for _, v in ipairs(util.execl(cmd)) do
     local device, uuid = v:match("^ARRAY%s-([^%s]+)%s-[^%s]-%s-[^%s]-%s-UUID=([^%s]+)%s-")
     if device and uuid then
       local section_name = x:add("mdadm", "array")
@@ -544,7 +540,7 @@ d.gen_mdadm_config = function()
   end
   x:commit("mdadm")
   -- enable mdadm
-  luci.util.exec("/etc/init.d/mdadm enable")
+  util.exec("/etc/init.d/mdadm enable")
 end
 
 -- list btrfs filesystem device
@@ -553,7 +549,7 @@ d.list_btrfs_devices = function()
   local btrfs_device = {}
   if not d.command.btrfs then return btrfs_device end
   local line, _uuid
-  for _, line in ipairs(luci.util.execl(d.command.btrfs .. " filesystem show -d --raw"))
+  for _, line in ipairs(util.execl(d.command.btrfs .. " filesystem show -d --raw"))
   do
     local label, uuid = line:match("^Label:%s+([^%s]+)%s+uuid:%s+([^%s]+)")
     if label and uuid then
@@ -582,7 +578,7 @@ d.create_btrfs = function(blabel, blevel, bmembers)
   if not d.command.btrfs or type(bmembers) ~= "table" or next(bmembers) == nil then return "ERR no btrfs support or no members" end
   local label = blabel and " -L " .. blabel or ""
   local cmd = "mkfs.btrfs -f " .. label .. " -d " .. blevel .. " " .. table.concat(bmembers, " ")
-  return luci.util.exec(cmd)
+  return util.exec(cmd)
 end
 
 -- get btrfs info
@@ -590,9 +586,9 @@ end
 d.get_btrfs_info = function(m_point)
   local btrfs_info = {}
   if not m_point or not d.command.btrfs then return btrfs_info end
-  local cmd = d.command.btrfs .. " filesystem show --raw " .. m_point
+  local cmd = "%s filesystem show --raw %s" %{d.command.btrfs, m_point}
   local _, line, uuid, _label, members
-  for _, line in ipairs(luci.util.execl(cmd)) do
+  for _, line in ipairs(util.execl(cmd)) do
     if not uuid and not _label then
       _label, uuid = line:match("^Label:%s+([^%s]+)%s+uuid:%s+([^s]+)")
     else
@@ -607,7 +603,7 @@ d.get_btrfs_info = function(m_point)
   local label = _label:match("^'([^']+)'")
   cmd = d.command.btrfs .. " filesystem usage -b " .. m_point
   local used, free, data_raid_level, metadata_raid_lavel
-  for _, line in ipairs(luci.util.execl(cmd)) do
+  for _, line in ipairs(util.execl(cmd)) do
     if not used then
       used = line:match("^%s+Used:%s+(%d+)")
     elseif not free then
@@ -647,14 +643,14 @@ if not m_point or not d.command.btrfs then return subvolume end
 
 -- get default subvolume
 local cmd = d.command.btrfs .. " subvolume get-default " .. m_point
-local res = luci.util.exec(cmd)
+local res = util.exec(cmd)
 local default_subvolume_id = res:match("^ID%s+([^%s]+)")
 
 -- get the root subvolume
 if not snapshot then
   local _, line, section_snap, _uuid, _otime, _id, _snap
   cmd = d.command.btrfs .. " subvolume show ".. m_point
-  for _, line in ipairs(luci.util.execl(cmd)) do
+  for _, line in ipairs(util.execl(cmd)) do
     if not section_snap then
       if not _uuid then
         _uuid = line:match("^%s-UUID:%s+([^%s]+)")
@@ -682,7 +678,7 @@ end
 
 -- get subvolume of btrfs
 cmd = d.command.btrfs .. " subvolume list -gcu" .. (snapshot and "s " or " ") .. m_point
-for _, line in ipairs(luci.util.execl(cmd)) do
+for _, line in ipairs(util.execl(cmd)) do
   -- ID 259 gen 11 top level 258 uuid 26ae0c59-199a-cc4d-bd58-644eb4f65d33 path 1a/2b'
   local id, gen, top_level, uuid, path, otime, otime2
   if snapshot then
@@ -696,7 +692,7 @@ for _, line in ipairs(luci.util.execl(cmd)) do
       -- use btrfs subv show to get snapshots
       local show_cmd = d.command.btrfs .. " subvolume show "..m_point.."/"..path
       local __, line_show, section_snap
-      for __, line_show in ipairs(luci.util.execl(show_cmd)) do
+      for __, line_show in ipairs(util.execl(show_cmd)) do
         if not section_snap then
           local create_time = line_show:match("^%s+Creation time:%s+(.+)")
           if create_time then
@@ -716,7 +712,7 @@ if subvolume[default_subvolume_id] then
   subvolume[default_subvolume_id].default_subvolume = 1
 end
 -- if m_point == "/tmp/.btrfs_tmp" then
---   luci.util.exec("umount " .. m_point)
+--   util.exec("umount " .. m_point)
 -- end
 return subvolume
 end
@@ -732,7 +728,7 @@ d.format_partition = function(partition, fs)
     return 500, "Filesystem NOT support!"
   end
   local cmd = format_cmd[fs].cmd .. " " .. format_cmd[fs].option .. " " .. partition_name
-  local res = luci.util.exec(cmd .. " 2>&1")
+  local res = util.exec(cmd .. " 2>&1")
   if res and res:lower():match("error+") then
     return 500, res
   else

@@ -1,0 +1,12 @@
+{
+	"admin/services/diskman": {
+		"title": "Disk Man",
+		"action": {
+			"type": "view",
+			"path": "diskman/diskman"
+		},
+		"depends": {
+			"acl": [ "luci-app-diskman" ]
+		}
+	}
+}

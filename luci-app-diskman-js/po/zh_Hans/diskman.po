@@ -1,0 +1,370 @@
+msgid "Task Plan Plus+"
+msgstr "计划任务 Plus+"
+
+msgid ""
+"Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc."
+msgstr ""
+"定时任务执行和开机任务执行。预置功能超过10种，包括重启、关机、网络重启、释放内存、系统清理、网络共享、关闭网络、自动检测网络断开并重连、MWAN3负载均衡重连检测、自定义脚本等"
+
+msgid "Scheduled task"
+msgstr "定时任务"
+
+msgid "Startup task"
+msgstr "开机任务"
+
+msgid "The task to be executed upon startup, with a startup delay time unit of seconds."
+msgstr "开机启动执行的任务，启动延时时间单位为秒。"
+
+msgid "Control"
+msgstr "管控"
+
+msgid "Task Plan"
+msgstr "任务设置"
+
+msgid "Scheduled Type"
+msgstr "任务类型"
+
+msgid "Delayed Start(seconds)"
+msgstr "开机任务延时(秒)"
+
+msgid "Weekend"
+msgstr "休息日"
+
+msgid "Workdays"
+msgstr "工作日"
+
+msgid "No such file %s"
+msgstr "没有这样的文件 %s"
+
+msgid "Edit %s"
+msgstr "编辑 %s"
+
+msgid "Note: Please use valid syntax. The script runs as root. Avoid destructive commands (e.g., \"rm -rf /\"). The script should not require user interaction."
+msgstr "注意：请使用正确的语法。脚本是以 root 权限执行，请勿使用破坏性命令（如 \"rm -rf /\"）。脚本是后台自动执行，不会与用户交互。"
+
+msgid "File saved to %s"
+msgstr "文件已保存至 %s"
+
+msgid "Click to upload the script to %s"
+msgstr "点击可以上传脚本到 %s"
+
+msgid "Unable to read %s: %s"
+msgstr "无法打开 %s: %s"
+
+msgid "Log"
+msgstr "日志"
+
+msgid "No log data available"
+msgstr "无可用日志数据"
+
+msgid "Log cleared"
+msgstr "日志已清空"
+
+msgid "Failed to clear the log: %s"
+msgstr "清空日志失败: %s"
+
+msgid "Number of logs retained"
+msgstr "保留日志数量"
+
+msgid "Clear Log"
+msgstr "清空日志"
+
+msgid "▽ Show Oldest First"
+msgstr "▽ 正序显示(旧在前)"
+
+msgid "△ Show Newest First"
+msgstr "△ 倒序显示(新在前)"
+
+msgid "Scheduled Reboot"
+msgstr "重启机器"
+
+msgid "Scheduled Poweroff"
+msgstr "关闭机器"
+
+msgid "Scheduled ReNetwork"
+msgstr "重启网络"
+
+msgid "Scheduled RestartSamba"
+msgstr "重启网络共享"
+
+msgid "Scheduled Restartlan"
+msgstr "重启LAN"
+
+msgid "Scheduled Restartwan"
+msgstr "重启WAN"
+
+msgid "Scheduled Closewan"
+msgstr "关闭网络"
+
+msgid "Scheduled Clearmem"
+msgstr "释放内存"
+
+msgid "Scheduled Sysfree"
+msgstr "系统清理(重启)"
+
+msgid "Scheduled DisReconn"
+msgstr "检测断网重连"
+
+msgid "Scheduled DisRereboot"
+msgstr "检测断网重启"
+
+msgid "Scheduled Restartmwan3"
+msgstr "检测MWAN3(重启)"
+
+msgid "Scheduled Wifidown"
+msgstr "关闭无线网络"
+
+msgid "Scheduled Wifiup"
+msgstr "启用无线网络"
+
+msgid "Custom Script %s"
+msgstr "脚本 %s"
+
+msgid "Execution"
+msgstr "执行"
+
+msgid "WAN restart successful!"
+msgstr "WAN 重启成功！"
+
+msgid "LAN restart successful!"
+msgstr "LAN 重启成功！"
+
+msgid "Redial successful!"
+msgstr "重新拨号成功！"
+
+msgid "[WARN] Failed to acquire lock, skipping log"
+msgstr "[WARN] 获取锁失败，跳过日志记录"
+
+msgid "Restarting mwan3..."
+msgstr "mwan3 重启中..."
+
+msgid "mwan3 status normal"
+msgstr "mwan3 状态正常"
+
+msgid "mwan3 monitor timeout"
+msgstr "mwan3 监控超时退出"
+
+msgid "Unknown command: "
+msgstr "未知命令: "
+
+msgid "Execution content of script %s"
+msgstr "脚本 %s 的执行代码"
+
+msgid "Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-6, 0 and 6 = Sunday)"
+msgstr "分钟 (0-59)，小时 (0-23)，日期 (1-31)，月份 (1-12)，星期 (0-6，0=星期日)"
+
+msgid "\"*\" any value, \",\" value list separator, \"-\" range of values, \"/\" step values"
+msgstr "\"*\" 任何值，\",\" 值列表分隔符，\"-\" 值范围，\"/\" 步长值"
+
+msgid "Examples: Range 2-5 (means 2 to 5), List 1,3,5 (means 1 and 3 and 5), Step */5 (means every 5 units)"
+msgstr "示例：区间 2-5（表示2到5），列表 1,3,5（表示1和3和5），步进 */5（表示每5单位一次）"
+
+msgid "After selecting, click to crontab.guru to verify"
+msgstr "选择后点击到 crontab.guru 验证"
+
+msgid "verify"
+msgstr "验证"
+
+msgid "Check this Cron expression at <a target=\"_blank\" href=\"https://crontab.guru\">crontab.guru</a>"
+msgstr "前往 <a target=\"_blank\" href=\"https://crontab.guru\">crontab.guru</a> 验证当前 Cron 表达式"
+
+msgid "Cron's log level saved successfully"
+msgstr "Cron 的日志级别保存成功"
+
+msgid "Save Cron's log level"
+msgstr "保存 Cron 的日志级别"
+
+msgid "Task Files"
+msgstr "任务文件"
+
+msgid "This page can be edited and saved directly. Changes will take effect immediately after saving."
+msgstr "本页面可直接编辑保存，保存后立即生效。"
+
+msgid "Please ensure the syntax is correct, as incorrect syntax may cause the system to malfunction."
+msgstr "请务必检查语法正确性，错误的语法可能导致系统无法正常运行。"
+
+msgid "No modifications detected. The content remains unchanged."
+msgstr "当前编辑内容与原始文件完全相同，无需保存"
+
+msgid "Last modified: %s, Size: %s bytes"
+msgstr "最后修改：%s，大小：%s字节"
+
+msgid "File not found %s"
+msgstr "%s 文件不存在"
+
+msgid "minutes"
+msgstr "分钟"
+
+msgid "hours"
+msgstr "小时"
+
+msgid "Days"
+msgstr "日期"
+
+msgid "months"
+msgstr "月份"
+
+msgid "weeks"
+msgstr "星期"
+
+msgid "Everyday"
+msgstr "每天"
+
+msgid "1-31, \"*\", \"*/N\", ranges, or lists. E.g.: 1,5,10 or 5-10,*/2"
+msgstr "1-31，\"*\"，\"*/N\"，区间或列表。例如：1,5,10 或 5-10,*/2"
+
+msgid "0-23, \"*\", \"*/N\", ranges, or lists. E.g.: 0,12,18 or 8-17"
+msgstr "0-23，\"*\"，\"*/N\"，区间或列表。例如：0,12,18 或 8-17"
+
+msgid "1-12, \"*\", \"*/N\", ranges, or lists. E.g.: 1,6,12 or 3-8,*/2"
+msgstr "1-12，\"*\"，\"*/N\"，区间或列表。例如：1,6,12 或 3-8,*/2"
+
+msgid "0-59, \"*\", \"*/N\", ranges, or lists. E.g.: 0,15,30,45 or 10-50,*/5"
+msgstr "0-59，\"*\"，\"*/N\"，区间或列表。例如：0,15,30,45 或 10-50,*/5"
+
+msgid "0-6 (0=Sunday), \"*\", \"*/N\", ranges, or lists. E.g.: 0,1,5 or 1-5,*/2"
+msgstr "0-6（0=星期日），\"*\"，\"*/N\"，区间或列表。例如：0,1,5 或 1-5,*/2"
+
+msgid "Note: Actual days may be limited by specific months"
+msgstr "注意：实际天数可能受具体月份限制"
+
+msgid "Unknown field type: %s"
+msgstr "未知字段类型：%s"
+
+msgid "Invalid format for %s"
+msgstr "%s 的格式无效"
+
+msgid "Step value in %s must be between 1 and %d"
+msgstr "%s 的步长只能在 1 到 %d 之间"
+
+msgid "%s value %s out of range (%d-%d)"
+msgstr "%s %s 的值超出范围 (%d-%d)"
+
+msgid "Invalid range or step value in %s (%s)"
+msgstr "%s 中的区间或步长值无效（%s）"
+
+msgid "Range %d-%d out of bounds (%d-%d) in %s"
+msgstr "%s 的区间 %d-%d 超出有效范围 (%d-%d)"
+
+msgid "Step value %d out of range (1-%d) in %s"
+msgstr "%s 的步长 %d 超出有效范围 (1-%d)"
+
+msgid "Invalid syntax: %s in (%s). Step must be used with * or ranges"
+msgstr "%s 字段中的语法 (%s) 无效。步长只能用于 * 或区间"
+
+msgid "Invalid part: %s in (%s)"
+msgstr "%s 字段中的 (%s) 部分无效"
+
+msgid "Invalid format for %s. Example: (%s)"
+msgstr "%s 的格式无效，示例：(%s)"
+
+msgid "Are you sure you want to execute the %s script?"
+msgstr "你确定要执行 %s 吗？"
+
+msgid "%s execution result"
+msgstr "%s 执行结果"
+
+msgid "No results were returned for execution"
+msgstr "执行没有返回结果"
+
+msgid "The execution result has been copied to the clipboard!"
+msgstr "执行结果已复制到剪贴板！"
+
+msgid "Script execution failed: %s"
+msgstr "%s 脚本执行失败"
+
+msgid "execution failed: %s"
+msgstr "执行失败： %s"
+
+msgid "Save successfully"
+msgstr "成功保存"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Confirm"
+msgstr "确定"
+
+msgid "Run"
+msgstr "运行"
+
+msgid "%s Contents have been saved."
+msgstr "%s 的文档内容已保存。"
+
+msgid "Unable to save contents: %s"
+msgstr "无法保存内容：%s"
+
+msgid "Copy the current execution result"
+msgstr "复制当前执行结果"
+
+msgid "Script name"
+msgstr "脚本名称"
+
+msgid "The script is saved successfully"
+msgstr "脚本保存成功"
+
+msgid "Error saving script %s"
+msgstr "脚本保存出错 %s"
+
+msgid "Create Script"
+msgstr "创建脚本"
+
+msgid "Create/Edit Script"
+msgstr "创建/编辑脚本"
+
+msgid "Script name"
+msgstr "脚本名称"
+
+msgid "Custom Script %s"
+msgstr "脚本 %s"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Confirm Deletion"
+msgstr "确认删除"
+
+msgid "Confirm Delete"
+msgstr "确认删除"
+
+msgid "Script saved successfully"
+msgstr "脚本保存成功"
+
+msgid "Error saving script: %s"
+msgstr "保存脚本出错: %s"
+
+msgid "Script deleted successfully"
+msgstr "脚本删除成功"
+
+msgid "Error deleting script: %s"
+msgstr "删除脚本出错: %s"
+
+msgid "Are you sure you want to delete script %s?"
+msgstr "确定要删除脚本 %s 吗？"
+
+msgid "Script does not exist"
+msgstr "脚本不存在"
+
+msgid "Create a new script"
+msgstr "创建新脚本"
+
+msgid "Create a script"
+msgstr "创建脚本"
+
+msgid "Edit script"
+msgstr "编辑脚本"
+
+msgid "New script"
+msgstr "新脚本"
+
+msgid "Existing script"
+msgstr "已有脚本"
+
+msgid "Create/Edit"
+msgstr "创建/编辑"
