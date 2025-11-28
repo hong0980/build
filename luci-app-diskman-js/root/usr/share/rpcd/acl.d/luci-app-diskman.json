@@ -6,13 +6,6 @@
 				"service": [ "list" ]
 			},
 			"file": {
-				"/usr/bin/mkfs.btrfs": ["exec"],
-				"/usr/bin/mkfs.fat": [ "exec" ],
-				"/usr/sbin/mkfs.f2fs": [ "exec" ],
-				"/usr/sbin/mkfs.ext2": [ "exec" ],
-				"/usr/sbin/mkfs.ext3": [ "exec" ],
-				"/usr/sbin/mkfs.ext4": ["exec"],
-				"/usr/sbin/mkfs.exfat": [ "exec" ],
 				"/bin/df": [ "exec"],
 				"/bin/mount": ["exec"],
 				"/bin/umount": ["exec"],
@@ -20,10 +13,16 @@
 				"/sbin/partprobe": ["exec"],
 				"/usr/bin/btrfs": ["exec"],
 				"/usr/bin/lsblk": ["exec"],
-				"/usr/bin/which": ["exec"],
 				"/usr/sbin/blkid": ["exec"],
 				"/usr/sbin/smartctl": ["exec"],
-				"/usr/libexec/diskman": ["exec"]
+				"/usr/libexec/diskman": ["exec"],
+				"/usr/bin/mkfs.btrfs": ["exec"],
+				"/usr/bin/mkfs.fat": [ "exec" ],
+				"/usr/sbin/mkfs.ext4": ["exec"],
+				"/usr/sbin/mkfs.f2fs": [ "exec" ],
+				"/usr/sbin/mkfs.ext2": [ "exec" ],
+				"/usr/sbin/mkfs.ext3": [ "exec" ],
+				"/usr/sbin/mkfs.exfat": [ "exec" ]
 			}
 		},
 		"write": {

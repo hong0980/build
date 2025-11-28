@@ -12,25 +12,50 @@ case "$action" in
     lsblk)
         /usr/bin/lsblk -fJo NAME,PATH,TYPE,SIZE,MODEL,TRAN,FSTYPE,VENDOR,ROTA,PTTYPE,MOUNTPOINT
     ;;
+    # mount_dev)
+    #     dev="$1"
+    #     mp="$2"
+    #     mkdir -p "$mp"
+
+    #     fstype=$(lsblk -no FSTYPE "$dev" 2>/dev/null | head -1)
+
+    #     if echo "$fstype" | grep -qE 'vfat|fat|exfat'; then
+    #         mount -o rw,noatime,utf8=1,flush,uid=0,gid=0,dmask=000,fmask=111 "$dev" "$mp"
+    #     else
+    #         mount -o rw,noatime "$dev" "$mp"
+    #     fi
+
+    #     if [ $? -eq 0 ]; then
+    #         echo "成功挂载 $dev → $mp"
+    #         exit 0
+    #     else
+    #         rmdir "$mp" 2>/dev/null
+    #         echo "错误：挂载失败"
+    #         exit 1
+    #     fi
+    # ;;
     mount_dev)
         dev="$1"
         mp="$2"
-        mkdir -p "$mp"
 
-        fstype=$(lsblk -no FSTYPE "$dev" 2>/dev/null | head -1)
+        mkdir -p "$mp"
+        fstype=$(blkid -o value -s TYPE "$dev" 2>/dev/null)
 
         if echo "$fstype" | grep -qE 'vfat|fat|exfat'; then
-            mount -o rw,noatime,utf8=1,flush,uid=0,gid=0,dmask=000,fmask=111 "$dev" "$mp"
+            opts="rw,noatime,utf8=1,flush,uid=0,gid=0,dmask=000,fmask=111"
         else
-            mount -o rw,noatime "$dev" "$mp"
+            opts="rw,noatime"
         fi
 
-        if [ $? -eq 0 ]; then
-            echo "成功挂载 $dev → $mp"
+        out=$(mount -o "$opts" "$dev" "$mp" 2>&1)
+        ret=$?
+
+        if [ $ret -eq 0 ]; then
+            echo "__OK__ $dev → $mp"
             exit 0
         else
             rmdir "$mp" 2>/dev/null
-            echo "错误：挂载失败"
+            echo "__ERR__ $out"
             exit 1
         fi
     ;;
@@ -159,10 +184,9 @@ case "$action" in
         /usr/bin/which mdadm > /dev/null && mdadm --assemble --scan
     ;;
     reject)
-        json_load "$1"
-        json_get_var device_name name
-        json_get_var devpath     path
-        json_get_var devtype     type
+        device_name="$1"
+        devpath="$2"
+        devtype="$3"
 
         if grep "^$devpath" /proc/mounts | grep -qvE ' squashfs .* /rom | vfat | exfat | ntfs | fuseblk | iso9660 '; then
             echo "错误：设备 $devpath 正被内核真正占用，无法弹出！"
