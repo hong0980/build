@@ -6,34 +6,133 @@ action="$1"
 shift
 
 case "$action" in
-    smartctl)
-        /usr/sbin/smartctl -ja "$1"
+    fsfdisk)
+        sfdisk -F "$1" 2>/dev/null | awk '
+        /Unpartitioned space/ {
+            # 行1: "Unpartitioned space /dev/sdb: 55.58 GiB, 59678654976 bytes, 116559873 sectors"
+            free_size = $4 " " $5;    # "55.58 GiB,"
+            free_bytes = $6;          # "59678654976"
+            free_sectors = $8;        # "116559873"
+            gsub(/,/, "", free_size);
+            gsub(/,/, "", free_bytes);
+        }
+        /^[0-9]/ && NF == 4 {
+            # 行6: "4517888 121077760 116559873 55.6G"
+            free_start = $1;
+            free_end = $2;
+            free_sectors_num = $3;
+            free_size_h = $4;
+        }
+        END {
+            if (free_sectors) {
+                print "{";
+                print "  \"free_space\": {";
+                printf "    \"size\": \"%s\",\n", free_size;
+                printf "    \"size_bytes\": %s,\n", free_bytes;
+                printf "    \"sectors\": %s,\n", free_sectors;
+                printf "    \"start\": %s,\n", free_start;
+                printf "    \"end\": %s\n", free_end;
+                print "  }";
+                print "}";
+            }
+        }'
     ;;
-    lsblk)
-        /usr/bin/lsblk -fJo NAME,PATH,TYPE,SIZE,MODEL,TRAN,FSTYPE,VENDOR,ROTA,PTTYPE,MOUNTPOINT
+    lsfdisk)
+        sfdisk -l "$1" | awk '
+        function get_filesystem_type(id, type_desc) {
+            # 根据分区ID和描述判断文件系统类型
+            if (id == "83") return "ext4";
+            if (id == "82") return "swap";
+            if (id == "ef") return "fat32";
+            if (id == "0") return "iso9660";
+            if (id == "7") return "ntfs";
+            if (id == "b" || id == "c") return "fat32";
+            if (id == "1" || id == "4" || id == "6" || id == "e") return "fat16";
+            if (id == "85") return "extended";
+            if (id == "5" || id == "f") return "extended";
+
+            # 根据类型描述判断
+            if (type_desc ~ /FAT-12/) return "fat12";
+            if (type_desc ~ /FAT-16/) return "fat16";
+            if (type_desc ~ /FAT-32/) return "fat32";
+            if (type_desc ~ /FAT/) return "fat";
+            if (type_desc ~ /Linux/) return "ext4";
+            if (type_desc ~ /swap/) return "swap";
+            if (type_desc ~ /NTFS/) return "ntfs";
+            if (type_desc ~ /ext4/) return "ext4";
+            if (type_desc ~ /ext3/) return "ext3";
+            if (type_desc ~ /ext2/) return "ext2";
+            if (type_desc ~ /ISO/) return "iso9660";
+            if (type_desc ~ /Empty/) return "iso9660";
+            if (type_desc ~ /EFI/) return "fat32";
+
+            return "";
+        }
+
+        BEGIN {
+            print "[";
+            print "  {";
+            print "    \"disk\": {";
+            first_part = 1;
+        }
+
+        /^Disk \/dev\// {
+            path = $2; gsub(/:/, "", path);
+            size_value = $3;
+            size_unit = $4;
+            gsub(/,/, "", size_unit);
+
+            printf "      \"device\": \"%s\",\n", path;
+            printf "      \"size\": \"%s %s\",\n", size_value, size_unit;
+            printf "      \"total_sectors\": %s", $7;
+            next;
+        }
+
+        /^Disk model:/ {
+            model = substr($0, index($0, ":") + 2);
+            printf ",\n      \"model\": \"%s\"", model;
+            next;
+        }
+
+        /^Disklabel type:/ {
+            printf ",\n      \"partition_table\": \"%s\"", $3;
+            next;
+        }
+
+        /^\/dev\// {
+            if (first_part) {
+                printf ",\n      \"sector_size\": {\n";
+                printf "        \"logical\": 512,\n";
+                printf "        \"physical\": 512\n";
+                printf "      }";
+                print "\n    },";
+                print "    \"partitions\": [";
+                first_part = 0;
+            } else {
+                printf ",\n";
+            }
+
+            n = split($0, fields, " ");
+            bootable = (fields[2] == "*") ? "boot" : "";
+            start_field = (fields[2] == "*") ? 3 : 2;
+
+            printf "      {\n";
+            printf "        \"number\": \"%s\",\n", fields[1];
+            printf "        \"start\": \"%s\",\n", fields[start_field];
+            printf "        \"end\": \"%s\",\n", fields[start_field+1];
+            printf "        \"size\": \"%s\",\n", fields[start_field+2];
+            printf "        \"Size\": \"%s\",\n", fields[start_field+3];
+            printf "        \"type\": \"primary\",\n";
+            printf "        \"fileSystem\": \"%s\"\n", get_filesystem_type(fields[start_field+4], fields[start_field+5]);
+            printf "      }";
+            next;
+        }
+
+        END {
+            print "\n    ]";
+            print "  }]";
+        }'
     ;;
-    # mount_dev)
-    #     dev="$1"
-    #     mp="$2"
-    #     mkdir -p "$mp"
-
-    #     fstype=$(lsblk -no FSTYPE "$dev" 2>/dev/null | head -1)
-
-    #     if echo "$fstype" | grep -qE 'vfat|fat|exfat'; then
-    #         mount -o rw,noatime,utf8=1,flush,uid=0,gid=0,dmask=000,fmask=111 "$dev" "$mp"
-    #     else
-    #         mount -o rw,noatime "$dev" "$mp"
-    #     fi
-
-    #     if [ $? -eq 0 ]; then
-    #         echo "成功挂载 $dev → $mp"
-    #         exit 0
-    #     else
-    #         rmdir "$mp" 2>/dev/null
-    #         echo "错误：挂载失败"
-    #         exit 1
-    #     fi
-    # ;;
     mount_dev)
         dev="$1"
         mp="$2"
@@ -47,10 +146,7 @@ case "$action" in
             opts="rw,noatime"
         fi
 
-        out=$(mount -o "$opts" "$dev" "$mp" 2>&1)
-        ret=$?
-
-        if [ $ret -eq 0 ]; then
+        if mount -o "$opts" "$dev" "$mp" 2>&1; then
             echo "__OK__ $dev → $mp"
             exit 0
         else
@@ -86,7 +182,7 @@ case "$action" in
         END {print "]"}'
     ;;
     parted)
-        /sbin/parted "$1" unit s print free | awk '
+        /sbin/parted -s "$1" unit s print free | awk '
         BEGIN {print "[{"; disk_printed = 0; first_part = 1}
 
         /^Model:/ {
@@ -197,9 +293,9 @@ case "$action" in
 
         if [ "$devtype" = "disk" ]; then
             if echo 1 > "/sys/block/$device_name/device/delete" 2>/dev/null; then
-                echo "磁盘 $device_name 已安全弹出"
+                echo "磁盘 $devpath 已安全弹出"
             else
-                echo "磁盘 $device_name 弹出失败（可能为系统盘或仍在使用）"
+                echo "磁盘 $devpath 弹出失败（可能为系统盘或仍在使用）"
                 exit 1
             fi
             exit 0
