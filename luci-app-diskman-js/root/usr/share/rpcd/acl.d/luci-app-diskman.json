@@ -18,7 +18,7 @@
 				"/usr/sbin/smartctl": ["exec"],
 				"/usr/libexec/diskman": ["exec"],
 				"/usr/bin/mkfs.btrfs": ["exec"],
-				"/usr/bin/mkfs.fat": [ "exec" ],
+				"/usr/sbin/mkfs.fat": [ "exec" ],
 				"/usr/sbin/mkfs.ext4": ["exec"],
 				"/usr/sbin/mkfs.f2fs": [ "exec" ],
 				"/usr/sbin/mkfs.ext2": [ "exec" ],

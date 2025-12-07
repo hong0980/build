@@ -27,7 +27,8 @@ case "$action" in
             if (free_sectors) {
                 print "{";
                 print "  \"free_space\": {";
-                printf "    \"size\": \"%s\",\n", free_size;
+                printf "    \"Size\": \"%s\",\n", free_size_h;
+                printf "    \"size\": \"%s\",\n", free_size_h;
                 printf "    \"size_bytes\": %s,\n", free_bytes;
                 printf "    \"sectors\": %s,\n", free_sectors;
                 printf "    \"start\": %s,\n", free_start;
@@ -38,7 +39,7 @@ case "$action" in
         }'
     ;;
     lsfdisk)
-        sfdisk -l "$1" | awk '
+        sfdisk -l "$1" 2>/dev/null | awk '
         function get_filesystem_type(id, type_desc) {
             # 根据分区ID和描述判断文件系统类型
             if (id == "83") return "ext4";
@@ -70,13 +71,14 @@ case "$action" in
         }
 
         BEGIN {
-            print "[";
             print "  {";
             print "    \"disk\": {";
             first_part = 1;
+            disk_fields_added = 0;
         }
 
         /^Disk \/dev\// {
+            # Disk /dev/sdb: 57.73 GiB, 61991813632 bytes, 121077761 sectors
             path = $2; gsub(/:/, "", path);
             size_value = $3;
             size_unit = $4;
@@ -85,52 +87,102 @@ case "$action" in
             printf "      \"device\": \"%s\",\n", path;
             printf "      \"size\": \"%s %s\",\n", size_value, size_unit;
             printf "      \"total_sectors\": %s", $7;
+            disk_fields_added = 1;
             next;
         }
 
         /^Disk model:/ {
-            model = substr($0, index($0, ":") + 2);
-            printf ",\n      \"model\": \"%s\"", model;
-            next;
+            # Disk model: DataTraveler 3.0
+            sub(/^Disk model:[[:space:]]*/, "", $0)
+            if (disk_fields_added) {
+                printf ",\n      \"model\": \"%s\"", $0
+            } else {
+                printf "      \"model\": \"%s\"", $0
+            }
+            next
         }
 
         /^Disklabel type:/ {
+            # Disklabel type: dos
             printf ",\n      \"partition_table\": \"%s\"", $3;
             next;
         }
 
-        /^\/dev\// {
+        /Sector.*size/ {
+            # Sector size (logical/physical): 512 bytes / 512 bytes
+            match($0, /([0-9]+) bytes.*\/([0-9]+) bytes/, arr)
+            if (arr[1] != "") {
+                logical_sector = arr[1] + 0
+                physical_sector = (arr[2] != "" ? arr[2] + 0 : logical_sector)
+            }
+            next
+        }
+
+        /^\/dev\// && !/^Device/ {
             if (first_part) {
                 printf ",\n      \"sector_size\": {\n";
-                printf "        \"logical\": 512,\n";
-                printf "        \"physical\": 512\n";
+                printf "        \"logical\": %d,\n", logical_sector;
+                printf "        \"physical\": %d\n", physical_sector;
                 printf "      }";
-                print "\n    },";
-                print "    \"partitions\": [";
+                printf "\n    },\n";
+                printf "    \"partitions\": [";
                 first_part = 0;
             } else {
                 printf ",\n";
             }
 
+            # 清理和分割字段
+            gsub(/  +/, " ", $0);
+            gsub(/^ /, "", $0);
             n = split($0, fields, " ");
-            bootable = (fields[2] == "*") ? "boot" : "";
-            start_field = (fields[2] == "*") ? 3 : 2;
+
+            # 检查启动标记
+            has_boot = (fields[2] == "*") ? 1 : 0;
+            start_idx = 2 + has_boot;
+
+
+            # 清理数字字段
+            for (i = start_idx; i <= start_idx + 2; i++) {
+                gsub(/[^0-9]/, "", fields[i]);
+                fields[i] = fields[i] + 0;  # 转换为数字
+            }
 
             printf "      {\n";
             printf "        \"number\": \"%s\",\n", fields[1];
-            printf "        \"start\": \"%s\",\n", fields[start_field];
-            printf "        \"end\": \"%s\",\n", fields[start_field+1];
-            printf "        \"size\": \"%s\",\n", fields[start_field+2];
-            printf "        \"Size\": \"%s\",\n", fields[start_field+3];
+            printf "        \"start\": %d,\n", fields[start_idx];
+            printf "        \"end\": %d,\n", fields[start_idx + 1];
+            printf "        \"size\": %d,\n", fields[start_idx + 2];
+            printf "        \"Size\": \"%s\",\n", fields[start_idx + 3];
             printf "        \"type\": \"primary\",\n";
-            printf "        \"fileSystem\": \"%s\"\n", get_filesystem_type(fields[start_field+4], fields[start_field+5]);
+
+            # 合并类型描述
+            type_desc = "";
+            for (i = start_idx + 5; i <= n; i++) {
+                type_desc = type_desc (type_desc ? " " : "") fields[i];
+            }
+
+            # 清理ID字段
+            id = fields[start_idx + 4];
+            gsub(/[^0-9a-fA-F]/, "", id);
+
+            printf "        \"fileSystem\": \"%s\"\n", get_filesystem_type(id, type_desc);
             printf "      }";
             next;
         }
 
         END {
-            print "\n    ]";
-            print "  }]";
+            if (first_part) {
+                # 没有分区的情况
+                printf ",\n      \"sector_size\": {\n";
+                printf "        \"logical\": %d,\n", logical_sector;
+                printf "        \"physical\": %d\n", physical_sector;
+                printf "      }";
+                printf "\n    },\n";
+                printf "    \"partitions\": []\n";
+            } else {
+                printf "\n    ]\n";
+            }
+            print "  }";
         }'
     ;;
     mount_dev)
@@ -183,7 +235,7 @@ case "$action" in
     ;;
     parted)
         /sbin/parted -s "$1" unit s print free | awk '
-        BEGIN {print "[{"; disk_printed = 0; first_part = 1}
+        BEGIN {print "{"; disk_printed = 0; first_part = 1}
 
         /^Model:/ {
             model = substr($0, 7)
@@ -198,6 +250,7 @@ case "$action" in
         }
 
         /Sector size/ {
+            # Sector size (logical/physical): 512B/512B
             if (match($0, /([0-9]+)B\/([0-9]+)B/)) {
                 logical = substr($0, RSTART, RLENGTH)
                 split(logical, arr, "/")
@@ -242,11 +295,11 @@ case "$action" in
 
             if ($1 ~ /^[0-9]+$/) {
                 # 正常分区
-                number = $1
-                start = $2; end = $3; size = $4
-                type = ($5 == "" ? "primary" : $5)
-                fs = ($6 == "" ? "" : $6)
-                flags_val = ($7 == "" ? "" : $7)
+                type = ""
+                number = $1; start = $2; end = $3; size = $4; fs = $5; flags_val = "";
+                if (pt == "msdos") {
+                    type = $5; fs = $6; flags_val = ($7 == "" ? "" : $7)
+                }
 
                 # 移除's'后缀
                 sub(/s$/, "", start)
@@ -256,22 +309,22 @@ case "$action" in
                 printf "    {\"number\": %d, \"start\": \"%s\", \"end\": \"%s\", \"size\": \"%s\", \"type\": \"%s\", \"fileSystem\": \"%s\", \"flags\": \"%s\"}", number, start, end, size, type, fs, flags_val
             } else {
                 # Free Space
-                start = $1; end = $2; size = $3
+                start = $1; end = $2; size = $3; fs = substr($0, index($0, $4));
 
                 # 移除's'后缀
                 sub(/s$/, "", start)
                 sub(/s$/, "", end)
                 sub(/s$/, "", size)
 
-                printf "    {\"number\": null, \"start\": \"%s\", \"end\": \"%s\", \"size\": \"%s\", \"type\": \"Free Space\", \"fileSystem\": \"\", \"flags\": \"\"}", start, end, size
+                printf "    {\"number\": null, \"start\": \"%s\", \"end\": \"%s\", \"size\": \"%s\", \"fileSystem\": \"%s\"}", start, end, size, fs
             }
         }
 
         END {
             if (disk_printed) {
-                print "\n  ]\n}]"
+                print "\n  ]\n}"
             } else {
-                print "}]"
+                print "}"
             }
         }'
     ;;
@@ -309,67 +362,5 @@ case "$action" in
 
         echo "不支持的设备类型：$devtype"
         exit 1
-    ;;
-    format)
-        device="$1"
-        fstype="${2:-ext4}"
-        label="$3"
-
-        # OpenWrt安全检查
-        [ ! -b "$device" ] && echo "错误：设备不存在" && exit 1
-        [[ "$device" == /dev/root* || "$device" == /dev/mtd* ]] && echo "错误：系统设备禁止格式化" && exit 1
-
-        # 卸载设备
-        umount -f "$device" 2>/dev/null
-        grep "^$device" /proc/mounts | cut -d' ' -f2 | while read mp; do
-            umount -l "$mp" 2>/dev/null
-        done
-
-        echo "正在格式化 $device 为 $fstype..."
-
-        # 格式化
-        case "$fstype" in
-            ext4|ext2|ext3)
-                opts="-F"
-                [ -n "$label" ] && opts="$opts -L $label"
-                if mkfs.$fstype $opts "$device" 2>/dev/null; then
-                    echo "格式化完成：$fstype${label:+ (标签: $label)}"
-                else
-                    echo "错误：格式化失败，请检查设备"
-                    exit 1
-                fi
-                ;;
-            vfat|fat32)
-                opts="-F 32"
-                [ -n "$label" ] && opts="$opts -n $label"
-                if mkfs.vfat $opts "$device" 2>/dev/null; then
-                    echo "格式化完成：FAT32${label:+ (标签: $label)}"
-                else
-                    echo "错误：FAT32格式化失败"
-                    exit 1
-                fi
-                ;;
-            ntfs)
-                [ -n "$label" ] && opts="-f -L $label" || opts="-f"
-                if mkfs.ntfs $opts "$device" 2>/dev/null; then
-                    echo "格式化完成：NTFS${label:+ (标签: $label)}"
-                else
-                    echo "错误：NTFS格式化失败，请安装ntfs-3g"
-                    exit 1
-                fi
-                ;;
-            xfs)
-                [ -n "$label" ] && opts="-f -L $label" || opts="-f"
-                if mkfs.xfs $opts "$device" 2>/dev/null; then
-                    echo "格式化完成：XFS${label:+ (标签: $label)}"
-                else
-                    echo "错误：XFS格式化失败"
-                    exit 1
-                fi
-                ;;
-            *) echo "错误：不支持的文件系统: $fstype" && exit 1 ;;
-        esac
-
-        exit 0
     ;;
 esac
