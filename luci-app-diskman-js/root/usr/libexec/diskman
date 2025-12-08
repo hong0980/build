@@ -146,9 +146,10 @@ case "$action" in
                 gsub(/[^0-9]/, "", fields[i]);
                 fields[i] = fields[i] + 0;  # 转换为数字
             }
+            sub(/.*[^0-9]/, "", fields[1])
 
             printf "      {\n";
-            printf "        \"number\": \"%s\",\n", fields[1];
+            printf "        \"number\": %d,\n", fields[1];
             printf "        \"start\": %d,\n", fields[start_idx];
             printf "        \"end\": %d,\n", fields[start_idx + 1];
             printf "        \"size\": %d,\n", fields[start_idx + 2];
@@ -190,20 +191,32 @@ case "$action" in
         mp="$2"
 
         mkdir -p "$mp"
-        fstype=$(blkid -o value -s TYPE "$dev" 2>/dev/null)
 
-        if echo "$fstype" | grep -qE 'vfat|fat|exfat'; then
-            opts="rw,noatime,utf8=1,flush,uid=0,gid=0,dmask=000,fmask=111"
-        else
-            opts="rw,noatime"
-        fi
+        case $(blkid -o value -s TYPE "$dev" 2>/dev/null) in
+            udf|iso9660)
+                opts="ro,noatime"
+                ;;
+            ntfs)
+                opts="rw,noatime,uid=0,gid=0,dmask=000,fmask=111"
+                ;;
+            vfat|exfat)
+                opts="rw,noatime,utf8=1,flush,uid=0,gid=0,dmask=000,fmask=111"
+                ;;
+            "")
+                echo "无法确定 $dev 的文件系统类型"
+                rmdir "$mp" 2>/dev/null
+                exit 1
+                ;;
+            *)
+                opts="rw,noatime"
+                ;;
+        esac
 
         if mount -o "$opts" "$dev" "$mp" 2>&1; then
-            echo "__OK__ $dev → $mp"
+            echo "__OK__"
             exit 0
         else
             rmdir "$mp" 2>/dev/null
-            echo "__ERR__ $out"
             exit 1
         fi
     ;;
