@@ -16,6 +16,16 @@ case "$action" in
             gsub(/,/, "", free_size);
             gsub(/,/, "", free_bytes);
         }
+
+        /Sector.*size/ {
+            gsub(/[^0-9 ]/, " ")      # 只保留数字和空格
+            gsub(/ +/, " ")           # 合并空格
+            split($0, a, " ")         # 拆分字段
+            logical = a[1] + 0
+            physical = (a[2] ? a[2] + 0 : logical_sector)
+            next
+        }
+
         /^[0-9]/ && NF == 4 {
             # 行6: "4517888 121077760 116559873 55.6G"
             free_start = $1;
@@ -24,18 +34,17 @@ case "$action" in
             free_size_h = $4;
         }
         END {
-            if (free_sectors) {
-                print "{";
-                print "  \"free_space\": {";
-                printf "    \"Size\": \"%s\",\n", free_size_h;
-                printf "    \"size\": \"%s\",\n", free_size_h;
-                printf "    \"size_bytes\": %s,\n", free_bytes;
-                printf "    \"sectors\": %s,\n", free_sectors;
-                printf "    \"start\": %s,\n", free_start;
-                printf "    \"end\": %s\n", free_end;
-                print "  }";
-                print "}";
-            }
+            print "{";
+            print "  \"free_space\": {";
+            printf "    \"logical\": %d,\n", logical;
+            printf "    \"physical\": %d,\n", physical;
+            printf "    \"Size\": \"%s\",\n", free_size_h;
+            printf "    \"size\": \"%s\",\n", free_size_h;
+            printf "    \"size_bytes\": %s,\n", free_bytes;
+            printf "    \"sectors\": %s,\n", free_sectors;
+            printf "    \"start\": %s,\n", free_start;
+            printf "    \"end\": %s\n", free_end;
+            print "  }}";
         }'
     ;;
     lsfdisk)
@@ -149,7 +158,7 @@ case "$action" in
             sub(/.*[^0-9]/, "", fields[1])
 
             printf "      {\n";
-            printf "        \"number\": %d,\n", fields[1];
+            printf "        \"number\": \"%s\",\n", fields[1];
             printf "        \"start\": %d,\n", fields[start_idx];
             printf "        \"end\": %d,\n", fields[start_idx + 1];
             printf "        \"size\": %d,\n", fields[start_idx + 2];
@@ -185,40 +194,6 @@ case "$action" in
             }
             print "  }";
         }'
-    ;;
-    mount_dev)
-        dev="$1"
-        mp="$2"
-
-        mkdir -p "$mp"
-
-        case $(blkid -o value -s TYPE "$dev" 2>/dev/null) in
-            udf|iso9660)
-                opts="ro,noatime"
-                ;;
-            ntfs)
-                opts="rw,noatime,uid=0,gid=0,dmask=000,fmask=111"
-                ;;
-            vfat|exfat)
-                opts="rw,noatime,utf8=1,flush,uid=0,gid=0,dmask=000,fmask=111"
-                ;;
-            "")
-                echo "无法确定 $dev 的文件系统类型"
-                rmdir "$mp" 2>/dev/null
-                exit 1
-                ;;
-            *)
-                opts="rw,noatime"
-                ;;
-        esac
-
-        if mount -o "$opts" "$dev" "$mp" 2>&1; then
-            echo "__OK__"
-            exit 0
-        else
-            rmdir "$mp" 2>/dev/null
-            exit 1
-        fi
     ;;
     df)
         /bin/df -h | awk '
