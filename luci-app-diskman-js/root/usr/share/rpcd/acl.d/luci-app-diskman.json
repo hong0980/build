@@ -18,6 +18,7 @@
 				"/usr/sbin/blkid": [ "exec" ],
 				"/usr/sbin/sfdisk": [ "exec" ],
 				"/usr/sbin/smartctl": [ "exec" ],
+				"/sbin/mkswap": [ "exec" ],
 				"/usr/sbin/mkfs.fat": [ "exec" ],
 				"/usr/bin/mkfs.btrfs": [ "exec" ],
 				"/usr/sbin/mkfs.ext4": [ "exec" ],
