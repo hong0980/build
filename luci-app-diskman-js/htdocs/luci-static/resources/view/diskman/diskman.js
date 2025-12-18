@@ -178,6 +178,22 @@ function getTemperature(smartData) {
 	return '-';
 };
 
+const multipliers = { 'K': 1024, 'M': 1024 ** 2, 'G': 1024 ** 3, 'T': 1024 ** 4 };
+
+const toSectors = (input, sectorSize = 512) => {
+	if (!input || input === '-') return 0;
+	if (/^\d+$/.test(input)) return parseInt(input);
+
+	const match = input.match(/^([\d.]+)\s*([KMGT]?i?)[B]?$/i);
+	if (match) {
+		const value = parseFloat(match[1]);
+		const unit = match[2].toUpperCase().charAt(0);
+		const bytes = value * (multipliers[unit] || 1);
+		return Math.floor(bytes / sectorSize);
+	}
+	return null;
+};
+
 const sectorsTohuman = (sectors, sectorSize = 512) => {
 	if (sectors <= 0) return '0 B';
 	let bytes = sectors * sectorSize;
@@ -349,14 +365,8 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 			if (size <= 0) return null;
 
 			const unit = match[2].toUpperCase();
-			const units = {
-				'B': 1, 'K': 1024, 'M': 1024 ** 2, 'G': 1024 ** 3,
-				'T': 1024 ** 4, 'P': 1024 ** 5, 'S': SECTOR,
-			};
-
-			if (!units[unit]) return null;
-
-			const bytes = size * units[unit];
+			if (!multipliers[unit]) return null;
+			const bytes = size * multipliers[unit];
 			const sectors = Math.ceil(bytes / SECTOR);
 			return s + sectors - 1;
 		};
@@ -458,11 +468,11 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 
 				for (const p of partitions) {
 					await parted(['mkpart', isMBR ? 'primary' : '', 'ext4', `${p.start}s`, `${p.end}s`].filter(Boolean));
-					await sleep(600);
+					await sleep(500);
 				}
 
 				await partprobe();
-				await sleep(600);
+				await sleep(500);
 
 				if (specificIndex) {
 					const p = partitions[0];
@@ -562,7 +572,7 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 								class: 'btn cbi-button-positive',
 								click: ui.createHandlerFn(this, async () => {
 									const selectedFs = modal.querySelector(`#fs-${i}`).value;
-									await executeOperation([{ start: p.start, end: p.end, fs: selectedFs, devices: i + 1 }]);
+									await executeOperation([{ start: p.start, end: p.end, fs: selectedFs, devices: i + 1 }], true);
 								})
 							}, _('新建'))
 							: E('span', { style: 'flex:1; color:#6c757d;white-space:nowrap' }, _('现有分区'))
@@ -897,6 +907,9 @@ return view.extend({
 		// const COLORS = ["#ffc8dd", "#bde0fe", "#ffafcc", "#a2d2ff", "#cdb4db"];
 
 		res.forEach(([lsblk, smart, df, mount, parted, sfdisk], i) => {
+			const disk = parted.disk;
+			const partitions = parted.partitions;
+			const children = lsblk.children || [lsblk];
 			const health = !smart.nosmart
 				? (smart.smart_status.passed ? '正常' : '警告')
 				: (smart?.error ? 'SMART错误' : '不支持');
@@ -904,8 +917,6 @@ return view.extend({
 			const healthElement = E('span', {
 				style: `background:${healthColor};color:#fff;padding:2px 6px;border-radius:3px;font-size:12px;`
 			}, health);
-			const children = lsblk.children || [lsblk];
-			const partitions = parted.partitions;
 			const editButton = E('button', {
 				class: 'btn cbi-button-edit',
 				click: ui.createHandlerFn(this, () => editdev(lsblk, smart, df, parted, sfdisk))
@@ -942,36 +953,49 @@ return view.extend({
 				ejectButton, editButton
 			]);
 
-			const lsblkMap = {}, mountpointsMap = [];
-			children.forEach(i => {
-				if (i.path && i.path.startsWith(lsblk.path)) {
-					const partitionNum = i.name.replace(/^[a-z]+/, '');
-					lsblkMap[partitionNum] = {
-						path: i.path, size: i.size,
-						fstype: i.fstype, mountpoints: i.mountpoints
-					};
+			const allParts = partitions.map(p => {
+				const child = children.find(c => {
+					const match = c.path?.match(/\d+$/);
+					return match && match[0] === p.number?.toString();
+				});
 
-					if (i.mountpoints.length === 0 && i.fstype) {
-						mountpointsMap.push({
-							fstype: i.fstype, Size: i.size,
-							Filesystem: i.path, isUnmounted: true
-						});
-					}
+				return {
+					end: p.end,
+					start: p.start,
+					number: p.number,
+					path: child?.path || '',
+					mountpoints: child?.mountpoints || [],
+					fileSystem: child?.fstype || p.fileSystem,
+					size: child?.size ? toSectors(child.size) : p.size
+				};
+			});
+
+			const mountpointsMap = [], noPartitions = partitions.length === 0;
+			children.forEach(i => {
+				if (i.mountpoints.length === 0 && i.fstype) {
+					mountpointsMap.push({
+						Size: i.size,
+						fstype: i.fstype,
+						Filesystem: i.path,
+						isUnmounted: true
+					});
+				}
+
+				if (noPartitions) {
+					allParts.push({
+						path: i.path,
+						fileSystem: i.fstype,
+						size: toSectors(i.size),
+						mountpoints: i.mountpoints || []
+					});
 				}
 			});
 
-			const allParts = [...partitions];
-			if (sfdisk?.free_space.sectors > 0) {
-				allParts.push({
-					fstype: null,
-					mountpoints: null,
-					name: 'Free Space',
-					type: 'Free Space',
-					size: sfdisk.free_space.size
-				});
+			if (sfdisk?.free_space.sectors > 0 && disk.partition_table === 'unknown') {
+				allParts.push({ fileSystem: 'Free Space', size: sfdisk.free_space.sectors });
 			};
 
-			const maxEnd = parseInt(parted.disk.total_sectors || 0);
+			const maxEnd = parseInt(disk.total_sectors || 0);
 			const parts = allParts.map(p => ({
 				p, width: Math.max(
 					(maxEnd > 0 ? (p.size / maxEnd) * 100 : 0),
@@ -985,9 +1009,8 @@ return view.extend({
 					? 'display:flex; width:100vw; min-height:20px; overflow:auto; padding:4px;'
 					: 'display:flex; width:100%; height:16px; overflow:hidden;'
 			}, parts.filter(({ p }, j) => p.size > 2048).map(({ p, width }, j) => {
-				const l = lsblkMap[p.number?.toString()] || {};
 				const color = p.fileSystem !== 'Free Space' ? COLORS[j % 5] : '#ccc';
-				const txt = [l.path, tableTypeMap[l.fstype] || l.fstype, l.size || sectorsTohuman(p.size), [...new Set(l.mountpoints)].join(' ')]
+				const txt = [p.path, tableTypeMap[p.fileSystem] || p.fileSystem, sectorsTohuman(p.size), [...new Set(p.mountpoints)].join(' ')]
 					.filter(x => x && x !== '-' && x !== 'Free Space').join(' ') || ' ';
 				return E('div', {
 					title: txt,
@@ -1000,8 +1023,8 @@ return view.extend({
 			const getMount = (device) => mount.find(m => m.device === device);
 			allMountRows = [...df, ...mountpointsMap].map(item => {
 				const m = getMount(item.Filesystem) || {};
-				const fsType = m.filesystem || item.fstype;
-				let actionBtn;
+				const fsType = m.filesystem || item.fstype || '-';
+				let actionBtn = '-';
 				if (item.isUnmounted) {
 					actionBtn = E('button', {
 						class: 'btn cbi-button-positive',
@@ -1012,8 +1035,6 @@ return view.extend({
 						class: 'btn cbi-button-remove',
 						click: ui.createHandlerFn(this, () => umount_dev(item.Mounted))
 					}, _('Unmount'));
-				} else {
-					actionBtn = '-';
 				};
 
 				return [
@@ -1022,7 +1043,7 @@ return view.extend({
 						style: 'max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;',
 						title: m.mount_point || item.Mounted || ''
 					}, m.mount_point || item.Mounted || '-'),
-					tableTypeMap[fsType] || fsType || '-',
+					tableTypeMap[fsType] || fsType,
 					item.Size || '-',
 					(item.Used && item.Available && item['Use%']) ? `${item.Available}/${item.Used}(${item['Use%']})` : '-',
 					E('span', {
