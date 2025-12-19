@@ -5,7 +5,7 @@
 'require view';
 'require form';
 
-const tableTypeMap = { gpt: 'GPT', msdos: 'MBR', dos: 'MBR', iso9660: 'ISO' };
+const tableTypeMap = { gpt: 'GPT', msdos: 'MBR', dos: 'MBR' };
 const interfaceMap = { sata: 'SATA', nvme: 'NVMe', usb: 'USB', scsi: 'SCSI', ata: 'ATA', sas: 'SAS' };
 const availableFS = {
 	ext4: { cmd: "/usr/sbin/mkfs.ext4", label: "EXT4", args: ["-F", "-E", "lazy_itable_init=1"], labelFlag: "-L" },
@@ -79,7 +79,7 @@ function mount_dev(dev, mountpoints = null) {
 		E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
 			E('label', { style: 'min-width:150px;' }, _('挂载点：')),
 			E('input', {
-				type: 'text', id: 'mount-point-input', style: 'flex:1;padding:6px;',
+				class: 'cbi-input-text', style: 'flex:1;padding:6px;',
 				blur: ui.createHandlerFn(this, ev => mp = ev.target.value.trim()),
 				placeholder: mountpoints?.length > 0 ? _('默认挂载在 %s').format(mountpoints) : ''
 			})
@@ -87,7 +87,7 @@ function mount_dev(dev, mountpoints = null) {
 		E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
 			E('label', { style: 'min-width:150px;' }, _('挂载选项：')),
 			E('input', {
-				type: 'text', id: 'mount-opts-input',
+				class: 'cbi-input-text',
 				style: 'flex:2;padding:6px;', placeholder: _('留空自动挂载'),
 				blur: ui.createHandlerFn(this, ev => opts = ev.target.value.trim())
 			})
@@ -195,7 +195,7 @@ const toSectors = (input, sectorSize = 512) => {
 };
 
 const sectorsTohuman = (sectors, sectorSize = 512) => {
-	if (sectors <= 0) return '0 B';
+	// if (sectors <= 0) return '0 B';
 	let bytes = sectors * sectorSize;
 	const units = ['B', 'KB', 'MB', 'GB', 'TB'];
 	let i = 0;
@@ -214,7 +214,7 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 		};
 
 		const disk = parted.disk;
-		const sectors = parseInt(disk.total_sectors) || 0;
+		const sectors = disk.total_sectors || 0;
 		const health = !smart.nosmart
 			? (smart.smart_status.passed ? '正常' : '警告')
 			: (smart?.error ? 'SMART错误' : '不支持');
@@ -281,49 +281,34 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 			.then(result => {
 				if (sfdisk.free_space) {
 					result.partitions.push({
-						type: '',
-						flags: '',
-						fileSystem: '',
 						number: null,
-						end: String(sfdisk.free_space.end),
-						Size: String(sfdisk.free_space.Size),
-						start: String(sfdisk.free_space.start),
-						size: String(sfdisk.free_space.sectors)
+						start: sfdisk.free_space.start,
+						end: sfdisk.free_space.end,
+						size: sfdisk.free_space.sectors,
+						Size: sfdisk.free_space.Size
 					});
-					result.disk.sector_size.logical = sfdisk.free_space.logical;
-					result.disk.sector_size.physical = sfdisk.free_space.physical;
 				};
-
 				return result;
 			})
 			.catch(() => {});
 	};
 
-	function onreset(partedjson) {
+	function onreset(partedjson, initialstart = null, initialend = null) {
 		let newParts = [];
 		const disk = partedjson.disk || null;
 		const parts = partedjson.partitions || [];
-		const path = disk.device;
 		const pttable = disk.partition_table;
-		const isMBR = pttable === 'msdos';
-		const SECTOR = (disk.sector_size && disk.sector_size.logical)
-			? parseInt(disk.sector_size.logical) : 512;
+		let ptSelect = pttable;
+		const isMBR = tableTypeMap[pttable] === 'MBR';
+		const maxEnd = disk.total_sectors || 0;
+		const SECTOR = disk.sector_size.logical || 512;
 		const ALIGN = Math.ceil((1 * 1024 * 1024) / SECTOR);
-		const maxEnd = parseInt(disk.total_sectors || 0);
 		const maxUsable = Math.max(0, maxEnd - 1024 - (isMBR ? 1 : 34));
-
-		const parseIntSafe = v => (v === null || v === undefined) ? 0 : parseInt(v);
-		const toBytes = s => Math.floor(parseInt(s || 0) * SECTOR);
-		const allPartitions = parts.map(p => ({
-			number: p.number, start: parseIntSafe(p.start), end: parseIntSafe(p.end),
-			size: parseIntSafe(p.size), fs: p.fileSystem
-		}));
-		const existing = allPartitions.filter(p => p.number != null && p.size > 0);
+		const existing = parts.filter(p => p.number != null && p.size > 0);
+		const lastEnd = parts.filter(p => p.size >= 2048).at(-1)?.end || 0;
 		const existingUsed = existing.reduce((sum, p) => sum + p.size, 0);
-		const freeSectors = Math.max(0, maxUsable - existingUsed);
-		if ((toBytes(freeSectors) / 1024 / 1024) < 10)
+		if (Math.max(0, maxUsable - existingUsed) < 20480)
 			return modalnotify(null, E('p', _('磁盘太小')), 5000, 'warning');
-
 		const getLastEnd = () => {
 			const all = [...existing.map(p => p.end), ...newParts.map(p => p.end)];
 			return all.length ? Math.max(...all) : -1;
@@ -370,47 +355,29 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 			const sectors = Math.ceil(bytes / SECTOR);
 			return s + sectors - 1;
 		};
-		const updateUI = () => {
-			addBtn.disabled = !hasSpace() || checkMBR();
-			addBtn.title = checkMBR()
-				? 'MBR最多4个主分区'
-				: `可用: ${sectorsTohuman(getFreeSectors())}`;
+		const updateUI = (e) => {
+			addBtn.title = checkMBR() ? _('MBR最多4个主分区') : '';
+			addBtn.disabled = !hasSpace() || checkMBR() || maxUsable === e;
+			addBtn.innerHTML = _('添加分区  <span style="color:red">剩余: %s</span>')
+				.format(sectorsTohuman(maxUsable - e) || 0);
 		};
 		const addRow = (fs, start = null, end = null) => {
-			if (checkMBR()) return modalnotify(null, E('p', _('MBR最多4个主分区')), 5000, 'warning');
 			if (!hasSpace()) return modalnotify(null, E('p', _('空间不足')), 5000, 'error');
+			if (checkMBR()) return modalnotify(null, E('p', _('MBR最多4个主分区')), 5000, 'warning');
 
 			start = start !== null ? start : getNextStart();
-			if (start >= maxUsable) return modalnotify(null, E('p', _('起始扇区超出容量')), 5000, 'error');
 			end = end !== null ? Math.min(end, maxUsable) : maxUsable;
-
+			// start = start !== null ? start : parts.length >= 1 ? initialstart : getNextStart();
+			// end = end !== null
+			// 	? Math.min(end, maxUsable) === lastEnd
+			// 		? initialend
+			// 		: Math.min(end, maxUsable)
+			// 	: maxUsable;
+			if (start >= maxUsable) return modalnotify(null, E('p', _('起始扇区超出容量')), 5000, 'error');
 			const part = { id: 'p-' + Math.random().toString(36).slice(2), start, end, fs };
 			if (checkOverlap(part)) return modalnotify(null, E('p', _('分区重叠')), 5000, 'error');
 
 			newParts.push(part);
-
-			const row = E('div', {
-				'data-id': part.id,
-				style: 'display:flex;align-items:center;gap:8px;margin:8px 0;padding:8px;background:white;border-radius:4px;'
-			}, [
-				E('input', {
-					type: 'text', class: 'cbi-input-text', style: 'flex:4; width:100%; box-sizing:border-box;',
-					value: start, title: `起始: ${start} (${sectorsTohuman(start)})`
-				}),
-				E('input', {
-					type: 'text', class: 'cbi-input-text', style: 'flex:3; width:100%; box-sizing:border-box;',
-					value: end, title: `结束: ${end} (${sectorsTohuman(end)}) | 大小: ${sectorsTohuman(end - start + 1)}`
-				}),
-				E('select', {
-					class: 'cbi-input-select', style: 'flex:2; width:100%; box-sizing:border-box;',
-				}, Object.keys(availableFS).map(k =>
-					E('option', { value: k, selected: k === fs ? '' : null }, availableFS[k].label)
-				)),
-				E('button', { class: 'btn cbi-button-remove', style: 'flex:1;' }, _('删除'))
-			]);
-
-			const [startInput, endInput, fsSel, delBtn] = row.children;
-
 			const update = () => {
 				const s = parseInt(startInput.value) || part.start;
 				let e = parseSize(endInput.value, s);
@@ -422,16 +389,37 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 				if (e <= s) return modalnotify(null, E('p', _('结束扇区必须大于起始扇区')), 5000, 'error');
 				const temp = { id: part.id, start: s, end: e, fs: fsSel.value };
 				if (checkOverlap(temp, part.id)) {
-					modalnotify(null, E('p', _('分区重叠')), 5000, 'error');
-					startInput.value = part.start;
 					endInput.value = part.end;
-					return;
+					startInput.value = part.start;
+					return modalnotify(null, E('p', _('分区重叠')), 5000, 'error');
 				}
 				part.start = s; part.end = e; part.fs = fsSel.value;
 				startInput.title = `起始位置: ${sectorsTohuman(s)}`;
-				endInput.title = `分区大小: ${sectorsTohuman(e - s + 1)}`;
-				updateUI();
+				endInput.title = `大小: ${sectorsTohuman(e - s + 1)} | 结束: ${e}`
+				updateUI(e);
 			};
+
+			const row = E('div', {
+				'data-id': part.id,
+				style: 'display:flex;align-items:center;gap:8px;margin:8px 0;padding:8px;background:white;border-radius:4px;'
+			}, [
+				E('input', {
+					class: 'cbi-input-text', style: 'flex:4; width:100%; box-sizing:border-box;',
+					value: start, title: `起始: ${start} (${sectorsTohuman(start)})`
+				}),
+				E('input', {
+					class: 'cbi-input-text', style: 'flex:3; width:100%; box-sizing:border-box;',
+					value: end, title: `大小: ${sectorsTohuman(end - start + 1)} | 结束: ${end}`
+				}),
+				E('select', {
+					class: 'cbi-input-select', style: 'flex:2; width:100%; box-sizing:border-box;',
+				}, Object.keys(availableFS).map(k =>
+					E('option', { value: k, selected: k === fs ? '' : null }, availableFS[k].label)
+				)),
+				E('button', { class: 'btn cbi-button-remove', style: 'flex:1;' }, _('删除'))
+			]);
+
+			const [startInput, endInput, fsSel, delBtn] = row.children;
 
 			[startInput, endInput].forEach(i => { i.onblur = update; i.onchange = update; });
 			endInput.onkeydown = e => {
@@ -449,27 +437,63 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 			};
 
 			partitionsList.appendChild(row);
-			updateUI();
+			updateUI(end);
 			return row;
 		};
 
+		const modal = E('div', { style: 'display:flex;flex-direction:column;gap:15px;font-size:14px;max-width:600px;' }, [
+			E('div', { style: 'background:#fff3cd;border:1px solid #ffeaa7;border-radius:4px;padding:12px;' }, [
+				E('div', { style: 'color:#856404;font-weight:bold;margin-bottom:5px;' }, _('⚠️ 警告：此操作将擦除磁盘所有数据！'))
+			]),
+			existing.length === 0
+				? E('div', { style: 'display:flex;flex-direction:column;gap:12px;' }, [
+					E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
+						E('label', { style: 'min-width:80px;font-weight:bold;' }, _('分区表类型：')),
+						E('select', {
+							style: 'flex:1;padding:6px;',
+							change: ui.createHandlerFn(this, (ev) => ptSelect = ev.target.value)
+						}, ['msdos', 'gpt'].map(pt =>
+							E('option', { value: pt, selected: pt === pttable ? '' : null },
+								_(tableTypeMap[pt]))
+						))
+					]),
+				])
+				: [],
+			E('div', { style: 'display:block;margin-top:10px;border:1px solid #e9ecef;border-radius:4px;padding:15px;background:#f8f9fa;' }, [
+				E('div', { style: 'display:flex;font-weight:bold;margin-bottom:10px;' }, [
+					E('span', { style: 'flex:4;' }, _('起始扇区')),
+					E('span', { style: 'flex:3;' }, _('结束扇区')),
+					E('span', { style: 'flex:2;' }, _('文件系统')),
+					E('span', { style: 'flex:1;' }, _('操作')),
+				]),
+				E('div', { id: 'partitionsList' }),
+				E('button', { id: 'addBtn', class: 'btn cbi-button-add', style: 'width:100%;' }, _('添加分区')),
+			]),
+			E('div', { style: 'display:flex;justify-content:flex-end;gap:10px;margin-top:20px;' }, [
+				E('button', { id: 'confirmBtn', class: 'btn cbi-button-positive important' }, _('确认执行')),
+				E('button', { class: 'btn', click: ui.hideModal }, _('取消'))
+			])
+		]);
+		const addBtn = modal.querySelector('#addBtn');
+		const confirmBtn = modal.querySelector('#confirmBtn');
+		const partitionsList = modal.querySelector('#partitionsList');
+
 		const executeOperation = async (partitions, specificIndex = null) => {
 			ui.showModal(null, E('div', { class: 'spinning' }, _('正在创建分区...')));
-
 			try {
 				const sleep = ms => new Promise(r => setTimeout(r, ms));
 				const parted = args => fs.exec_direct('/sbin/parted', ['-s', path, ...args]);
 				const partprobe = () => fs.exec_direct('/sbin/partprobe', [path]).catch(() => {});
 
-				if (existing.length === 0) {
-					await parted(['mklabel', pttable]);
+				if (ptSelect !== pttable) {
+					await parted(['mklabel', ptSelect]);
 					await sleep(500);
-				}
+				};
 
 				for (const p of partitions) {
 					await parted(['mkpart', isMBR ? 'primary' : '', 'ext4', `${p.start}s`, `${p.end}s`].filter(Boolean));
 					await sleep(500);
-				}
+				};
 
 				await partprobe();
 				await sleep(500);
@@ -490,49 +514,28 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 							return n1 - n2;
 						})
 						.slice(existing.length);
+
 					for (let i = 0; i < devices.length && i < partitions.length; i++) {
 						const fsTool = availableFS[partitions[i].fs] || availableFS.ext4;
 						await fs.exec_direct(fsTool.cmd, [...fsTool.args, devices[i]]);
 						await sleep(300);
-					}
-				}
+					};
+				};
 
 				modalnotify(null, E('p', _('操作成功！')), 3000, 'success');
 				setTimeout(() => location.reload(), 3000);
 			} catch (err) {
 				modalnotify(null, E('p', [_('操作失败：'), E('br'), err.message || String(err)]), 5000, 'error');
 				confirmBtn.disabled = false;
-			}
+			};
 		};
-
-		const modal = E('div', { style: 'display:flex;flex-direction:column;gap:15px;font-size:14px;max-width:600px;' }, [
-			E('div', { style: 'background:#fff3cd;border:1px solid #ffeaa7;border-radius:4px;padding:12px;' }, [
-				E('div', { style: 'color:#856404;font-weight:bold;margin-bottom:5px;' }, _('⚠️ 警告：此操作将擦除磁盘所有数据！'))
-			]),
-			E('div', { style: 'display:block;margin-top:10px;border:1px solid #e9ecef;border-radius:4px;padding:15px;background:#f8f9fa;' }, [
-				E('div', { style: 'display:flex;font-weight:bold;margin-bottom:10px;' }, [
-					E('span', { style: 'flex:4;' }, _('起始扇区')),
-					E('span', { style: 'flex:3;' }, _('结束扇区')),
-					E('span', { style: 'flex:2;' }, _('文件系统')),
-					E('span', { style: 'flex:1;' }, _('操作')),
-				]),
-				E('div', { id: 'partitionsList' }),
-				E('button', { id: 'addBtn', class: 'btn cbi-button-add', style: 'width:100%;' }, _('添加分区')),
-			]),
-			E('div', { style: 'display:flex;justify-content:flex-end;gap:10px;margin-top:20px;' }, [
-				E('button', { id: 'confirmBtn', class: 'btn cbi-button-positive important' }, _('确认执行')),
-				E('button', { class: 'btn', click: ui.hideModal }, _('取消'))
-			])
-		]);
-		const addBtn = modal.querySelector('#addBtn');
-		const confirmBtn = modal.querySelector('#confirmBtn');
-		const partitionsList = modal.querySelector('#partitionsList');
-
-		allPartitions.slice(0, -1)
-			.filter(p => p.fs !== 'Free Space' || p.end - p.start > 2047)
+		parts.slice(0, -1)
+			.filter(p => p.size > 2048)
 			.forEach((p, i) => {
+				let fstype = 'ext4';
 				const isFreeSpace = p.number === null;
 				const disabled = isFreeSpace ? null : 'disabled';
+
 				partitionsList.appendChild(
 					E('div', {
 						style: `display:flex;align-items:center;gap:6px;padding:6px;margin:6px 0;border-radius:2px;border-radius:4px;background: ${isFreeSpace ? 'white' : '#e9ecef'};`
@@ -552,10 +555,10 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 							title: `分区大小: ${sectorsTohuman(p.end - p.start + 1)}`
 						}),
 						E('select', {
-							id: `fs-${i}`,
 							disabled: disabled,
 							class: 'cbi-input-select',
-							style: 'flex:2; background:#f8f9fa;'
+							style: 'flex:2; background:#f8f9fa;',
+							change: ui.createHandlerFn(this, (ev) => fstype = ev.target.value)
 						},
 							isFreeSpace
 								? Object.keys(availableFS).map(k =>
@@ -564,15 +567,14 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 										selected: k === fs || undefined
 									}, availableFS[k].label || k)
 								)
-								: [E('option', { value: p.fs }, p.fs)]
+								: [E('option', { value: p.fileSystem }, p.fileSystem)]
 						),
 						isFreeSpace
 							? E('button', {
 								style: 'flex:1;',
 								class: 'btn cbi-button-positive',
 								click: ui.createHandlerFn(this, async () => {
-									const selectedFs = modal.querySelector(`#fs-${i}`).value;
-									await executeOperation([{ start: p.start, end: p.end, fs: selectedFs, devices: i + 1 }], true);
+									await executeOperation([{ start: p.start, end: p.end, fs: fstype, devices: i + 1 }], true);
 								})
 							}, _('新建'))
 							: E('span', { style: 'flex:1; color:#6c757d;white-space:nowrap' }, _('现有分区'))
@@ -587,8 +589,8 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 			for (let i = 1; i < sorted.length; i++) {
 				if (sorted[i].start <= sorted[i - 1].end) {
 					return modalnotify(null, E('p', _('分区重叠')), 5000, 'error');
-				}
-			}
+				};
+			};
 
 			if (getFreeSectors() < 0) return modalnotify(null, E('p', _('超出磁盘容量')), 5000, 'error');
 
@@ -596,10 +598,10 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 			await executeOperation(sorted);
 		};
 
-		addRow('ext4');
+		// addRow('ext4');
+		updateUI(getLastEnd());
 		ui.showModal(_(('%s 磁盘分区').format(path)), [
-			E('style', ['h4 {text-align:center;color:red;}']),
-			modal
+			E('style', ['h4 {text-align:center;color:red;}']), modal
 		]);
 	};
 
@@ -631,7 +633,7 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 
 	function musttable(parted, df, onSelectionChange) {
 		const dfMap = {};
-		(df || []).forEach(i => {
+		df.forEach(i => {
 			if (i.Filesystem && i.Filesystem.startsWith(path)) {
 				dfMap[i.Filesystem] = {
 					used: i.Used || '-',
@@ -692,9 +694,7 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 								E('label', { style: 'min-width:150px;' }, _('文件系统：')),
 								E('select', {
 									style: 'flex:1;padding:6px;',
-									change: ui.createHandlerFn(this, (ev) => {
-										fstype = ev.target.value || entry.fileSystem;
-									})
+									change: ui.createHandlerFn(this, (ev) => fstype = ev.target.value)
 								}, Object.keys(availableFS).map(k =>
 									E('option', { value: k, selected: k === fstype ? '' : null }, availableFS[k].label))
 								)
@@ -702,7 +702,7 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 							E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
 								E('label', { style: 'min-width:150px;' }, _('分区标签（可选）：')),
 								E('input', {
-									type: 'text', style: 'flex:2;padding:6px;',
+									class: 'cbi-input-text', style: 'flex:2;padding:6px;',
 									blur: ui.createHandlerFn(this, (ev) => label = ev.target.value.trim())
 								})
 							]),
@@ -711,8 +711,8 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 								E('button', {
 									class: 'btn cbi-button-positive important',
 									click: ui.createHandlerFn(this, () => {
-										if (entry.fileSystem === fstype)
-											return modalnotify(null, E('p', _('文件系统相同')), 8000, 'error')
+										// if (entry.fileSystem === fstype)
+										// 	return modalnotify(null, E('p', _('文件系统相同')), 8000, 'error')
 
 										const fsTool = availableFS[fstype] || availableFS.ext4;
 										let finalArgs = [...fsTool.args];
@@ -748,7 +748,7 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 						click: ui.createHandlerFn(this, () => mount_dev(fullDev))
 					}, _('挂载'));
 
-				let singleDeleteButton = E('button', {
+				action.appendChild(E('button', {
 					class: 'btn cbi-button-remove',
 					click: ui.createHandlerFn(this, () => {
 						ui.showModal(_('删除 %s 分区').format(fullDev), [
@@ -763,29 +763,22 @@ function editdev(lsblk, smart, df, parted, jsonsfdisk = null) {
 							])
 						]);
 					})
-				}, _('移除'));
-
-				let partitionCheckbox = E('input', {
+				}, _('移除')));
+				action.appendChild(E('input', {
 					type: 'checkbox',
 					'data-partition': entry.number,
-					style: 'margin-left: 10px; transform: scale(1.2);'
-				});
-
-				partitionCheckbox.addEventListener('change', function () {
-					if (onSelectionChange) {
-						onSelectionChange(entry.number, this.checked);
-					}
-				});
-				action.appendChild(singleDeleteButton);
-				action.appendChild(partitionCheckbox);
+					style: 'margin-left: 10px; transform: scale(1.2);',
+					change: ui.createHandlerFn(this, function (ev) {
+						onSelectionChange(entry.number, ev.target.checked);
+					})
+				}));
 			} else {
-				if (entry.fileSystem === 'Free Space' && entry.size > 2048)
+				if ((entry.fileSystem === null || entry.fileSystem === 'Free Space') && entry.size > 2048)
 					action.appendChild(E('button', {
 						class: 'btn cbi-button-positive',
-						click: ui.createHandlerFn(this, () => onreset(parted))
+						click: ui.createHandlerFn(this, () => onreset(parted, entry.start, entry.end))
 					}, _('新建')));
 			};
-
 			const u = fullDev && dfMap[fullDev] ? dfMap[fullDev] : { used: null, avail: null, percent: '-' };
 
 			return [
@@ -942,7 +935,7 @@ return view.extend({
 				`${lsblk.model.trim()} ${lsblk.vendor.trim()}` || '-',
 				smart.serial_number || '-',
 				lsblk.size || '-',
-				tableTypeMap[lsblk.pttype] || lsblk.pttype || '-',
+				tableTypeMap[lsblk.pttype] || '-',
 				interfaceMap[lsblk.tran] || lsblk.tran || '-',
 				getTemperature(smart),
 				getInterfaceSpeed(smart),
@@ -957,16 +950,16 @@ return view.extend({
 				const child = children.find(c => {
 					const match = c.path?.match(/\d+$/);
 					return match && match[0] === p.number?.toString();
-				});
+				}) || {};
 
 				return {
 					end: p.end,
 					start: p.start,
 					number: p.number,
-					path: child?.path || '',
-					mountpoints: child?.mountpoints || [],
-					fileSystem: child?.fstype || p.fileSystem,
-					size: child?.size ? toSectors(child.size) : p.size
+					path: child.path || '',
+					mountpoints: child.mountpoints || [],
+					fileSystem: p.fileSystem || child.fstype,
+					size: child.size ? toSectors(child.size) : p.size
 				};
 			});
 
@@ -979,7 +972,7 @@ return view.extend({
 						Filesystem: i.path,
 						isUnmounted: true
 					});
-				}
+				};
 
 				if (noPartitions) {
 					allParts.push({
@@ -988,29 +981,29 @@ return view.extend({
 						size: toSectors(i.size),
 						mountpoints: i.mountpoints || []
 					});
-				}
+				};
 			});
 
 			if (sfdisk?.free_space.sectors > 0 && disk.partition_table === 'unknown') {
 				allParts.push({ fileSystem: 'Free Space', size: sfdisk.free_space.sectors });
 			};
 
-			const maxEnd = parseInt(disk.total_sectors || 0);
-			const parts = allParts.map(p => ({
-				p, width: Math.max(
-					(maxEnd > 0 ? (p.size / maxEnd) * 100 : 0),
-					p.fileSystem === 'Free Space' ? 0 : 7
-				)
-			}));
+			const maxEnd = disk.total_sectors || 0;
+			const parts = allParts.filter(p => p.size > 2048).map(p => {
+				const w = maxEnd ? (p.size / maxEnd) * 100 : 0;
+				return { p, width: Math.max(w, p.fileSystem === 'Free Space' ? 0 : 7) };
+			});
+
 			const totalWidth = parts.reduce((sum, { width }) => sum + width, 0);
 			const scale = totalWidth > 100 ? 100 / totalWidth : 1;
+
 			const barWrapper = E('div', {
 				style: window.innerWidth <= 768
 					? 'display:flex; width:100vw; min-height:20px; overflow:auto; padding:4px;'
 					: 'display:flex; width:100%; height:16px; overflow:hidden;'
-			}, parts.filter(({ p }, j) => p.size > 2048).map(({ p, width }, j) => {
-				const color = p.fileSystem !== 'Free Space' ? COLORS[j % 5] : '#ccc';
-				const txt = [p.path, tableTypeMap[p.fileSystem] || p.fileSystem, sectorsTohuman(p.size), [...new Set(p.mountpoints)].join(' ')]
+			}, parts.map(({ p, width }, j) => {
+				const color = p.fileSystem === 'Free Space' ? '#ccc' : COLORS[j % 5];
+				const txt = [p.path, p.fileSystem, sectorsTohuman(p.size), [...new Set(p.mountpoints)].join(' ')]
 					.filter(x => x && x !== '-' && x !== 'Free Space').join(' ') || ' ';
 				return E('div', {
 					title: txt,
@@ -1020,32 +1013,31 @@ return view.extend({
 
 			partitionBars.push({ path: lsblk.path, bar: barWrapper });
 
-			const getMount = (device) => mount.find(m => m.device === device);
-			allMountRows = [...df, ...mountpointsMap].map(item => {
-				const m = getMount(item.Filesystem) || {};
-				const fsType = m.filesystem || item.fstype || '-';
+			const getMount = (d) => mount.find(m => m.device === d);
+			allMountRows = [...df, ...mountpointsMap].map(i => {
+				const m = getMount(i.Filesystem) || {};
 				let actionBtn = '-';
-				if (item.isUnmounted) {
+				if (i.isUnmounted) {
 					actionBtn = E('button', {
 						class: 'btn cbi-button-positive',
-						click: ui.createHandlerFn(this, () => mount_dev(item.Filesystem))
+						click: ui.createHandlerFn(this, () => mount_dev(i.Filesystem))
 					}, _('挂载'));
-				} else if (!/^\/(overlay|rom|tmp(?:\/.+)?|dev(?:\/.+)?|)$/.test(item.Mounted)) {
+				} else if (!/^\/(overlay|rom|tmp(?:\/.+)?|dev(?:\/.+)?|)$/.test(i.Mounted)) {
 					actionBtn = E('button', {
 						class: 'btn cbi-button-remove',
-						click: ui.createHandlerFn(this, () => umount_dev(item.Mounted))
+						click: ui.createHandlerFn(this, () => umount_dev(i.Mounted))
 					}, _('Unmount'));
 				};
 
 				return [
-					m.device || item.Filesystem,
+					m.device || i.Filesystem,
 					E('span', {
 						style: 'max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;',
-						title: m.mount_point || item.Mounted || ''
-					}, m.mount_point || item.Mounted || '-'),
-					tableTypeMap[fsType] || fsType,
-					item.Size || '-',
-					(item.Used && item.Available && item['Use%']) ? `${item.Available}/${item.Used}(${item['Use%']})` : '-',
+						title: m.mount_point || i.Mounted || ''
+					}, m.mount_point || i.Mounted || '-'),
+					m.filesystem || i.fstype || '-',
+					i.Size || '-',
+					(i.Used && i.Available && i['Use%']) ? `${i.Available}/${i.Used}(${i['Use%']})` : '-',
 					E('span', {
 						style: 'max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;',
 						title: m.options || ''

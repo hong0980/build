@@ -9,7 +9,6 @@ case "$action" in
     fsfdisk)
         sfdisk -F "$1" 2>/dev/null | awk '
         /Unpartitioned space/ {
-            # 行1: "Unpartitioned space /dev/sdb: 55.58 GiB, 59678654976 bytes, 116559873 sectors"
             free_size = $4 " " $5;    # "55.58 GiB,"
             free_bytes = $6;          # "59678654976"
             free_sectors = $8;        # "116559873"
@@ -17,34 +16,29 @@ case "$action" in
             gsub(/,/, "", free_bytes);
         }
 
-        /Sector.*size/ {
-            gsub(/[^0-9 ]/, " ")      # 只保留数字和空格
-            gsub(/ +/, " ")           # 合并空格
-            split($0, a, " ")         # 拆分字段
-            logical = a[1] + 0
-            physical = (a[2] ? a[2] + 0 : logical_sector)
+        /Sector.*size.*logical.*physical/ {
+            logical = $4 + 0
+            physical = $7 + 0
             next
         }
 
         /^[0-9]/ && NF == 4 {
-            # 行6: "4517888 121077760 116559873 55.6G"
             free_start = $1;
             free_end = $2;
             free_sectors_num = $3;
             free_size_h = $4;
         }
         END {
-            print "{";
-            print "  \"free_space\": {";
-            printf "    \"logical\": %d,\n", logical;
-            printf "    \"physical\": %d,\n", physical;
-            printf "    \"Size\": \"%s\",\n", free_size_h;
-            printf "    \"size\": \"%s\",\n", free_size_h;
-            printf "    \"size_bytes\": %s,\n", free_bytes;
-            printf "    \"sectors\": %s,\n", free_sectors;
-            printf "    \"start\": %s,\n", free_start;
-            printf "    \"end\": %s\n", free_end;
-            print "  }}";
+            print "{\"free_space\": {";
+            printf "  \"logical\": %d,", logical;
+            printf "  \"physical\": %d,", physical;
+            printf "  \"Size\": \"%s\",", free_size_h;
+            printf "  \"size\": \"%s\",", free_size_h;
+            printf "  \"size_bytes\": %s,", free_bytes;
+            printf "  \"sectors\": %s,", free_sectors;
+            printf "  \"start\": %s,", free_start;
+            printf "  \"end\": %s", free_end;
+            print "}}";
         }'
     ;;
     lsfdisk)
@@ -80,92 +74,77 @@ case "$action" in
         }
 
         BEGIN {
-            print "  {";
-            print "    \"disk\": {";
+            print "{\"disk\": {";
             first_part = 1;
             disk_fields_added = 0;
         }
 
         /^Disk \/dev\// {
-            # Disk /dev/sdb: 57.73 GiB, 61991813632 bytes, 121077761 sectors
             path = $2; gsub(/:/, "", path);
             size_value = $3;
             size_unit = $4;
             gsub(/,/, "", size_unit);
 
-            printf "      \"device\": \"%s\",\n", path;
-            printf "      \"size\": \"%s %s\",\n", size_value, size_unit;
-            printf "      \"total_sectors\": %s", $7;
+            printf "  \"device\": \"%s\",\n", path;
+            printf "  \"size\": \"%s %s\",\n", size_value, size_unit;
+            printf "  \"total_sectors\": %s", $7;
             disk_fields_added = 1;
             next;
         }
 
         /^Disk model:/ {
-            # Disk model: DataTraveler 3.0
             sub(/^Disk model:[[:space:]]*/, "", $0)
             if (disk_fields_added) {
-                printf ",\n      \"model\": \"%s\"", $0
+                printf ",\"model\": \"%s\"", $0
             } else {
-                printf "      \"model\": \"%s\"", $0
+                printf " \"model\": \"%s\"", $0
             }
             next
         }
 
         /^Disklabel type:/ {
-            # Disklabel type: dos
-            printf ",\n      \"partition_table\": \"%s\"", $3;
+            printf ",\"partition_table\": \"%s\"", $3;
             next;
         }
 
-        /Sector.*size/ {
-            # Sector size (logical/physical): 512 bytes / 512 bytes
-            match($0, /([0-9]+) bytes.*\/([0-9]+) bytes/, arr)
-            if (arr[1] != "") {
-                logical_sector = arr[1] + 0
-                physical_sector = (arr[2] != "" ? arr[2] + 0 : logical_sector)
-            }
+        /Sector.*size.*logical.*physical/ {
+            logical = $4 + 0
+            physical = $7 + 0
             next
         }
 
         /^\/dev\// && !/^Device/ {
             if (first_part) {
-                printf ",\n      \"sector_size\": {\n";
-                printf "        \"logical\": %d,\n", logical_sector;
-                printf "        \"physical\": %d\n", physical_sector;
-                printf "      }";
-                printf "\n    },\n";
-                printf "    \"partitions\": [";
+                printf ",\"sector_size\": {";
+                printf "  \"logical\": %d,", logical;
+                printf "  \"physical\": %d", physical;
+                printf "}},";
+                printf "  \"partitions\": [";
                 first_part = 0;
             } else {
-                printf ",\n";
+                printf ",";
             }
 
-            # 清理和分割字段
             gsub(/  +/, " ", $0);
             gsub(/^ /, "", $0);
             n = split($0, fields, " ");
 
-            # 检查启动标记
             has_boot = (fields[2] == "*") ? 1 : 0;
             start_idx = 2 + has_boot;
 
-
-            # 清理数字字段
             for (i = start_idx; i <= start_idx + 2; i++) {
                 gsub(/[^0-9]/, "", fields[i]);
                 fields[i] = fields[i] + 0;  # 转换为数字
             }
             sub(/.*[^0-9]/, "", fields[1])
 
-            printf "      {\n";
-            printf "        \"number\": \"%s\",\n", fields[1];
-            printf "        \"start\": %d,\n", fields[start_idx];
-            printf "        \"end\": %d,\n", fields[start_idx + 1];
-            printf "        \"size\": %d,\n", fields[start_idx + 2];
-            printf "        \"Size\": \"%s\",\n", fields[start_idx + 3];
-            printf "        \"type\": \"primary\",\n";
+            printf "{\"number\": %s,", fields[1];
+            printf "  \"start\": %d,", fields[start_idx];
+            printf "  \"end\": %d,", fields[start_idx + 1];
+            printf "  \"size\": %d,", fields[start_idx + 2];
+            printf "  \"Size\": \"%s\",", fields[start_idx + 3];
+            printf "  \"type\": \"primary\",";
 
-            # 合并类型描述
             type_desc = "";
             for (i = start_idx + 5; i <= n; i++) {
                 type_desc = type_desc (type_desc ? " " : "") fields[i];
@@ -175,24 +154,23 @@ case "$action" in
             id = fields[start_idx + 4];
             gsub(/[^0-9a-fA-F]/, "", id);
 
-            printf "        \"fileSystem\": \"%s\"\n", get_filesystem_type(id, type_desc);
-            printf "      }";
+            printf "\"fileSystem\": \"%s\"", get_filesystem_type(id, type_desc);
+            printf "}";
             next;
         }
 
         END {
             if (first_part) {
                 # 没有分区的情况
-                printf ",\n      \"sector_size\": {\n";
-                printf "        \"logical\": %d,\n", logical_sector;
-                printf "        \"physical\": %d\n", physical_sector;
-                printf "      }";
-                printf "\n    },\n";
-                printf "    \"partitions\": []\n";
+                printf ",\"sector_size\": {";
+                printf "  \"logical\": %d,", logical;
+                printf "  \"physical\": %d", physical;
+                printf " }},";
+                printf " \"partitions\": []";
             } else {
-                printf "\n    ]\n";
+                printf "]";
             }
-            print "  }";
+            print "}";
         }'
     ;;
     df)
@@ -294,7 +272,7 @@ case "$action" in
                 sub(/s$/, "", end)
                 sub(/s$/, "", size)
 
-                printf "    {\"number\": %d, \"start\": \"%s\", \"end\": \"%s\", \"size\": \"%s\", \"type\": \"%s\", \"fileSystem\": \"%s\", \"flags\": \"%s\"}", number, start, end, size, type, fs, flags_val
+                printf "    {\"number\": %d, \"start\": %d, \"end\": %d, \"size\": %d, \"type\": \"%s\", \"fileSystem\": \"%s\", \"flags\": \"%s\"}", number, start, end, size, type, fs, flags_val
             } else {
                 # Free Space
                 start = $1; end = $2; size = $3; fs = substr($0, index($0, $4));
@@ -304,7 +282,7 @@ case "$action" in
                 sub(/s$/, "", end)
                 sub(/s$/, "", size)
 
-                printf "    {\"number\": null, \"start\": \"%s\", \"end\": \"%s\", \"size\": \"%s\", \"fileSystem\": \"%s\"}", start, end, size, fs
+                printf "    {\"number\": null, \"start\": %d, \"end\": %d, \"size\": %d, \"fileSystem\": \"%s\"}", start, end, size, fs
             }
         }
 
