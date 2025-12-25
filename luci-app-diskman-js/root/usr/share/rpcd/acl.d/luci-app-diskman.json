@@ -6,11 +6,13 @@
 				"service": [ "list" ]
 			},
 			"file": {
+				"/bin/sh": [ "exec" ],
 				"/bin/df": [ "exec" ],
 				"/bin/echo": [ "exec" ],
 				"/bin/mkdir": [ "exec" ],
 				"/bin/mount": [ "exec" ],
 				"/bin/umount": [ "exec" ],
+				"/sbin/mdadm": [ "exec" ],
 				"/sbin/parted": [ "exec" ],
 				"/usr/bin/btrfs": [ "exec" ],
 				"/usr/bin/lsblk": [ "exec" ],

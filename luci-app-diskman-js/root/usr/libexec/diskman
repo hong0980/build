@@ -294,39 +294,4 @@ case "$action" in
             }
         }'
     ;;
-    rescandisks)
-        echo '- - -' | tee /sys/class/scsi_host/host*/scan > /dev/null && return 0 || return 1
-        /usr/bin/which mdadm > /dev/null && mdadm --assemble --scan
-    ;;
-    reject)
-        device_name="$1"
-        devpath="$2"
-        devtype="$3"
-
-        if grep "^$devpath" /proc/mounts | grep -qvE ' squashfs .* /rom | vfat | exfat | ntfs | fuseblk | iso9660 '; then
-            echo "错误：设备 $devpath 正被内核真正占用，无法弹出！"
-            # echo "挂载情况："
-            # grep "^$devpath" /proc/mounts | awk '{print "  "$1" -> "$2" ("$3")"}'
-            exit 1
-        fi
-
-        if [ "$devtype" = "disk" ]; then
-            if echo 1 > "/sys/block/$device_name/device/delete" 2>/dev/null; then
-                echo "磁盘 $devpath 已安全弹出"
-            else
-                echo "磁盘 $devpath 弹出失败（可能为系统盘或仍在使用）"
-                exit 1
-            fi
-            exit 0
-        fi
-        if echo "$device_name" | grep -Eq '^md[0-9]+'; then
-            mdadm --stop "/dev/$device_name" 2>/dev/null
-            mdadm --remove "/dev/$device_name" 2>/dev/null || true
-            echo "RAID 阵列 /dev/$device_name 已停止并移除"
-            exit 0
-        fi
-
-        echo "不支持的设备类型：$devtype"
-        exit 1
-    ;;
 esac
