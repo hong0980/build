@@ -543,6 +543,279 @@ msgstr "运行时间"
 msgid "Cycles"
 msgstr "通电次数"
 
+msgid "Mounts:"
+msgstr "挂载点："
+
+msgid "Filesystem: %s"
+msgstr "文件系统：%s"
+
+msgid "Size: %s"
+msgstr "大小：%s"
+
+msgid "unnamed partition"
+msgstr "未命名分区"
+
+msgid "Disk %s has been safely ejected"
+msgstr "磁盘 %s 已安全弹出"
+
+msgid "Disk %s failed to eject, %s"
+msgstr "磁盘 %s 弹出失败，%s"
+
+msgid "Unsupported device type: %s"
+msgstr "不支持的设备类型：%s"
+
+msgid "Device %s is still occupied and cannot be ejected"
+msgstr "设备 %s 仍被占用，无法弹出"
+
+msgid "SMART error"
+msgstr "SMART错误"
+
+msgid "Not enough space"
+msgstr "空间不足"
+
+msgid "MBR up to 4 primary partitions"
+msgstr "MBR最多4个主分区"
+
+msgid "Start sector exceeds capacity"
+msgstr "起始扇区超出容量"
+
+msgid "Partition overlap"
+msgstr "分区重叠"
+
+msgid "⚠️ Warning: This operation will erase all data on the disk!"
+msgstr "⚠️ 警告：此操作将擦除磁盘所有数据！"
+
+msgid "Invalid disk device"
+msgstr "无效的磁盘设备"
+
+msgid "No valid partition number specified"
+msgstr "未指定有效分区号"
+
+msgid "Partition deleted successfully"
+msgstr "分区删除成功"
+
+msgid "Operation failed:"
+msgstr "操作失败："
+
+msgid "Modify mount %s"
+msgstr "修改挂载 %s"
+
+msgid "Format %s"
+msgstr "格式化 %s"
+
+msgid "Modify %s file system"
+msgstr "修改 %s 文件系统"
+
+msgid "Are you sure you want to format %s? All data will be cleared!"
+msgstr "确定要格式化 %s 吗？所有数据将被清除！"
+
+msgid "File system:"
+msgstr "文件系统："
+
+msgid "Partition label (optional):"
+msgstr "分区标签（可选）："
+
+msgid "Partition label format is illegal"
+msgstr "分区标签格式非法"
+
+msgid "Formatting..."
+msgstr "正在格式化..."
+
+msgid "Formatting completed"
+msgstr "格式化完成"
+
+msgid "Format failed: %s"
+msgstr "格式化失败： %s"
+
+msgid "mount"
+msgstr "挂载"
+
+msgid "delete partition"
+msgstr "删除分区"
+
+msgid "Delete %s partition"
+msgstr "删除 %s 分区"
+
+msgid "Are you sure you want to delete partition %s? This operation will result in permanent data loss!"
+msgstr "确定要删除分区 %s 吗？此操作将永久丢失数据！"
+
+msgid "Remove"
+msgstr "移除"
+
+msgid "Select batch delete"
+msgstr "选中批量删除"
+
+msgid "device"
+msgstr "设备"
+
+msgid "end sector"
+msgstr "结束扇区"
+
+msgid "type"
+msgstr "类型"
+
+msgid "Used/Idle (usage)"
+msgstr "已用/空闲(用量)"
+
+msgid "Delete %s in batches"
+msgstr "批量删除 %s"
+
+msgid "%s partition management"
+msgstr "%s 分区管理"
+
+msgid "Mount %s"
+msgstr "挂载 %s"
+
+msgid "Mount point:"
+msgstr "挂载点："
+
+msgid "Mounted at %s by default"
+msgstr "默认挂载在 %s"
+
+msgid "Mount options:"
+msgstr "挂载选项："
+
+msgid "Leave blank to automatically mount"
+msgstr "留空自动挂载"
+
+msgid "Please enter the mount point"
+msgstr "请输入挂载点"
+
+msgid "%s is mounted to %s"
+msgstr "%s 已挂载到 %s"
+
+msgid "Mount failed: %s"
+msgstr "挂载失败：%s"
+
+msgid "%s uninstalled successfully"
+msgstr "%s 卸载成功"
+
+msgid "Uninstall failed: %s"
+msgstr "卸载失败：%s"
+
+msgid "Available/used (usage rate)"
+msgstr "可用/已用(使用率)"
+
+msgid "total size"
+msgstr "总大小"
+
+msgid "This operation will overwrite the existing partition. Are you sure you want to modify the %s partition table to %s?"
+msgstr "此操作会覆盖现有分区，确定修改 %s 分区表为 %s？"
+
+msgid "warning"
+msgstr "警告"
+
+msgid "normal"
+msgstr "正常"
+
+msgid "warn! !"
+msgstr "警告！！"
+
+msgid "Partition table modified successfully"
+msgstr "分区表修改成功"
+
+msgid "Operation failed:"
+msgstr "操作失败："
+
+msgid "define"
+msgstr "确定"
+
+msgid "model"
+msgstr "型号"
+
+msgid "serial number"
+msgstr "序号"
+
+msgid "sector size"
+msgstr "扇区大小"
+
+msgid "Creating partition..."
+msgstr "正在创建分区..."
+
+msgid "Operation successful!"
+msgstr "操作成功！"
+
+msgid "Operation failed:"
+msgstr "操作失败："
+
+msgid "Add partition"
+msgstr "添加分区"
+
+msgid "Please add partition"
+msgstr "请添加分区"
+
+msgid "Partition overlap"
+msgstr "分区重叠"
+
+msgid "Disk capacity exceeded"
+msgstr "超出磁盘容量"
+
+msgid "MBR up to 4 primary partitions"
+msgstr "MBR最多4个主分区"
+
+msgid "Add partition <span style="color:red">Remaining: %s</span>"
+msgstr "添加分区 <span style="color:red">剩余: %s</span>"
+
+msgid "Starting position: %s"
+msgstr "起始位置: %s"
+
+msgid "Size: %s"
+msgstr "大小: %s"
+
+msgid "Format not supported (should be e.g. +5M, 10G, 100s or just a number)"
+msgstr "格式不支持（应为例如 +5M、10G、100s 或纯数字）"
+
+msgid "existing partition"
+msgstr "现有分区"
+
+msgid "Partition table type:"
+msgstr "分区表类型："
+
+msgid "%s disk partition"
+msgstr "%s 磁盘分区"
+
+msgid "operate"
+msgstr "操作"
+
+msgid "Delete %s"
+msgstr "删除 %s"
+
+msgid "No disks found"
+msgstr "未找到磁盘"
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
 msgid ""
 msgstr ""
 
