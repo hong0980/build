@@ -753,8 +753,8 @@ msgstr "超出磁盘容量"
 msgid "MBR up to 4 primary partitions"
 msgstr "MBR最多4个主分区"
 
-msgid "Add partition <span style="color:red">Remaining: %s</span>"
-msgstr "添加分区 <span style="color:red">剩余: %s</span>"
+msgid "Add partition <span style='color:red'>Remaining: %s</span>"
+msgstr "添加分区 <span style='color:red'>剩余: %s</span>"
 
 msgid "Starting position: %s"
 msgstr "起始位置: %s"
@@ -783,8 +783,8 @@ msgstr "删除 %s"
 msgid "No disks found"
 msgstr "未找到磁盘"
 
-msgid ""
-msgstr ""
+msgid "Confirm execution"
+msgstr "确认执行"
 
 msgid ""
 msgstr ""

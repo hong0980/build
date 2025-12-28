@@ -556,7 +556,7 @@ return view.extend({
 						class: 'btn cbi-button-positive',
 						click: ui.createHandlerFn(this, () =>
 							mount_dev(i.Filesystem, null, self))
-					}, _('挂载'));
+					}, _('mount'));
 				} else if (!/^\/(overlay|rom|tmp(?:\/.+)?|dev(?:\/.+)?|)$/.test(i.Mounted)) {
 					actionBtn = E('button', {
 						class: 'btn cbi-button-remove',
@@ -656,7 +656,7 @@ return view.extend({
 		return E([
 			E('style', [CSS]),
 			E('h2', _('DiskMan')),
-			E('div', [
+			E('div', { style: 'display: flex; align-items: center; gap: 10px;' }, [
 				E('span', _('Manage Disks over LuCI.')),
 				E('span', {
 					class: 'btn cbi-button-add',
@@ -729,7 +729,7 @@ return view.extend({
 
 			const table = new ui.Table([
 				_('Path'), _('model'), _('serial number'), _('size'), _('sector size'),
-				_('Partition Table'), _('temperature'), _('Speed'), _('status')
+				_('Partition Table'), _('Temp'), _('Rotation Rate'), _('Status')
 			],
 				{ sortable: true, classes: 'cbi-section-table' },
 				E('em', _('No disks found'))
@@ -896,13 +896,13 @@ return view.extend({
 					if (getFreeSectors() < 0) return modalnotify(null, E('p', _('Disk capacity exceeded')), 4000, 'error');
 					await executeOperation(sorted);
 				})
-			}, _('确认执行'));
+			}, _('Confirm execution'));
 			const updateUI = () => {
 				let remaining = Math.max(0, maxUsable - getLastEnd());
 				confirmBtn.disabled = !newParts.length > 0;
 				addBtn.title = checkMBR() ? _('MBR up to 4 primary partitions') : '';
 				addBtn.disabled = !hasSpace() || checkMBR() || remaining === 0;
-				addBtn.innerHTML = _('Add partition <span style="color:red">Remaining: %s</span>')
+				addBtn.innerHTML = _("Add partition <span style='color:red'>Remaining: %s</span>")
 					.format(sectorsTohuman(remaining));
 			};
 
@@ -974,7 +974,7 @@ return view.extend({
 							newParts = newParts.filter(p => p.id !== part.id);
 							refreshTable();
 						}),
-					}, _('删除 %s').format(sectorsTohuman(part.end - part.start + 1)))
+					}, _('Delete %s').format(sectorsTohuman(part.end - part.start + 1)))
 				];
 			};
 
@@ -1149,7 +1149,7 @@ return view.extend({
 					? E('button', {
 						class: 'btn cbi-button-positive important',
 						title: lsblkEntry.mountpoints[0]
-							? _(('Modify mount %s').format([...new Set(lsblkEntry.mountpoints)].join('\n')))
+							? _('Modify mount %s').format([...new Set(lsblkEntry.mountpoints)].join('\n'))
 							: _('mount'),
 						click: ui.createHandlerFn(this, () =>
 							umount_dev(fullDev, true)
@@ -1225,7 +1225,7 @@ return view.extend({
 								])
 							]);
 						})
-					}, _(isPrimary ? _('Format') : (tableTypeMap[fsCell] || fsCell)));
+					}, isPrimary ? _('Format') : (tableTypeMap[fsCell] || fsCell));
 
 					if (mountPoints === '' && entry.fileSystem !== 'primary')
 						mountPoints = E('button', {
@@ -1283,7 +1283,7 @@ return view.extend({
 			});
 
 			const table = new ui.Table([
-				_('device'), _('start sector'), _('end sector'), _('Size'), _('type'),
+				_('device'), _('Start Sector'), _('end sector'), _('Size'), _('type'),
 				_('File System'), _('Used/Idle (usage)'), _('Mount Point'), _('delete partition')
 			],
 				{ sortable: true, classes: 'cbi-section-table' },
@@ -1327,9 +1327,9 @@ return view.extend({
 
 			ui.showModal(_('%s partition management').format(path), [
 				E('style', ['.modal{max-width:1000px;padding:.5em;} h4{text-align:center;padding:9px;background:#f0f0f0;color:red;}']),
-				E('h5', _('Device information')),
+				E('h5', _('Device Info')),
 				disktable(parted, smart),
-				E('h5', _('Partition information')),
+				E('h5', _('Partitions Info')),
 				musttable(parted, df, onSelectionChange),
 				E('div', {
 					id: 'button-container',
