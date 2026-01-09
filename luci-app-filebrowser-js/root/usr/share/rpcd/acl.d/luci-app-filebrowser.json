@@ -1,0 +1,40 @@
+{
+	"luci-app-filebrowser": {
+		"description": "File browser with full read/write operations",
+		"read": {
+			"cgi-io": [ "backup", "download" ],
+			"file": {
+				"/bin/sh": [ "exec" ],
+				"/bin/ls": [ "exec" ],
+				"/bin/mv": [ "exec" ],
+				"/bin/rm": [ "exec" ],
+				"/bin/cp": [ "exec" ],
+				"/bin/ln": [ "exec" ],
+				"/bin/opkg": [ "exec" ],
+				"/bin/echo": [ "exec" ],
+				"/bin/grep": [ "exec" ],
+				"/bin/mkdir": [ "exec" ],
+				"/bin/chmod": [ "exec" ],
+				"/usr/bin/du": [ "exec" ],
+				"/usr/bin/find": [ "exec" ],
+				"/*": [ "list", "read", "stat" ]
+			},
+			"ubus": {
+				"file": [ "exec", "list", "read", "stat" ],
+				"session": [ "access" ]
+			},
+			"uci": [ "filebrowser" ]
+		},
+		"write": {
+			"cgi-io": [ "upload" ],
+			"file": {
+				"/tmp/*": [ "write" ],
+				"/*": [ "write", "remove" ]
+			},
+			"ubus": {
+				"file": [ "exec", "remove", "write" ]
+			},
+			"uci": [ "filebrowser" ]
+		}
+	}
+}

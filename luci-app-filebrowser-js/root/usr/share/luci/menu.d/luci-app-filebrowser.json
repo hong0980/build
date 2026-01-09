@@ -1,0 +1,12 @@
+{
+	"admin/system/filebrowser": {
+		"title": "File management",
+		"action": {
+			"type": "view",
+			"path": "filebrowser/filebrowser"
+		},
+		"depends": {
+			"acl": [ "luci-app-filebrowser" ]
+		}
+	}
+}
