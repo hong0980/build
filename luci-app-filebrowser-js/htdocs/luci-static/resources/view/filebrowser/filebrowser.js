@@ -750,7 +750,7 @@ return view.extend({
 
 		const pathInput = E('input', {
 			class: 'cbi-input-text', style: 'width:150px;', placeholder: '/tmp/c.txt',
-			title: _('绝对路径的文件以及当前目录创建文件(目录)'),
+			title: _('绝对路径的文件以及当前目录创建文件(目录)'), type: 'text',
 			change: ui.createHandlerFn(this, ev => result = this.parsePath(ev.target.value.trim()))
 		});
 
@@ -804,7 +804,7 @@ return view.extend({
 						return fs.exec('/bin/sh', ['-c', cmd]).then(res => {
 							if (res.code !== 0)
 								this.modalnotify(null, E('p', _('Create failed: %s').format(res.stderr)), '', 'error');
-							this.reload(this._cwd);
+							this.reload(this._path);
 							this.showNotification(_('创建成功: %s').format(fullFile), 3000, 'success');
 						});
 					})
@@ -872,7 +872,7 @@ return view.extend({
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
 				E('label', { style: 'min-width:80px;font-weight:bold;' }, _('newname:')),
 				E('input', {
-					id: 'nameinput', style: 'width:100%;',
+					id: 'nameinput', style: 'width:100%;', type: 'text',
 					class: 'cbi-input-text', value: oldname,
 					change: ui.createHandlerFn(this, ev => newname = ev.target.value.trim())
 				}),
@@ -980,7 +980,7 @@ return view.extend({
 	createLink: function (file) {
 		let linkPath = '', isHardLink = false;
 		const pathInput = E('input', {
-			id: 'linkinput', style: 'width:60%;',
+			id: 'linkinput', style: 'width:60%;', type: 'text',
 			class: 'cbi-input-text', placeholder: '/path/to/link',
 			change: ui.createHandlerFn(this, ev => linkPath = ev.target.value.trim())
 		});
