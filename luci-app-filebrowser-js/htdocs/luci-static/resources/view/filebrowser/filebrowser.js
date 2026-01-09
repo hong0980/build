@@ -334,7 +334,7 @@ return view.extend({
 
 		const menu = E('div', { class: 'file-context-menu' });
 		const items = [
-			[_('Refresh Page'), () => this.reload(this._cwd)],
+			[_('Refresh Page'), () => this.reload(this._path)],
 			[_('Create file (directory)'), () => this.createnew()],
 			!file.isDirectory && [_('Edit file'), () => this.showFileEditor(file, true)],
 			!file.isLink && [_('Create link'), () => this.createLink(file)],
@@ -490,7 +490,7 @@ return view.extend({
 				fs.write(path, val).then(() => {
 					L.hideModal();
 					this.showNotification(_('File saved successfully!'), 3000, 'success');
-					this.reload(this._cwd);
+					this.reload(this._path);
 				});
 			})
 		}, _('Save'));
@@ -649,7 +649,7 @@ return view.extend({
 					.then(() => {
 						L.hideModal();
 						this.showNotification(_('File saved successfully!'), 3000, 'success');
-						this.reload(this._cwd);
+						this.reload(this._path);
 					})
 					.catch(error =>
 						this.modalnotify(null, E('p', _('Save failed: %s').format(error.message || error)), '', 'warning'));
@@ -751,8 +751,7 @@ return view.extend({
 		const pathInput = E('input', {
 			class: 'cbi-input-text', style: 'width:150px;', placeholder: '/tmp/c.txt',
 			title: _('绝对路径的文件以及当前目录创建文件(目录)'),
-			change: ui.createHandlerFn(this, ev =>
-				result = this.parsePath(ev.target.value.trim()))
+			change: ui.createHandlerFn(this, ev => result = this.parsePath(ev.target.value.trim()))
 		});
 
 		L.showModal(_('New directory'), [
@@ -784,31 +783,30 @@ return view.extend({
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
 						L.hideModal();
-						const ispath = result.path === result.file;
-						let path = ispath ? this._path + '/' + result.path : result.path;
+						const base = result.isAbsolute ? '' : this._path + '/';
+						const fullDir = result.isDir ? base + result.path : base + result.dir;
+						const fullFile = result.isFile ? base + result.path : (createFileToo ? fullDir : null);
 
-						if (result.dir) {
-							const dir = ispath ? path : result.dir;
-							fs.exec('/bin/mkdir', ['-p', dir, '-m', String(dirPerm)]).then(res => {
-								if (ispath) {
+						if (fullDir) {
+							fs.exec('/bin/mkdir', ['-p', fullDir, '-m', String(dirPerm)]).then(res => {
+								if (!fullFile) {
 									if (res.code !== 0)
-										this.modalnotify(null, E('p', _('目录 %s 创建失败: %s').format(dir, res.stderr)), '', 'error');
-									this.reload(this._cwd);
-									this.showNotification(_('目录 %s 创建成功').format(dir), 3000, 'success');
+										return this.modalnotify(null, E('p', _('目录 %s 创建失败: %s').format(fullDir, res.stderr)), '', 'error');
+									this.reload(this._path);
+									this.showNotification(_('目录 %s 创建成功').format(fullDir), 3000, 'success');
 								}
 							});
 						};
 
-						if (createFileToo) {
-							const content = (window._aceReady && editor) ? editor.getValue() : fileContent;
-							const cmd = `(cat > ${JSON.stringify(path)} <<'EOF'\n${content}\nEOF\n) && /bin/chmod ${filePerm} ${JSON.stringify(path)}`;
-							return fs.exec('/bin/sh', ['-c', cmd]).then(res => {
-								if (res.code !== 0)
-									this.modalnotify(null, E('p', _('Create failed: %s').format(res.stderr)), '', 'error');
-								this.reload(this._cwd);
-								this.showNotification(_('创建成功: %s').format(path), 3000, 'success');
-							});
-						};
+						if (!fullFile) return;
+						const content = (window._aceReady && editor) ? editor.getValue() : fileContent;
+						const cmd = `(cat > ${JSON.stringify(fullFile)} <<'EOF'\n${content}\nEOF\n) && /bin/chmod ${filePerm} ${JSON.stringify(fullFile)}`;
+						return fs.exec('/bin/sh', ['-c', cmd]).then(res => {
+							if (res.code !== 0)
+								this.modalnotify(null, E('p', _('Create failed: %s').format(res.stderr)), '', 'error');
+							this.reload(this._cwd);
+							this.showNotification(_('创建成功: %s').format(fullFile), 3000, 'success');
+						});
 					})
 				}, _('Create')),
 				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
@@ -828,12 +826,10 @@ return view.extend({
 						}
 					};
 				});
-
 			ui.addValidator(pathInput, 'string', false, function (value) {
-				const result = this.parsePath(value.trim());
+				result = this.parsePath(value.trim());
 				if (!result.valid)
 					return result.error ? _(result.error) : _('无效的路径格式');
-
 				return true;
 			}.bind(this), 'blur', 'keyup');
 			this.Draggable();
@@ -841,25 +837,30 @@ return view.extend({
 	},
 
 	parsePath: function (path) {
-		if (/[\0\s<>|?:*";,\\]/.test(path))
+		path = path.trim();
+
+		if (!/^[A-Za-z0-9._\/-]+$/.test(path))
 			return { valid: false, error: _('路径包含非法字符') };
 
 		if (path.split('/').includes('..'))
 			return { valid: false, error: _('路径包含非法段(..)') };
 
-		const match = path.match(/^(.*\/)?([^\/]*)$/);
-		const rawDir = match[1] || false;
-		const file = match[2] || false;
-		const extMatch = path.match(/\.([^.]+)$/);
-		const ext = extMatch ? extMatch[1] : false;
+		const parts = path.split('/');
+		const last = parts.pop() || parts.pop() || '';
+		const isFile = /^[^.].*\.[^.]+$/.test(last) && !path.endsWith('/');
+		const dir = path.endsWith('/') ? path : path.slice(0, path.lastIndexOf('/') + 1);
+		const isAbsolute = path.startsWith('/');
 
-		if (rawDir && !rawDir.startsWith('/'))
-			return { valid: false, error: _('目录路径必须是以/开头') };
-
-		let dir = rawDir;
-		if (!rawDir && file) dir = !ext;
-
-		return { valid: true, dir, file, ext, path };
+		return {
+			valid: true,
+			isFile,
+			isDir: !isFile,
+			dir,
+			file: isFile ? last : '',
+			ext: isFile ? last.replace(/^.*\./, '') : '',
+			path,
+			isAbsolute
+		};
 	},
 
 	renameFile: function (path) {
@@ -886,7 +887,7 @@ return view.extend({
 						fs.exec('/bin/mv', [path, path.replace(/[^/]+$/, newname)]).then(r => {
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Rename failed: %s').format(r.stderr)), '', 'error');
-							this.reload(this._cwd);
+							this.reload(this._path);
 							this.showNotification(_('Renamed: %s').format(newname), 3000, 'success');
 						});
 					})
@@ -925,7 +926,7 @@ return view.extend({
 						fs.exec('/bin/chmod', [n, file.path]).then(r => {
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Permission change failed: %s').format(r.stderr)), '', 'error');
-							this.reload(this._cwd);
+							this.reload(this._path);
 							this.showNotification(_('Permissions updated: %s').format(file.path), 3000, 'success');
 						});
 					})
@@ -961,7 +962,7 @@ return view.extend({
 
 							L.hideModal();
 							this.clearSelectedFiles();
-							this.reload(this._cwd);
+							this.reload(this._path);
 							this.showNotification(
 								files.length === 1
 									? _('Deleted: %s').format(files[0].name)
@@ -978,15 +979,16 @@ return view.extend({
 
 	createLink: function (file) {
 		let linkPath = '', isHardLink = false;
+		const pathInput = E('input', {
+			id: 'linkinput', style: 'width:60%;',
+			class: 'cbi-input-text', placeholder: '/path/to/link',
+			change: ui.createHandlerFn(this, ev => linkPath = ev.target.value.trim())
+		});
 		L.showModal(_('%s Create link').format(file.path), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
 				E('label', { style: 'min-width:80px;font-weight:bold;' }, _('Create link')),
-				E('input', {
-					id: 'linkinput', style: 'width:60%;',
-					class: 'cbi-input-text', placeholder: '/path/to/link',
-					change: ui.createHandlerFn(this, ev => linkPath = ev.target.value.trim())
-				}),
+				pathInput,
 				E('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
 					E('input', {
 						type: 'checkbox', id: 'checkbox',
@@ -1006,14 +1008,24 @@ return view.extend({
 						fs.exec('/bin/ln', args).then(r => {
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Link creation failed: %s').format(r.stderr)), '', 'error');
-							this.reload(this._cwd);
-							this.showNotification(_('Link created successfully: %s').format(file.path), 3000, 'success');
+							this.reload(this._path);
+							this.showNotification(_('%s Link created successfully: %s').format(file.path, linkPath), 3000, 'success');
 						});
 					})
 				}, _('Apply')),
 				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
 			])
 		]);
+		requestAnimationFrame(() => {
+			ui.addValidator(pathInput, 'string', false, function (value) {
+				const result = this.parsePath(value.trim());
+				if (!result.valid)
+					return result.error ? _(result.error) : _('无效的路径格式');
+
+				return true;
+			}.bind(this), 'blur', 'keyup');
+			this.Draggable();
+		});
 	},
 
 	downloadFile: function (input) {
@@ -1161,7 +1173,7 @@ return view.extend({
 				return fs.exec('/bin/mv', [tmp, `${this._path}/${reply.name}`]).then(res => {
 					if (res.code !== 0)
 						return this.modalnotify(null, E('p', _('Upload failed: %s').format(res.stderr)), '', 'error');
-					this.reload(this._cwd);
+					this.reload(this._path);
 					this.showNotification(_('Uploaded: %s').format(`${this._path}/${reply.name}`), 3000, 'success');
 				});
 			}, this, ev.target))
