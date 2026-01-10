@@ -686,6 +686,7 @@ return view.extend({
 	},
 
 	createnew: function () {
+		let modeid = '';
 		let editor = null, result = '', createFileToo = false;
 		let filePerm = 755, dirPerm = 644, fileContent = '', mode = '';
 		const syntaxid = 'syntax-select-' + Date.now();
@@ -702,9 +703,7 @@ return view.extend({
 		const toolbar = E('div', { style: 'margin-top:8px;display:none;' }, [
 			window._aceReady
 				? E('span', [
-					E('p', {
-						class: 'ace-toolbar',
-					}, [
+					E('p', { class: 'ace-toolbar', }, [
 						E('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
 							E('span', _('Syntax')),
 							E('select', {
@@ -751,7 +750,17 @@ return view.extend({
 		const pathInput = E('input', {
 			class: 'cbi-input-text', style: 'width:150px;', placeholder: '/tmp/c.txt',
 			title: _('绝对路径的文件以及当前目录创建文件(目录)'), type: 'text',
-			change: ui.createHandlerFn(this, ev => result = this.parsePath(ev.target.value.trim()))
+			change: ui.createHandlerFn(this, ev => {
+				result = this.parsePath(ev.target.value.trim());
+				modeid = document.getElementById(syntaxid);
+				if (editor && result.valid && result.file) {
+					mode = this.detectFileMode(result.file, null);
+					if (mode) {
+						editor.session.setMode(`ace/mode/${mode}`);
+						if (modeid) modeid.value = mode;
+					}
+				};
+			})
 		});
 
 		L.showModal(_('New directory'), [
@@ -785,7 +794,7 @@ return view.extend({
 						L.hideModal();
 						const base = result.isAbsolute ? '' : this._path + '/';
 						const fullDir = result.isDir ? base + result.path : base + result.dir;
-						const fullFile = result.isFile ? base + result.path : (createFileToo ? fullDir : null);
+						const fullFile = (result.isFile && createFileToo) ? base + result.path : null;
 
 						if (fullDir) {
 							fs.exec('/bin/mkdir', ['-p', fullDir, '-m', String(dirPerm)]).then(res => {
@@ -819,10 +828,9 @@ return view.extend({
 					editor = ed;
 					if (result.valid && result.file) {
 						mode = this.detectFileMode(result.file, null);
-						if (mode) {
+						if (mode && modeid) {
 							editor.session.setMode(`ace/mode/${mode}`);
-							const modeid = document.getElementById(syntaxid);
-							if (modeid) modeid.value = mode;
+							modeid.value = mode;
 						}
 					};
 				});
