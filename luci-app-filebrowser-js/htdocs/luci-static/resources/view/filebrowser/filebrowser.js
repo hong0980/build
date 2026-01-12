@@ -8,6 +8,19 @@ const CSS = `
 .file-name-cell:hover {
 	background: #f5f7fa;
 }
+
+.file-context-menu {
+	margin: 0;
+	padding: 5px 0;
+	position: fixed;
+	z-index: 10000;
+	font-size: 12px;
+	border-radius: 5px;
+	border: 1px solid #dadada;
+	background-color: #f5f5f5;
+	font-family: Arial, sans-serif;
+	box-shadow: 2px 2px 6px rgba(0,0,0,.1);
+}
 .file-context-menu .item {
     color: #333;
     display: block;
@@ -23,9 +36,9 @@ const CSS = `
     border-bottom: 1px solid #ddd;
 }
 .file-checkbox {
+	gap:5px;
 	display:flex;
 	align-items:center;
-	gap:5px;
 }
 .ace-toolbar-select {
 	min-width: 60px !important;
@@ -36,14 +49,63 @@ const CSS = `
 	position: fixed; /* 固定定位 */
 	top: 50px; /* 距离顶部50像素 */
 	right: 0px; /* 距离右侧0像素 */
-	z-index: 1000; /* 层级索引 */
+	z-index: 100; /* 层级索引 */
 	background: #fff; /* 背景色白色 */
 	border: 1px solid #ccc; /* 边框：1像素实线灰色 */
 	border-radius: 5px; /* 边框圆角8像素 */
 	padding: 5px; /* 内边距10像素 */
 }
 
-/* 移动端适配 */
+tr.selected {
+	background-color: #e4efffff;
+}
+.table .th, .table .td {
+	padding: 5px 10px 5px;
+}
+
+.ace-fullscreen {
+	inset: 0;
+	z-index: 9999;
+	position: fixed;
+	background: #fff;
+	display: flex;
+	flex-direction: column;
+}
+
+.ace-fullscreen .ace-editor-container {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.ace-fullscreen .ace-editor-container .ace-wrapper {
+	flex: 1;
+	height: auto !important;
+}
+
+.ace-fullscreen-wrapper > div:last-child {
+	border-top: 1px solid #eee;
+	padding: .5em;
+	background: #fafafa;
+}
+
+.ace-editor-container {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+
+.ace-editor-container > div:last-child {
+	flex: 1 1 auto;
+}
+
+.ace-toolbar {
+	flex: 0 0 auto;padding: 6px 6px;
+}
+.ace-toolbar-select {
+	min-width: 60px !important;
+	max-width: 80px;
+}
 @media (max-width: 768px) {
 	.batch-action-bar {
 		left: 50%;
@@ -53,61 +115,6 @@ const CSS = `
 	.ace-toolbar .cbi-value-field {
 		gap: 6px;
 	}
-}
-.file-context-menu {
-	position: fixed;
-	z-index: 10000;
-	font-size: 12px;
-	border-radius: 5px;
-	margin: 0;
-	padding: 5px 0;
-	border: 1px solid #dadada;
-	background-color: #f5f5f5;
-	font-family: Arial, sans-serif;
-	box-shadow: 2px 2px 6px rgba(0,0,0,.1);
-}
-
-.file-context-menu .item {
-	padding: 4px 12px;
-	cursor: pointer;
-	white-space: nowrap;
-}
-
-.file-context-menu .item:hover {
-	background: #e6e6e6;
-}
-
-tr.selected {
-	background-color: #e4efffff;
-}
-.table .th, .table .td {
-	padding: 5px 10px 5px;
-}
-.screen_button {
-    top: 0; /* 位于父元素顶部 */
-    right: 16px; /* 右侧距离0 */
-    z-index: 99; /* 层级99，处于最顶层 */
-    line-height: 22px; /* 设置行高为22像素 */
-    position: absolute; /* 绝对定位 */
-    cursor: pointer; /* 设置鼠标光标为文本光标 */
-    color: #666; /* 文字颜色为深灰色 */
-    background-color: #ddd; /* 背景颜色为浅灰色 */
-    border-radius: 0px 0px 0px 5px; /* 边框圆角设置，左下角为5像素 */
-    padding: 4px 6px 0 4px; /* 上内边距4px，右内边距6px，下内边距0，左内边距4px */
-}
-.screen_button:hover {
-    background-color: #faf8f8;
-}
-.ace-absolute-fullscreen {
-	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	z-index: 9999;
-	background: #fff;
-	display: flex;
-	flex-direction: column;
 }`;
 
 const permissions = [
@@ -152,24 +159,13 @@ const modes = [
 
 return view.extend({
 	load: function (p = null) {
-		const urlParams = new URLSearchParams(window.location.search);
-		const pathFromUrl = urlParams.get('path');
+		const pathFromUrl = location.hash ? location.hash.slice(1) : null;
 		const path = (p && typeof p === 'string')
 			? p.replace(/\/+/g, '/').replace(/\/$/, '')
 			: (pathFromUrl || '/');
 
-		const newUrl = ('%s?path=%s').format(window.location.pathname, encodeURIComponent(path));
-		window.history.pushState({ path }, '', newUrl);
-		this._path = window.history.state.path;
-
-		if (!this._historyListener) {
-			this._historyListener = event => {
-				if (event.state && event.state.path) {
-					this.load(event.state.path).then(data => this.render(data));
-				}
-			};
-			window.addEventListener('popstate', this._historyListener);
-		}
+		location.hash = path;
+		this._path = path;
 
 		return fs.exec_direct('/bin/ls', ['-Ah', '--full-time', path]).then(out => {
 			const files = [];
@@ -186,16 +182,16 @@ return view.extend({
 				const isLink = perm[0] === 'l';
 
 				files.push({
-					perm: perm, isLink: isLink, isDirectory: isDir,
-					size: isDir ? '' : size, name, owner, date: date,
+					perm: perm, isLink: isLink, isDir,
+					size: isDir ? '' : size, name, owner, date,
 					permissionNum: this.permissionsToOctal(perm),
 					path: path === '/' ? `/${name}` : `${path}/${name}`
 				});
 			});
 
 			files.sort((a, b) => {
-				if (a.isDirectory !== b.isDirectory)
-					return a.isDirectory ? -1 : 1;
+				if (a.isDir !== b.isDir)
+					return a.isDir ? -1 : 1;
 				if (a.isLink !== b.isLink)
 					return a.isLink ? 1 : -1;
 				return a.name.localeCompare(b.name);
@@ -210,9 +206,9 @@ return view.extend({
 		root.innerHTML = '';
 		root.oncontextmenu = ev => { ev.preventDefault(); return false; };
 
-		const files = this.currentFiles = data.files || [];
-		const cwd = data.path || '/';
-		const parts = cwd.split('/').filter(Boolean);
+		this.currentFiles = data.files || [];
+		const files = this.currentFiles;
+		const parts = data.path.split('/').filter(Boolean);
 		let cur = '';
 
 		const crumbs = E('div', [
@@ -233,7 +229,7 @@ return view.extend({
 		]);
 
 		const totalSize = files.reduce((s, f) =>
-			(!f.isDirectory && !f.isLink) ? s + this.parseSizeToBytes(f.size) : s, 0);
+			(!f.isDir && !f.isLink) ? s + this.parseSizeToBytes(f.size) : s, 0);
 
 		const table = new ui.Table(
 			[_('Name'), _('Owner'), _('Size'), _('Change the time'), _('Rights'), _('')],
@@ -242,7 +238,7 @@ return view.extend({
 		);
 
 		table.update(files.map(f => {
-			const icon = f.isDirectory ? '📂' : (f.isLink ? '🔗' : '📄');
+			const icon = f.isDir ? '📂' : (f.isLink ? '🔗' : '📄');
 			const nameText = f.name.length > 18
 				? `${f.name.slice(0, 11)}...${f.name.slice(-7)}`
 				: f.name;
@@ -261,13 +257,13 @@ return view.extend({
 				}, [
 					E('span', {
 						title: f.name,
-						click: f.isDirectory ? ui.createHandlerFn(this, 'reload', f.path) : null,
-						style: `${f.isDirectory ? 'cursor:pointer;color:#0066cc;' : ''}display:inline-block;`
+						click: f.isDir ? ui.createHandlerFn(this, 'reload', f.path) : null,
+						style: `${f.isDir ? 'cursor:pointer;color:#0066cc;' : ''}display:inline-block;`
 					}, `${icon} ${nameText}`)
 				])
 			]);
 
-			const btn = E('div', { style: 'display:flex; gap:3px;' }, [
+			const btn = E('div', { style: 'display:flex;gap:3px;' }, [
 				E('button', {
 					class: 'btn cbi-button-edit', style: 'padding:0 10px',
 					click: ui.createHandlerFn(this, 'renameFile', f.path)
@@ -276,7 +272,7 @@ return view.extend({
 					class: 'btn cbi-button-remove', style: 'padding:0 10px',
 					click: ui.createHandlerFn(this, 'deleteFile', f)
 				}, _('Delete')),
-				!f.isDirectory
+				!f.isDir
 					? E('button', {
 						class: 'btn cbi-button-edit', style: 'padding:0 10px',
 						click: ui.createHandlerFn(this, 'showFileEditor', f, false)
@@ -292,7 +288,7 @@ return view.extend({
 			E('h2', _('File management')),
 			E('p', { style: 'display:flex;justify-content:space-between;align-items:center;margin-top:10px;' }, [
 				crumbs,
-				E('div', { style: 'display:flex; align-items:center; gap:10px;' }, [
+				E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
 					E('span', { style: 'color:#666;font-size:12px;' },
 						_('%d items • Total %s').format(files.length, this.formatSizeHuman(totalSize)))
 				])
@@ -327,6 +323,10 @@ return view.extend({
 		return root;
 	},
 
+	reload: function (p) {
+		return this.load(p).then(d => this.render(d));
+	},
+
 	showContextMenu: function (ev, file) {
 		ev.preventDefault();
 		ev.stopPropagation();
@@ -336,7 +336,7 @@ return view.extend({
 		const items = [
 			[_('Refresh Page'), () => this.reload(this._path)],
 			[_('Create file (directory)'), () => this.createnew()],
-			!file.isDirectory && [_('Edit file'), () => this.showFileEditor(file, true)],
+			!file.isDir && [_('Edit file'), () => this.showFileEditor(file, true)],
 			!file.isLink && [_('Create link'), () => this.createLink(file)],
 			[_('download file'), () => this.downloadFile(file)],
 			[_('Upload'), ev => this.Upload(ev)],
@@ -403,50 +403,44 @@ return view.extend({
 	showAceEditor: function (file, content, path, editable) {
 		const originalContent = content;
 		const containerId = 'ace-' + Date.now();
-		const syntaxid = 'syntax-select-' + Date.now();
+		const syntaxid = 'syntax-' + Date.now();
 		let hasUnsavedChanges = false, editor = null;
 		const mode = this.detectFileMode(file.name, content);
-
-		const info = E('p', {
-			style: 'padding:8px;background:#f0f0f0;border-radius:4px;font-size:12px;'
-		}, [
-			E('span', {}, _('Ace Editor version: %s').format(ace.version)),
-			E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
-			E('span', {}, _('Size: %s').format(file.size)),
-			E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
-			E('span', {}, _('Lines: %d').format(content.split('\n').length)),
-			E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
-			E('span', {}, _('Path: %s').format(path))
-		]);
-
+		const container = E('div', { id: containerId, style: 'width:100%;height:350px;border:1px solid #ccc;' });
 		const changeIndicator = E('span', {
 			style: 'display:none;color:#e74c3c;font-size:22px;margin-left:5px;',
 			title: _('Unsaved changes')
 		}, '●');
 
-		const editCheckbox = E('input', {
-			type: 'checkbox', id: 'editCheckbox',
-			checked: !!editable || undefined,
-			change: ui.createHandlerFn(this, ev => {
+		const saveBtn = E('button', {
+			class: 'btn cbi-button-positive important',
+			style: `display:${editable ? 'block' : 'none'};`,
+			click: ui.createHandlerFn(this, () => {
 				if (!editor) return;
-				const on = ev.target.checked;
-				editor.setReadOnly(!on);
-				saveBtn.style.display = on ? 'block' : 'none';
-				cancelBtn.textContent = on ? _('Cancel') : _('Close');
-				changeIndicator.style.display =
-					(hasUnsavedChanges && on) ? 'inline' : 'none';
+				const val = editor.getValue();
+				if (val === originalContent)
+					return this.modalnotify(null, E('p', _('文档没有变动')), 3000);
+
+				fs.write(path, val).then(() => {
+					L.hideModal();
+					this.showNotification(_('File saved successfully!'), 3000, 'success');
+					this.reload(this._path);
+				});
 			})
-		});
+		}, _('Save'));
 
-		const wrapCheckbox = E('input', {
-			type: 'checkbox', checked: true, id: 'wrapCheckbox',
-			change: ui.createHandlerFn(this, ev => editor && editor.setOption('wrap', ev.target.checked))
-		});
+		const btnFull = E('button', {
+			style: 'margin-left:auto;',
+			class: 'btn', click: toggleFullscreen
+		}, _('全屏'));
 
-		const toolbar = E('div', { class: 'cbi-value ace-toolbar' }, [
-			E('div', {
-				style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;'
-			}, [
+		const btnExit = E('button', {
+			click: toggleFullscreen, class: 'btn',
+			style: 'display:none;margin-left:auto;',
+		}, _('退出全屏'));
+
+		const toolbar = E('div', { class: 'ace-toolbar' }, [
+			E('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
 				E('span', _('Syntax')),
 				E('select', {
 					id: syntaxid, class: 'cbi-input-select ace-toolbar-select',
@@ -470,105 +464,96 @@ return view.extend({
 					E('option', { value: '14', selected: true }, '14px'),
 					E('option', { value: '16' }, '16px')
 				]),
-				wrapCheckbox,
+				E('input', {
+					type: 'checkbox', checked: true, id: 'wrapCheckbox',
+					change: ui.createHandlerFn(this, ev => editor && editor.setOption('wrap', ev.target.checked))
+				}),
 				E('label', { style: 'display:flex;align-items:center;gap:5px;', for: 'wrapCheckbox' }, _('wrap')),
-				editCheckbox,
+				E('input', {
+					type: 'checkbox', id: 'editCheckbox',
+					checked: !!editable || undefined,
+					change: ui.createHandlerFn(this, ev => {
+						if (!editor) return;
+						const on = ev.target.checked;
+						editor.setReadOnly(!on);
+						saveBtn.style.display = on ? 'block' : 'none';
+						changeIndicator.style.display =
+							(hasUnsavedChanges && on) ? 'inline' : 'none';
+					})
+				}),
 				E('label', { style: 'display:flex;align-items:center;gap:5px;', for: 'editCheckbox' }, _('Edit')),
-				changeIndicator,
+				changeIndicator, btnFull, btnExit
 			])
 		]);
 
-		const saveBtn = E('button', {
-			class: 'btn cbi-button-positive important',
-			style: `display:${editable ? 'block' : 'none'};`,
-			click: ui.createHandlerFn(this, () => {
-				if (!editor) return;
-				const val = editor.getValue();
-				if (val === originalContent)
-					return this.modalnotify(null, E('p', _('文档没有变动')), 3000);
-
-				fs.write(path, val).then(() => {
-					L.hideModal();
-					this.showNotification(_('File saved successfully!'), 3000, 'success');
-					this.reload(this._path);
-				});
-			})
-		}, _('Save'));
-
-		const cancelBtn = E('button', {
-			class: 'btn cbi-butto', click: L.hideModal
-		}, editable ? _('Cancel') : _('Close'));
-
-		const copyBtn = E('button', {
-			class: 'btn cbi-button-positive',
-			click: ui.createHandlerFn(this, () => editor && this.copyText(editor.getValue()))
-		}, _('Copy'));
-
-		const btnFullscreen = E('div', {
-			class: 'screen_button', title: _('全屏'), click: toggleFullscreen
-		}, '⤢');
-
-		const btnExit = E('div', {
-			class: 'screen_button', style: 'display:none;',
-			click: toggleFullscreen, title: _('退出全屏')
-		}, '⤡');
-
-		const aceWrapper = E('div', { style: 'position:relative;width:100%;height:350px;' }, [
-			E('div', {
-				id: containerId, style: 'width:100%;height:100%;border:1px solid #ccc;'
-			}), btnFullscreen, btnExit
+		const fullscreenWrapper = E('div', { class: 'ace-fullscreen-wrapper' }, [
+			E('div', { class: 'ace-editor-container', style: 'width:auto;' }, [
+				toolbar, container
+			]),
+			E('div', { style: 'display:flex;gap:.5em;justify-content:space-around;' }, [
+				E('button', {
+					class: 'btn cbi-button-positive',
+					click: ui.createHandlerFn(this, () => editor && this.copyText(editor.getValue()))
+				}, _('Copy')),
+				saveBtn,
+				E('button', {
+					class: 'btn', click: ui.createHandlerFn(this, () => {
+						if (isFullscreen) toggleFullscreen();
+						L.hideModal();
+					})
+				}, editable ? _('Cancel') : _('Close'))
+			])
 		]);
 
-		L.showModal(_('View: %s').format(file.name), [
-			E('style', ['h4 {text-align:center;color:red;}.modal{padding: .3em .3em .3em .3em;}']),
-			info, toolbar, aceWrapper,
-			E('div', { style: 'display:flex;gap:.5em;justify-content:space-around;' },
-				[copyBtn, saveBtn, cancelBtn])
+		L.showModal(_('%s: %s').format(editable ? _('Edit') : _('View'), file.name), [
+			E('style', ['h4 {text-align:center;color:red;}.modal{padding:.3em;}']),
+			E('p', { style: 'padding:8px;background:#f0f0f0;font-size:12px;' }, [
+				E('span', {}, _('Ace Editor version: %s').format(ace.version)),
+				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
+				E('span', {}, _('Size: %s').format(file.size)),
+				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
+				E('span', {}, _('Lines: %d').format(content.split('\n').length)),
+				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
+				E('span', {}, _('Path: %s').format(path))
+			]), fullscreenWrapper
 		]);
 
-		let isFullscreen = false, placeholder = null, fullscreenHost = null;
+		let isFullscreen = false, originalParent = null, originalNext = null;
+
 		function toggleFullscreen() {
 			if (!editor) return;
+			isFullscreen = !isFullscreen;
 
 			if (isFullscreen) {
-				placeholder.parentNode.insertBefore(aceWrapper, placeholder);
-				placeholder.remove();
-				placeholder = null;
+				document.addEventListener('keydown', escHandler);
+				originalParent = fullscreenWrapper.parentNode;
+				originalNext = fullscreenWrapper.nextSibling;
 
-				fullscreenHost.remove();
-				fullscreenHost = null;
-
-				aceWrapper.style.height = '350px';
-
-				btnFullscreen.style.display = 'block';
-				btnExit.style.display = 'none';
-
-				isFullscreen = false;
+				document.body.appendChild(fullscreenWrapper);
+				fullscreenWrapper.classList.add('ace-fullscreen');
+				container.style.height = 'calc(100vh - 42px - 48px)';
 			} else {
-				placeholder = document.createComment('ace-placeholder');
-				aceWrapper.parentNode.insertBefore(placeholder, aceWrapper);
+				document.removeEventListener('keydown', escHandler);
+				if (originalParent)
+					originalParent.insertBefore(fullscreenWrapper, originalNext);
 
-				fullscreenHost = document.createElement('div');
-				fullscreenHost.className = 'ace-absolute-fullscreen';
-				document.body.appendChild(fullscreenHost);
-				fullscreenHost.appendChild(aceWrapper);
-
-				aceWrapper.style.height = '100%';
-
-				btnFullscreen.style.display = 'none';
-				btnExit.style.display = 'block';
-
-				isFullscreen = true;
+				fullscreenWrapper.classList.remove('ace-fullscreen');
+				container.style.height = '350px';
 			}
 
-			setTimeout(() => editor.resize(), 50);
-		};
+			btnFull.style.display = isFullscreen ? 'none' : 'block';
+			btnExit.style.display = isFullscreen ? 'block' : 'none';
+			requestAnimationFrame(() => editor.resize());
+		}
+
+		function escHandler(e) {
+			if (e.key === 'Escape') toggleFullscreen();
+		}
 
 		requestAnimationFrame(() => {
 			this.initAceEditor(containerId, {
-				mode, content, editable,
-				changeIndicator, saveBtn,
-				syntaxid, wrapCheckbox,
+				content, editable, syntaxid,
+				mode, changeIndicator, saveBtn,
 				onChange: (ed, hasChanges) => {
 					hasUnsavedChanges = hasChanges;
 				}
@@ -576,7 +561,6 @@ return view.extend({
 				editor = ed;
 				editor.resize();
 			});
-			if (editor && editor.__destroy) editor.__destroy();
 			this.Draggable();
 		});
 	},
@@ -589,9 +573,7 @@ return view.extend({
 
 		const originalContent = content;
 
-		const info = E('p', {
-			style: 'padding:8px;background:#f0f0f0;border-radius:4px;'
-		}, [
+		const info = E('p', { style: 'padding:8px;background:#f0f0f0;border-radius:4px;' }, [
 			E('span', {}, _('Size: %s').format(file.size)),
 			E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
 			E('span', {}, _('Lines: %d').format(content.split('\n').length)),
@@ -618,9 +600,7 @@ return view.extend({
 		wrapCheckbox.checked = true;
 
 		const modeToggle = E('div', [
-			E('div', {
-				style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;'
-			}, [
+			E('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
 				E('span', _('Font')),
 				E('select', {
 					class: 'cbi-input-select ace-toolbar-select',
@@ -675,20 +655,15 @@ return view.extend({
 		}, [copyBtn, saveBtn, cancelBtn]);
 
 		L.showModal(_('%s: %s').format(editable ? _('Edit') : _('View'), file.name), [
-			E('style', ['h4 {text-align:center;color:red;}']),
+			E('style', ['h4 {text-align:center;color:red;}.modal{padding: .3em .3em .3em .3em;}']),
 			info, modeToggle, textarea, buttons
 		]);
 		requestAnimationFrame(() => this.Draggable());
-		// 监听变化
-		textarea.addEventListener('input', () => {
-			// 可以在这里添加变化标记
-		});
 	},
 
 	createnew: function () {
-		let modeid = '';
-		let editor = null, result = '', createFileToo = false;
-		let filePerm = 755, dirPerm = 644, fileContent = '', mode = '';
+		let editor = null, createFileToo = false, mode = '', result = '';
+		let filePerm = 755, dirPerm = 644, fileContent = '', modeid = '';
 		const syntaxid = 'syntax-select-' + Date.now();
 		const containerId = 'ace-editor-' + Date.now();
 		const fileElem = E('span', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
@@ -700,11 +675,11 @@ return view.extend({
 				E('option', { value: id, selected: id === filePerm || undefined }, name)
 			))
 		]);
-		const toolbar = E('div', { style: 'margin-top:8px;display:none;' }, [
+		const toolbar = E('span', { style: 'display:none;' }, [
 			window._aceReady
 				? E('span', [
 					E('p', { class: 'ace-toolbar', }, [
-						E('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
+						E('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
 							E('span', _('Syntax')),
 							E('select', {
 								class: 'cbi-input-select ace-toolbar-select', id: syntaxid,
@@ -731,15 +706,12 @@ return view.extend({
 							fileElem
 						])
 					]),
-					E('div', {
-						id: containerId,
-						style: 'width:100%;height:250px;border:1px solid #ccc;border-radius:4px;'
-					})
+					E('div', { id: containerId, style: 'width:100%;height:250px;' })
 				])
 				: E('span', [
-					E('p', [fileElem]),
+					fileElem,
 					E('textarea', {
-						class: 'cbi-input-text',
+						class: 'cbi-input-text', type: 'text',
 						style: 'width:100%;height:250px;font-family:Consolas;',
 						placeholder: _('File content (optional)'),
 						change: ui.createHandlerFn(this, ev => fileContent = ev.target.value)
@@ -748,8 +720,8 @@ return view.extend({
 		]);
 
 		const pathInput = E('input', {
+			title: _('可以创建当前(绝对路径)的文件(目录)'), type: 'text',
 			class: 'cbi-input-text', style: 'width:150px;', placeholder: '/tmp/c.txt',
-			title: _('绝对路径的文件以及当前目录创建文件(目录)'), type: 'text',
 			change: ui.createHandlerFn(this, ev => {
 				result = this.parsePath(ev.target.value.trim());
 				modeid = document.getElementById(syntaxid);
@@ -766,7 +738,7 @@ return view.extend({
 		L.showModal(_('New directory'), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', [
-				E('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
+				E('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
 					E('span', _('Name')), pathInput,
 					E('span', _('目录权限')),
 					E('select', {
@@ -776,7 +748,6 @@ return view.extend({
 						E('option', { value: id, selected: id === dirPerm || undefined }, name)
 					)),
 					E('input', {
-						class: 'cbi-input-selec',
 						type: 'checkbox', id: 'createFileCheckbox',
 						change: ui.createHandlerFn(this, ev => {
 							createFileToo = ev.target.checked;
@@ -812,7 +783,7 @@ return view.extend({
 						const cmd = `(cat > ${JSON.stringify(fullFile)} <<'EOF'\n${content}\nEOF\n) && /bin/chmod ${filePerm} ${JSON.stringify(fullFile)}`;
 						return fs.exec('/bin/sh', ['-c', cmd]).then(res => {
 							if (res.code !== 0)
-								this.modalnotify(null, E('p', _('Create failed: %s').format(res.stderr)), '', 'error');
+								return this.modalnotify(null, E('p', _('Create failed: %s').format(res.stderr)), '', 'error');
 							this.reload(this._path);
 							this.showNotification(_('创建成功: %s').format(fullFile), 3000, 'success');
 						});
@@ -860,14 +831,9 @@ return view.extend({
 		const isAbsolute = path.startsWith('/');
 
 		return {
-			valid: true,
-			isFile,
-			isDir: !isFile,
-			dir,
-			file: isFile ? last : '',
-			ext: isFile ? last.replace(/^.*\./, '') : '',
-			path,
-			isAbsolute
+			isFile, valid: true, dir, path, isAbsolute,
+			file: isFile ? last : '', isDir: !isFile,
+			ext: isFile ? last.replace(/^.*\./, '') : ''
 		};
 	},
 
@@ -880,12 +846,11 @@ return view.extend({
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
 				E('label', { style: 'min-width:80px;font-weight:bold;' }, _('newname:')),
 				E('input', {
-					id: 'nameinput', style: 'width:100%;', type: 'text',
 					class: 'cbi-input-text', value: oldname,
+					id: 'nameinput', style: 'width:auto', type: 'text',
 					change: ui.createHandlerFn(this, ev => newname = ev.target.value.trim())
 				}),
 			]),
-
 			E('div', { class: 'button-row' }, [
 				E('button', {
 					class: 'btn cbi-button-positive',
@@ -919,7 +884,7 @@ return view.extend({
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
 				E('label', { style: 'min-width:80px;font-weight:bold;' }, _('Permission:')),
 				E('select', {
-					style: 'width:100%;',
+					style: 'width:auto;',
 					change: ui.createHandlerFn(this, ev => n = ev.target.value)
 				}, permissions.map(([id, name]) =>
 					E('option', { value: id, selected: id === Number(file.permissionNum) || undefined }, name)
@@ -1038,8 +1003,8 @@ return view.extend({
 
 	downloadFile: function (input) {
 		if (
-			(Array.isArray(input) && input.length === 1 && !input[0].isDirectory) ||
-			(!Array.isArray(input) && !input.isDirectory)
+			(Array.isArray(input) && input.length === 1 && !input[0].isDir) ||
+			(!Array.isArray(input) && !input.isDir)
 		) {
 			try {
 				const file = Array.isArray(input) ? input[0] : input;
@@ -1115,9 +1080,7 @@ return view.extend({
 						const fmt = document.querySelector('[name=fmt]:checked').value;
 						let fname = this.sanitizeFilename(nameInput?.value || defaultName);
 
-						if (!fname)
-							fname = defaultName;
-
+						if (!fname) fname = defaultName;
 						L.hideModal();
 						this.packAndDownload(files, fmt, fname);
 					})
@@ -1132,7 +1095,6 @@ return view.extend({
 		const t = Date.now();
 		const base = this.sanitizeFilename(filename || ('files-' + t));
 		const out = `/tmp/${base}.${format}`;
-
 		const selectedPaths = files.map(f => f.path);
 
 		try {
@@ -1140,18 +1102,13 @@ return view.extend({
 			const args = relPaths.map(p => `"${p}"`).join(' ');
 
 			if (format === 'zip') {
-				await fs.exec('/bin/sh', ['-c',
-					`cd / && zip -qr "${out}" ${args}`
-				]);
+				await fs.exec('/bin/sh', ['-c', `cd / && zip -qr "${out}" ${args}`]);
 			} else {
-				await fs.exec('/bin/sh', ['-c',
-					`tar -czf "${out}" -C / ${args}`
-				]);
+				await fs.exec('/bin/sh', ['-c', `tar -czf "${out}" -C / ${args}`]);
 			}
 
 			const blob = await fs.read_direct(out, 'blob');
 			await this.startDownload(blob, `${base}.${format}`);
-
 			this.clearSelectedFiles();
 
 		} catch (e) {
@@ -1188,10 +1145,6 @@ return view.extend({
 			.catch(e => this.showNotification(_('Error Uploaded: %s').format(e.message || e), 5000, 'error'));
 	},
 
-	reload: function (p) {
-		return this.load(p).then(data => this.render(data));
-	},
-
 	detectFileMode: function (filename, content) {
 		const name = filename.toLowerCase();
 		const ext = name.includes('.') ? name.split('.').pop() : '';
@@ -1209,7 +1162,6 @@ return view.extend({
 		};
 
 		if (extMap[ext]) return extMap[ext]
-
 		const trimmed = (content || '').trim();
 		const firstLine = trimmed.split('\n')[0] || '';
 		const byShebang = this.detectByShebang(firstLine);
@@ -1226,7 +1178,6 @@ return view.extend({
 			if (/^\s*<\?xml\b/i.test(trimmed)) return 'xml';
 			if (/<html\b/i.test(trimmed) || /<!doctype\s+html/i.test(trimmed)) return 'html';
 		}
-
 		return 'text';
 	},
 
@@ -1274,14 +1225,6 @@ return view.extend({
 		}
 		const bar = this._root.querySelector('.batch-action-bar');
 		bar.style.display = selectedCount > 0 ? 'block' : 'none';
-	},
-
-	getSelectedFiles: function () {
-		const map = new Map(this.currentFiles.map(f => [f.path, f]));
-		return Array.from(
-			this._root.querySelectorAll('.file-checkbox input[type="checkbox"]:checked'),
-			cb => map.get(cb.dataset.path)
-		).filter(Boolean);
 	},
 
 	preloadAceEditor: function () {
@@ -1368,7 +1311,6 @@ return view.extend({
 				try {
 					const editor = ace.edit(el);
 					el.env = { editor };
-
 					editor.setOptions({
 						fontSize: 14,
 						showPrintMargin: false,
@@ -1398,7 +1340,6 @@ return view.extend({
 								editor.getValue() !== config.originalContent;
 
 							if (config.onChange) config.onChange(editor, hasUnsavedChanges);
-
 							if (config.changeIndicator && config.changeIndicator.style) {
 								config.changeIndicator.style.display =
 									(hasUnsavedChanges && !editor.getReadOnly())
@@ -1421,15 +1362,6 @@ return view.extend({
 							editor.setOption('wrap', !!config.wrapCheckbox.checked);
 						});
 					};
-
-					const resizeHandler = () => editor.resize();
-					window.addEventListener('resize', resizeHandler);
-
-					editor.__destroy = () => {
-						window.removeEventListener('resize', resizeHandler);
-						editor.destroy();
-					};
-
 					resolve(editor);
 				} catch (err) {
 					reject(err);
@@ -1448,6 +1380,14 @@ return view.extend({
 			.replace(/\s+/g, ' ')
 			.trim()
 			.substring(0, 255);
+	},
+
+	getSelectedFiles: function () {
+		const map = new Map(this.currentFiles.map(f => [f.path, f]));
+		return Array.from(
+			this._root.querySelectorAll('.file-checkbox input[type="checkbox"]:checked'),
+			cb => map.get(cb.dataset.path)
+		).filter(Boolean);
 	},
 
 	clearSelectedFiles: function () {
@@ -1470,9 +1410,9 @@ return view.extend({
 
 		const successful = document.execCommand('copy');
 		if (successful) {
-			this.modalnotify(null, E('p', _('Copied to clipboard!')), 3000);
+			this.showNotification(_('Copied to clipboard!'), 3000);
 		} else {
-			this.modalnotify(null, E('p', _('Copy failed!')), '', 'error');
+			this.showNotification(_('Copy failed!'), '', 'error');
 		}
 
 		document.body.removeChild(textarea);
@@ -1535,16 +1475,16 @@ return view.extend({
 			class: 'file-notification',
 			style: `
             position: fixed;
-            top: 20px;
-            right: 70px;
-            padding: 10px 25px;
-            background: ${type === 'success' ? '#4CAF50' : type === 'error' ? 'red' : '#2196F3'};
-            color: white;
-            border-radius: 4px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            z-index: 10000;
-            transform: translateX(100px);
             opacity: 0;
+            top: 20px;
+            color: white;
+            right: 70px;
+            z-index: 10000;
+            padding: 10px 25px;
+            border-radius: 4px;
+            transform: translateX(100px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            background: ${type === 'success' ? '#4CAF50' : type === 'error' ? 'red' : '#2196F3'};
             transition: transform 0.3s ease, opacity 0.3s ease;
         `}, message);
 
@@ -1556,57 +1496,53 @@ return view.extend({
 
 		setTimeout(() => {
 			if (notification.parentNode) {
-				notification.style.transform = 'translateX(100px)';
 				notification.style.opacity = '0';
+				notification.style.transform = 'translateX(100px)';
 				setTimeout(() => notification.remove(), 300);
 			}
 		}, (typeof timeout === 'number' && timeout > 0) ? timeout : 3000);
 	},
 
 	Draggable: function () {
-		const modal = document.querySelector('.modal');
+		const modal = document.querySelector('#modal_overlay .modal');
 		if (!modal) return;
 
 		const rect = modal.getBoundingClientRect();
-		modal.style.position = 'fixed';
-		modal.style.left = rect.left + 'px';
-		modal.style.top = rect.top + 'px';
 		modal.style.margin = '0';
 		modal.style.transform = 'none';
+		modal.style.position = 'fixed';
+		modal.style.top = rect.top + 'px';
+		modal.style.left = rect.left + 'px';
 
 		const dragArea = modal.querySelector('h4');
 		if (!dragArea) return;
 
 		dragArea.style.cursor = 'move';
-
 		let dragData = null;
 
 		const onMouseMove = (e) => {
 			if (!dragData) return;
-
-			modal.style.left = (dragData.startLeft + e.clientX - dragData.startX) + 'px';
 			modal.style.top = (dragData.startTop + e.clientY - dragData.startY) + 'px';
+			modal.style.left = (dragData.startLeft + e.clientX - dragData.startX) + 'px';
 		};
 
 		const onMouseUp = () => {
 			dragData = null;
-			document.removeEventListener('mousemove', onMouseMove);
 			document.removeEventListener('mouseup', onMouseUp);
+			document.removeEventListener('mousemove', onMouseMove);
 		};
 
 		dragArea.addEventListener('mousedown', (e) => {
 			if (e.button !== 0) return;
-
 			dragData = {
 				startX: e.clientX,
 				startY: e.clientY,
-				startLeft: parseInt(modal.style.left, 10) || 0,
-				startTop: parseInt(modal.style.top, 10) || 0
+				startTop: parseInt(modal.style.top, 10) || 0,
+				startLeft: parseInt(modal.style.left, 10) || 0
 			};
 
 			document.addEventListener('mousemove', onMouseMove);
 			document.addEventListener('mouseup', onMouseUp);
-
 			e.preventDefault();
 		});
 	},
@@ -1629,7 +1565,6 @@ return view.extend({
 					click: function (ev) {
 						dom.parent(ev.target, '.alert-message').classList.add('fade-out');
 					},
-
 				}, [_('Dismiss')])
 			])
 		]);

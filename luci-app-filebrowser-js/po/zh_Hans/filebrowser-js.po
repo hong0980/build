@@ -223,14 +223,14 @@ msgstr "链接创建成功"
 msgid "Link creation failed"
 msgstr "链接创建失败"
 
-msgid "Edit Document"
-msgstr "编辑文档"
+msgid "Edit file"
+msgstr "编辑文件"
 
 msgid "Failed to load document"
 msgstr "加载文档失败"
 
-msgid "An error occurred while loading the document"
-msgstr "加载文档时发生错误"
+msgid "Failed to read file: %s"
+msgstr "读取文件失败：%s"
 
 msgid "Document saved successfully"
 msgstr "文档保存成功"
