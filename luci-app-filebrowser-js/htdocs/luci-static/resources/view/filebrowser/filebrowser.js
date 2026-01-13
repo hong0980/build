@@ -40,10 +40,6 @@ const CSS = `
 	display:flex;
 	align-items:center;
 }
-.ace-toolbar-select {
-	min-width: 60px !important;
-	max-width: 80px;
-}
 .batch-action-bar {
 	display: none; /* 默认隐藏 */
 	position: fixed; /* 固定定位 */
@@ -263,21 +259,19 @@ return view.extend({
 				])
 			]);
 
-			const btn = E('div', { style: 'display:flex;gap:3px;' }, [
+			const btn = E('div', { style: 'display:flex;gap:6px;' }, [
 				E('button', {
-					class: 'btn cbi-button-edit', style: 'padding:0 10px',
+					class: 'btn cbi-button-edit', style: 'flex:1;',
 					click: ui.createHandlerFn(this, 'renameFile', f.path)
 				}, _('Rename')),
 				E('button', {
-					class: 'btn cbi-button-remove', style: 'padding:0 10px',
+					class: 'btn cbi-button-remove', style: 'flex:1;',
 					click: ui.createHandlerFn(this, 'deleteFile', f)
 				}, _('Delete')),
-				!f.isDir
-					? E('button', {
-						class: 'btn cbi-button-edit', style: 'padding:0 10px',
-						click: ui.createHandlerFn(this, 'showFileEditor', f, false)
-					}, _('open'))
-					: ''
+				!f.isDir ? E('button', {
+					class: 'btn cbi-button-edit', style: 'flex:1;',
+					click: ui.createHandlerFn(this, 'showFileEditor', f, false)
+				}, _('open')) : '',
 			]);
 
 			return [nameCell, f.owner, f.size, f.date, `[${f.permissionNum}] ${f.perm}`, btn];
@@ -408,8 +402,9 @@ return view.extend({
 		const mode = this.detectFileMode(file.name, content);
 		const container = E('div', { id: containerId, style: 'width:100%;height:350px;border:1px solid #ccc;' });
 		const changeIndicator = E('span', {
-			style: 'display:none;color:#e74c3c;font-size:22px;margin-left:5px;',
-			title: _('Unsaved changes')
+			style: 'display:none;cursor:pointer;color:#e74c3c;font-size:22px;',
+			title: _('The document has been modified, click to undo all'),
+			click: ui.createHandlerFn(this, () => editor && editor.setValue(originalContent, -1))
 		}, '●');
 
 		const saveBtn = E('button', {
@@ -423,20 +418,20 @@ return view.extend({
 
 				fs.write(path, val).then(() => {
 					L.hideModal();
-					this.showNotification(_('File saved successfully!'), 3000, 'success');
+					this.showNotification(_('%s File saved successfully!').format(path), 3000, 'success');
 					this.reload(this._path);
 				});
 			})
 		}, _('Save'));
 
 		const btnFull = E('button', {
-			style: 'margin-left:auto;',
-			class: 'btn', click: toggleFullscreen
+			class: 'btn', click: toggleFullscreen,
+			style: 'padding: 0 8px; margin-left:auto;'
 		}, _('full screen'));
 
 		const btnExit = E('button', {
 			click: toggleFullscreen, class: 'btn',
-			style: 'display:none;margin-left:auto;',
+			style: 'display:none;margin-left:auto;'
 		}, _('Exit full screen'));
 
 		const toolbar = E('div', { class: 'ace-toolbar' }, [
@@ -469,8 +464,8 @@ return view.extend({
 				}),
 				E('label', { style: 'display:flex;align-items:center;gap:5px;', for: 'wrapCheckbox' }, _('wrap')),
 				E('input', {
-					type: 'checkbox', id: 'editCheckbox',
 					checked: !!editable || undefined,
+					type: 'checkbox', id: 'editCheckbox',
 					change: ui.createHandlerFn(this, ev => {
 						if (!editor) return;
 						const on = ev.target.checked;
@@ -626,7 +621,7 @@ return view.extend({
 				fs.write(path, newContent)
 					.then(() => {
 						L.hideModal();
-						this.showNotification(_('File saved successfully!'), 3000, 'success');
+						this.showNotification(_('%s File saved successfully!').format(path), 3000, 'success');
 						this.reload(this._path);
 					})
 					.catch(error =>
@@ -709,23 +704,23 @@ return view.extend({
 				: E('span', [
 					fileElem,
 					E('textarea', {
+						placeholder: _('Enter text here'),
 						class: 'cbi-input-text', type: 'text',
 						style: 'width:100%;height:250px;font-family:Consolas;',
-						placeholder: _('Enter text here'),
 						change: ui.createHandlerFn(this, ev => fileContent = ev.target.value)
 					}),
 				])
 		]);
 
 		const pathInput = E('input', {
-			title: _('Can create files (directories) in the current (absolute path) directory'), type: 'text',
-			class: 'cbi-input-text', style: 'width:150px;', placeholder: '/tmp/c.txt',
+			title: _('Can create files (directories) in the current (absolute path) directory'),
+			class: 'cbi-input-text', style: 'width:150px;', placeholder: '/tmp/c.txt', type: 'text',
 			change: ui.createHandlerFn(this, ev => {
 				result = this.parsePath(ev.target.value.trim());
 				modeid = document.getElementById(syntaxid);
-				if (editor && result.valid && result.file) {
+				if (result.valid && result.file) {
 					mode = this.detectFileMode(result.file, null);
-					if (mode) {
+					if (editor && mode) {
 						editor.session.setMode(`ace/mode/${mode}`);
 						if (modeid) modeid.value = mode;
 					}
@@ -842,10 +837,10 @@ return view.extend({
 		L.showModal(_('Rename %s').format(path), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
-				E('label', { style: 'min-width:80px;font-weight:bold;' }, _('newname:')),
+				E('label', { style: 'min-width:80px;' }, _('newname:')),
 				E('input', {
 					class: 'cbi-input-text', value: oldname,
-					id: 'nameinput', style: 'width:auto', type: 'text',
+					id: 'nameinput', style: 'width:100%', type: 'text',
 					change: ui.createHandlerFn(this, ev => newname = ev.target.value.trim())
 				}),
 			]),
@@ -880,7 +875,7 @@ return view.extend({
 		L.showModal(_('Change permissions %s').format(file.path), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
-				E('label', { style: 'min-width:80px;font-weight:bold;' }, _('Permission:')),
+				E('label', { style: 'min-width:80px;' }, _('Permission:')),
 				E('select', {
 					style: 'width:100%;',
 					change: ui.createHandlerFn(this, ev => n = ev.target.value)
@@ -892,7 +887,7 @@ return view.extend({
 				E('button', {
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
-						if (!n) return this.modalnotify(null, E('p', _('请选择新的值')), 3000);
+						if (!n) return this.modalnotify(null, E('p', _('Please select a new value')), 3000);
 						L.hideModal();
 						fs.exec('/bin/chmod', [n, file.path]).then(r => {
 							if (r.code !== 0)
@@ -951,7 +946,7 @@ return view.extend({
 	createLink: function (file) {
 		let linkPath = '', isHardLink = false;
 		const pathInput = E('input', {
-			id: 'linkinput', style: 'width:60%;', type: 'text',
+			id: 'linkinput', style: 'width:100%;', type: 'text',
 			class: 'cbi-input-text', placeholder: '/path/to/link',
 			change: ui.createHandlerFn(this, ev => linkPath = ev.target.value.trim())
 		});
@@ -1214,7 +1209,7 @@ return view.extend({
 			downloadCount.textContent = selectedCount > 0 ? `(${selectedCount})` : '';
 		if (selectedCount > 0) {
 			ui.showIndicator('selected-files',
-				_('已选择 %d 个文件').format(selectedCount),
+				_('%d files selected').format(selectedCount),
 				() => this.clearSelectedFiles(),
 				'active'
 			);

@@ -349,8 +349,8 @@ msgstr "取消选择"
 msgid "The file content has not changed"
 msgstr "文件内容没有变动"
 
-msgid "Unsaved changes"
-msgstr "未保存的更改"
+msgid "%s File saved successfully!"
+msgstr "%s 文件保存成功！"
 
 msgid "Please enter a new name"
 msgstr "请输入新的名称"
@@ -453,6 +453,18 @@ msgstr "语法"
 
 msgid "Font"
 msgstr "字体"
+
+msgid "%d items • Total %s"
+msgstr "%d 项 • 总计 %s"
+
+msgid "Please select a new value"
+msgstr "请选择新的值"
+
+msgid "%d files selected"
+msgstr "已选择 %d 个文件"
+
+msgid "The document has been modified, click to undo all"
+msgstr "文档已修改，点击全部撤销"
 
 msgid "wrap"
 msgstr "wrap"
