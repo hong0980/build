@@ -118,14 +118,14 @@ tr.selected {
 }`;
 
 const permissions = [
-	[777, _('777 - All users have read, write and execute permissions')],
-	[755, _('755 - All users have read and execute permissions, but only the file owner has write permissions')],
-	[700, _('700 - Only the file owner has read, write, and execute permissions')],
-	[666, _('666 - All users have read and write permissions but no execute permissions')],
-	[644, _('644 - All users have read permissions, but only the file owner has write permissions')],
-	[600, _('600 - Only the file owner has read and write permissions')],
-	[555, _('555 - All users have execute permissions, but only the file owner has read and write permissions')],
-	[444, _('444 - All users have read permissions but no write and execute permissions')]
+	[777, _('777 - Owner, group, and others have read, write, and execute permissions')],
+	[755, _('755 - Owner has all permissions; group and others have read and execute permissions')],
+	[700, _('700 - Only owner has read, write, and execute permissions; group and others have no permissions')],
+	[666, _('666 - Owner, group, and others have read and write permissions, but no execute permissions')],
+	[644, _('644 - Owner has read and write permissions; group and others have read-only permissions')],
+	[600, _('600 - Only owner has read and write permissions; group and others have no permissions')],
+	[555, _('555 - Owner, group, and others have read and execute permissions, but no write permissions')],
+	[444, _('444 - Owner, group, and others have read-only permissions; no write or execute permissions')]
 ];
 
 const themes = [
@@ -232,7 +232,7 @@ return view.extend({
 			(!f.isDir && !f.isLink) ? s + this.parseSizeToBytes(f.size) : s, 0);
 
 		const table = new ui.Table(
-			[_('Name'), _('Owner'), _('Size'), _('Change the time'), _('Rights'), _('')],
+			[_('Name'), _('owner'), _('Size'), _('Change the time'), _('Rights'), _('')],
 			{ sortable: true, classes: 'cbi-section-table' },
 			E('em', _('No files found'))
 		);
@@ -296,17 +296,17 @@ return view.extend({
 			E('div', { class: 'batch-action-bar' }, [
 				E('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
 					E('button', {
-						class: 'btn cbi-button-negative',
+						class: 'btn cbi-button-remove',
 						click: ui.createHandlerFn(this, () => this.deleteFile(this.getSelectedFiles()))
-					}, [_('批量删除'), E('span', { id: 'delete-count' })]),
+					}, [_('Batch delete'), E('span', { id: 'delete-count' })]),
 					E('button', {
 						class: 'btn cbi-button-action',
 						click: ui.createHandlerFn(this, () => this.downloadFile(this.getSelectedFiles()))
-					}, [_('批量下载'), E('span', { id: 'download-count' })]),
+					}, [_('Batch download'), E('span', { id: 'download-count' })]),
 					E('button', {
-						class: 'btn',
+						class: 'btn cbi-button-remove',
 						click: ui.createHandlerFn(this, 'clearSelectedFiles')
-					}, _('取消选择'))
+					}, _('Deselect'))
 				])
 			]),
 			table.render()
@@ -419,7 +419,7 @@ return view.extend({
 				if (!editor) return;
 				const val = editor.getValue();
 				if (val === originalContent)
-					return this.modalnotify(null, E('p', _('文档没有变动')), 3000);
+					return this.modalnotify(null, E('p', _('The file content has not changed')), 3000);
 
 				fs.write(path, val).then(() => {
 					L.hideModal();
@@ -432,12 +432,12 @@ return view.extend({
 		const btnFull = E('button', {
 			style: 'margin-left:auto;',
 			class: 'btn', click: toggleFullscreen
-		}, _('全屏'));
+		}, _('full screen'));
 
 		const btnExit = E('button', {
 			click: toggleFullscreen, class: 'btn',
 			style: 'display:none;margin-left:auto;',
-		}, _('退出全屏'));
+		}, _('Exit full screen'));
 
 		const toolbar = E('div', { class: 'ace-toolbar' }, [
 			E('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
@@ -454,7 +454,6 @@ return view.extend({
 				}, themes.map(([id, name]) =>
 					E('option', { value: id, selected: id === 'monokai' || undefined }, name)
 				)),
-
 				E('span', _('Font')),
 				E('select', {
 					class: 'cbi-input-select ace-toolbar-select',
@@ -572,7 +571,6 @@ return view.extend({
 		}, content);
 
 		const originalContent = content;
-
 		const info = E('p', { style: 'padding:8px;background:#f0f0f0;border-radius:4px;' }, [
 			E('span', {}, _('Size: %s').format(file.size)),
 			E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
@@ -624,7 +622,7 @@ return view.extend({
 			click: ui.createHandlerFn(this, () => {
 				const newContent = textarea.value;
 				if (newContent === originalContent)
-					return this.modalnotify(null, E('p', _('文档没有变动')), 3000);
+					return this.modalnotify(null, E('p', _('The file content has not changed')), 3000);
 				fs.write(path, newContent)
 					.then(() => {
 						L.hideModal();
@@ -667,7 +665,7 @@ return view.extend({
 		const syntaxid = 'syntax-select-' + Date.now();
 		const containerId = 'ace-editor-' + Date.now();
 		const fileElem = E('span', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
-			E('span', _('文件权限')),
+			E('span', _('file permissions')),
 			E('select', {
 				class: 'cbi-input-select ace-toolbar-select',
 				change: ui.createHandlerFn(this, ev => filePerm = parseInt(ev.target.value, 10))
@@ -713,14 +711,14 @@ return view.extend({
 					E('textarea', {
 						class: 'cbi-input-text', type: 'text',
 						style: 'width:100%;height:250px;font-family:Consolas;',
-						placeholder: _('File content (optional)'),
+						placeholder: _('Enter text here'),
 						change: ui.createHandlerFn(this, ev => fileContent = ev.target.value)
 					}),
 				])
 		]);
 
 		const pathInput = E('input', {
-			title: _('可以创建当前(绝对路径)的文件(目录)'), type: 'text',
+			title: _('Can create files (directories) in the current (absolute path) directory'), type: 'text',
 			class: 'cbi-input-text', style: 'width:150px;', placeholder: '/tmp/c.txt',
 			change: ui.createHandlerFn(this, ev => {
 				result = this.parsePath(ev.target.value.trim());
@@ -740,7 +738,7 @@ return view.extend({
 			E('div', [
 				E('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
 					E('span', _('Name')), pathInput,
-					E('span', _('目录权限')),
+					E('span', _('Directory permissions')),
 					E('select', {
 						class: 'cbi-input-select ace-toolbar-select',
 						change: ui.createHandlerFn(this, ev => dirPerm = parseInt(ev.target.value, 10))
@@ -754,7 +752,7 @@ return view.extend({
 							toolbar.style.display = createFileToo ? 'block' : 'none';
 						})
 					}),
-					E('label', { for: 'createFileCheckbox' }, _('同时创建文件'))
+					E('label', { for: 'createFileCheckbox' }, _('Create files simultaneously'))
 				]),
 				toolbar
 			]),
@@ -771,9 +769,9 @@ return view.extend({
 							fs.exec('/bin/mkdir', ['-p', fullDir, '-m', String(dirPerm)]).then(res => {
 								if (!fullFile) {
 									if (res.code !== 0)
-										return this.modalnotify(null, E('p', _('目录 %s 创建失败: %s').format(fullDir, res.stderr)), '', 'error');
+										return this.modalnotify(null, E('p', _('Directory %s creation failed: %s').format(fullDir, res.stderr)), '', 'error');
 									this.reload(this._path);
-									this.showNotification(_('目录 %s 创建成功').format(fullDir), 3000, 'success');
+									this.showNotification(_('Directory %s created successfully').format(fullDir), 3000, 'success');
 								}
 							});
 						};
@@ -785,7 +783,7 @@ return view.extend({
 							if (res.code !== 0)
 								return this.modalnotify(null, E('p', _('Create failed: %s').format(res.stderr)), '', 'error');
 							this.reload(this._path);
-							this.showNotification(_('创建成功: %s').format(fullFile), 3000, 'success');
+							this.showNotification(_('Created successfully: %s').format(fullFile), 3000, 'success');
 						});
 					})
 				}, _('Create')),
@@ -808,7 +806,7 @@ return view.extend({
 			ui.addValidator(pathInput, 'string', false, function (value) {
 				result = this.parsePath(value.trim());
 				if (!result.valid)
-					return result.error ? _(result.error) : _('无效的路径格式');
+					return result.error ? _(result.error) : _('Invalid path format');
 				return true;
 			}.bind(this), 'blur', 'keyup');
 			this.Draggable();
@@ -819,10 +817,10 @@ return view.extend({
 		path = path.trim();
 
 		if (!/^[A-Za-z0-9._\/-]+$/.test(path))
-			return { valid: false, error: _('路径包含非法字符') };
+			return { valid: false, error: _('Path contains illegal characters') };
 
 		if (path.split('/').includes('..'))
-			return { valid: false, error: _('路径包含非法段(..)') };
+			return { valid: false, error: _('Path contains illegal segment (..)') };
 
 		const parts = path.split('/');
 		const last = parts.pop() || parts.pop() || '';
@@ -855,7 +853,7 @@ return view.extend({
 				E('button', {
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
-						if (!newname) return this.modalnotify(null, E('p', _('请输入新的名称')), 3000);
+						if (!newname) return this.modalnotify(null, E('p', _('Please enter a new name')), 3000);
 						L.hideModal();
 						fs.exec('/bin/mv', [path, path.replace(/[^/]+$/, newname)]).then(r => {
 							if (r.code !== 0)
@@ -884,7 +882,7 @@ return view.extend({
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
 				E('label', { style: 'min-width:80px;font-weight:bold;' }, _('Permission:')),
 				E('select', {
-					style: 'width:auto;',
+					style: 'width:100%;',
 					change: ui.createHandlerFn(this, ev => n = ev.target.value)
 				}, permissions.map(([id, name]) =>
 					E('option', { value: id, selected: id === Number(file.permissionNum) || undefined }, name)
@@ -917,8 +915,8 @@ return view.extend({
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('p', { style: 'text-align:center;' },
 				files.length === 1
-					? _('Delete %s ?').format(files[0].name)
-					: _('Delete %d files?').format(files.length)
+					? _('Confirm %s').format(files[0].name)
+					: _('Confirm %d files?').format(files.length)
 			),
 			E('div', { class: 'button-row' }, [
 				E('button', {
@@ -960,9 +958,9 @@ return view.extend({
 		L.showModal(_('%s Create link').format(file.path), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
-				E('label', { style: 'min-width:80px;font-weight:bold;' }, _('Create link')),
+				E('label', { style: 'min-width:auto;' }, _('Create link')),
 				pathInput,
-				E('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
+				E('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
 					E('input', {
 						type: 'checkbox', id: 'checkbox',
 						change: ui.createHandlerFn(this, ev => isHardLink = ev.target.value)
@@ -993,7 +991,7 @@ return view.extend({
 			ui.addValidator(pathInput, 'string', false, function (value) {
 				const result = this.parsePath(value.trim());
 				if (!result.valid)
-					return result.error ? _(result.error) : _('无效的路径格式');
+					return result.error ? _(result.error) : _('Invalid path format');
 
 				return true;
 			}.bind(this), 'blur', 'keyup');
@@ -1015,7 +1013,7 @@ return view.extend({
 				return fs.read_direct(path, 'blob')
 					.then(blob => this.startDownload(blob, file.name));
 			} catch (e) {
-				return this.showNotification(_('下载失败: %s').format(e.message), 5000, 'error');
+				return this.showNotification(_('Download failed: %s').format(e.message), 5000, 'error');
 			}
 		};
 
@@ -1048,17 +1046,17 @@ return view.extend({
 		const isBatch = Array.isArray(input);
 		const defaultName = isBatch ? 'files-' + Date.now() : (input.name || ('dir-' + Date.now()));
 
-		L.showModal(isBatch ? _('批量下载') : _('下载目录'), [
+		L.showModal(isBatch ? _('Batch download') : _('Download catalog'), [
 			E('style', ['h4 {text-align:center;}']),
-			E('p', isBatch ? _('文件数量: %d').format(files.length) : _('目录: %s').format(input.name)),
+			E('p', isBatch ? _('Number of files: %d').format(files.length) : _('Directory: %s').format(input.name)),
 			E('p', { class: 'cbi-value ace-toolbar' }, [
 				E('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:10px;' }, [
-					E('label', isBatch ? _('压缩包文件名') : _('文件名')),
+					E('label', isBatch ? _('Compressed package file name') : _('file name')),
 					E('input', {
 						id: 'pack-name', class: 'cbi-input-text',
 						type: 'text', value: defaultName + '.tar.gz'
 					}),
-					E('label', _('后缀')),
+					E('label', _('suffix')),
 					E('input', {
 						type: 'radio', name: 'fmt', value: 'tar.gz',
 						checked: true, click: updateExtension, id: 'tar'
@@ -1084,8 +1082,8 @@ return view.extend({
 						L.hideModal();
 						this.packAndDownload(files, fmt, fname);
 					})
-				}, isBatch ? _('打包下载') : _('下载')),
-				E('button', { class: 'btn', click: L.hideModal }, _('取消'))
+				}, isBatch ? _('Package download') : _('download')),
+				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
 			])
 		]);
 		focusAndSelectBase();
@@ -1112,7 +1110,7 @@ return view.extend({
 			this.clearSelectedFiles();
 
 		} catch (e) {
-			this.showNotification(_('打包失败: %s').format(e.message), 5000, 'error');
+			this.showNotification(_('Packaging failed: %s').format(e.message), 5000, 'error');
 		} finally {
 			fs.remove(out).catch(() => {});
 		}
