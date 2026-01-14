@@ -1,29 +1,14 @@
 msgid "File management"
 msgstr "文件管理"
 
-msgid "Go to directory"
-msgstr "转到目录"
-
-msgid "Upload to current directory"
-msgstr "上传到当前目录"
-
 msgid "confirm deletion"
 msgstr "确定删除"
 
 msgid "create new file"
 msgstr "创建新文件"
 
-msgid "Enter ${oldnamecolor} new name"
-msgstr "输入 ${oldnamecolor} 新的文件名"
-
-msgid "Back to previous"
-msgstr "返回上一级"
-
 msgid "Rename"
 msgstr "重命名"
-
-msgid "download"
-msgstr "下载"
 
 msgid "Confirm"
 msgstr "确认"
@@ -103,14 +88,8 @@ msgstr "555 - 所有者、组用户和其他用户都有读取和执行权限，
 msgid "444 - Owner, group, and others have read-only permissions; no write or execute permissions"
 msgstr "444 - 所有者、组用户和其他用户都有读取权限，但没有写入和执行权限"
 
-msgid "directory."
-msgstr "个目录。"
-
 msgid "total file size"
 msgstr "文件总大小"
-
-msgid "Go to root directory"
-msgstr "进入根目录"
 
 msgid "Successful installation"
 msgstr "安装成功"
@@ -124,9 +103,6 @@ msgstr "确定安装"
 msgid "Enter name"
 msgstr "输入名称"
 
-msgid "For example: example.txt"
-msgstr "例如：example.txt"
-
 msgid "Enter file content"
 msgstr "输入文件内容"
 
@@ -139,47 +115,17 @@ msgstr "文件创建成功！"
 msgid "File creation failed!"
 msgstr "文件创建失败！"
 
+msgid "open file"
+msgstr "打开文件"
+
 msgid "upload file"
 msgstr "上传文件"
-
-msgid "Create as directory"
-msgstr "创建为目录"
-
-msgid "You can enter a file name or directory name"
-msgstr "可以输入文件名或者目录名"
 
 msgid "download file"
 msgstr "下载文件"
 
-msgid "Confirm download"
-msgstr "确定下载"
-
-msgid "Do you want to create this directory?"
-msgstr "是否要创建该目录？"
-
-msgid "open file"
-msgstr "打开文件"
-
-msgid "Confirm open"
-msgstr "确定打开"
-
-msgid "Download catalog"
-msgstr "下载目录"
-
-msgid "open Directory"
-msgstr "打开目录"
-
-msgid "Refresh Page"
-msgstr "刷新页面"
-
-msgid "It’s the current directory"
-msgstr "就是当前目录的"
-
-msgid "The name contains a non-canonical string"
-msgstr "名称包含了不是规范字符串"
-
-msgid "Failed to check the directory"
-msgstr "检查目录失败"
+msgid "Reload page"
+msgstr "重加载页面"
 
 msgid "owner"
 msgstr "所有者"
@@ -246,9 +192,6 @@ msgstr "您可以修改文件和目录的名称和下载、权限、添加目录
 
 msgid "Right click"
 msgstr "右键点击"
-
-msgid "open"
-msgstr "打开"
 
 msgid "wrap"
 msgstr "换行"
@@ -322,6 +265,9 @@ msgstr "正在加载文件进行编辑..."
 msgid "Loading file content..."
 msgstr "正在加载文件内容..."
 
+msgid "Unknown file type"
+msgstr "未知的文件类型"
+
 msgid "Exit full screen"
 msgstr "退出全屏"
 
@@ -361,8 +307,8 @@ msgstr "您有未保存的更改。丢弃它们？"
 msgid "Rename failed: %s"
 msgstr "重命名失败：%s"
 
-msgid "Renamed: %s"
-msgstr "已重命名：%s"
+msgid "Renamed: %s to %s"
+msgstr "已重命名：%s 为 %s"
 
 msgid "Change permissions %s"
 msgstr "更改权限 %s"
@@ -466,8 +412,23 @@ msgstr "已选择 %d 个文件"
 msgid "The document has been modified, click to undo all"
 msgstr "文档已修改，点击全部撤销"
 
-msgid "wrap"
-msgstr "wrap"
+msgid "newname"
+msgstr "新名称"
 
-msgid "wrap"
-msgstr "wrap"
+msgid "Permission"
+msgstr "权限"
+
+msgid "Change permissions %s"
+msgstr "更改权限 %s"
+
+msgid "Rename %s"
+msgstr "重命名 %s"
+
+msgid "Delete file"
+msgstr "删除文件"
+
+msgid "Permission"
+msgstr "权限"
+
+msgid "Permission"
+msgstr "权限"

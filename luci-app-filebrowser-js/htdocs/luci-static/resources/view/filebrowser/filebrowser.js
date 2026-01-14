@@ -56,9 +56,10 @@ tr.selected {
 	background-color: #e4efffff;
 }
 .table .th, .table .td {
-	padding: 5px 10px 5px;
+	.item::after, .btn, .cbi-button{
+	    line-height: 1.6em;
+	}
 }
-
 .ace-fullscreen {
 	inset: 0;
 	z-index: 9999;
@@ -259,19 +260,11 @@ return view.extend({
 				])
 			]);
 
-			const btn = E('div', { style: 'display:flex;gap:6px;' }, [
-				E('button', {
-					class: 'btn cbi-button-edit', style: 'flex:1;',
-					click: ui.createHandlerFn(this, 'renameFile', f.path)
-				}, _('Rename')),
-				E('button', {
-					class: 'btn cbi-button-remove', style: 'flex:1;',
-					click: ui.createHandlerFn(this, 'deleteFile', f)
-				}, _('Delete')),
+			const btn = E('div', [
 				!f.isDir ? E('button', {
-					class: 'btn cbi-button-edit', style: 'flex:1;',
+					class: 'btn cbi-button-edit',
 					click: ui.createHandlerFn(this, 'showFileEditor', f, false)
-				}, _('open')) : '',
+				}, _('open file')) : '',
 			]);
 
 			return [nameCell, f.owner, f.size, f.date, `[${f.permissionNum}] ${f.perm}`, btn];
@@ -283,6 +276,10 @@ return view.extend({
 			E('p', { style: 'display:flex;justify-content:space-between;align-items:center;margin-top:10px;' }, [
 				crumbs,
 				E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
+					E('button', {
+						class: 'btn cbi-button-positive',
+						click: ui.createHandlerFn(this, 'reload', this._path)
+					}, _('Reload page')),
 					E('span', { style: 'color:#666;font-size:12px;' },
 						_('%d items • Total %s').format(files.length, this.formatSizeHuman(totalSize)))
 				])
@@ -328,13 +325,14 @@ return view.extend({
 
 		const menu = E('div', { class: 'file-context-menu' });
 		const items = [
-			[_('Refresh Page'), () => this.reload(this._path)],
 			[_('Create file (directory)'), () => this.createnew()],
 			!file.isDir && [_('Edit file'), () => this.showFileEditor(file, true)],
+			[_('Rename'), () => this.renameFile(file.path)],
 			!file.isLink && [_('Create link'), () => this.createLink(file)],
+			[_('Modify permissions'), () => this.chmodFile(file)],
+			[_('Delete file'), () => this.deleteFile(file)],
 			[_('download file'), () => this.downloadFile(file)],
-			[_('Upload'), ev => this.Upload(ev)],
-			[_('Modify permissions'), () => this.chmodFile(file)]
+			[_('upload file'), ev => this.Upload(ev)],
 		].filter(Boolean);
 
 		items.forEach(([label, action]) => {
@@ -371,27 +369,31 @@ return view.extend({
 			);
 		}
 
-		const modal = L.showModal(_('Loading file...'), [
+		const modal = L.showModal(null, [
 			E('p', editable ? _('Loading file for editing...') : _('Loading file content...')),
 			E('div', { class: 'spinner' }),
-			E('div', { class: 'left', style: 'flex:1' }, [
+			E('div', { class: 'right', style: 'flex:1' }, [
 				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
 			])
 		]);
-		const path = file.isLink
+		const showError = (e) => this.modalnotify(null, E('p', _('Failed to read file: %s').format(e.message || e)), '', 'error');
+		let path = file.isLink
 			? (this.parseLinkString(file.path)?.targetPath || file.path)
 			: file.path;
-
-		fs.read_direct(path)
-			.then(content => {
+		path = path.startsWith('/') ? path : '/' + path;
+		fs.stat(path).then(r => {
+			if (r.type === 'directory') {
 				L.hideModal();
-				window._aceReady
-					? this.showAceEditor(file, content, path, editable)
-					: this.showSimpleEditor(file, content, path, editable)
-			})
-			.catch(e => {
-				this.modalnotify(null, E('p', _('Failed to read file: %s').format(e.message || e)), '', 'error')
-			});
+				this.reload(path);
+			} else if (r.type === 'file') {
+				return fs.read_direct(path).then(content => {
+					L.hideModal();
+					window._aceReady
+						? this.showAceEditor(file, content, path, editable)
+						: this.showSimpleEditor(file, content, path, editable);
+				});
+			} else throw new Error(_('Unknown file type'));
+		}).catch(showError);
 	},
 
 	showAceEditor: function (file, content, path, editable) {
@@ -837,7 +839,7 @@ return view.extend({
 		L.showModal(_('Rename %s').format(path), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
-				E('label', { style: 'min-width:80px;' }, _('newname:')),
+				E('label', { style: 'min-width:60px;' }, _('newname')),
 				E('input', {
 					class: 'cbi-input-text', value: oldname,
 					id: 'nameinput', style: 'width:100%', type: 'text',
@@ -848,13 +850,14 @@ return view.extend({
 				E('button', {
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
-						if (!newname) return this.modalnotify(null, E('p', _('Please enter a new name')), 3000);
+						if (!newname || newname === oldname)
+							return this.modalnotify(null, E('p', _('Please enter a new name')), 3000);
 						L.hideModal();
 						fs.exec('/bin/mv', [path, path.replace(/[^/]+$/, newname)]).then(r => {
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Rename failed: %s').format(r.stderr)), '', 'error');
 							this.reload(this._path);
-							this.showNotification(_('Renamed: %s').format(newname), 3000, 'success');
+							this.showNotification(_('Renamed: %s to %s').format(path, newname), 3000, 'success');
 						});
 					})
 				}, _('Rename')),
@@ -875,7 +878,7 @@ return view.extend({
 		L.showModal(_('Change permissions %s').format(file.path), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
-				E('label', { style: 'min-width:80px;' }, _('Permission:')),
+				E('label', { style: 'min-width:60px;' }, _('Permission')),
 				E('select', {
 					style: 'width:100%;',
 					change: ui.createHandlerFn(this, ev => n = ev.target.value)
@@ -946,14 +949,14 @@ return view.extend({
 	createLink: function (file) {
 		let linkPath = '', isHardLink = false;
 		const pathInput = E('input', {
-			id: 'linkinput', style: 'width:100%;', type: 'text',
+			id: 'linkinput', style: 'width:60%;', type: 'text',
 			class: 'cbi-input-text', placeholder: '/path/to/link',
 			change: ui.createHandlerFn(this, ev => linkPath = ev.target.value.trim())
 		});
 		L.showModal(_('%s Create link').format(file.path), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
-				E('label', { style: 'min-width:auto;' }, _('Create link')),
+				E('label', { style: 'min-width:60px;' }, _('Create link')),
 				pathInput,
 				E('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
 					E('input', {
