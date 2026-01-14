@@ -193,12 +193,25 @@ return view.extend({
 					return a.isLink ? 1 : -1;
 				return a.name.localeCompare(b.name);
 			});
+			history.replaceState({
+				path, data: { path, files }
+			}, '', '#' + path);
 
 			return { path, files };
 		}).catch(() => ({ path, files: [] }));
 	},
 
 	render: function (data) {
+		if (!this._popBound) {
+			this._popBound = true;
+
+			window.addEventListener('popstate', e => {
+				if (e.state && e.state.data) {
+					this._path = e.state.path;
+					this.render(e.state.data);
+				}
+			});
+		};
 		const root = this._root || (this._root = E('div'));
 		root.innerHTML = '';
 		root.oncontextmenu = ev => { ev.preventDefault(); return false; };
@@ -276,12 +289,12 @@ return view.extend({
 			E('p', { style: 'display:flex;justify-content:space-between;align-items:center;margin-top:10px;' }, [
 				crumbs,
 				E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
+					E('span', { style: 'color:#666;font-size:12px;' },
+						_('%d items • Total %s').format(files.length, this.formatSizeHuman(totalSize))),
 					E('button', {
 						class: 'btn cbi-button-positive',
 						click: ui.createHandlerFn(this, 'reload', this._path)
-					}, _('Reload page')),
-					E('span', { style: 'color:#666;font-size:12px;' },
-						_('%d items • Total %s').format(files.length, this.formatSizeHuman(totalSize)))
+					}, _('Reload page'))
 				])
 			]),
 			E('div', { class: 'batch-action-bar' }, [
@@ -997,88 +1010,53 @@ return view.extend({
 		});
 	},
 
-	downloadFile: function (input) {
-		if (
-			(Array.isArray(input) && input.length === 1 && !input[0].isDir) ||
-			(!Array.isArray(input) && !input.isDir)
-		) {
-			try {
-				const file = Array.isArray(input) ? input[0] : input;
-				const path = file.isLink
-					? this.parseLinkString(file.path)?.targetPath
-					: file.path;
-
-				return fs.read_direct(path, 'blob')
-					.then(blob => this.startDownload(blob, file.name));
-			} catch (e) {
-				return this.showNotification(_('Download failed: %s').format(e.message), 5000, 'error');
-			}
+	downloadFile: function (files) {
+		const isBatch = Array.isArray(files);
+		if (!isBatch && !files.isDir) {
+			const path = files.isLink
+				? this.parseLinkString(files.path)?.targetPath
+				: files.path;
+			return this.startDownload(path, files.name);
 		};
 
-		const focusAndSelectBase = (input = null, base = null) => {
-			input = input || document.getElementById('pack-name');
-			base = base || input.value.replace(/\.(tar\.gz|tgz|zip)$/i, '');
+		const focusAndSelectBase = () => {
+			const input = document.getElementById('pack-name');
+			if (!input) return;
 
-			requestAnimationFrame(() => {
-				input.focus({ preventScroll: true });
-				requestAnimationFrame(() => {
-					input.setSelectionRange(0, base.length);
-				});
-			});
+			const baseLen = input.value.replace(/\.tar\.gz$/i, '').length;
+			input.focus();
+			input.setSelectionRange(0, baseLen);
 		};
-
-		const updateExtension = () => {
-			const fmt = document.querySelector('[name=fmt]:checked')?.value;
-			const nameInput = document.getElementById('pack-name');
-			if (!nameInput)
-				return;
-
-			const base = nameInput.value.replace(/\.(tar\.gz|tgz|zip)$/i, '');
-			const ext = fmt === 'zip' ? '.zip' : '.tar.gz';
-
-			nameInput.value = base + ext;
-			focusAndSelectBase(nameInput, base);
-		};
-
-		const files = Array.isArray(input) ? input : [input];
-		const isBatch = Array.isArray(input);
-		const defaultName = isBatch ? 'files-' + Date.now() : (input.name || ('dir-' + Date.now()));
+		let nameInput = '';
+		const defaultName = isBatch ? 'files-' + Date.now() : (files.name || ('dir-' + Date.now()));
 
 		L.showModal(isBatch ? _('Batch download') : _('Download catalog'), [
 			E('style', ['h4 {text-align:center;}']),
-			E('p', isBatch ? _('Number of files: %d').format(files.length) : _('Directory: %s').format(input.name)),
-			E('p', { class: 'cbi-value ace-toolbar' }, [
-				E('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:10px;' }, [
-					E('label', isBatch ? _('Compressed package file name') : _('file name')),
-					E('input', {
-						id: 'pack-name', class: 'cbi-input-text',
-						type: 'text', value: defaultName + '.tar.gz'
-					}),
-					E('label', _('suffix')),
-					E('input', {
-						type: 'radio', name: 'fmt', value: 'tar.gz',
-						checked: true, click: updateExtension, id: 'tar'
-					}),
-					E('label', { for: 'tar' }, ' .tar.gz'),
-					E('input', {
-						type: 'radio', name: 'fmt', id: 'zip',
-						value: 'zip', click: updateExtension
-					}),
-					E('label', { for: 'zip' }, ' .zip'),
-				]),
+			E('p', isBatch ? _('Number of files: %d').format(files.length) : _('Directory: %s').format(files.name)),
+			E('p', { style: 'display:flex;align-items:center;gap:10px;' }, [
+				E('label', isBatch ? _('Compressed package file name') : _('file name')),
+				E('input', {
+					id: 'pack-name', class: 'cbi-input-text',
+					type: 'text', value: defaultName + '.tar.gz',
+					input: ui.createHandlerFn(this, (ev) => nameInput = ev.target.value)
+				}),
 			]),
-
 			E('div', { class: 'button-row' }, [
 				E('button', {
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
-						const nameInput = document.getElementById('pack-name');
-						const fmt = document.querySelector('[name=fmt]:checked').value;
-						let fname = this.sanitizeFilename(nameInput?.value || defaultName);
-
-						if (!fname) fname = defaultName;
 						L.hideModal();
-						this.packAndDownload(files, fmt, fname);
+						let name = this.sanitizeFilename(nameInput || defaultName);
+						name = name.toLowerCase().endsWith('.tar.gz') ? name : name + '.tar.gz';
+						const relPaths = files.map(f => f.path.replace(/^\//, ''));
+						const args = relPaths.map(p => `"${p}"`).join(' ');
+						const out = `/tmp/${name}`;
+
+						fs.exec('/bin/sh', ['-c', `tar -czf "${out}" -C / ${args}`])
+							.then(() => this.startDownload(out, name))
+							.then(() => this.clearSelectedFiles())
+							.catch(e => this.showNotification(_('Packaging failed: %s').format(e.message), 5000, 'error'))
+							.finally(() => fs.remove(out).catch(() => {}));
 					})
 				}, isBatch ? _('Package download') : _('download')),
 				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
@@ -1087,44 +1065,19 @@ return view.extend({
 		focusAndSelectBase();
 	},
 
-	packAndDownload: async function (files, format = 'tar.gz', filename = null) {
-		const t = Date.now();
-		const base = this.sanitizeFilename(filename || ('files-' + t));
-		const out = `/tmp/${base}.${format}`;
-		const selectedPaths = files.map(f => f.path);
-
-		try {
-			const relPaths = files.map(f => f.path.replace(/^\/+/, ''));
-			const args = relPaths.map(p => `"${p}"`).join(' ');
-
-			if (format === 'zip') {
-				await fs.exec('/bin/sh', ['-c', `cd / && zip -qr "${out}" ${args}`]);
-			} else {
-				await fs.exec('/bin/sh', ['-c', `tar -czf "${out}" -C / ${args}`]);
-			}
-
-			const blob = await fs.read_direct(out, 'blob');
-			await this.startDownload(blob, `${base}.${format}`);
-			this.clearSelectedFiles();
-
-		} catch (e) {
-			this.showNotification(_('Packaging failed: %s').format(e.message), 5000, 'error');
-		} finally {
-			fs.remove(out).catch(() => {});
-		}
-	},
-
-	startDownload: function (blob, name) {
-		const a = Object.assign(document.createElement('a'), {
-			href: URL.createObjectURL(blob),
-			download: name
+	startDownload: function (path, name) {
+		fs.read_direct(path, 'blob').then((blob) => {
+			const url = window.URL.createObjectURL(blob);
+			let a = document.createElement('a');
+			a.style.display = 'none';
+			a.href = url;
+			a.download = name;
+			document.body.appendChild(a);
+			a.click();
+			window.URL.revokeObjectURL(url);
+		}).catch((err) => {
+			alert(_('Download failed: %s').format(err.message));
 		});
-		document.body.appendChild(a);
-		a.click();
-		setTimeout(() => {
-			URL.revokeObjectURL(a.href);
-			a.remove();
-		}, 200);
 	},
 
 	Upload: function (ev) {
