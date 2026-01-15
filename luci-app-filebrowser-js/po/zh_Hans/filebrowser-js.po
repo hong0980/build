@@ -14,10 +14,10 @@ msgid "Confirm"
 msgstr "确认"
 
 msgid "Delete file (directory)"
-msgstr "删除文件(目录)"
+msgstr "删除文件（目录）"
 
 msgid "Create file (directory)"
-msgstr "创建文件(目录)"
+msgstr "创建文件（目录）"
 
 msgid "successfully deleted!"
 msgstr "删除成功！"
@@ -64,29 +64,29 @@ msgstr "修改权限"
 msgid "Select the required permissions"
 msgstr "选择需要的权限"
 
-msgid "777 - Owner, group, and others have read, write, and execute permissions"
-msgstr "777 - 所有者、组用户和其他用户都有读取、写入和执行权限"
+msgid "777 - Full access for owner, group, and others (read, write, execute)"
+msgstr "777 - 所有者、组用户和其他用户均拥有完全权限（读、写、执行）"
 
-msgid "755 - Owner has all permissions; group and others have read and execute permissions"
-msgstr "755 - 所有者有全部权限；组用户和其他用户有读取和执行权限"
+msgid "755 - Full access for owner; read and execute for group and others"
+msgstr "755 - 所有者拥有完全权限；组用户和其他用户具有读和执行权限"
 
-msgid "700 - Only owner has read, write, and execute permissions; group and others have no permissions"
-msgstr "700 - 只有所有者有读取、写入和执行权限；组用户和其他用户没有任何权限"
+msgid "700 - Full access for owner only"
+msgstr "700 - 仅所有者拥有完全权限"
 
-msgid "666 - Owner, group, and others have read and write permissions, but no execute permissions"
-msgstr "666 - 所有者、组用户和其他用户都有读取和写入权限，但没有执行权限"
+msgid "666 - Read and write for owner, group, and others (no execute)"
+msgstr "666 - 所有者、组用户和其他用户具有读和写权限（无执行权限）"
 
-msgid "644 - Owner has read and write permissions; group and others have read-only permissions"
-msgstr "644 - 所有者有读取和写入权限；组用户和其他用户只有读取权限"
+msgid "644 - Read and write for owner; read-only for group and others"
+msgstr "644 - 所有者具有读和写权限；组用户和其他用户仅有读权限"
 
-msgid "600 - Only owner has read and write permissions; group and others have no permissions"
-msgstr "600 - 只有所有者有读取和写入权限；组用户和其他用户没有任何权限"
+msgid "600 - Read and write for owner only"
+msgstr "600 - 仅所有者具有读和写权限"
 
-msgid "555 - Owner, group, and others have read and execute permissions, but no write permissions"
-msgstr "555 - 所有者、组用户和其他用户都有读取和执行权限，但没有写入权限"
+msgid "555 - Read and execute for owner, group, and others (no write)"
+msgstr "555 - 所有者、组用户和其他用户具有读和执行权限（无写权限）"
 
-msgid "444 - Owner, group, and others have read-only permissions; no write or execute permissions"
-msgstr "444 - 所有者、组用户和其他用户都有读取权限，但没有写入和执行权限"
+msgid "444 - Read-only for owner, group, and others"
+msgstr "444 - 所有者、组用户和其他用户仅有读权限"
 
 msgid "total file size"
 msgstr "文件总大小"
@@ -265,6 +265,9 @@ msgstr "正在加载文件进行编辑..."
 msgid "Loading file content..."
 msgstr "正在加载文件内容..."
 
+msgid "The file is empty."
+msgstr "文件为空。"
+
 msgid "Unknown file type"
 msgstr "未知的文件类型"
 
@@ -274,11 +277,17 @@ msgstr "退出全屏"
 msgid "full screen"
 msgstr "全屏"
 
-msgid "The file is too large (%s)."
-msgstr "文件太大 (%s)。"
+msgid "cannot be edited"
+msgstr "无法编辑"
 
-msgid "Maximum size is %s."
-msgstr "最大大小为 %s。"
+msgid "cannot be displayed"
+msgstr "无法查看"
+
+msgid "File too large (%s), %s. Maximum allowed size is %s."
+msgstr "文件过大（%s），%s。最大允许大小为 %s。"
+
+msgid "This is a binary file and %s"
+msgstr "这是一个二进制文件，%s"
 
 msgid "Edit file"
 msgstr "编辑文件"
@@ -302,7 +311,7 @@ msgid "Please enter a new name"
 msgstr "请输入新的名称"
 
 msgid "You have unsaved changes. Discard them?"
-msgstr "您有未保存的更改。丢弃它们？"
+msgstr "您有未保存的更改。是否丢弃？"
 
 msgid "Rename failed: %s"
 msgstr "重命名失败：%s"
@@ -427,8 +436,5 @@ msgstr "重命名 %s"
 msgid "Delete file"
 msgstr "删除文件"
 
-msgid "Permission"
-msgstr "权限"
-
-msgid "Permission"
-msgstr "权限"
+msgid ""
+msgstr ""

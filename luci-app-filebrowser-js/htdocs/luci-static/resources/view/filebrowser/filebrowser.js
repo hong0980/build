@@ -115,35 +115,21 @@ tr.selected {
 }`;
 
 const permissions = [
-	[777, _('777 - Owner, group, and others have read, write, and execute permissions')],
-	[755, _('755 - Owner has all permissions; group and others have read and execute permissions')],
-	[700, _('700 - Only owner has read, write, and execute permissions; group and others have no permissions')],
-	[666, _('666 - Owner, group, and others have read and write permissions, but no execute permissions')],
-	[644, _('644 - Owner has read and write permissions; group and others have read-only permissions')],
-	[600, _('600 - Only owner has read and write permissions; group and others have no permissions')],
-	[555, _('555 - Owner, group, and others have read and execute permissions, but no write permissions')],
-	[444, _('444 - Owner, group, and others have read-only permissions; no write or execute permissions')]
+	[777, _('777 - Full access for owner, group, and others (read, write, execute)')],
+	[755, _('755 - Full access for owner; read and execute for group and others')],
+	[700, _('700 - Full access for owner only')],
+	[666, _('666 - Read and write for owner, group, and others (no execute)')],
+	[644, _('644 - Read and write for owner; read-only for group and others')],
+	[600, _('600 - Read and write for owner only')],
+	[555, _('555 - Read and execute for owner, group, and others (no write)')],
+	[444, _('444 - Read-only for owner, group, and others')]
 ];
 
 const themes = [
-	["ambiance", "Ambiance"], ["chaos", "Chaos"], ["chrome", "Chrome"],
-	["cloud9_day", "Cloud9 Day"], ["cloud9_night", "Cloud9 Night"],
-	["cloud9_night_low_color", "Cloud9 Night Low Color"], ["clouds", "Clouds"],
-	["clouds_midnight", "Clouds Midnight"], ["cobalt", "Cobalt"],
-	["crimson_editor", "Crimson Editor"], ["dawn", "Dawn"], ["dracula", "Dracula"],
-	["dreamweaver", "Dreamweaver"], ["eclipse", "Eclipse"], ["github", "GitHub"],
-	["github_dark", "GitHub Dark"], ["gob", "Gob"], ["gruvbox", "Gruvbox"],
-	["gruvbox_dark_hard", "Gruvbox Dark Hard"], ["gruvbox_light_hard", "Gruvbox Light Hard"],
-	["idle_fingers", "Idle Fingers"], ["iplastic", "IPlastic"], ["katzenmilch", "Katzenmilch"],
-	["kr_theme", "KR Theme"], ["kuroir", "Kuroir"], ["merbivore", "Merbivore"],
-	["merbivore_soft", "Merbivore Soft"], ["mono_industrial", "Mono Industrial"],
-	["monokai", "Monokai"], ["nord_dark", "Nord Dark"], ["one_dark", "One Dark"],
-	["pastel_on_dark", "Pastel on Dark"], ["solarized_dark", "Solarized Dark"],
-	["solarized_light", "Solarized Light"], ["sqlserver", "SQL Server"],
-	["terminal", "Terminal"], ["textmate", "TextMate"], ["tomorrow", "Tomorrow"],
-	["tomorrow_night", "Tomorrow Night"], ["tomorrow_night_blue", "Tomorrow Night Blue"],
-	["tomorrow_night_bright", "Tomorrow Night Bright"], ["tomorrow_night_eighties", "Tomorrow Night Eighties"],
-	["twilight", "Twilight"], ["vibrant_ink", "Vibrant Ink"], ["xcode", "Xcode"]
+	["monokai", "Monokai"], ["dracula", "Dracula"], ["one_dark", "One Dark"], ["github", "GitHub"],
+	["github_dark", "GitHub Dark"], ["solarized_light", "Solarized Light"],
+	["solarized_dark", "Solarized Dark"], ["tomorrow", "Tomorrow"],
+	["tomorrow_night", "Tomorrow Night"], ["terminal", "Terminal"]
 ];
 
 const modes = [
@@ -373,12 +359,16 @@ return view.extend({
 	showFileEditor: function (file, editable) {
 		const fileSize = this.parseSizeToBytes(file.size);
 		const maxSize = editable ? 512 * 1024 : 1024 * 1024;
-		const sizeLimit = editable ? '512KB' : '1MB';
+		const maxSizeStr = editable ? '512KB' : '1MB';
+		const action = editable
+			? _('cannot be edited')
+			: _('cannot be displayed');
 
-		if (fileSize > sizeLimit) {
-			return this.showNotification([
-				E('p', _('The file is too large (%s).').format(file.size)),
-				E('p', _('Maximum size is %s.').format(sizeLimit))], 8000, 'error'
+		if (fileSize > maxSize) {
+			return this.showNotification(
+				_('File too large (%s), %s. Maximum allowed size is %s.')
+					.format(file.size, action, maxSizeStr),
+				8000, 'error'
 			);
 		}
 
@@ -389,27 +379,34 @@ return view.extend({
 				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
 			])
 		]);
-		const showError = (e) => this.modalnotify(null, E('p', _('Failed to read file: %s').format(e.message || e)), '', 'error');
+
 		let path = file.isLink
 			? (this.parseLinkString(file.path)?.targetPath || file.path)
 			: file.path;
 		path = path.startsWith('/') ? path : '/' + path;
+
 		fs.stat(path).then(r => {
-			if (r.type === 'directory') {
-				L.hideModal();
-				this.reload(path);
+			if (r.size === 0) {
+				throw new Error(_('The file is empty.'));
 			} else if (r.type === 'file') {
 				return fs.read_direct(path).then(content => {
+					if (content.indexOf('\0') !== -1)
+						throw new Error(_('This is a binary file and %s').format(action));
+
 					L.hideModal();
 					window._aceReady
-						? this.showAceEditor(file, content, path, editable)
-						: this.showSimpleEditor(file, content, path, editable);
-				});
+						? this.showAceEditor(file, content, editable)
+						: this.showSimpleEditor(file, content, editable);
+				})
+			} else if (r.type === 'directory') {
+				L.hideModal();
+				this.reload(path);
 			} else throw new Error(_('Unknown file type'));
-		}).catch(showError);
+		}).catch((e) =>
+			this.modalnotify(null, E('p', _('Failed to read file: %s').format(e.message || e)), '', 'error'));
 	},
 
-	showAceEditor: function (file, content, path, editable) {
+	showAceEditor: function (file, content, editable) {
 		const originalContent = content;
 		const containerId = 'ace-' + Date.now();
 		const syntaxid = 'syntax-' + Date.now();
@@ -431,9 +428,9 @@ return view.extend({
 				if (val === originalContent)
 					return this.modalnotify(null, E('p', _('The file content has not changed')), 3000);
 
-				fs.write(path, val).then(() => {
+				fs.write(file.path, val).then(() => {
 					L.hideModal();
-					this.showNotification(_('%s File saved successfully!').format(path), 3000, 'success');
+					this.showNotification(_('%s File saved successfully!').format(file.path), 3000, 'success');
 					this.reload(this._path);
 				});
 			})
@@ -483,11 +480,15 @@ return view.extend({
 					type: 'checkbox', id: 'editCheckbox',
 					change: ui.createHandlerFn(this, ev => {
 						if (!editor) return;
-						const on = ev.target.checked;
-						editor.setReadOnly(!on);
-						saveBtn.style.display = on ? 'block' : 'none';
+						const val = ev.target.checked;
+						editor.setReadOnly(!val);
+						saveBtn.style.display = val ? 'block' : 'none';
 						changeIndicator.style.display =
-							(hasUnsavedChanges && on) ? 'inline' : 'none';
+							(hasUnsavedChanges && val) ? 'inline' : 'none';
+						const modalTitle = document.querySelector('.modal h4');
+						if (modalTitle) {
+							modalTitle.textContent = (val ? _('Edit') : _('View')) + ': ' + file.name;
+						}
 					})
 				}),
 				E('label', { style: 'display:flex;align-items:center;gap:5px;', for: 'editCheckbox' }, _('Edit')),
@@ -515,7 +516,7 @@ return view.extend({
 		]);
 
 		L.showModal(_('%s: %s').format(editable ? _('Edit') : _('View'), file.name), [
-			E('style', ['h4 {text-align:center;color:red;}.modal{padding:.3em;}']),
+			E('style', ['.modal{padding:.3em;h4{text-align:center;color:red;}}']),
 			E('p', { style: 'padding:8px;background:#f0f0f0;font-size:12px;' }, [
 				E('span', {}, _('Ace Editor version: %s').format(ace.version)),
 				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
@@ -523,7 +524,7 @@ return view.extend({
 				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
 				E('span', {}, _('Lines: %d').format(content.split('\n').length)),
 				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
-				E('span', {}, _('Path: %s').format(path))
+				E('span', {}, _('Path: %s').format(file.path))
 			]), fullscreenWrapper
 		]);
 
@@ -574,7 +575,7 @@ return view.extend({
 		});
 	},
 
-	showSimpleEditor: function (file, content, path, editable) {
+	showSimpleEditor: function (file, content, editable) {
 		const textarea = E('textarea', {
 			class: 'cbi-input-text', readonly: !editable,
 			style: 'width:100%;height:400px;font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;'
@@ -586,7 +587,7 @@ return view.extend({
 			E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
 			E('span', {}, _('Lines: %d').format(content.split('\n').length)),
 			E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
-			E('span', {}, _('Path: %s').format(path))
+			E('span', {}, _('Path: %s').format(file.path))
 		]);
 
 		const editCheckbox = E('input', {
@@ -633,10 +634,10 @@ return view.extend({
 				const newContent = textarea.value;
 				if (newContent === originalContent)
 					return this.modalnotify(null, E('p', _('The file content has not changed')), 3000);
-				fs.write(path, newContent)
+				fs.write(file.path, newContent)
 					.then(() => {
 						L.hideModal();
-						this.showNotification(_('%s File saved successfully!').format(path), 3000, 'success');
+						this.showNotification(_('%s File saved successfully!').format(file.path), 3000, 'success');
 						this.reload(this._path);
 					})
 					.catch(error =>
@@ -743,7 +744,7 @@ return view.extend({
 			})
 		});
 
-		L.showModal(_('New directory'), [
+		L.showModal(_('Create file (directory)'), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', [
 				E('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
@@ -922,7 +923,7 @@ return view.extend({
 		const files = Array.isArray(fileOrArray) ? fileOrArray : [fileOrArray];
 		if (files.length === 0) return;
 
-		L.showModal(_('Confirm deletion'), [
+		L.showModal(_('confirm deletion'), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('p', { style: 'text-align:center;' },
 				files.length === 1
