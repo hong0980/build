@@ -208,8 +208,8 @@ msgstr "滚动到顶部"
 msgid "Reverse Log Order"
 msgstr "反转日志顺序"
 
-msgid "Path contains illegal characters"
-msgstr "路径包含非法字符"
+msgid "Path contains unsupported characters"
+msgstr "路径包含不支持的字符"
 
 msgid "Path contains illegal segment (..)"
 msgstr "路径包含非法段(..)"
@@ -235,8 +235,33 @@ msgstr "同时创建文件"
 msgid "Directory permissions"
 msgstr "目录权限"
 
-msgid "Can create files (directories) in the current (absolute path) directory"
-msgstr "可以创建当前(绝对路径)目录的文件(目录)"
+msgid ""
+"Rules:\n"
+"• End with \"/\" → create directory\n"
+"• No \"/\" at end → create file\n"
+"• Start with \"/\" → absolute path\n"
+"• \"..\" is not allowed"
+msgstr ""
+"规则说明：\n"
+"• 以“/”结尾：创建目录\n"
+"• 不以“/”结尾：创建文件\n"
+"• 以“/”开头：绝对路径\n"
+"• 不允许使用“..”"
+
+msgid "e.g. file.txt   or   folder/"
+msgstr "示例 file.txt 或 folder/"
+
+msgid "This will create a directory"
+msgstr "将创建一个目录"
+
+msgid "This will create a file"
+msgstr "将创建一个文件"
+
+msgid "File will not be created (option disabled)"
+msgstr "未勾选选项，不会创建文件"
+
+msgid "Please enter a file or directory name"
+msgstr "请输入文件或目录名称"
 
 msgid "file permissions"
 msgstr "文件权限"

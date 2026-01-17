@@ -8,31 +8,25 @@
 				"/bin/ls": [ "exec" ],
 				"/bin/mv": [ "exec" ],
 				"/bin/rm": [ "exec" ],
-				"/bin/cp": [ "exec" ],
 				"/bin/ln": [ "exec" ],
-				"/bin/opkg": [ "exec" ],
-				"/bin/echo": [ "exec" ],
-				"/bin/grep": [ "exec" ],
 				"/bin/mkdir": [ "exec" ],
 				"/bin/chmod": [ "exec" ],
 				"/usr/bin/du": [ "exec" ],
-				"/usr/bin/find": [ "exec" ],
+				"/dev/mtdblock[0-9]*": [ "read" ],
 				"/*": [ "list", "read", "stat" ]
 			},
 			"ubus": {
-				"file": [ "exec", "list", "read", "stat" ],
-				"session": [ "access" ]
+				"file": [ "exec", "read", "stat" ]
 			},
 			"uci": [ "filebrowser" ]
 		},
 		"write": {
 			"cgi-io": [ "upload" ],
 			"file": {
-				"/tmp/*": [ "write" ],
 				"/*": [ "write", "remove" ]
 			},
 			"ubus": {
-				"file": [ "exec", "remove", "write" ]
+				"file": [ "exec", "remove", "write" ],
 			},
 			"uci": [ "filebrowser" ]
 		}

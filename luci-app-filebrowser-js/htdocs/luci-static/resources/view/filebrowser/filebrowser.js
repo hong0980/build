@@ -126,9 +126,9 @@ const permissions = [
 ];
 
 const themes = [
-	["monokai", "Monokai"], ["dracula", "Dracula"], ["one_dark", "One Dark"], ["github", "GitHub"],
+	["monokai", "Monokai"], ["dracula", "Dracula"], ["one_dark", "One Dark"],
 	["github_dark", "GitHub Dark"], ["solarized_light", "Solarized Light"],
-	["solarized_dark", "Solarized Dark"], ["tomorrow", "Tomorrow"],
+	["solarized_dark", "Solarized Dark"], ["tomorrow", "Tomorrow"], ["github", "GitHub"],
 	["tomorrow_night", "Tomorrow Night"], ["terminal", "Terminal"]
 ];
 
@@ -137,7 +137,7 @@ const modes = [
 	['html', 'HTML'], ['json', 'JSON'], ['python', 'Python'],
 	['text', 'Text'], ['css', 'CSS'], ['yaml', 'YAML'],
 	['xml', 'XML'], ['toml', 'Toml'], ["sql", "SQL"],
-	["ini", "ini"], ["diff", "patch(diff)"], ["makefile", "Makefile"]
+	["diff", "patch(diff)"], ["makefile", "Makefile"]
 ];
 
 return view.extend({
@@ -259,14 +259,12 @@ return view.extend({
 				])
 			]);
 
-			const btn = E('div', [
-				!f.isDir ? E('button', {
-					class: 'btn cbi-button-edit',
-					click: ui.createHandlerFn(this, 'showFileEditor', f, false)
-				}, _('open file')) : '',
-			]);
+			const btn = E('button', {
+				class: 'btn cbi-button-edit',
+				click: ui.createHandlerFn(this, 'showFileEditor', f, false)
+			}, _('open'));
 
-			return [nameCell, f.owner, f.size, f.date, `[${f.permissionNum}] ${f.perm}`, btn];
+			return [nameCell, f.owner, f.size, f.date, `[${f.permissionNum}] ${f.perm}`, f.isDir ? '' : btn];
 		}));
 
 		root.append(
@@ -279,7 +277,7 @@ return view.extend({
 						_('%d items • Total %s').format(files.length, this.formatSizeHuman(totalSize))),
 					E('button', {
 						class: 'btn cbi-button-positive',
-						click: ui.createHandlerFn(this, 'reload', this._path)
+						click: ui.createHandlerFn(this, 'reload')
 					}, _('Reload page'))
 				])
 			]),
@@ -314,7 +312,7 @@ return view.extend({
 	},
 
 	reload: function (p) {
-		return this.load(p).then(d => this.render(d));
+		return this.load(p || this._path).then(d => this.render(d));
 	},
 
 	showContextMenu: function (ev, file) {
@@ -393,13 +391,13 @@ return view.extend({
 					if (content.indexOf('\0') !== -1)
 						throw new Error(_('This is a binary file and %s').format(action));
 
-					L.hideModal();
+					hideModal();
 					window._aceReady
 						? this.showAceEditor(file, content, editable)
 						: this.showSimpleEditor(file, content, editable);
 				})
 			} else if (r.type === 'directory') {
-				L.hideModal();
+				hideModal();
 				this.reload(path);
 			} else throw new Error(_('Unknown file type'));
 		}).catch((e) =>
@@ -429,9 +427,9 @@ return view.extend({
 					return this.modalnotify(null, E('p', _('The file content has not changed')), 3000);
 
 				fs.write(file.path, val).then(() => {
-					L.hideModal();
+					hideModal();
 					this.showNotification(_('%s File saved successfully!').format(file.path), 3000, 'success');
-					this.reload(this._path);
+					this.reload();
 				});
 			})
 		}, _('Save'));
@@ -509,7 +507,7 @@ return view.extend({
 				E('button', {
 					class: 'btn', click: ui.createHandlerFn(this, () => {
 						if (isFullscreen) toggleFullscreen();
-						L.hideModal();
+						hideModal();
 					})
 				}, editable ? _('Cancel') : _('Close'))
 			])
@@ -627,6 +625,11 @@ return view.extend({
 			])
 		]);
 
+		const copyBtn = E('button', {
+			class: 'btn cbi-button-positive',
+			click: ui.createHandlerFn(this, 'copyText', textarea.value)
+		}, _('Copy'));
+
 		const saveBtn = E('button', {
 			class: 'btn cbi-button-positive',
 			style: `display:${editable ? 'inline-block' : 'none'};`,
@@ -636,9 +639,9 @@ return view.extend({
 					return this.modalnotify(null, E('p', _('The file content has not changed')), 3000);
 				fs.write(file.path, newContent)
 					.then(() => {
-						L.hideModal();
+						hideModal();
 						this.showNotification(_('%s File saved successfully!').format(file.path), 3000, 'success');
-						this.reload(this._path);
+						this.reload();
 					})
 					.catch(error =>
 						this.modalnotify(null, E('p', _('Save failed: %s').format(error.message || error)), '', 'warning'));
@@ -650,14 +653,9 @@ return view.extend({
 			click: ui.createHandlerFn(this, () => {
 				if (textarea.value !== originalContent && editable)
 					if (!confirm(_('You have unsaved changes. Discard them?'))) return;
-				L.hideModal();
+				hideModal();
 			})
 		}, editable ? _('Cancel') : _('Close'));
-
-		const copyBtn = E('button', {
-			class: 'btn cbi-button-positive',
-			click: ui.createHandlerFn(this, 'copyText', textarea.value)
-		}, _('Copy'));
 
 		const buttons = E('div', {
 			style: 'display:flex;justify-content:space-around;gap:0.5em;',
@@ -671,10 +669,20 @@ return view.extend({
 	},
 
 	createnew: function () {
-		let editor = null, createFileToo = false, mode = '', result = '';
-		let filePerm = 755, dirPerm = 644, fileContent = '', modeid = '';
-		const syntaxid = 'syntax-select-' + Date.now();
-		const containerId = 'ace-editor-' + Date.now();
+		const setmode = () => {
+			if (result.file) {
+				mode = this.detectFileMode(result.file, null);
+				if (editor && mode) {
+					editor.session.setMode(`ace/mode/${mode}`);
+					const modeElem = document.getElementById(syntaxid);
+					if (modeElem) modeElem.value = mode;
+				}
+			}
+		};
+		let editor = null, dirPerm = 644, result = '', mode = '', fullFile = '';
+		let filePerm = 755, fileContent = '', fullDir = '', createFileToo = false;
+		const syntaxid = 'syntax-' + Date.now();
+		const containerId = 'ace-' + Date.now();
 		const fileElem = E('span', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
 			E('span', _('file permissions')),
 			E('select', {
@@ -693,15 +701,13 @@ return view.extend({
 							E('select', {
 								class: 'cbi-input-select ace-toolbar-select', id: syntaxid,
 								change: ui.createHandlerFn(this, ev => editor && editor.session.setMode('ace/mode/' + ev.target.value))
-							}, modes.map(([id, name]) =>
-								E('option', { value: id, selected: id === mode || undefined }, name))
+							}, modes.map(([id, name]) => E('option', { value: id, selected: id === mode || undefined }, name))
 							),
 							E('span', _('Theme')),
 							E('select', {
 								class: 'cbi-input-select ace-toolbar-select',
 								change: ui.createHandlerFn(this, ev => editor && editor.setTheme('ace/theme/' + ev.target.value))
-							}, themes.map(([id, name]) =>
-								E('option', { value: id, selected: id === 'monokai' || undefined }, name))
+							}, themes.map(([id, name]) => E('option', { value: id, selected: id === 'monokai' || undefined }, name))
 							),
 							E('span', _('Font')),
 							E('select', {
@@ -729,19 +735,30 @@ return view.extend({
 		]);
 
 		const pathInput = E('input', {
-			title: _('Can create files (directories) in the current (absolute path) directory'),
-			class: 'cbi-input-text', style: 'width:150px;', placeholder: '/tmp/c.txt', type: 'text',
+			class: 'cbi-input-text', style: 'width:150px;',
+			placeholder: _('e.g. file.txt   or   folder/'),
+			title: _('Rules:\n' +
+				'• End with "/" → create directory\n' +
+				'• No "/" at end → create file\n' +
+				'• Start with "/" → absolute path\n' +
+				'• ".." is not allowed'),
 			change: ui.createHandlerFn(this, ev => {
 				result = this.parsePath(ev.target.value.trim());
-				modeid = document.getElementById(syntaxid);
-				if (result.valid && result.file) {
-					mode = this.detectFileMode(result.file, null);
-					if (editor && mode) {
-						editor.session.setMode(`ace/mode/${mode}`);
-						if (modeid) modeid.value = mode;
-					}
-				};
-			})
+				const base = result.isAbsolute ? '' : this._path + '/';
+				fullDir = result.isDir ? base + result.path : base + result.dir;
+				fullFile = (result.isFile && createFileToo) ? base + result.path : null;
+				let tip;
+				if (fullFile) {
+					tip = _('This will create a file');
+					tip += `\n${fullFile}`;
+				} else if (fullDir) {
+					tip = _('This will create a directory');
+					tip += `\n${fullDir}`;
+				} else
+					tip = _('File will not be created (option disabled)');
+				ev.target.title = tip;
+				setmode();
+			}), type: 'text'
 		});
 
 		L.showModal(_('Create file (directory)'), [
@@ -761,6 +778,7 @@ return view.extend({
 						change: ui.createHandlerFn(this, ev => {
 							createFileToo = ev.target.checked;
 							toolbar.style.display = createFileToo ? 'block' : 'none';
+							setmode();
 						})
 					}),
 					E('label', { for: 'createFileCheckbox' }, _('Create files simultaneously'))
@@ -771,17 +789,13 @@ return view.extend({
 				E('button', {
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
-						L.hideModal();
-						const base = result.isAbsolute ? '' : this._path + '/';
-						const fullDir = result.isDir ? base + result.path : base + result.dir;
-						const fullFile = (result.isFile && createFileToo) ? base + result.path : null;
-
+						hideModal();
 						if (fullDir) {
 							fs.exec('/bin/mkdir', ['-p', fullDir, '-m', String(dirPerm)]).then(res => {
 								if (!fullFile) {
 									if (res.code !== 0)
 										return this.modalnotify(null, E('p', _('Directory %s creation failed: %s').format(fullDir, res.stderr)), '', 'error');
-									this.reload(this._path);
+									this.reload(fullDir);
 									this.showNotification(_('Directory %s created successfully').format(fullDir), 3000, 'success');
 								}
 							});
@@ -793,7 +807,7 @@ return view.extend({
 						return fs.exec('/bin/sh', ['-c', cmd]).then(res => {
 							if (res.code !== 0)
 								return this.modalnotify(null, E('p', _('Create failed: %s').format(res.stderr)), '', 'error');
-							this.reload(this._path);
+							this.reload(fullDir);
 							this.showNotification(_('Created successfully: %s').format(fullFile), 3000, 'success');
 						});
 					})
@@ -806,20 +820,14 @@ return view.extend({
 			if (window._aceReady)
 				this.initAceEditor(containerId, { editable: true }).then(ed => {
 					editor = ed;
-					if (result.valid && result.file) {
-						mode = this.detectFileMode(result.file, null);
-						if (mode && modeid) {
-							editor.session.setMode(`ace/mode/${mode}`);
-							modeid.value = mode;
-						}
-					};
+					setmode();
 				});
 			ui.addValidator(pathInput, 'string', false, function (value) {
-				result = this.parsePath(value.trim());
+				const result = this.parsePath(value.trim());
 				if (!result.valid)
 					return result.error ? _(result.error) : _('Invalid path format');
 				return true;
-			}.bind(this), 'blur', 'keyup');
+			}.bind(this));
 			this.Draggable();
 		});
 	},
@@ -827,22 +835,21 @@ return view.extend({
 	parsePath: function (path) {
 		path = path.trim();
 
-		if (!/^[A-Za-z0-9._\/-]+$/.test(path))
-			return { valid: false, error: _('Path contains illegal characters') };
+		if (!/^[A-Za-z0-9._\-\/~@()+,=]+$/.test(path))
+			return { valid: false, error: _('Path contains unsupported characters') };
 
 		if (path.split('/').includes('..'))
 			return { valid: false, error: _('Path contains illegal segment (..)') };
 
 		const parts = path.split('/');
-		const last = parts.pop() || parts.pop() || '';
-		const isFile = /^[^.].*\.[^.]+$/.test(last) && !path.endsWith('/');
+		const last = parts.pop() || '';
+		const isFile = /^[^.].*\.[^.]+$/.test(last) || !path.endsWith('/');
 		const dir = path.endsWith('/') ? path : path.slice(0, path.lastIndexOf('/') + 1);
 		const isAbsolute = path.startsWith('/');
 
 		return {
 			isFile, valid: true, dir, path, isAbsolute,
-			file: isFile ? last : '', isDir: !isFile,
-			ext: isFile ? last.replace(/^.*\./, '') : ''
+			file: isFile ? last : '', isDir: !isFile
 		};
 	},
 
@@ -866,11 +873,11 @@ return view.extend({
 					click: ui.createHandlerFn(this, () => {
 						if (!newname || newname === oldname)
 							return this.modalnotify(null, E('p', _('Please enter a new name')), 3000);
-						L.hideModal();
+						hideModal();
 						fs.exec('/bin/mv', [path, path.replace(/[^/]+$/, newname)]).then(r => {
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Rename failed: %s').format(r.stderr)), '', 'error');
-							this.reload(this._path);
+							this.reload();
 							this.showNotification(_('Renamed: %s to %s').format(path, newname), 3000, 'success');
 						});
 					})
@@ -905,11 +912,11 @@ return view.extend({
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
 						if (!n) return this.modalnotify(null, E('p', _('Please select a new value')), 3000);
-						L.hideModal();
+						hideModal();
 						fs.exec('/bin/chmod', [n, file.path]).then(r => {
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Permission change failed: %s').format(r.stderr)), '', 'error');
-							this.reload(this._path);
+							this.reload();
 							this.showNotification(_('Permissions updated: %s').format(file.path), 3000, 'success');
 						});
 					})
@@ -943,9 +950,9 @@ return view.extend({
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Delete failed: %s').format(r.stderr)), '', 'error');
 
-							L.hideModal();
+							hideModal();
 							this.clearSelectedFiles();
-							this.reload(this._path);
+							this.reload();
 							this.showNotification(
 								files.length === 1
 									? _('Deleted: %s').format(files[0].name)
@@ -986,12 +993,12 @@ return view.extend({
 					click: ui.createHandlerFn(this, () => {
 						if (!linkPath)
 							return this.modalnotify(null, E('p', _('Please enter link path')), '', 'error');
-						L.hideModal();
+						hideModal();
 						const args = isHardLink ? [file.path, linkPath] : ['-s', file.path, linkPath];
 						fs.exec('/bin/ln', args).then(r => {
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Link creation failed: %s').format(r.stderr)), '', 'error');
-							this.reload(this._path);
+							this.reload();
 							this.showNotification(_('%s Link created successfully: %s').format(file.path, linkPath), 3000, 'success');
 						});
 					})
@@ -1046,7 +1053,7 @@ return view.extend({
 				E('button', {
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
-						L.hideModal();
+						hideModal();
 						let name = this.sanitizeFilename(nameInput || defaultName);
 						name = name.toLowerCase().endsWith('.tar.gz') ? name : name + '.tar.gz';
 						const relPaths = files.map(f => f.path.replace(/^\//, ''));
@@ -1088,7 +1095,7 @@ return view.extend({
 				return fs.exec('/bin/mv', [tmp, `${this._path}/${reply.name}`]).then(res => {
 					if (res.code !== 0)
 						return this.modalnotify(null, E('p', _('Upload failed: %s').format(res.stderr)), '', 'error');
-					this.reload(this._path);
+					this.reload();
 					this.showNotification(_('Uploaded: %s').format(`${this._path}/${reply.name}`), 3000, 'success');
 				});
 			}, this, ev.target))
@@ -1098,20 +1105,15 @@ return view.extend({
 	detectFileMode: function (filename, content) {
 		const name = filename.toLowerCase();
 		const ext = name.includes('.') ? name.split('.').pop() : '';
-
-		if (name === 'dockerfile') return 'sh';
-		if (name === 'makefile') return 'text';
-		if (name === '.gitignore') return 'text';
-
 		const extMap = {
 			js: 'javascript', json: 'json', html: 'html', htm: 'html',
 			css: 'css', xml: 'xml', py: 'python', sh: 'sh', bash: 'sh',
 			php: 'php', lua: 'lua', pl: 'perl', rb: 'ruby', md: 'markdown',
 			yaml: 'yaml', yml: 'yaml', uc: 'javascript', ut: 'javascript',
-			lua: 'lua', toml: 'toml'
+			ts: 'javascript', lua: 'lua', toml: 'toml'
 		};
+		if (extMap[ext]) return extMap[ext];
 
-		if (extMap[ext]) return extMap[ext]
 		const trimmed = (content || '').trim();
 		const firstLine = trimmed.split('\n')[0] || '';
 		const byShebang = this.detectByShebang(firstLine);
@@ -1139,11 +1141,11 @@ return view.extend({
 		const patterns = [
 			{ re: /\/lua\b/, mode: 'lua' },
 			{ re: /(ba)?sh\b/, mode: 'sh' },
-			{ re: /python\d?(\.\d+)?\b/, mode: 'python' },
+			{ re: /node\b/, mode: 'javascript' },
 			{ re: /ucode\b/, mode: 'javascript' },
+			{ re: /python\d?(\.\d+)?\b/, mode: 'python' },
 			{ re: /perl\b/, mode: 'perl' },
 			{ re: /ruby\b/, mode: 'ruby' },
-			{ re: /node\b/, mode: 'javascript' },
 			{ re: /php\b/, mode: 'php' },
 			{ re: /zsh\b/, mode: 'sh' },
 			{ re: /ksh\b/, mode: 'sh' },
