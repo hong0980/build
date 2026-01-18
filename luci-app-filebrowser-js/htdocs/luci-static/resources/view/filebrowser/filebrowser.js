@@ -325,7 +325,7 @@ return view.extend({
 			[_('Create file (directory)'), () => this.createnew()],
 			!file.isDir && [_('Edit file'), () => this.showFileEditor(file, true)],
 			[_('Rename'), () => this.renameFile(file.path)],
-			!file.isLink && [_('Create link'), () => this.createLink(file)],
+			!file.isLink && [_('Create link'), () => this.createLink(file.path)],
 			[_('Modify permissions'), () => this.chmodFile(file)],
 			[_('Delete file'), () => this.deleteFile(file)],
 			[_('download file'), () => this.downloadFile(file)],
@@ -368,15 +368,7 @@ return view.extend({
 					.format(file.size, action, maxSizeStr),
 				8000, 'error'
 			);
-		}
-
-		const modal = L.showModal(null, [
-			E('p', editable ? _('Loading file for editing...') : _('Loading file content...')),
-			E('div', { class: 'spinner' }),
-			E('div', { class: 'right', style: 'flex:1' }, [
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
-			])
-		]);
+		};
 
 		let path = file.isLink
 			? (this.parseLinkString(file.path)?.targetPath || file.path)
@@ -401,7 +393,7 @@ return view.extend({
 				this.reload(path);
 			} else throw new Error(_('Unknown file type'));
 		}).catch((e) =>
-			this.modalnotify(null, E('p', _('Failed to read file: %s').format(e.message || e)), '', 'error'));
+			this.showNotification(_('Failed to read file: %s').format(e.message), 8000, 'error'));
 	},
 
 	showAceEditor: function (file, content, editable) {
@@ -679,8 +671,8 @@ return view.extend({
 				}
 			}
 		};
-		let editor = null, dirPerm = 644, result = '', mode = '', fullFile = '';
-		let filePerm = 755, fileContent = '', fullDir = '', createFileToo = false;
+		let editor = null, dirPerm = 755, result = '', mode, tip, fullFile;
+		let filePerm = 644, fileContent = '', fullDir, createFileToo = false;
 		const syntaxid = 'syntax-' + Date.now();
 		const containerId = 'ace-' + Date.now();
 		const fileElem = E('span', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
@@ -735,53 +727,64 @@ return view.extend({
 		]);
 
 		const pathInput = E('input', {
-			class: 'cbi-input-text', style: 'width:150px;',
-			placeholder: _('e.g. file.txt   or   folder/'),
-			title: _('Rules:\n' +
-				'• End with "/" → create directory\n' +
-				'• No "/" at end → create file\n' +
-				'• Start with "/" → absolute path\n' +
-				'• ".." is not allowed'),
+			class: 'cbi-input-text', type: 'text',
+			placeholder: _('e.g. file.txt or folder/'),
+			title: [
+				_("Rules:"),
+				" • " + _("End with '/' -> create directory"),
+				" • " + _("No '/' at end -> create file"),
+				" • " + _("Start with '/' -> absolute path")
+			].join("\n"),
 			change: ui.createHandlerFn(this, ev => {
 				result = this.parsePath(ev.target.value.trim());
 				const base = result.isAbsolute ? '' : this._path + '/';
 				fullDir = result.isDir ? base + result.path : base + result.dir;
-				fullFile = (result.isFile && createFileToo) ? base + result.path : null;
-				let tip;
+				fullFile = (result.isFile || createFileToo) ? base + result.path : null;
+				const dirElem = document.getElementById('dirperm');
+				const createFile = document.getElementById('createFile');
 				if (fullFile) {
-					tip = _('This will create a file');
-					tip += `\n${fullFile}`;
+					if (createFile) createFile.checked = true;
+					if (dirElem) dirElem.style.display = 'none';
+					toolbar.style.display = 'block';
+					tip = _('This will create a file at: %s').format(fullFile);
 				} else if (fullDir) {
-					tip = _('This will create a directory');
-					tip += `\n${fullDir}`;
+					if (createFile) createFile.checked = false;
+					if (dirElem) dirElem.style.display = 'block';
+					toolbar.style.display = 'none';
+					tip = _('This will create a directory at: %s').format(fullDir);
 				} else
 					tip = _('File will not be created (option disabled)');
 				ev.target.title = tip;
 				setmode();
-			}), type: 'text'
+			})
 		});
 
 		L.showModal(_('Create file (directory)'), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', [
-				E('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
+				E('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;' }, [
 					E('span', _('Name')), pathInput,
-					E('span', _('Directory permissions')),
-					E('select', {
-						class: 'cbi-input-select ace-toolbar-select',
-						change: ui.createHandlerFn(this, ev => dirPerm = parseInt(ev.target.value, 10))
-					}, permissions.map(([id, name]) =>
-						E('option', { value: id, selected: id === dirPerm || undefined }, name)
-					)),
+					E('span', { id: 'dirperm' }, [
+						E('span', _('Directory permissions')),
+						E('select', {
+							class: 'cbi-input-select ace-toolbar-select',
+							change: ui.createHandlerFn(this, ev => dirPerm = parseInt(ev.target.value, 10))
+						}, permissions.map(([id, name]) =>
+							E('option', { value: id, selected: id === dirPerm || undefined }, name)
+						)),
+					]),
 					E('input', {
-						type: 'checkbox', id: 'createFileCheckbox',
+						type: 'checkbox', id: 'createFile',
 						change: ui.createHandlerFn(this, ev => {
 							createFileToo = ev.target.checked;
 							toolbar.style.display = createFileToo ? 'block' : 'none';
+							const value = pathInput.value.trim();
+							if (value)
+								pathInput.dispatchEvent(new Event('change'));
 							setmode();
 						})
 					}),
-					E('label', { for: 'createFileCheckbox' }, _('Create files simultaneously'))
+					E('label', { for: 'createFile' }, _('Create files simultaneously'))
 				]),
 				toolbar
 			]),
@@ -791,7 +794,7 @@ return view.extend({
 					click: ui.createHandlerFn(this, () => {
 						hideModal();
 						if (fullDir) {
-							fs.exec('/bin/mkdir', ['-p', fullDir, '-m', String(dirPerm)]).then(res => {
+							fs.exec('/bin/mkdir', ['-p', '-m', String(dirPerm), fullDir]).then(res => {
 								if (!fullFile) {
 									if (res.code !== 0)
 										return this.modalnotify(null, E('p', _('Directory %s creation failed: %s').format(fullDir, res.stderr)), '', 'error');
@@ -812,7 +815,7 @@ return view.extend({
 						});
 					})
 				}, _('Create')),
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
+				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
 			])
 		]);
 
@@ -833,8 +836,6 @@ return view.extend({
 	},
 
 	parsePath: function (path) {
-		path = path.trim();
-
 		if (!/^[A-Za-z0-9._\-\/~@()+,=]+$/.test(path))
 			return { valid: false, error: _('Path contains unsupported characters') };
 
@@ -843,13 +844,16 @@ return view.extend({
 
 		const parts = path.split('/');
 		const last = parts.pop() || '';
-		const isFile = /^[^.].*\.[^.]+$/.test(last) || !path.endsWith('/');
-		const dir = path.endsWith('/') ? path : path.slice(0, path.lastIndexOf('/') + 1);
-		const isAbsolute = path.startsWith('/');
+		const isDir = path.endsWith('/');
+		const isFile = !isDir;
+		const dir = isFile
+			? path.slice(0, path.lastIndexOf('/') + 1)
+			: (path.endsWith('/') ? path : path + '/');
 
 		return {
-			isFile, valid: true, dir, path, isAbsolute,
-			file: isFile ? last : '', isDir: !isFile
+			isFile, isDir, dir, path,
+			file: isFile ? last : '', valid: true,
+			isAbsolute: path.startsWith('/')
 		};
 	},
 
@@ -882,7 +886,7 @@ return view.extend({
 						});
 					})
 				}, _('Rename')),
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
+				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
 			])
 		]);
 
@@ -894,40 +898,40 @@ return view.extend({
 		}, 10);
 	},
 
-	chmodFile: function (file) {
-		let n = '';
-		L.showModal(_('Change permissions %s').format(file.path), [
+	chmodFile: function ({ path, permissionNum }) {
+		let val = '';
+		L.showModal(_('Change permissions %s').format(path), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
 				E('label', { style: 'min-width:60px;' }, _('Permission')),
 				E('select', {
 					style: 'width:100%;',
-					change: ui.createHandlerFn(this, ev => n = ev.target.value)
+					change: ui.createHandlerFn(this, ev => val = ev.target.value)
 				}, permissions.map(([id, name]) =>
-					E('option', { value: id, selected: id === Number(file.permissionNum) || undefined }, name)
+					E('option', { value: id, selected: id === Number(permissionNum) || undefined }, name)
 				))
 			]),
 			E('div', { class: 'button-row' }, [
 				E('button', {
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
-						if (!n) return this.modalnotify(null, E('p', _('Please select a new value')), 3000);
+						if (!val) return this.modalnotify(null, E('p', _('Please select a new value')), 3000);
 						hideModal();
-						fs.exec('/bin/chmod', [n, file.path]).then(r => {
+						fs.exec('/bin/chmod', [val, path]).then(r => {
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Permission change failed: %s').format(r.stderr)), '', 'error');
 							this.reload();
-							this.showNotification(_('Permissions updated: %s').format(file.path), 3000, 'success');
+							this.showNotification(_('Permissions updated: %s').format(path), 3000, 'success');
 						});
 					})
 				}, _('Apply')),
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
+				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
 			])
 		]);
 	},
 
-	deleteFile: function (fileOrArray) {
-		const files = Array.isArray(fileOrArray) ? fileOrArray : [fileOrArray];
+	deleteFile: function (files) {
+		files = [].concat(files);
 		if (files.length === 0) return;
 
 		L.showModal(_('confirm deletion'), [
@@ -941,10 +945,9 @@ return view.extend({
 				E('button', {
 					class: 'btn cbi-button-negative',
 					click: ui.createHandlerFn(this, () => {
-						const paths = files.map(f => {
-							const path = f.path;
-							return f.isLink ? (this.parseLinkString(path)?.linkPath || path) : path;
-						});
+						const paths = files.map(({ path, isLink }) =>
+							isLink ? this.parseLinkString(path)?.linkPath || path : path
+						);
 
 						fs.exec('/bin/rm', ['-rf', ...paths]).then(r => {
 							if (r.code !== 0)
@@ -962,19 +965,19 @@ return view.extend({
 						});
 					})
 				}, _('Delete')),
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
+				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
 			])
 		]);
 	},
 
-	createLink: function (file) {
+	createLink: function (path) {
 		let linkPath = '', isHardLink = false;
 		const pathInput = E('input', {
 			id: 'linkinput', style: 'width:60%;', type: 'text',
 			class: 'cbi-input-text', placeholder: '/path/to/link',
 			change: ui.createHandlerFn(this, ev => linkPath = ev.target.value.trim())
 		});
-		L.showModal(_('%s Create link').format(file.path), [
+		L.showModal(_('%s Create link').format(path), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
 				E('label', { style: 'min-width:60px;' }, _('Create link')),
@@ -994,16 +997,16 @@ return view.extend({
 						if (!linkPath)
 							return this.modalnotify(null, E('p', _('Please enter link path')), '', 'error');
 						hideModal();
-						const args = isHardLink ? [file.path, linkPath] : ['-s', file.path, linkPath];
+						const args = isHardLink ? [path, linkPath] : ['-s', path, linkPath];
 						fs.exec('/bin/ln', args).then(r => {
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Link creation failed: %s').format(r.stderr)), '', 'error');
 							this.reload();
-							this.showNotification(_('%s Link created successfully: %s').format(file.path, linkPath), 3000, 'success');
+							this.showNotification(_('%s Link created successfully: %s').format(path, linkPath), 3000, 'success');
 						});
 					})
 				}, _('Apply')),
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
+				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
 			])
 		]);
 		requestAnimationFrame(() => {
@@ -1046,7 +1049,7 @@ return view.extend({
 				E('input', {
 					id: 'pack-name', class: 'cbi-input-text',
 					type: 'text', value: defaultName + '.tar.gz',
-					input: ui.createHandlerFn(this, (ev) => nameInput = ev.target.value)
+					change: ui.createHandlerFn(this, ev => nameInput = ev.target.value)
 				}),
 			]),
 			E('div', { class: 'button-row' }, [
@@ -1054,20 +1057,21 @@ return view.extend({
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
 						hideModal();
-						let name = this.sanitizeFilename(nameInput || defaultName);
-						name = name.toLowerCase().endsWith('.tar.gz') ? name : name + '.tar.gz';
-						const relPaths = files.map(f => f.path.replace(/^\//, ''));
-						const args = relPaths.map(p => `"${p}"`).join(' ');
+						let name = (nameInput || defaultName).replace(/[\/\\:*?"<>|]/g, '_').trim();
+						if (!name.endsWith('.tar.gz')) name += '.tar.gz';
 						const out = `/tmp/${name}`;
+						const args = files
+							.map(({ path }) => `"${path.replace(/^\//, '').replace(/"/g, '\\"')}"`)
+							.join(' ');
 
-						fs.exec('/bin/sh', ['-c', `tar -czf "${out}" -C / ${args}`])
+						fs.exec('/bin/sh', ['-c', `tar -czf "${out}" -C / -- ${args}`])
 							.then(() => this.startDownload(out, name))
 							.then(() => this.clearSelectedFiles())
 							.catch(e => this.showNotification(_('Packaging failed: %s').format(e.message), 5000, 'error'))
 							.finally(() => fs.remove(out).catch(() => {}));
 					})
 				}, isBatch ? _('Package download') : _('download')),
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
+				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
 			])
 		]);
 		focusAndSelectBase();
@@ -1322,16 +1326,6 @@ return view.extend({
 
 			requestAnimationFrame(init);
 		});
-	},
-
-	sanitizeFilename: function (name) {
-		return name
-			.replace(/[\/\\:*?"<>|\x00-\x1F]+/g, '_')
-			.replace(/\.\.+/g, '.')
-			.replace(/^\.+/, '')
-			.replace(/\s+/g, ' ')
-			.trim()
-			.substring(0, 255);
 	},
 
 	getSelectedFiles: function () {
