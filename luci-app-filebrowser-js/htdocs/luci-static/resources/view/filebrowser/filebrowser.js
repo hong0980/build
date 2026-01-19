@@ -103,6 +103,22 @@ tr.selected {
 	min-width: 60px !important;
 	max-width: 80px;
 }
+.modal-custom-row {
+	display: flex;
+	align-items: center;
+	padding: 15px 10px;
+}
+.modal-custom-label {
+	font-weight: bold;
+	min-width: 50px;
+	color: #555;
+}
+.modal-custom-path {
+	padding:8px;
+	background:#f0f0f0;
+	font-size:12px;
+}
+
 @media (max-width: 768px) {
 	.batch-action-bar {
 		left: 50%;
@@ -143,12 +159,15 @@ const modes = [
 return view.extend({
 	load: function (p = null) {
 		const pathFromUrl = location.hash ? location.hash.slice(1) : null;
-		const path = (p && typeof p === 'string')
-			? p.replace(/\/+/g, '/').replace(/\/$/, '')
-			: (pathFromUrl || '/');
+		let path = (p && typeof p === 'string') ? p : (pathFromUrl || '/');
 
-		location.hash = path;
+		path = path.replace(/\/+/g, '/');
+		if (path.length > 1 && path.endsWith('/'))
+			path = path.slice(0, -1);
+
+		if (!path) path = '/';
 		this._path = path;
+		location.hash = path;
 
 		return fs.exec_direct('/bin/ls', ['-Ah', '--full-time', path]).then(out => {
 			const files = [];
@@ -462,7 +481,7 @@ return view.extend({
 					return this.modalnotify(null, E('p', _('The file content has not changed')), 3000);
 				fs.write(file.path, val).then(() => {
 					hideModal();
-					this.showNotification(_('%s File saved successfully!').format(file.path), 3000, 'success');
+					this.showNotification(_('%s File saved successfully!').format(file.path), '', 'success');
 					this.reload();
 				});
 			})
@@ -541,7 +560,7 @@ return view.extend({
 
 		L.showModal(_('%s: %s').format(editable ? _('Edit') : _('View'), file.name), [
 			E('style', ['.modal{padding:.3em;h4{text-align:center;color:red;}}']),
-			E('p', { style: 'padding:8px;background:#f0f0f0;font-size:12px;' }, [
+			E('p', { class: 'modal-custom-path' }, [
 				E('span', {}, _('Ace Editor version: %s').format(ace.version)),
 				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
 				E('span', {}, _('Size: %s').format(file.size)),
@@ -579,7 +598,7 @@ return view.extend({
 		const toggleFn = ui.createHandlerFn(this, 'toggleFullscreenLogic', fsConfig);
 		btnFull.onclick = btnExit.onclick = toggleFn;
 
-		const info = E('p', { style: 'padding:8px;background:#f0f0f0;border-radius:4px;' }, [
+		const info = E('p', { class: 'modal-custom-path' }, [
 			E('span', {}, _('Size: %s').format(file.size)),
 			E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
 			E('span', {}, _('Lines: %d').format(content.split('\n').length)),
@@ -596,7 +615,7 @@ return view.extend({
 					return this.modalnotify(null, E('p', _('The file content has not changed')), 3000);
 				fs.write(file.path, newContent).then(() => {
 					hideModal();
-					this.showNotification(_('%s File saved successfully!').format(file.path), 3000, 'success');
+					this.showNotification(_('%s File saved successfully!').format(file.path), '', 'success');
 					this.reload();
 				}).catch(error => this.modalnotify(null, E('p', _('Save failed: %s').format(error.message || error)), '', 'warning'));
 			})
@@ -605,7 +624,7 @@ return view.extend({
 		const cancelBtn = E('button', {
 			class: 'btn',
 			click: ui.createHandlerFn(this, () => {
-				if (textarea.value !== originalContent)
+				if (textarea.value !== originalContent && !textarea.readOnly)
 					if (!confirm(_('You have unsaved changes. Discard them?'))) return;
 				if (this._isFullscreen) btnExit.click();
 				hideModal();
@@ -806,7 +825,7 @@ return view.extend({
 
 							if (!fullFile) {
 								this.reload(fullDir);
-								this.showNotification(_('Directory %s created successfully').format(fullDir), 3000, 'success');
+								this.showNotification(_('Directory %s created successfully').format(fullDir), '', 'success');
 								return;
 							}
 
@@ -815,7 +834,7 @@ return view.extend({
 							}).then(res => {
 								if (res && res.code !== 0) throw new Error(res.stderr);
 								this.reload(fullDir);
-								this.showNotification(_('Created successfully: %s').format(fullFile), 3000, 'success');
+								this.showNotification(_('Created successfully: %s').format(fullFile), '', 'success');
 							});
 						}).catch(e => {
 							this.modalnotify(null, E('p', _('Create failed: %s').format(e.message || e)), '', 'error');
@@ -889,7 +908,7 @@ return view.extend({
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Rename failed: %s').format(r.stderr)), '', 'error');
 							this.reload();
-							this.showNotification(_('Renamed: %s to %s').format(path, newname), 3000, 'success');
+							this.showNotification(_('Renamed: %s to %s').format(path, newname), '', 'success');
 						});
 					})
 				}, _('Rename')),
@@ -897,42 +916,50 @@ return view.extend({
 			])
 		]);
 
-		setTimeout(() => {
+		requestAnimationFrame(() => {
 			const input = document.querySelector('#nameinput');
+			if (!input) return;
 			const pos = oldname.lastIndexOf('.');
 			input.setSelectionRange(0, pos > 0 ? pos : oldname.length);
 			input.focus();
-		}, 10);
+		});
 	},
 
 	chmodFile: function ({ path, permissionNum }) {
 		let val = '';
-		L.showModal(_('Change permissions %s').format(path), [
-			E('style', ['h4 {text-align:center;color:red;}']),
-			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
-				E('label', { style: 'min-width:60px;' }, _('Permission')),
+		L.showModal(_('Change permissions'), [
+			E('style', ['.modal{padding:.3em;h4{text-align:center;color:red;}}']),
+			E('div', { class: 'modal-custom-path' }, path),
+			E('div', { class: 'modal-custom-row' }, [
+				E('label', { class: 'modal-custom-label' }, _('Permission')),
 				E('select', {
-					style: 'width:100%;',
+					class: 'cbi-input-select', style: 'flex:1',
 					change: ui.createHandlerFn(this, ev => val = ev.target.value)
 				}, permissions.map(([id, name]) =>
 					E('option', { value: id, selected: id === permissionNum || undefined }, name)
 				))
 			]),
-			E('div', { class: 'button-row' }, [
+
+			E('div', { class: 'right', style: 'margin-top: 15px;' }, [
+				E('button', { class: 'btn', click: hideModal }, _('Cancel')),
+				' ',
 				E('button', {
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
-						if (!val) return this.modalnotify(null, E('p', _('Please select a new value')), 3000);
+						if (!val)
+							return this.showNotification(_('Please select a new value'), 5000, 'error');
+
 						hideModal();
-						fs.exec('/bin/chmod', [val, path]).then(r => {
-							if (r.code !== 0)
-								return this.modalnotify(null, E('p', _('Permission change failed: %s').format(r.stderr)), '', 'error');
-							this.reload();
-							this.showNotification(_('Permissions updated: %s').format(path), 3000, 'success');
-						});
+						fs.exec('/bin/chmod', [val, path])
+							.then(r => {
+								if (r.code !== 0) throw new Error(r.stderr);
+								this.reload();
+								this.showNotification(_('Permissions updated: %s').format(path), 2000, 'success');
+							})
+							.catch(e =>
+								this.showNotification(_('Failed to change permissions: %s').format(e.message || e), 5000, 'error'));
 					})
-				}, _('Apply')),
-				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
+				}, _('Apply'))
 			])
 		]);
 	},
@@ -967,7 +994,7 @@ return view.extend({
 								files.length === 1
 									? _('Deleted: %s').format(files[0].name)
 									: _('Deleted %d files').format(files.length),
-								3000, 'success'
+								'', 'success'
 							);
 						});
 					})
@@ -1009,7 +1036,7 @@ return view.extend({
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Link creation failed: %s').format(r.stderr)), '', 'error');
 							this.reload();
-							this.showNotification(_('%s Link created successfully: %s').format(path, linkPath), 3000, 'success');
+							this.showNotification(_('%s Link created successfully: %s').format(path, linkPath), '', 'success');
 						});
 					})
 				}, _('Apply')),
@@ -1099,18 +1126,24 @@ return view.extend({
 		});
 	},
 
-	Upload: function (ev) {
-		const tmp = '/tmp/upload-' + Date.now();
-		ui.uploadFile(tmp, ev.target.firstChild)
-			.then(L.bind(function (btn, reply) {
-				return fs.exec('/bin/mv', [tmp, `${this._path}/${reply.name}`]).then(res => {
-					if (res.code !== 0)
-						return this.modalnotify(null, E('p', _('Upload failed: %s').format(res.stderr)), '', 'error');
+	Upload: function () {
+		const tmpPath = '/tmp/luci-upload-' + Math.random().toString(36).substring(2, 9);
+		ui.uploadFile(tmpPath)
+			.then(reply => {
+				const destPath = `${this._path}/${reply.name}`.replace(/\/+/g, '/');
+				return fs.exec('/bin/mv', [tmpPath, destPath]).then(res => {
+					if (res.code !== 0) throw new Error(res.stderr);
 					this.reload();
-					this.showNotification(_('Uploaded: %s').format(`${this._path}/${reply.name}`), 3000, 'success');
+					this.modalnotify(_('Successfully uploaded: %s').format(reply.name), '', 'success');
 				});
-			}, this, ev.target))
-			.catch(e => this.showNotification(_('Error Uploaded: %s').format(e.message || e), 5000, 'error'));
+			})
+			.catch(e => {
+				if (e && e.message !== 'Upload has been cancelled')
+					this.modalnotify(_('Upload failed: %s').format(e.message || e), 5000, 'error');
+			})
+			.finally(() => {
+				fs.remove(tmpPath).catch(() => {});
+			});
 	},
 
 	detectFileMode: function (filename, content) {
@@ -1363,21 +1396,24 @@ return view.extend({
 	},
 
 	copyText: function (text) {
-		const textarea = document.createElement('textarea');
-		textarea.value = text;
-		textarea.style.opacity = '0';
-		textarea.style.position = 'fixed';
-		document.body.appendChild(textarea);
-		textarea.select();
+		if (!text) return;
 
-		const successful = document.execCommand('copy');
-		if (successful) {
-			this.showNotification(_('Copied to clipboard!'), 3000);
-		} else {
-			this.showNotification(_('Copy failed!'), '', 'error');
+		try {
+			const textarea = E('textarea', {
+				style: 'position:fixed;top:0;left:0;opacity:0;z-index:-1;pointer-events:none;'
+			}, text);
+
+			document.body.appendChild(textarea);
+			textarea.select();
+			const successful = document.execCommand('copy');
+			document.body.removeChild(textarea);
+
+			if (successful)
+				return this.showNotification(_('Copied to clipboard!'), '', 'success');
+			throw new Error('execCommand failed');
+		} catch (err) {
+			this.showNotification(_('Copy failed!'), 5000, 'error');
 		}
-
-		document.body.removeChild(textarea);
 	},
 
 	parseLinkString: function (path) {
@@ -1428,81 +1464,114 @@ return view.extend({
 		return o;
 	},
 
-	/** 显示通知 */
 	showNotification: function (message, timeout, type = 'info') {
 		const existing = document.querySelector('.file-notification');
 		if (existing) existing.remove();
 
+		const colors = { success: '#4CAF50', error: '#F44336', warning: '#FF9800', info: '#2196F3' };
 		const notification = E('div', {
 			class: 'file-notification',
 			style: `
-            position: fixed;
-            opacity: 0;
-            top: 20px;
-            color: white;
-            right: 70px;
-            z-index: 10000;
-            padding: 10px 25px;
-            border-radius: 4px;
-            transform: translateX(100px);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            background: ${type === 'success' ? '#4CAF50' : type === 'error' ? 'red' : '#2196F3'};
-            transition: transform 0.3s ease, opacity 0.3s ease;
-        `}, message);
+            position: fixed; top: 20px; right: 20px; z-index: 20000;
+            padding: 12px 24px; border-radius: 4px; color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            cursor: pointer; font-weight: 500;
+            background: ${colors[type] || colors.info};
+            opacity: 0; transform: translateX(30px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        `, click: ui.createHandlerFn(this, ev => {
+				ev.target.style.opacity = '0';
+				setTimeout(() => ev.target.remove(), 300);
+			})
+		}, message);
 
 		document.body.appendChild(notification);
 
-		notification.offsetHeight;
-		notification.style.transform = 'translateX(0)';
-		notification.style.opacity = '1';
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				notification.style.opacity = '1';
+				notification.style.transform = 'translateX(0)';
+			});
+		});
 
+		const duration = (typeof timeout === 'number' && timeout > 0) ? timeout : 3000;
 		setTimeout(() => {
-			if (notification.parentNode) {
+			if (notification && notification.parentNode) {
 				notification.style.opacity = '0';
-				notification.style.transform = 'translateX(100px)';
-				setTimeout(() => notification.remove(), 300);
+				notification.style.transform = 'translateX(30px)';
+				notification.addEventListener('transitionend', () => notification.remove(), { once: true });
 			}
-		}, (typeof timeout === 'number' && timeout > 0) ? timeout : 3000);
+		}, duration);
 	},
 
 	Draggable: function () {
 		const modal = document.querySelector('#modal_overlay .modal');
-		if (!modal) return;
+		if (!modal || modal.dataset.draggable === 'true') return;
 
 		const rect = modal.getBoundingClientRect();
-		modal.style.margin = '0';
-		modal.style.transform = 'none';
 		modal.style.position = 'fixed';
+		modal.style.margin = '0';
 		modal.style.top = rect.top + 'px';
 		modal.style.left = rect.left + 'px';
+		modal.style.transform = 'none';
+		modal.dataset.draggable = 'true';
 
 		const dragArea = modal.querySelector('h4');
 		if (!dragArea) return;
 
 		dragArea.style.cursor = 'move';
+		dragArea.style.userSelect = 'none';
+
 		let dragData = null;
+		let ticking = false;
 
 		const onMouseMove = (e) => {
 			if (!dragData) return;
-			modal.style.top = (dragData.startTop + e.clientY - dragData.startY) + 'px';
-			modal.style.left = (dragData.startLeft + e.clientX - dragData.startX) + 'px';
+
+			if (!ticking) {
+				requestAnimationFrame(() => {
+					if (!dragData) return;
+
+					let newTop = dragData.startTop + e.clientY - dragData.startY;
+					let newLeft = dragData.startLeft + e.clientX - dragData.startX;
+					const viewW = window.innerWidth;
+					const viewH = window.innerHeight;
+					const modalW = modal.offsetWidth;
+					const modalH = modal.offsetHeight;
+					const headerH = dragArea.offsetHeight;
+					newTop = Math.max(0, newTop);
+					newTop = Math.min(newTop, viewH - headerH);
+
+					const visibleEdge = 40;
+					newLeft = Math.max(visibleEdge - modalW, Math.min(newLeft, viewW - visibleEdge));
+
+					modal.style.top = newTop + 'px';
+					modal.style.left = newLeft + 'px';
+
+					ticking = false;
+				});
+				ticking = true;
+			}
 		};
 
 		const onMouseUp = () => {
 			dragData = null;
+			modal.classList.remove('dragging');
 			document.removeEventListener('mouseup', onMouseUp);
 			document.removeEventListener('mousemove', onMouseMove);
 		};
 
 		dragArea.addEventListener('mousedown', (e) => {
-			if (e.button !== 0) return;
+			if (e.button !== 0 || e.target.tagName === 'BUTTON') return;
+
 			dragData = {
 				startX: e.clientX,
 				startY: e.clientY,
-				startTop: parseInt(modal.style.top, 10) || 0,
-				startLeft: parseInt(modal.style.left, 10) || 0
+				startTop: parseFloat(modal.style.top),
+				startLeft: parseFloat(modal.style.left)
 			};
 
+			modal.classList.add('dragging');
 			document.addEventListener('mousemove', onMouseMove);
 			document.addEventListener('mouseup', onMouseUp);
 			e.preventDefault();

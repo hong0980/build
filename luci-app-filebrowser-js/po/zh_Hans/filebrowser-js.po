@@ -343,14 +343,8 @@ msgstr "重命名失败：%s"
 msgid "Renamed: %s to %s"
 msgstr "已重命名：%s 为 %s"
 
-msgid "Change permissions %s"
-msgstr "更改权限 %s"
-
-msgid "请选择新的值"
-msgstr "请选择新的值"
-
-msgid "Permission change failed: %s"
-msgstr "权限更改失败：%s"
+msgid "Failed to change permissions: %s"
+msgstr "更改权限失败：%s"
 
 msgid "Permissions updated: %s"
 msgstr "权限已更新：%s"
@@ -415,11 +409,8 @@ msgstr "打包失败: %s"
 msgid "Upload failed: %s"
 msgstr "上传失败：%s"
 
-msgid "Uploaded: %s"
-msgstr "已上传：%s"
-
-msgid "Error Uploaded: %s"
-msgstr "上传错误：%s"
+msgid "Successfully uploaded: %s"
+msgstr "已成功上传到：%s"
 
 msgid "Copied to clipboard!"
 msgstr "已复制到剪贴板！"
@@ -451,8 +442,8 @@ msgstr "新名称"
 msgid "Permission"
 msgstr "权限"
 
-msgid "Change permissions %s"
-msgstr "更改权限 %s"
+msgid "Change permissions"
+msgstr "更改权限"
 
 msgid "Rename %s"
 msgstr "重命名 %s"
