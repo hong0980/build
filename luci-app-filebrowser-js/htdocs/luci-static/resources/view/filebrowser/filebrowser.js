@@ -106,7 +106,7 @@ tr.selected {
 .modal-custom-row {
 	display: flex;
 	align-items: center;
-	padding: 15px 10px;
+	padding: 9px 9px;
 }
 .modal-custom-label {
 	font-weight: bold;
@@ -929,7 +929,9 @@ return view.extend({
 		let val = '';
 		L.showModal(_('Change permissions'), [
 			E('style', ['.modal{padding:.3em;h4{text-align:center;color:red;}}']),
-			E('div', { class: 'modal-custom-path' }, path),
+			E('div', { class: 'modal-custom-path' }, [
+				E('strong', _('Source: ')), path
+			]),
 			E('div', { class: 'modal-custom-row' }, [
 				E('label', { class: 'modal-custom-label' }, _('Permission')),
 				E('select', {
@@ -940,7 +942,7 @@ return view.extend({
 				))
 			]),
 
-			E('div', { class: 'right', style: 'margin-top: 15px;' }, [
+			E('div', { class: 'right' }, [
 				E('button', { class: 'btn', click: hideModal }, _('Cancel')),
 				' ',
 				E('button', {
@@ -968,38 +970,42 @@ return view.extend({
 		files = [].concat(files);
 		if (files.length === 0) return;
 
-		L.showModal(_('confirm deletion'), [
-			E('style', ['h4 {text-align:center;color:red;}']),
-			E('p', { style: 'text-align:center;' },
+		L.showModal(_('Confirm Deletion'), [
+			E('p', { style: 'text-align:center; padding: 20px 10px;' },
 				files.length === 1
-					? _('Confirm %s').format(files[0].name)
-					: _('Confirm %d files?').format(files.length)
+					? _('Are you sure you want to delete "%s"?').format(files[0].name)
+					: _('Are you sure you want to delete %d selected files?').format(files.length)
 			),
-			E('div', { class: 'button-row' }, [
+			E('div', { class: 'right' }, [
+				E('button', { class: 'btn', click: hideModal }, _('Cancel')),
+				' ',
 				E('button', {
 					class: 'btn cbi-button-negative',
 					click: ui.createHandlerFn(this, () => {
-						const paths = files.map(({ path, isLink }) =>
-							isLink ? this.parseLinkString(path)?.linkPath || path : path
-						);
+						const paths = files.map(({ path, isLink }) => {
+							if (isLink) {
+								const linkInfo = this.parseLinkString(path);
+								return linkInfo ? linkInfo.linkPath : path;
+							}
+							return path;
+						});
 
+						hideModal();
 						fs.exec('/bin/rm', ['-rf', ...paths]).then(r => {
-							if (r.code !== 0)
-								return this.modalnotify(null, E('p', _('Delete failed: %s').format(r.stderr)), '', 'error');
-
-							hideModal();
+							if (r.code !== 0) throw new Error(r.stderr);
 							this.clearSelectedFiles();
 							this.reload();
 							this.showNotification(
 								files.length === 1
 									? _('Deleted: %s').format(files[0].name)
-									: _('Deleted %d files').format(files.length),
-								'', 'success'
+									: _('Successfully deleted %d files').format(files.length),
+								2000, 'success'
 							);
+						}).catch(e => {
+							this.showNotification(_('Delete failed: %s').format(e.message || e), 5000, 'error');
 						});
 					})
-				}, _('Delete')),
-				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
+				}, _('Delete'))
 			])
 		]);
 	},
@@ -1007,42 +1013,56 @@ return view.extend({
 	createLink: function (path) {
 		let linkPath = '', isHardLink = false;
 		const pathInput = E('input', {
-			id: 'linkinput', style: 'width:60%;', type: 'text',
-			class: 'cbi-input-text', placeholder: '/path/to/link',
+			class: 'cbi-input-text', style: 'flex:1', type: 'text',
+			placeholder: '/path/to/target',
 			change: ui.createHandlerFn(this, ev => linkPath = ev.target.value.trim())
 		});
-		L.showModal(_('%s Create link').format(path), [
+
+		L.showModal(_('Create link'), [
 			E('style', ['h4 {text-align:center;color:red;}']),
-			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
-				E('label', { style: 'min-width:60px;' }, _('Create link')),
-				pathInput,
-				E('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
-					E('input', {
-						type: 'checkbox', id: 'checkbox',
-						change: ui.createHandlerFn(this, ev => isHardLink = ev.target.value)
-					}),
-					E('label', { for: 'checkbox', style: 'display:flex;align-items:center;gap:5px;' }, _('Create hard link'))
-				]),
+			E('div', { class: 'modal-custom-path' }, [
+				E('strong', _('Source: ')), path
 			]),
-			E('div', { class: 'button-row' }, [
+
+			E('div', { class: 'modal-custom-row' }, [
+				E('label', { class: 'modal-custom-label' }, _('Target')),
+				pathInput
+			]),
+
+			E('div', { class: 'modal-custom-row', style: 'padding-top:0' }, [
+				E('label', { class: 'modal-custom-label' }),
+				E('div', { style: 'display:flex; align-items:center; gap:5px;' }, [
+					E('input', {
+						type: 'checkbox', id: 'is_hardlink',
+						change: ui.createHandlerFn(this, ev => isHardLink = ev.target.checked)
+					}),
+					E('label', { for: 'is_hardlink', style: 'font-size:12px; cursor:pointer;' }, _('Create hard link'))
+				])
+			]),
+
+			E('div', { class: 'right' }, [
+				E('button', { class: 'btn', click: hideModal }, _('Cancel')),
+				' ',
 				E('button', {
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
-						if (!linkPath)
-							return this.modalnotify(null, E('p', _('Please enter link path')), '', 'error');
-						hideModal();
-						const args = isHardLink ? [path, linkPath] : ['-s', path, linkPath];
+						const finalPath = linkPath.trim();
+						if (!finalPath)
+							return this.showNotification(_('Please enter a valid target path'), 3000, 'error');
+
+						L.hideModal();
+						const args = isHardLink ? [path, finalPath] : ['-s', path, finalPath];
 						fs.exec('/bin/ln', args).then(r => {
-							if (r.code !== 0)
-								return this.modalnotify(null, E('p', _('Link creation failed: %s').format(r.stderr)), '', 'error');
+							if (r.code !== 0) throw new Error(r.stderr);
 							this.reload();
-							this.showNotification(_('%s Link created successfully: %s').format(path, linkPath), '', 'success');
-						});
+							this.showNotification(_('Link "%s" created successfully').format(finalPath), '', 'success');
+						}).catch(e =>
+							this.showNotification(_('Failed to create link: %s').format(e.message || e), 5000, 'error'));
 					})
-				}, _('Apply')),
-				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
+				}, _('Apply'))
 			])
 		]);
+
 		requestAnimationFrame(() => {
 			ui.addValidator(pathInput, 'string', false, function (value) {
 				const result = this.parsePath(value.trim());
@@ -1057,6 +1077,7 @@ return view.extend({
 
 	downloadFile: function (files) {
 		const isBatch = Array.isArray(files);
+
 		if (!isBatch && !files.isDir) {
 			const path = files.isLink
 				? this.parseLinkString(files.path)?.targetPath
@@ -1064,65 +1085,76 @@ return view.extend({
 			return this.startDownload(path, files.name);
 		};
 
-		const focusAndSelectBase = () => {
-			const input = document.getElementById('pack-name');
-			if (!input) return;
-
-			const baseLen = input.value.replace(/\.tar\.gz$/i, '').length;
-			input.focus();
-			input.setSelectionRange(0, baseLen);
-		};
+		const defaultName = isBatch ? 'files-' + Date.now() : (files.name || 'archive');
 		let nameInput = '';
-		const defaultName = isBatch ? 'files-' + Date.now() : (files.name || ('dir-' + Date.now()));
 
-		L.showModal(isBatch ? _('Batch download') : _('Download catalog'), [
-			E('style', ['h4 {text-align:center;}']),
-			E('p', isBatch ? _('Number of files: %d').format(files.length) : _('Directory: %s').format(files.name)),
-			E('p', { style: 'display:flex;align-items:center;gap:10px;' }, [
-				E('label', isBatch ? _('Compressed package file name') : _('file name')),
+		L.showModal(isBatch ? _('Batch Download') : _('Download Directory'), [
+			E('div', { class: 'modal-custom-path' },
+				isBatch ? _('Number of files: %d').format(files.length) : _('Path: %s').format(files.path)
+			),
+			E('div', { class: 'modal-custom-row' }, [
+				E('label', { class: 'modal-custom-label' }, _('Filename')),
 				E('input', {
 					id: 'pack-name', class: 'cbi-input-text',
-					type: 'text', value: defaultName + '.tar.gz',
-					change: ui.createHandlerFn(this, ev => nameInput = ev.target.value)
+					type: 'text', style: 'flex:1',
+					value: defaultName + '.tar.gz',
+					input: (ev) => nameInput = ev.target.value
 				}),
 			]),
-			E('div', { class: 'button-row' }, [
+			E('div', { class: 'right' }, [
+				E('button', { class: 'btn', click: L.hideModal }, _('Cancel')),
+				' ',
 				E('button', {
 					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, () => {
-						hideModal();
-						let name = (nameInput || defaultName).replace(/[\/\\:*?"<>|]/g, '_').trim();
+						let name = (nameInput || (defaultName + '.tar.gz')).replace(/[\/\\:*?"<>|]/g, '_').trim();
 						if (!name.endsWith('.tar.gz')) name += '.tar.gz';
+
 						const out = `/tmp/${name}`;
-						const args = files
+						hideModal();
+						this.showNotification(_('Packaging... please wait'), 0, 'info');
+
+						const args = (isBatch ? files : [files])
 							.map(({ path }) => `"${path.replace(/^\//, '').replace(/"/g, '\\"')}"`)
 							.join(' ');
 
 						fs.exec('/bin/sh', ['-c', `tar -czf "${out}" -C / -- ${args}`])
-							.then(() => this.startDownload(out, name))
-							.then(() => this.clearSelectedFiles())
-							.catch(e => this.showNotification(_('Packaging failed: %s').format(e.message), 5000, 'error'))
-							.finally(() => fs.remove(out).catch(() => {}));
+							.then(r => {
+								if (r.code !== 0) throw new Error(r.stderr);
+								return this.startDownload(out, name);
+							})
+							.then(() => {
+								this.clearSelectedFiles();
+								setTimeout(() => fs.remove(out).catch(() => {}), 30000);
+							})
+							.catch(e => this.showNotification(_('Download failed: %s').format(e.message), 5000, 'error'));
 					})
-				}, isBatch ? _('Package download') : _('download')),
-				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
+				}, isBatch ? _('Package and Download') : _('Download'))
 			])
 		]);
-		focusAndSelectBase();
+
+		requestAnimationFrame(() => {
+			const input = document.getElementById('pack-name');
+			if (input) {
+				input.focus();
+				const baseLen = input.value.replace(/\.tar\.gz$/i, '').length;
+				input.setSelectionRange(0, baseLen);
+			}
+			this.Draggable();
+		});
 	},
 
 	startDownload: function (path, name) {
-		fs.read_direct(path, 'blob').then((blob) => {
+		return fs.read_direct(path, 'blob').then((blob) => {
 			const url = window.URL.createObjectURL(blob);
-			let a = document.createElement('a');
-			a.style.display = 'none';
-			a.href = url;
-			a.download = name;
+			const a = E('a', { href: url, download: name, style: 'display:none' });
 			document.body.appendChild(a);
 			a.click();
-			window.URL.revokeObjectURL(url);
+			document.body.removeChild(a);
+			setTimeout(() => window.URL.revokeObjectURL(url), 100);
+			this.showNotification(_('Download started: %s').format(name), 2000, 'success');
 		}).catch((err) => {
-			alert(_('Download failed: %s').format(err.message));
+			this.showNotification(_('Read failed: %s').format(err.message), 5000, 'error');
 		});
 	},
 

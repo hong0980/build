@@ -1,455 +1,330 @@
-msgid "File management"
-msgstr "文件管理"
+### 顶部导航与面包屑 ###
+msgid "Root"
+msgstr "根目录"
 
-msgid "confirm deletion"
-msgstr "确定删除"
+msgid "Reload page"
+msgstr "刷新页面"
 
-msgid "create new file"
-msgstr "创建新文件"
 
-msgid "Rename"
-msgstr "重命名"
-
-msgid "Confirm"
-msgstr "确认"
-
-msgid "Delete file (directory)"
-msgstr "删除文件（目录）"
-
-msgid "Create file (directory)"
-msgstr "创建文件（目录）"
-
-msgid "successfully deleted!"
-msgstr "删除成功！"
-
-msgid "Renaming successful!"
-msgstr "重命名成功！"
-
-msgid "File has been uploaded to"
-msgstr "文件已上传到"
-
-msgid "name"
+### 文件列表表头与状态 ###
+msgid "Name"
 msgstr "名称"
 
 msgid "owner"
 msgstr "所有者"
 
-msgid "size"
+msgid "Size"
 msgstr "大小"
 
 msgid "Change the time"
-msgstr "修改时间"
+msgstr "最后修改"
 
 msgid "Rights"
 msgstr "权限"
 
-msgid "File operations"
-msgstr "文件操作"
+msgid "No files found"
+msgstr "文件夹是空的"
 
-msgid "Renaming failed"
-msgstr "重命名失败"
+msgid "open"
+msgstr "打开"
 
-msgid "deleted failed"
-msgstr "删除失败"
+msgid "%d items • Total %s"
+msgstr "共 %d 个项目 • 总计 %s"
 
-msgid "Permissions modified successfully"
-msgstr "权限修改成功"
 
-msgid "Permission modification failed"
-msgstr "权限修改失败"
+### 右键菜单与操作选项 ###
+msgid "Create file (directory)"
+msgstr "新建文件或文件夹"
 
-msgid "Modify permissions"
-msgstr "修改权限"
+msgid "Edit file"
+msgstr "编辑内容"
 
-msgid "Select the required permissions"
-msgstr "选择需要的权限"
-
-msgid "777 - Full access for owner, group, and others (read, write, execute)"
-msgstr "777 - 所有者、组用户和其他用户均拥有完全权限（读、写、执行）"
-
-msgid "755 - Full access for owner; read and execute for group and others"
-msgstr "755 - 所有者拥有完全权限；组用户和其他用户具有读和执行权限"
-
-msgid "700 - Full access for owner only"
-msgstr "700 - 仅所有者拥有完全权限"
-
-msgid "666 - Read and write for owner, group, and others (no execute)"
-msgstr "666 - 所有者、组用户和其他用户具有读和写权限（无执行权限）"
-
-msgid "644 - Read and write for owner; read-only for group and others"
-msgstr "644 - 所有者具有读和写权限；组用户和其他用户仅有读权限"
-
-msgid "600 - Read and write for owner only"
-msgstr "600 - 仅所有者具有读和写权限"
-
-msgid "555 - Read and execute for owner, group, and others (no write)"
-msgstr "555 - 所有者、组用户和其他用户具有读和执行权限（无写权限）"
-
-msgid "444 - Read-only for owner, group, and others"
-msgstr "444 - 所有者、组用户和其他用户仅有读权限"
-
-msgid "total file size"
-msgstr "文件总大小"
-
-msgid "Successful installation"
-msgstr "安装成功"
-
-msgid "installation failed"
-msgstr "安装失败"
-
-msgid "Confirm installation"
-msgstr "确定安装"
-
-msgid "Enter name"
-msgstr "输入名称"
-
-msgid "Enter file content"
-msgstr "输入文件内容"
-
-msgid "Enter text here"
-msgstr "在这里输入文本"
-
-msgid "File created successfully!"
-msgstr "文件创建成功！"
-
-msgid "File creation failed!"
-msgstr "文件创建失败！"
-
-msgid "open file"
-msgstr "打开文件"
-
-msgid "upload file"
-msgstr "上传文件"
-
-msgid "download file"
-msgstr "下载文件"
-
-msgid "Reload page"
-msgstr "重加载页面"
-
-msgid "owner"
-msgstr "所有者"
-
-msgid "size"
-msgstr "大小"
-
-msgid "Download folder"
-msgstr "下载目录"
-
-msgid "View Files"
-msgstr "查看文件"
+msgid "Rename"
+msgstr "重命名"
 
 msgid "Create link"
 msgstr "创建链接"
 
-msgid "Enter ${targetPathcolor} target link path"
-msgstr "输入 ${targetPathcolor} 的链接目标路径"
+msgid "Modify permissions"
+msgstr "修改权限"
 
-msgid "Link created successfully"
-msgstr "链接创建成功"
+msgid "Delete file"
+msgstr "删除"
 
-msgid "Link creation failed"
-msgstr "链接创建失败"
+msgid "download file"
+msgstr "下载"
 
-msgid "Edit file"
-msgstr "编辑文件"
+msgid "upload file"
+msgstr "上传"
 
-msgid "Failed to load document"
-msgstr "加载文档失败"
+
+### 强大的编辑器 (Ace & Simple Editor) ###
+msgid "File management"
+msgstr "文件管理器"
+
+msgid "View"
+msgstr "查看模式"
+
+msgid "Edit"
+msgstr "编辑模式"
+
+msgid "cannot be edited"
+msgstr "该文件无法编辑"
+
+msgid "cannot be displayed"
+msgstr "无法显示内容"
+
+msgid "File too large (%s), %s. Maximum allowed size is %s."
+msgstr "文件太大 (%s)，%s。最大允许 %s。"
+
+msgid "The file is empty."
+msgstr "文件内容为空。"
+
+msgid "This is a binary file and %s"
+msgstr "这是二进制文件，%s"
+
+msgid "Unknown file type"
+msgstr "未知文件类型"
 
 msgid "Failed to read file: %s"
-msgstr "读取文件失败：%s"
+msgstr "读取失败: %s"
 
-msgid "Document saved successfully"
-msgstr "文档保存成功"
-
-msgid "Failed to save document"
-msgstr "保存文档失败"
-
-msgid "An error occurred while saving the document"
-msgstr "保存文档时出错"
-
-msgid "Confirm Save"
-msgstr "确认保存"
-
-msgid "Are you sure you want to save the changes?"
-msgstr "您确定要保存更改吗？"
-
-msgid "%s file does not exist"
-msgstr "%s 文件不存在"
-
-msgid "Unable to read file: %s"
-msgstr "无法读取文件: %s"
-
-msgid "Unable to open file: %s"
-msgstr "无法打开文件： %s"
+msgid "Syntax"
+msgstr "語法"
 
 msgid "Theme"
 msgstr "主题"
 
-msgid "You can modify the names and downloads of files and directories, permissions, add directories and files, and edit scripts."
-msgstr "您可以修改文件和目录的名称和下载、权限、添加目录和文件以及编辑脚本。"
-
-msgid "Right click"
-msgstr "右键点击"
+msgid "Font"
+msgstr "字体"
 
 msgid "wrap"
 msgstr "换行"
 
-msgid "NAS"
-msgstr "网络存储"
-
-msgid "Scroll to tail"
-msgstr "滚动到尾部"
-
-msgid "Scroll to head"
-msgstr "滚动到顶部"
-
-msgid "Reverse Log Order"
-msgstr "反转日志顺序"
-
-msgid "Path contains unsupported characters"
-msgstr "路径包含不支持的字符"
-
-msgid "Path contains illegal segment (..)"
-msgstr "路径包含非法段(..)"
-
-msgid "Invalid path format"
-msgstr "无效的路径格式"
-
-msgid "Created successfully: %s"
-msgstr "创建成功: %s"
-
-msgid "Create failed: %s"
-msgstr "创建失败：%s"
-
-msgid "Directory %s created successfully"
-msgstr "目录 %s 创建成功"
-
-msgid "Directory %s creation failed: %s"
-msgstr "目录 %s 创建失败: %s"
-
-msgid "Create files simultaneously"
-msgstr "同时创建文件"
-
-msgid "Directory permissions"
-msgstr "目录权限"
-
-msgid "End with '/' to create a Directory"
-msgstr "以 '/' 结尾：创建文件夹"
-
-msgid "No '/' at end to create a File"
-msgstr "不以 '/' 结尾：创建文件"
-
-msgid "Start with '/' for Absolute path"
-msgstr "以 '/' 开头：使用绝对路径（从根目录开始）"
-
-msgid "No '/' at start for Current path"
-msgstr "不以 '/' 开头：在当前目录下创建"
-
-msgid "e.g. file.txt or folder/"
-msgstr "示例 file.txt 或 folder/"
-
-msgid "This will create a directory at: %s"
-msgstr "这将在：%s 创建一个目录"
-
-msgid "This will create a file at: %s"
-msgstr "这将在：%s 创建一个文件"
-
-msgid "File will not be created (option disabled)"
-msgstr "未勾选选项，不会创建文件"
-
-msgid "Please enter a file or directory name"
-msgstr "请输入文件或目录名称"
-
-msgid "file permissions"
-msgstr "文件权限"
-
-msgid "Lines: %d"
-msgstr "行：%d"
-
-msgid "Path: %s"
-msgstr "路径：%s"
-
-msgid "Ace Editor version: %s"
-msgstr "Ace 版本：%s"
-
-msgid "View"
-msgstr "浏览"
-
-msgid "Failed to read file: %s"
-msgstr "读取文件失败：%s"
-
-msgid "Loading file..."
-msgstr "正在加载文件..."
-
-msgid "Loading file for editing..."
-msgstr "正在加载文件进行编辑..."
-
-msgid "Loading file content..."
-msgstr "正在加载文件内容..."
-
-msgid "The file is empty."
-msgstr "文件为空。"
-
-msgid "Unknown file type"
-msgstr "未知的文件类型"
+msgid "full screen"
+msgstr "全屏"
 
 msgid "Exit full screen"
 msgstr "退出全屏"
 
-msgid "full screen"
-msgstr "全屏"
+msgid "Copy"
+msgstr "复制代码"
 
-msgid "cannot be edited"
-msgstr "无法编辑"
+msgid "Save"
+msgstr "保存"
 
-msgid "cannot be displayed"
-msgstr "无法查看"
+msgid "Close"
+msgstr "关闭"
 
-msgid "File too large (%s), %s. Maximum allowed size is %s."
-msgstr "文件过大（%s），%s。最大允许大小为 %s。"
-
-msgid "This is a binary file and %s"
-msgstr "这是一个二进制文件，%s"
-
-msgid "Edit file"
-msgstr "编辑文件"
-
-msgid "Batch delete"
-msgstr "批量删除"
-
-msgid "Batch download"
-msgstr "批量下载"
-
-msgid "Deselect"
-msgstr "取消选择"
+msgid "The document has been modified, click to undo all"
+msgstr "内容已改动，点击撤销所有更改"
 
 msgid "The file content has not changed"
-msgstr "文件内容没有变动"
+msgstr "内容未变，无需保存"
 
 msgid "%s File saved successfully!"
-msgstr "%s 文件保存成功！"
-
-msgid "Please enter a new name"
-msgstr "请输入新的名称"
+msgstr "保存成功：%s"
 
 msgid "You have unsaved changes. Discard them?"
-msgstr "您有未保存的更改。是否丢弃？"
+msgstr "改动还没保存，确定要放弃吗？"
 
-msgid "Rename failed: %s"
-msgstr "重命名失败：%s"
+msgid "Ace Editor version: %s"
+msgstr "Ace 版本: %s"
+
+msgid "Lines: %d"
+msgstr "行数: %d"
+
+msgid "Path: %s"
+msgstr "路径: %s"
+
+
+### 新建/重命名 逻辑提示 ###
+msgid "newname"
+msgstr "新名称"
+
+msgid "Please enter a new name"
+msgstr "请输入名称"
 
 msgid "Renamed: %s to %s"
-msgstr "已重命名：%s 为 %s"
+msgstr "重命名成功：%s -> %s"
 
-msgid "Failed to change permissions: %s"
-msgstr "更改权限失败：%s"
+msgid "Directory permissions"
+msgstr "文件夹权限"
+
+msgid "file permissions"
+msgstr "文件权限"
+
+msgid "Create files simultaneously"
+msgstr "同时创建文件"
+
+msgid "e.g. file.txt or folder/"
+msgstr "例如: file.txt 或 folder/"
+
+msgid "End with '/' to create a Directory"
+msgstr "以 '/' 结尾会创建文件夹"
+
+msgid "No '/' at end to create a File"
+msgstr "末尾无 '/' 则创建普通文件"
+
+msgid "Start with '/' for Absolute path"
+msgstr "以 '/' 开头表示绝对路径"
+
+msgid "No '/' at start for Current path"
+msgstr "开头无 '/' 表示当前所在路径"
+
+msgid "This will create a file at: %s"
+msgstr "将在该位置创建文件：%s"
+
+msgid "This will create a directory at: %s"
+msgstr "将在该位置创建目录：%s"
+
+msgid "Directory %s created successfully"
+msgstr "目录 %s 创建成功"
+
+msgid "Created successfully: %s"
+msgstr "创建成功：%s"
+
+msgid "Create failed: %s"
+msgstr "创建失败：%s"
+
+msgid "Path contains unsupported characters"
+msgstr "路径包含不支持的特殊字符"
+
+msgid "Path contains illegal segment (..)"
+msgstr "路径包含非法片段 (..)"
+
+msgid "Invalid path format"
+msgstr "路径格式无效"
+
+
+### 权限修改与软硬链接 ###
+msgid "Change permissions"
+msgstr "修改权限"
+
+msgid "Permission"
+msgstr "权限数值"
+
+msgid "Source: "
+msgstr "源文件："
 
 msgid "Permissions updated: %s"
 msgstr "权限已更新：%s"
 
-msgid "Confirm %s"
-msgstr "确删除认 %s"
+msgid "Failed to change permissions: %s"
+msgstr "权限修改失败：%s"
 
-msgid "Confirm %d files?"
-msgstr "确删除认 %d 个文件?"
-
-msgid "Delete failed: %s"
-msgstr "删除失败: %s"
-
-msgid "Deleted: %s"
-msgstr "已删除：%s"
-
-msgid "Deleted %d files"
-msgstr "已删除 %d 个文件"
-
-msgid "%s Create link"
-msgstr "%s 创建链接"
+msgid "Target"
+msgstr "目标位置"
 
 msgid "Create hard link"
 msgstr "创建硬链接"
 
-msgid "Please enter link path"
-msgstr "请输入链接路径"
+msgid "Link \"%s\" created successfully"
+msgstr "链接 \"%s\" 创建成功"
 
-msgid "Link creation failed: %s"
-msgstr "链接创建失败：%s"
+msgid "Failed to create link: %s"
+msgstr "创建链接失败：%s"
 
-msgid "%s Link created successfully: %s"
-msgstr "%s 链接创建成功：%s"
 
-msgid "Download failed: %s"
-msgstr "下载失败: %s"
+### 删除与批量操作 ###
+msgid "Confirm Deletion"
+msgstr "确认删除"
 
-msgid "Download catalog"
-msgstr "下载目录"
+msgid "Are you sure you want to delete \"%s\"?"
+msgstr "确定要彻底删除 \"%s\" 吗？"
 
-msgid "Number of files: %d"
-msgstr "文件数量: %d"
+msgid "Are you sure you want to delete %d selected files?"
+msgstr "确定要删除选中的这 %d 个项目吗？"
 
-msgid "Directory: %s"
-msgstr "目录: %s"
+msgid "Deleted: %s"
+msgstr "已删除：%s"
 
-msgid "Compressed package file name"
-msgstr "压缩包文件名"
+msgid "Successfully deleted %d files"
+msgstr "成功删除了 %d 个项目"
 
-msgid "file name"
-msgstr "文件名"
+msgid "Delete failed: %s"
+msgstr "删除失败：%s"
 
-msgid "suffix"
-msgstr "后缀"
+msgid "Batch delete"
+msgstr "批量删除"
 
-msgid "Package download"
-msgstr "打包下载"
+msgid "Deselect"
+msgstr "取消选择"
 
-msgid "Packaging failed: %s"
-msgstr "打包失败: %s"
+msgid "%d files selected"
+msgstr "已选中 %d 个项目"
+
+
+### 下载与上传 ###
+msgid "Batch Download"
+msgstr "批量下载"
+
+msgid "Download Directory"
+msgstr "下载整个目录"
+
+msgid "Filename"
+msgstr "保存的文件名"
+
+msgid "Package and Download"
+msgstr "打包并下载"
+
+msgid "Packaging... please wait"
+msgstr "正在打包，请稍候..."
+
+msgid "Download started: %s"
+msgstr "开始下载：%s"
+
+msgid "Read failed: %s"
+msgstr "读取失败：%s"
+
+msgid "Successfully uploaded: %s"
+msgstr "上传成功：%s"
 
 msgid "Upload failed: %s"
 msgstr "上传失败：%s"
 
-msgid "Successfully uploaded: %s"
-msgstr "已成功上传到：%s"
 
+### 弹出消息与指示器 ###
 msgid "Copied to clipboard!"
-msgstr "已复制到剪贴板！"
+msgstr "已成功复制到剪贴板！"
 
 msgid "Copy failed!"
 msgstr "复制失败！"
 
-msgid "Syntax"
-msgstr "语法"
+msgid "Dismiss"
+msgstr "我知道了"
 
-msgid "Font"
-msgstr "字体"
+msgid "Please enter link path"
+msgstr "请输入链接路径"
 
-msgid "%d items • Total %s"
-msgstr "%d 项 • 总计 %s"
+msgid "%s Link created successfully: %s"
+msgstr "%s 链接创建成功：%s"
 
-msgid "Please select a new value"
-msgstr "请选择新的值"
+msgid "Link creation failed: %s"
+msgstr "创建链接失败：%s"
 
-msgid "%d files selected"
-msgstr "已选择 %d 个文件"
 
-msgid "The document has been modified, click to undo all"
-msgstr "文档已修改，点击全部撤销"
+### 权限详情说明 (Chmod Tooltips) ###
+msgid "777 - Full access for owner, group, and others (read, write, execute)"
+msgstr "777 - 所有用户拥有全部权限 (读、写、执行)"
 
-msgid "newname"
-msgstr "新名称"
+msgid "755 - Full access for owner; read and execute for group and others"
+msgstr "755 - 所有者完全控制；其他用户可读可执行"
 
-msgid "Permission"
-msgstr "权限"
+msgid "700 - Full access for owner only"
+msgstr "700 - 仅所有者拥有全部权限"
 
-msgid "Change permissions"
-msgstr "更改权限"
+msgid "666 - Read and write for owner, group, and others (no execute)"
+msgstr "666 - 所有用户拥有读写权限 (不可执行)"
 
-msgid "Rename %s"
-msgstr "重命名 %s"
+msgid "644 - Read and write for owner; read-only for group and others"
+msgstr "644 - 所有者可读写；其他用户只读"
 
-msgid "Delete file"
-msgstr "删除文件"
+msgid "600 - Read and write for owner only"
+msgstr "600 - 仅所有者可读写"
 
-msgid ""
-msgstr ""
+msgid "555 - Read and execute for owner, group, and others (no write)"
+msgstr "555 - 所有用户可读可执行 (不可修改)"
+
+msgid "444 - Read-only for owner, group, and others"
+msgstr "444 - 所有用户仅限读取"
