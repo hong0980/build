@@ -235,17 +235,17 @@ msgstr "同时创建文件"
 msgid "Directory permissions"
 msgstr "目录权限"
 
-msgid "Rules:"
-msgstr "规则："
+msgid "End with '/' to create a Directory"
+msgstr "以 '/' 结尾：创建文件夹"
 
-msgid "End with '/' -> create directory"
-msgstr "以 '/' 结尾：创建目录"
-
-msgid "No '/' at end -> create file"
+msgid "No '/' at end to create a File"
 msgstr "不以 '/' 结尾：创建文件"
 
-msgid "Start with '/' -> absolute path"
-msgstr "以 '/' 开头：是绝对路径"
+msgid "Start with '/' for Absolute path"
+msgstr "以 '/' 开头：使用绝对路径（从根目录开始）"
+
+msgid "No '/' at start for Current path"
+msgstr "不以 '/' 开头：在当前目录下创建"
 
 msgid "e.g. file.txt or folder/"
 msgstr "示例 file.txt 或 folder/"

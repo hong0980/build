@@ -115,14 +115,14 @@ tr.selected {
 }`;
 
 const permissions = [
-	[777, _('777 - Full access for owner, group, and others (read, write, execute)')],
-	[755, _('755 - Full access for owner; read and execute for group and others')],
-	[700, _('700 - Full access for owner only')],
-	[666, _('666 - Read and write for owner, group, and others (no execute)')],
-	[644, _('644 - Read and write for owner; read-only for group and others')],
-	[600, _('600 - Read and write for owner only')],
-	[555, _('555 - Read and execute for owner, group, and others (no write)')],
-	[444, _('444 - Read-only for owner, group, and others')]
+	["777", _('777 - Full access for owner, group, and others (read, write, execute)')],
+	["755", _('755 - Full access for owner; read and execute for group and others')],
+	["700", _('700 - Full access for owner only')],
+	["666", _('666 - Read and write for owner, group, and others (no execute)')],
+	["644", _('644 - Read and write for owner; read-only for group and others')],
+	["600", _('600 - Read and write for owner only')],
+	["555", _('555 - Read and execute for owner, group, and others (no write)')],
+	["444", _('444 - Read-only for owner, group, and others')]
 ];
 
 const themes = [
@@ -318,6 +318,9 @@ return view.extend({
 	showContextMenu: function (ev, file) {
 		ev.preventDefault();
 		ev.stopPropagation();
+		if (this._contextMenuHandler)
+			document.removeEventListener('click', this._contextMenuHandler);
+
 		this.hideContextMenu();
 
 		const menu = E('div', { class: 'file-context-menu' });
@@ -350,8 +353,13 @@ return view.extend({
 		menu.style.left = Math.min(x0, w - width - 5) + 'px';
 		menu.style.top = (y0 + height > h ? Math.max(0, y0 - height) : y0) + 'px';
 
-		this._contextMenu = menu;
-		document.addEventListener('click', () => this.hideContextMenu(), { once: true });
+		this._contextMenuHandler = (e) => {
+			this.hideContextMenu();
+			this._contextMenuHandler = null;
+		};
+
+		document.addEventListener('click', this._contextMenuHandler, { once: true });
+		document.addEventListener('contextmenu', this._contextMenuHandler, { once: true });
 	},
 
 	showFileEditor: function (file, editable) {
@@ -658,25 +666,23 @@ return view.extend({
 	},
 
 	createnew: function () {
-		const setmode = () => {
-			if (result.file) {
-				mode = this.detectFileMode(result.file, null);
-				if (editor && mode) {
-					editor.session.setMode(`ace/mode/${mode}`);
-					const modeElem = document.getElementById(syntaxid);
-					if (modeElem) modeElem.value = mode;
-				}
-			}
-		};
-		let editor = null, dirPerm = 755, result = '', mode, tip, fullFile;
-		let filePerm = 644, fileContent = '', fullDir, createFileToo = false;
+		let editor = null, dirPerm = '755', result = '', mode, tip, fullFile;
+		let filePerm = '644', fileContent = '', fullDir, createFileToo = false;
 		const syntaxid = 'syntax-' + Date.now();
 		const containerId = 'ace-' + Date.now();
+		const setmode = () => {
+			if (result && result.file && editor) {
+				const mode = this.detectFileMode(result.file, null);
+				editor.session.setMode(`ace/mode/${mode}`);
+				const modeElem = document.getElementById(syntaxid);
+				if (modeElem) modeElem.value = mode;
+			}
+		};
 		const fileElem = E('span', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
 			E('span', _('file permissions')),
 			E('select', {
 				class: 'cbi-input-select ace-toolbar-select',
-				change: ui.createHandlerFn(this, ev => filePerm = parseInt(ev.target.value, 10))
+				change: ui.createHandlerFn(this, ev => filePerm = ev.target.value)
 			}, permissions.map(([id, name]) =>
 				E('option', { value: id, selected: id === filePerm || undefined }, name)
 			))
@@ -724,38 +730,36 @@ return view.extend({
 		]);
 
 		const pathInput = E('input', {
-			class: 'cbi-input-text', type: 'text',
+			class: 'cbi-input-text', type: 'text', title: [
+				" 📂 " + _("End with '/' to create a Directory"),
+				" 📄 " + _("No '/' at end to create a File"),
+				" 🚩 " + _("Start with '/' for Absolute path"),
+				" 🏠 " + _("No '/' at start for Current path")
+			].join("\n"), style: 'flex:1;',
 			placeholder: _('e.g. file.txt or folder/'),
-			title: [
-				_("Rules:"),
-				" • " + _("End with '/' -> create directory"),
-				" • " + _("No '/' at end -> create file"),
-				" • " + _("Start with '/' -> absolute path")
-			].join("\n"),
 			change: ui.createHandlerFn(this, ev => {
 				result = this.parsePath(ev.target.value.trim());
+				const formatPath = (p) => p.replace(/\/+/g, '/');
 				const base = result.isAbsolute ? '' : this._path + '/';
-				fullDir = result.isDir ? base + result.path : base + result.dir;
-				fullFile = (result.isFile || createFileToo) ? base + result.path : null;
+				fullDir = formatPath(result.isDir ? base + result.path : base + result.dir);
+				fullFile = (result.isFile || createFileToo) ? formatPath(base + result.path) : null;
 				const dirElem = document.getElementById('dirperm');
 				const createFile = document.getElementById('createFile');
+
 				if (fullFile) {
 					if (createFile) createFile.checked = true;
 					if (dirElem) dirElem.style.display = 'none';
 					toolbar.style.display = 'block';
-					tip = _('This will create a file at: %s').format(fullFile);
+					ev.target.title = '📄 ' + _('This will create a file at: %s').format(fullFile);
 				} else if (fullDir) {
 					if (createFile) createFile.checked = false;
 					if (dirElem) dirElem.style.display = 'block';
 					toolbar.style.display = 'none';
-					tip = _('This will create a directory at: %s').format(fullDir);
-				} else
-					tip = _('File will not be created (option disabled)');
-				ev.target.title = tip;
+					ev.target.title = '📂 ' + _('This will create a directory at: %s').format(fullDir);
+				}
 				setmode();
 			})
 		});
-
 		L.showModal(_('Create file (directory)'), [
 			E('style', ['h4 {text-align:center;color:red;}']),
 			E('div', [
@@ -765,7 +769,7 @@ return view.extend({
 						E('span', _('Directory permissions')),
 						E('select', {
 							class: 'cbi-input-select ace-toolbar-select',
-							change: ui.createHandlerFn(this, ev => dirPerm = parseInt(ev.target.value, 10))
+							change: ui.createHandlerFn(this, ev => dirPerm = ev.target.value)
 						}, permissions.map(([id, name]) =>
 							E('option', { value: id, selected: id === dirPerm || undefined }, name)
 						)),
@@ -787,28 +791,29 @@ return view.extend({
 			]),
 			E('div', { class: 'button-row' }, [
 				E('button', {
-					class: 'btn cbi-button-positive',
+					class: 'btn cbi-button-positive important',
 					click: ui.createHandlerFn(this, () => {
 						hideModal();
-						if (fullDir) {
-							fs.exec('/bin/mkdir', ['-p', '-m', String(dirPerm), fullDir]).then(res => {
-								if (!fullFile) {
-									if (res.code !== 0)
-										return this.modalnotify(null, E('p', _('Directory %s creation failed: %s').format(fullDir, res.stderr)), '', 'error');
-									this.reload(fullDir);
-									this.showNotification(_('Directory %s created successfully').format(fullDir), 3000, 'success');
-								}
-							});
-						};
-
-						if (!fullFile) return;
 						const content = (window._aceReady && editor) ? editor.getValue() : fileContent;
-						const cmd = `(cat > ${JSON.stringify(fullFile)} <<'EOF'\n${content}\nEOF\n) && /bin/chmod ${filePerm} ${JSON.stringify(fullFile)}`;
-						return fs.exec('/bin/sh', ['-c', cmd]).then(res => {
-							if (res.code !== 0)
-								return this.modalnotify(null, E('p', _('Create failed: %s').format(res.stderr)), '', 'error');
-							this.reload(fullDir);
-							this.showNotification(_('Created successfully: %s').format(fullFile), 3000, 'success');
+						const p = fullDir ? fs.exec('/bin/mkdir', ['-p', '-m', dirPerm, fullDir]) : Promise.resolve();
+						p.then(res => {
+							if (res && res.code !== 0) throw new Error(res.stderr);
+
+							if (!fullFile) {
+								this.reload(fullDir);
+								this.showNotification(_('Directory %s created successfully').format(fullDir), 3000, 'success');
+								return;
+							}
+
+							return fs.write(fullFile, content).then(() => {
+								return fs.exec('/bin/chmod', [filePerm, fullFile]);
+							}).then(res => {
+								if (res && res.code !== 0) throw new Error(res.stderr);
+								this.reload(fullDir);
+								this.showNotification(_('Created successfully: %s').format(fullFile), 3000, 'success');
+							});
+						}).catch(e => {
+							this.modalnotify(null, E('p', _('Create failed: %s').format(e.message || e)), '', 'error');
 						});
 					})
 				}, _('Create')),
@@ -905,7 +910,7 @@ return view.extend({
 					style: 'width:100%;',
 					change: ui.createHandlerFn(this, ev => val = ev.target.value)
 				}, permissions.map(([id, name]) =>
-					E('option', { value: id, selected: id === Number(permissionNum) || undefined }, name)
+					E('option', { value: id, selected: id === permissionNum || undefined }, name)
 				))
 			]),
 			E('div', { class: 'button-row' }, [
@@ -1216,6 +1221,7 @@ return view.extend({
 						ace.config.set('basePath', path);
 						ace.config.set('modePath', path);
 						ace.config.set('themePath', path);
+						ace.config.set('workerPath', path);
 
 						window._aceReady = true;
 						resolve(true);
@@ -1238,9 +1244,12 @@ return view.extend({
 	},
 
 	hideContextMenu: function () {
-		if (this._contextMenu) {
-			this._contextMenu.remove();
-			this._contextMenu = null;
+		const menu = document.querySelector('.file-context-menu');
+		if (menu) menu.remove();
+
+		if (this._contextMenuHandler) {
+			document.removeEventListener('click', this._contextMenuHandler);
+			this._contextMenuHandler = null;
 		}
 	},
 
