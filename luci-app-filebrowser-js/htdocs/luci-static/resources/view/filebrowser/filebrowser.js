@@ -531,7 +531,7 @@ return view.extend({
 				E('button', {
 					class: 'btn',
 					click: ui.createHandlerFn(this, () => {
-						if (this._isFullscreen) toggleFn();
+						if (this._isFullscreen) btnExit.click();;
 						hideModal();
 					})
 				}, editable ? _('Cancel') : _('Close'))
@@ -569,7 +569,7 @@ return view.extend({
 	showSimpleEditor: function (file, content, editable) {
 		const originalContent = content;
 		const textarea = E('textarea', {
-			class: 'cbi-input-text', readonly: !editable || undefined,
+			class: 'cbi-input-text', readonly: !editable || undefined, type: 'text',
 			style: 'width:100%;height:320px;font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;'
 		}, content);
 
@@ -605,9 +605,9 @@ return view.extend({
 		const cancelBtn = E('button', {
 			class: 'btn',
 			click: ui.createHandlerFn(this, () => {
-				if (textarea.value !== originalContent && !textarea.readOnly)
+				if (textarea.value !== originalContent)
 					if (!confirm(_('You have unsaved changes. Discard them?'))) return;
-				if (this._isFullscreen) toggleFn();
+				if (this._isFullscreen) btnExit.click();
 				hideModal();
 			})
 		}, editable ? _('Cancel') : _('Close'));
@@ -719,26 +719,31 @@ return view.extend({
 					E('div', { id: containerId, style: 'width:100%;height:250px;' })
 				])
 				: E('span', [
-					fileElem,
+					E('style', ['.ace-toolbar-select {min-width:140px !important;}']),
+					E('div', { style: 'margin: 10px 0;' }, [fileElem]),
 					E('textarea', {
 						placeholder: _('Enter text here'),
 						class: 'cbi-input-text', type: 'text',
-						style: 'width:100%;height:250px;font-family:Consolas;',
+						style: 'width:100%;height:250px;font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;',
 						change: ui.createHandlerFn(this, ev => fileContent = ev.target.value)
 					}),
 				])
 		]);
-
+		const pathRules = [
+			" 📂 " + _("End with '/' to create a Directory"),
+			" 📄 " + _("No '/' at end to create a File"),
+			" 🚩 " + _("Start with '/' for Absolute path"),
+			" 🏠 " + _("No '/' at start for Current path")
+		].join("\n");
 		const pathInput = E('input', {
-			class: 'cbi-input-text', type: 'text', title: [
-				" 📂 " + _("End with '/' to create a Directory"),
-				" 📄 " + _("No '/' at end to create a File"),
-				" 🚩 " + _("Start with '/' for Absolute path"),
-				" 🏠 " + _("No '/' at start for Current path")
-			].join("\n"), style: 'flex:1;',
+			class: 'cbi-input-text', type: 'text',
+			title: pathRules, style: 'flex:1;',
 			placeholder: _('e.g. file.txt or folder/'),
 			change: ui.createHandlerFn(this, ev => {
-				result = this.parsePath(ev.target.value.trim());
+				const val = ev.target.value.trim();
+				if (!val)
+					return ev.target.title = pathRules;
+				result = this.parsePath(val);
 				const formatPath = (p) => p.replace(/\/+/g, '/');
 				const base = result.isAbsolute ? '' : this._path + '/';
 				fullDir = formatPath(result.isDir ? base + result.path : base + result.dir);
