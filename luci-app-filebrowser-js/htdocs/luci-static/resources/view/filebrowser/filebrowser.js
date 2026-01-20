@@ -86,23 +86,22 @@ tr.selected {
 	background: #fafafa;
 }
 
+.ace-toolbar {
+	flex: 0 0 auto;padding: 6px 6px;
+}
 .ace-editor-container {
 	height: 100%;
 	display: flex;
 	flex-direction: column;
 }
-
 .ace-editor-container > div:last-child {
 	flex: 1 1 auto;
-}
-
-.ace-toolbar {
-	flex: 0 0 auto;padding: 6px 6px;
 }
 .ace-toolbar-select {
 	min-width: 60px !important;
 	max-width: 80px;
 }
+
 .modal-custom-row {
 	display: flex;
 	align-items: center;
@@ -110,13 +109,13 @@ tr.selected {
 }
 .modal-custom-label {
 	font-weight: bold;
-	min-width: 50px;
+	min-width: 60px;
 	color: #555;
 }
 .modal-custom-path {
-	padding:8px;
+	padding:5px;
 	background:#f0f0f0;
-	font-size:12px;
+	font-size:11px;
 }
 
 @media (max-width: 768px) {
@@ -158,16 +157,9 @@ const modes = [
 
 return view.extend({
 	load: function (p = null) {
-		const pathFromUrl = location.hash ? location.hash.slice(1) : null;
-		let path = (p && typeof p === 'string') ? p : (pathFromUrl || '/');
-
-		path = path.replace(/\/+/g, '/');
-		if (path.length > 1 && path.endsWith('/'))
-			path = path.slice(0, -1);
-
-		if (!path) path = '/';
-		this._path = path;
-		location.hash = path;
+		let path = (typeof p === 'string' ? p : (location.hash.slice(1) || '/'));
+		path = path.replace(/\/+/g, '/').replace(/(.+)\/$/, '$1');
+		this._path = path || '/';
 
 		return fs.exec_direct('/bin/ls', ['-Ah', '--full-time', path]).then(out => {
 			const files = [];
@@ -187,7 +179,7 @@ return view.extend({
 					perm: perm, isLink: isLink, isDir,
 					size: isDir ? '' : size, name, owner, date,
 					permissionNum: this.permissionsToOctal(perm),
-					path: path === '/' ? `/${name}` : `${path}/${name}`
+					path: (`${path}/${name}`).replace(/\/+/g, '/')
 				});
 			});
 
@@ -198,25 +190,24 @@ return view.extend({
 					return a.isLink ? 1 : -1;
 				return a.name.localeCompare(b.name);
 			});
-			history.replaceState({
-				path, data: { path, files }
-			}, '', '#' + path);
 
 			return { path, files };
 		}).catch(() => ({ path, files: [] }));
 	},
 
 	render: function (data) {
-		if (!this._popBound) {
-			this._popBound = true;
-
+		if (!window._popBound) {
+			window._popBound = true;
 			window.addEventListener('popstate', e => {
-				if (e.state && e.state.data) {
-					this._path = e.state.path;
-					this.render(e.state.data);
+				if (e.state && e.state.path && e.state.path !== this._path) {
+					this.reload(e.state.path);
 				}
 			});
 		};
+		this._path = data.path;
+		if (history.state?.path !== data.path) {
+			history.pushState({ path: data.path, data: data }, '', '#' + data.path);
+		}
 		const root = this._root || (this._root = E('div'));
 		root.innerHTML = '';
 		root.oncontextmenu = ev => { ev.preventDefault(); return false; };
@@ -295,7 +286,7 @@ return view.extend({
 					E('span', { style: 'color:#666;font-size:12px;' },
 						_('%d items • Total %s').format(files.length, this.formatSizeHuman(totalSize))),
 					E('button', {
-						class: 'btn cbi-button-positive',
+						class: 'btn cbi-button-positive important',
 						click: ui.createHandlerFn(this, 'reload')
 					}, _('Reload page'))
 				])
@@ -309,7 +300,7 @@ return view.extend({
 					E('button', {
 						class: 'btn cbi-button-action',
 						click: ui.createHandlerFn(this, () => this.downloadFile(this.getSelectedFiles()))
-					}, [_('Batch download'), E('span', { id: 'download-count' })]),
+					}, [_('Batch Download'), E('span', { id: 'download-count' })]),
 					E('button', {
 						class: 'btn cbi-button-remove',
 						click: ui.createHandlerFn(this, 'clearSelectedFiles')
@@ -323,7 +314,7 @@ return view.extend({
 			if ('requestIdleCallback' in window) {
 				requestIdleCallback(() => this.preloadAceEditor(), { timeout: 1500 });
 			} else {
-				setTimeout(() => this.preloadAceEditor(), 800);
+				setTimeout(this.preloadAceEditor.bind(this), 800);
 			}
 		}
 
@@ -403,20 +394,18 @@ return view.extend({
 		path = path.startsWith('/') ? path : '/' + path;
 
 		fs.stat(path).then(r => {
-			if (r.size === 0) {
-				throw new Error(_('The file is empty.'));
-			} else if (r.type === 'file') {
+			if (r.type === 'file') {
 				return fs.read_direct(path).then(content => {
 					if (content.indexOf('\0') !== -1)
 						throw new Error(_('This is a binary file and %s').format(action));
 
-					hideModal();
+					L.hideModal();
 					window._aceReady
 						? this.showAceEditor(file, content, editable)
 						: this.showSimpleEditor(file, content, editable);
 				})
 			} else if (r.type === 'directory') {
-				hideModal();
+				L.hideModal();
 				this.reload(path);
 			} else throw new Error(_('Unknown file type'));
 		}).catch((e) =>
@@ -480,7 +469,7 @@ return view.extend({
 				if (val === originalContent)
 					return this.modalnotify(null, E('p', _('The file content has not changed')), 3000);
 				fs.write(file.path, val).then(() => {
-					hideModal();
+					L.hideModal();
 					this.showNotification(_('%s File saved successfully!').format(file.path), '', 'success');
 					this.reload();
 				});
@@ -531,7 +520,7 @@ return view.extend({
 						changeIndicator.style.display = (hasUnsavedChanges && isChecked) ? 'inline' : 'none';
 						const modalTitle = document.querySelector('.modal h4');
 						if (modalTitle)
-							modalTitle.textContent = (isChecked ? _('Edit') : _('View')) + ': ' + file.name;
+							modalTitle.textContent = isChecked ? _('edit mode') : _('view mode');
 					})
 				}),
 				E('label', { style: 'display:flex;align-items:center;gap:5px;', for: 'editCheckbox' }, _('Edit')),
@@ -543,7 +532,7 @@ return view.extend({
 			E('div', { class: 'ace-editor-container', style: 'width:auto;' }, [toolbar, container]),
 			E('div', { style: 'display:flex;gap:.5em;justify-content:space-around;padding-top:8px;' }, [
 				E('button', {
-					class: 'btn cbi-button-positive',
+					class: 'btn cbi-button-positive important',
 					click: ui.createHandlerFn(this, () => editor && this.copyText(editor.getValue()))
 				}, _('Copy')),
 				saveBtn,
@@ -551,15 +540,15 @@ return view.extend({
 					class: 'btn',
 					click: ui.createHandlerFn(this, () => {
 						if (this._isFullscreen) btnExit.click();;
-						hideModal();
+						L.hideModal();
 					})
 				}, editable ? _('Cancel') : _('Close'))
 			])
 		]);
 		fsConfig.wrapper = fullscreenWrapper;
 
-		L.showModal(_('%s: %s').format(editable ? _('Edit') : _('View'), file.name), [
-			E('style', ['.modal{padding:.3em;h4{text-align:center;color:red;}}']),
+		L.showModal(editable ? _('edit mode') : _('view mode'), [
+			E('style', ['.modal > h4{text-align:center;color:red;}']),
 			E('p', { class: 'modal-custom-path' }, [
 				E('span', {}, _('Ace Editor version: %s').format(ace.version)),
 				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
@@ -567,7 +556,7 @@ return view.extend({
 				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
 				E('span', {}, _('Lines: %d').format(content.split('\n').length)),
 				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
-				E('span', {}, _('Path: %s').format(file.path))
+				E('span', {}, _('Source: %s').format(file.path))
 			]), fullscreenWrapper
 		]);
 
@@ -603,7 +592,7 @@ return view.extend({
 			E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
 			E('span', {}, _('Lines: %d').format(content.split('\n').length)),
 			E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
-			E('span', {}, _('Path: %s').format(file.path))
+			E('span', {}, _('Source: %s').format(file.path))
 		]);
 
 		const saveBtn = E('button', {
@@ -614,7 +603,7 @@ return view.extend({
 				if (newContent === originalContent)
 					return this.modalnotify(null, E('p', _('The file content has not changed')), 3000);
 				fs.write(file.path, newContent).then(() => {
-					hideModal();
+					L.hideModal();
 					this.showNotification(_('%s File saved successfully!').format(file.path), '', 'success');
 					this.reload();
 				}).catch(error => this.modalnotify(null, E('p', _('Save failed: %s').format(error.message || error)), '', 'warning'));
@@ -627,7 +616,7 @@ return view.extend({
 				if (textarea.value !== originalContent && !textarea.readOnly)
 					if (!confirm(_('You have unsaved changes. Discard them?'))) return;
 				if (this._isFullscreen) btnExit.click();
-				hideModal();
+				L.hideModal();
 			})
 		}, editable ? _('Cancel') : _('Close'));
 
@@ -657,7 +646,7 @@ return view.extend({
 						saveBtn.style.display = isChecked ? 'inline-block' : 'none';
 						cancelBtn.textContent = isChecked ? _('Cancel') : _('Close');
 						const modalTitle = document.querySelector('.modal h4');
-						if (modalTitle) modalTitle.textContent = (isChecked ? _('Edit') : _('View')) + ': ' + file.name;
+						if (modalTitle) modalTitle.textContent = isChecked ? _('edit mode') : _('view mode');
 					})
 				}),
 				E('label', { style: 'display:flex;align-items:center;gap:5px;', for: 'editCheckboxSimple' }, _('Edit')),
@@ -669,7 +658,7 @@ return view.extend({
 			modeToggle, textarea,
 			E('div', { style: 'display:flex;justify-content:space-around;gap:0.5em;margin-top:8px;' }, [
 				E('button', {
-					class: 'btn cbi-button-positive',
+					class: 'btn cbi-button-positive important',
 					click: ui.createHandlerFn(this, 'copyText', textarea.value)
 				}, _('Copy')),
 				saveBtn, cancelBtn
@@ -677,8 +666,8 @@ return view.extend({
 		]);
 		fsConfig.wrapper = fullscreenWrapper;
 
-		L.showModal(_('%s: %s').format(editable ? _('Edit') : _('View'), file.name), [
-			E('style', ['.modal{padding:.3em;h4{text-align:center;color:red;}}']),
+		L.showModal(editable ? _('edit mode') : _('view mode'), [
+			E('style', ['.modal > h4{text-align:center;color:red;}']),
 			info, fullscreenWrapper
 		]);
 		requestAnimationFrame(() => this.Draggable());
@@ -785,7 +774,7 @@ return view.extend({
 			})
 		});
 		L.showModal(_('Create file (directory)'), [
-			E('style', ['h4 {text-align:center;color:red;}']),
+			E('style', ['.modal > h4{text-align:center;color:red;}']),
 			E('div', [
 				E('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;' }, [
 					E('span', _('Name')), pathInput,
@@ -817,7 +806,7 @@ return view.extend({
 				E('button', {
 					class: 'btn cbi-button-positive important',
 					click: ui.createHandlerFn(this, () => {
-						hideModal();
+						L.hideModal();
 						const content = (window._aceReady && editor) ? editor.getValue() : fileContent;
 						const p = fullDir ? fs.exec('/bin/mkdir', ['-p', '-m', dirPerm, fullDir]) : Promise.resolve();
 						p.then(res => {
@@ -841,7 +830,7 @@ return view.extend({
 						});
 					})
 				}, _('Create')),
-				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
+				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
 			])
 		]);
 
@@ -887,23 +876,28 @@ return view.extend({
 		let newname = '';
 		const oldname = path.split(/[/\\]/).pop() || '';
 
-		L.showModal(_('Rename %s').format(path), [
-			E('style', ['h4 {text-align:center;color:red;}']),
-			E('div', { style: 'display:flex;align-items:center;gap:10px;' }, [
-				E('label', { style: 'min-width:60px;' }, _('newname')),
+		L.showModal(_('Rename'), [
+			E('style', ['.modal > h4{text-align:center;color:red;}']),
+			E('div', { class: 'modal-custom-path' }, [
+				E('strong', _('Source: %s').format(path))
+			]),
+			E('div', { class: 'modal-custom-row' }, [
+				E('label', { class: 'modal-custom-label' }, _('newname')),
 				E('input', {
 					class: 'cbi-input-text', value: oldname,
-					id: 'nameinput', style: 'width:100%', type: 'text',
+					id: 'nameinput', style: 'flex:1', type: 'text',
 					change: ui.createHandlerFn(this, ev => newname = ev.target.value.trim())
 				}),
 			]),
-			E('div', { class: 'button-row' }, [
+			E('div', { class: 'right' }, [
+				E('button', { class: 'btn', click: L.hideModal }, _('Cancel')),
+				' ',
 				E('button', {
-					class: 'btn cbi-button-positive',
+					class: 'btn cbi-button-positive important',
 					click: ui.createHandlerFn(this, () => {
 						if (!newname || newname === oldname)
 							return this.modalnotify(null, E('p', _('Please enter a new name')), 3000);
-						hideModal();
+						L.hideModal();
 						fs.exec('/bin/mv', [path, path.replace(/[^/]+$/, newname)]).then(r => {
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Rename failed: %s').format(r.stderr)), '', 'error');
@@ -911,8 +905,7 @@ return view.extend({
 							this.showNotification(_('Renamed: %s to %s').format(path, newname), '', 'success');
 						});
 					})
-				}, _('Rename')),
-				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
+				}, _('Rename'))
 			])
 		]);
 
@@ -928,9 +921,9 @@ return view.extend({
 	chmodFile: function ({ path, permissionNum }) {
 		let val = '';
 		L.showModal(_('Change permissions'), [
-			E('style', ['.modal{padding:.3em;h4{text-align:center;color:red;}}']),
+			E('style', ['.modal > h4{text-align:center;color:red;}']),
 			E('div', { class: 'modal-custom-path' }, [
-				E('strong', _('Source: ')), path
+				E('strong', _('Source: %s').format(path))
 			]),
 			E('div', { class: 'modal-custom-row' }, [
 				E('label', { class: 'modal-custom-label' }, _('Permission')),
@@ -943,15 +936,15 @@ return view.extend({
 			]),
 
 			E('div', { class: 'right' }, [
-				E('button', { class: 'btn', click: hideModal }, _('Cancel')),
+				E('button', { class: 'btn', click: L.hideModal }, _('Cancel')),
 				' ',
 				E('button', {
-					class: 'btn cbi-button-positive',
+					class: 'btn cbi-button-positive important',
 					click: ui.createHandlerFn(this, () => {
 						if (!val)
 							return this.showNotification(_('Please select a new value'), 5000, 'error');
 
-						hideModal();
+						L.hideModal();
 						fs.exec('/bin/chmod', [val, path])
 							.then(r => {
 								if (r.code !== 0) throw new Error(r.stderr);
@@ -970,18 +963,41 @@ return view.extend({
 		files = [].concat(files);
 		if (files.length === 0) return;
 
-		L.showModal(_('Confirm Deletion'), [
-			E('p', { style: 'text-align:center; padding: 20px 10px;' },
+		const previewList = files.slice(0, 5).map(f => f.name).join('\n');
+		const moreSuffix = files.length > 5 ? '\n...' : '';
+
+		L.showModal(_('Delete project'), [
+			E('style', [
+				`.file-preview {
+					font-size: 0.9em; color: #6c757d; word-break: break-all;
+					margin-top: 10px; white-space: pre-line; max-height: 150px;
+					overflow-y: auto; background: rgba(0,0,0,0.03); padding: 5px;
+					border-radius: 3px;
+				}`,
+				`.modal > h4 {text-align:center !important; color:red !important;}`,
+				`.modal-delete-warning {background:#fff3cd; border-left:4px solid #ffc107; padding:12px; margin-bottom:15px; text-align:left;}`,
+				`.modal-delete-msg {text-align:center; padding:10px 5px; font-weight:bold; color: #dc3545; font-size:1.1em;}`
+			]),
+			E('div', { class: 'modal-delete-warning' }, [
+				E('strong', { style: 'color:#856404; display:block;' }, _('⚠️ Warning:')),
+				E('span', { style: 'color:#856404;' }, _('This action is irreversible! Files will be permanently removed.'))
+			]),
+			E('div', { class: 'modal-delete-msg' }, [
 				files.length === 1
-					? _('Are you sure you want to delete "%s"?').format(files[0].name)
-					: _('Are you sure you want to delete %d selected files?').format(files.length)
-			),
-			E('div', { class: 'right' }, [
-				E('button', { class: 'btn', click: hideModal }, _('Cancel')),
-				' ',
+					? _('Delete "%s"?').format(files[0].name)
+					: _('Delete %d selected items?').format(files.length),
+				E('div', { class: 'file-preview' },
+					files.length === 1 ? '' : _('Items to be deleted:\n%s%s').format(previewList, moreSuffix)
+				)
+			]),
+
+			E('div', { class: 'button-row' }, [
 				E('button', {
-					class: 'btn cbi-button-negative',
-					click: ui.createHandlerFn(this, () => {
+					class: 'btn cbi-button-negative important',
+					click: ui.createHandlerFn(this, (ev) => {
+						ev.target.disabled = true;
+						ev.target.textContent = _('Deleting...');
+
 						const paths = files.map(({ path, isLink }) => {
 							if (isLink) {
 								const linkInfo = this.parseLinkString(path);
@@ -990,7 +1006,7 @@ return view.extend({
 							return path;
 						});
 
-						hideModal();
+						L.hideModal();
 						fs.exec('/bin/rm', ['-rf', ...paths]).then(r => {
 							if (r.code !== 0) throw new Error(r.stderr);
 							this.clearSelectedFiles();
@@ -1005,7 +1021,8 @@ return view.extend({
 							this.showNotification(_('Delete failed: %s').format(e.message || e), 5000, 'error');
 						});
 					})
-				}, _('Delete'))
+				}, _('Confirm Delete')),
+				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
 			])
 		]);
 	},
@@ -1019,9 +1036,9 @@ return view.extend({
 		});
 
 		L.showModal(_('Create link'), [
-			E('style', ['h4 {text-align:center;color:red;}']),
+			E('style', ['.modal > h4 {text-align:center;color:red;}']),
 			E('div', { class: 'modal-custom-path' }, [
-				E('strong', _('Source: ')), path
+				E('strong', _('Source: %s').format(path))
 			]),
 
 			E('div', { class: 'modal-custom-row' }, [
@@ -1041,10 +1058,10 @@ return view.extend({
 			]),
 
 			E('div', { class: 'right' }, [
-				E('button', { class: 'btn', click: hideModal }, _('Cancel')),
+				E('button', { class: 'btn', click: L.hideModal }, _('Cancel')),
 				' ',
 				E('button', {
-					class: 'btn cbi-button-positive',
+					class: 'btn cbi-button-positive important',
 					click: ui.createHandlerFn(this, () => {
 						const finalPath = linkPath.trim();
 						if (!finalPath)
@@ -1090,7 +1107,7 @@ return view.extend({
 
 		L.showModal(isBatch ? _('Batch Download') : _('Download Directory'), [
 			E('div', { class: 'modal-custom-path' },
-				isBatch ? _('Number of files: %d').format(files.length) : _('Path: %s').format(files.path)
+				isBatch ? _('Number of files: %d').format(files.length) : _('Source: %s').format(files.path)
 			),
 			E('div', { class: 'modal-custom-row' }, [
 				E('label', { class: 'modal-custom-label' }, _('Filename')),
@@ -1105,13 +1122,13 @@ return view.extend({
 				E('button', { class: 'btn', click: L.hideModal }, _('Cancel')),
 				' ',
 				E('button', {
-					class: 'btn cbi-button-positive',
+					class: 'btn cbi-button-positive important',
 					click: ui.createHandlerFn(this, () => {
 						let name = (nameInput || (defaultName + '.tar.gz')).replace(/[\/\\:*?"<>|]/g, '_').trim();
 						if (!name.endsWith('.tar.gz')) name += '.tar.gz';
 
 						const out = `/tmp/${name}`;
-						hideModal();
+						L.hideModal();
 						this.showNotification(_('Packaging... please wait'), 0, 'info');
 
 						const args = (isBatch ? files : [files])
@@ -1186,9 +1203,12 @@ return view.extend({
 			css: 'css', xml: 'xml', py: 'python', sh: 'sh', bash: 'sh',
 			php: 'php', lua: 'lua', pl: 'perl', rb: 'ruby', md: 'markdown',
 			yaml: 'yaml', yml: 'yaml', uc: 'javascript', ut: 'javascript',
-			ts: 'javascript', lua: 'lua', toml: 'toml'
+			ts: 'javascript', toml: 'toml', svg: 'html',
+			config: 'sh', mk: 'makefile', Makefile: 'makefile'
 		};
+
 		if (extMap[ext]) return extMap[ext];
+		if (name === 'makefile') return 'makefile';
 
 		const trimmed = (content || '').trim();
 		const firstLine = trimmed.split('\n')[0] || '';
@@ -1197,14 +1217,16 @@ return view.extend({
 
 		if (trimmed) {
 			if (trimmed[0] === '{' || trimmed[0] === '[') {
-				try {
-					JSON.parse(trimmed);
-					return 'json';
-				} catch (e) {}
+				try { JSON.parse(trimmed); return 'json'; } catch (e) {}
 			}
 
 			if (/^\s*<\?xml\b/i.test(trimmed)) return 'xml';
 			if (/<html\b/i.test(trimmed) || /<!doctype\s+html/i.test(trimmed)) return 'html';
+
+			if (trimmed[0] === '#') {
+				if (trimmed.includes(':') && !trimmed.includes('=')) return 'yaml';
+				return 'sh';
+			}
 		}
 		return 'text';
 	},
@@ -1216,15 +1238,13 @@ return view.extend({
 		const s = firstLine.toLowerCase();
 		const patterns = [
 			{ re: /\/lua\b/, mode: 'lua' },
-			{ re: /(ba)?sh\b/, mode: 'sh' },
-			{ re: /node\b/, mode: 'javascript' },
-			{ re: /ucode\b/, mode: 'javascript' },
+			{ re: /(ba)?sh\b|busybox\b/, mode: 'sh' },
+			{ re: /node\b|ucode\b/, mode: 'javascript' },
 			{ re: /python\d?(\.\d+)?\b/, mode: 'python' },
 			{ re: /perl\b/, mode: 'perl' },
 			{ re: /ruby\b/, mode: 'ruby' },
 			{ re: /php\b/, mode: 'php' },
-			{ re: /zsh\b/, mode: 'sh' },
-			{ re: /ksh\b/, mode: 'sh' },
+			{ re: /[zkp]sh\b/, mode: 'sh' },
 		];
 
 		for (const { re, mode } of patterns)
@@ -1286,12 +1306,15 @@ return view.extend({
 				s.src = currentSrc;
 
 				s.onload = () => {
-					if (window.ace?.edit) {
+					const aceObj = window.ace;
+					if (aceObj && aceObj.edit) {
 						const path = currentSrc.substring(0, currentSrc.lastIndexOf('/'));
-						ace.config.set('basePath', path);
-						ace.config.set('modePath', path);
-						ace.config.set('themePath', path);
-						ace.config.set('workerPath', path);
+						const cleanPath = path.replace(/\/$/, '');
+
+						aceObj.config.set('basePath', cleanPath);
+						aceObj.config.set('modePath', cleanPath);
+						aceObj.config.set('themePath', cleanPath);
+						aceObj.config.set('workerPath', cleanPath);
 
 						window._aceReady = true;
 						resolve(true);
