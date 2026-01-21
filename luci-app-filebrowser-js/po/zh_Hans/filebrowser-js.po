@@ -115,6 +115,9 @@ msgstr "关闭"
 msgid "The document has been modified, click to undo all"
 msgstr "内容已改动，点击撤销所有更改"
 
+msgid "Undo all changes?"
+msgstr "撤消所有更改？"
+
 msgid "The file content has not changed"
 msgstr "内容未变，无需保存"
 
@@ -232,14 +235,14 @@ msgstr "确定要删除 \"%s\" 吗？"
 msgid "Delete %d selected items?"
 msgstr "确定要删除选中的 %d 个项目吗？"
 
-msgid "Items to be deleted:\n%s%s"
-msgstr "待删除的项目：\n%s%s"
+msgid "Items to be deleted:"
+msgstr "待删除的项目："
 
 msgid "Cancel"
 msgstr "取消"
 
 msgid "Confirm Delete"
-msgstr "确认确认删除"
+msgstr "确认删除"
 
 msgid "Deleting..."
 msgstr "正在处理..."
@@ -294,9 +297,6 @@ msgstr "已成功复制到剪贴板！"
 
 msgid "Copy failed!"
 msgstr "复制失败！"
-
-msgid "Dismiss"
-msgstr "我知道了"
 
 msgid "Please enter link path"
 msgstr "请输入链接路径"

@@ -8,6 +8,14 @@ const CSS = `
 .file-name-cell:hover {
 	background: #f5f7fa;
 }
+tr.selected {
+	background-color: #e4efffff;
+}
+.table .th, .table .td {
+	.item::after, .btn, .cbi-button{
+	    line-height: 1.6em;
+	}
+}
 
 .file-context-menu {
 	margin: 0;
@@ -29,12 +37,13 @@ const CSS = `
     transition: all 0.3s ease-in-out;
 }
 .file-context-menu .item:hover {
-    color: #007bff;
-    background-color: #fff;
+    color: #fff;
+    background-color: #007bff;
 }
 .file-context-menu .item:not(:last-child) {
     border-bottom: 1px solid #ddd;
 }
+
 .file-checkbox {
 	gap:5px;
 	display:flex;
@@ -51,15 +60,6 @@ const CSS = `
 	border-radius: 5px; /* 边框圆角8像素 */
 	padding: 5px; /* 内边距10像素 */
 }
-
-tr.selected {
-	background-color: #e4efffff;
-}
-.table .th, .table .td {
-	.item::after, .btn, .cbi-button{
-	    line-height: 1.6em;
-	}
-}
 .ace-fullscreen {
 	inset: 0;
 	z-index: 9999;
@@ -75,11 +75,6 @@ tr.selected {
 	flex-direction: column;
 }
 
-.ace-fullscreen .ace-editor-container .ace-wrapper {
-	flex: 1;
-	height: auto !important;
-}
-
 .ace-fullscreen-wrapper > div:last-child {
 	border-top: 1px solid #eee;
 	padding: .5em;
@@ -87,7 +82,15 @@ tr.selected {
 }
 
 .ace-toolbar {
-	flex: 0 0 auto;padding: 6px 6px;
+	flex: 0 0 auto;
+	padding: 6px 6px;
+	background: #eee;
+	border: 1px solid #ccc;
+	border-bottom: none;
+}
+.ace-toolbar-select {
+	min-width: 12% !important;
+	max-width: 15%;
 }
 .ace-editor-container {
 	height: 100%;
@@ -96,10 +99,6 @@ tr.selected {
 }
 .ace-editor-container > div:last-child {
 	flex: 1 1 auto;
-}
-.ace-toolbar-select {
-	min-width: 60px !important;
-	max-width: 80px;
 }
 
 .modal-custom-row {
@@ -113,9 +112,9 @@ tr.selected {
 	color: #555;
 }
 .modal-custom-path {
-	padding:5px;
+	padding:8px;
 	background:#f0f0f0;
-	font-size:11px;
+	font-size:12px;
 }
 
 @media (max-width: 768px) {
@@ -126,6 +125,10 @@ tr.selected {
 	}
 	.ace-toolbar .cbi-value-field {
 		gap: 6px;
+	}
+	.ace-toolbar-select {
+		min-width: 60px !important;
+		max-width: 80px;
 	}
 }`;
 
@@ -258,7 +261,7 @@ return view.extend({
 					})
 				}),
 				E('div', {
-					class: 'file-name-cell', style: 'width:100%',
+					class: 'file-name-cell', style: 'flex:1',
 					contextmenu: ui.createHandlerFn(this, ev => this.showContextMenu(ev, f))
 				}, [
 					E('span', {
@@ -310,7 +313,7 @@ return view.extend({
 			table.render()
 		);
 
-		if (window._aceReady === undefined && !window._acePromise) {
+		if (!window._aceReady && !window._acePromise) {
 			if ('requestIdleCallback' in window) {
 				requestIdleCallback(() => this.preloadAceEditor(), { timeout: 1500 });
 			} else {
@@ -334,23 +337,23 @@ return view.extend({
 		this.hideContextMenu();
 
 		const menu = E('div', { class: 'file-context-menu' });
-		const items = [
+		this._menu = menu;
+
+		[
 			[_('Create file (directory)'), () => this.createnew()],
-			!file.isDir && [_('Edit file'), () => this.showFileEditor(file, true)],
+			!file.isDir && [_('Edit'), () => this.showFileEditor(file, true)],
 			[_('Rename'), () => this.renameFile(file.path)],
-			!file.isLink && [_('Create link'), () => this.createLink(file.path)],
 			[_('Modify permissions'), () => this.chmodFile(file)],
+			!file.isLink && [_('Create link'), () => this.createLink(file.path)],
 			[_('Delete file'), () => this.deleteFile(file)],
 			[_('download file'), () => this.downloadFile(file)],
-			[_('upload file'), ev => this.Upload(ev)],
-		].filter(Boolean);
-
-		items.forEach(([label, action]) => {
+			[_('upload file'), ev => this.Upload(ev)]
+		].filter(Boolean).forEach(([label, action]) => {
 			menu.appendChild(E('div', {
 				class: 'item',
 				click: ui.createHandlerFn(this, ev => {
-					action(ev);
 					this.hideContextMenu();
+					action(ev);
 				})
 			}, label));
 		});
@@ -399,177 +402,180 @@ return view.extend({
 					if (content.indexOf('\0') !== -1)
 						throw new Error(_('This is a binary file and %s').format(action));
 
-					L.hideModal();
+					hideModal();
 					window._aceReady
 						? this.showAceEditor(file, content, editable)
 						: this.showSimpleEditor(file, content, editable);
 				})
 			} else if (r.type === 'directory') {
-				L.hideModal();
+				hideModal();
 				this.reload(path);
 			} else throw new Error(_('Unknown file type'));
 		}).catch((e) =>
 			this.showNotification(_('Failed to read file: %s').format(e.message), 8000, 'error'));
 	},
 
-	toggleFullscreenLogic: function (config) {
-		if (this._isFullscreen === undefined) this._isFullscreen = false;
+	toggleFS: function (config) {
 		this._isFullscreen = !this._isFullscreen;
+		const { wrapper, container, btnFull, btnExit, getEditor } = config;
 
-		const { wrapper, container, btnFull, btnExit } = config;
-		const escHandler = (e) => {
-			if (e.key === 'Escape' && this._isFullscreen) this.toggleFullscreenLogic(config);
-		};
+		if (!this._escHandler) {
+			this._escHandler = (e) => {
+				if (e.key === 'Escape' && this._isFullscreen)
+					this.toggleFS(config);
+			};
+		}
 
 		if (this._isFullscreen) {
-			document.addEventListener('keydown', escHandler);
+			document.addEventListener('keydown', this._escHandler);
 			config.originalParent = wrapper.parentNode;
 			config.originalNext = wrapper.nextSibling;
 
 			document.body.appendChild(wrapper);
 			wrapper.classList.add('ace-fullscreen');
-			container.style.height = 'calc(100vh - 110px)';
+			container.style.height = '100%';
+			container.style.flex = '1';
 		} else {
-			document.removeEventListener('keydown', escHandler);
+			document.removeEventListener('keydown', this._escHandler);
 			if (config.originalParent)
 				config.originalParent.insertBefore(wrapper, config.originalNext);
 
 			wrapper.classList.remove('ace-fullscreen');
 			container.style.height = '320px';
+			container.style.flex = '';
 		}
 
 		btnFull.style.display = this._isFullscreen ? 'none' : 'block';
 		btnExit.style.display = this._isFullscreen ? 'block' : 'none';
 
-		if (config.getEditor && config.getEditor()) {
-			requestAnimationFrame(() => config.getEditor().resize());
-		}
+		// if (typeof getEditor === 'function') {
+		// 	requestAnimationFrame(() => getEditor().resize());
+		// }
 	},
 
 	showAceEditor: function (file, content, editable) {
+		let editor = null;
 		const originalContent = content;
 		const containerId = 'ace-' + Date.now();
 		const syntaxid = 'syntax-' + Date.now();
-		let hasUnsavedChanges = false, editor = null;
 		const mode = this.detectFileMode(file.name, content);
 		const container = E('div', { id: containerId, style: 'width:100%;height:320px;border:1px solid #ccc;' });
-
 		const changeIndicator = E('span', {
-			style: 'display:none;cursor:pointer;color:#e74c3c;font-size:22px;',
+			style: 'display:none;cursor:pointer;color:#e74c3c;font-size:22px;line-height:1;',
 			title: _('The document has been modified, click to undo all'),
-			click: ui.createHandlerFn(this, () => editor && editor.setValue(originalContent, -1))
+			click: ui.createHandlerFn(this, () => {
+				if (editor && confirm(_('Undo all changes?')))
+					editor.setValue(originalContent, -1);
+			})
 		}, '●');
-
+		const wrapCheckbox = E('input', { type: 'checkbox', checked: true, id: 'wrapCheckbox' });
+		const editCheckbox = E('input', {
+			type: 'checkbox', id: 'editCheckbox', checked: !!editable || undefined,
+			change: ui.createHandlerFn(this, (ev) => {
+				if (!editor) return;
+				document.querySelector('.modal h4')
+					.textContent = ev.target.checked ? _('edit mode') : _('view mode');
+			})
+		});
 		const saveBtn = E('button', {
+			style: 'display:none;',
 			class: 'btn cbi-button-positive important',
-			style: `display:${editable ? 'block' : 'none'};`,
 			click: ui.createHandlerFn(this, () => {
 				if (!editor) return;
 				const val = editor.getValue();
-				if (val === originalContent)
-					return this.modalnotify(null, E('p', _('The file content has not changed')), 3000);
 				fs.write(file.path, val).then(() => {
-					L.hideModal();
+					hideModal();
 					this.showNotification(_('%s File saved successfully!').format(file.path), '', 'success');
 					this.reload();
-				});
+				}).catch(error => this.modalnotify(null, E('p', _('Save failed: %s').format(error.message || error)), '', 'warning'));
 			})
 		}, _('Save'));
-
 		const btnFull = E('button', { class: 'btn', style: 'padding: 0 8px; margin-left:auto;' }, _('full screen'));
 		const btnExit = E('button', { class: 'btn', style: 'display:none;margin-left:auto;' }, _('Exit full screen'));
-		const fsConfig = { wrapper: null, container, btnFull, btnExit, getEditor: () => editor };
-		const toggleFn = ui.createHandlerFn(this, 'toggleFullscreenLogic', fsConfig);
-		btnFull.onclick = btnExit.onclick = toggleFn;
-
 		const toolbar = E('div', { class: 'ace-toolbar' }, [
 			E('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
 				E('span', _('Syntax')),
 				E('select', {
-					id: syntaxid, class: 'cbi-input-select ace-toolbar-select',
-					change: ui.createHandlerFn(this, ev => editor && editor.session.setMode('ace/mode/' + ev.target.value))
+					id: syntaxid, class: 'ace-toolbar-select',
+					change: (ev) => editor && editor.session.setMode('ace/mode/' + ev.target.value)
 				}, modes.map(([id, name]) => E('option', { value: id, selected: id === mode || undefined }, name))),
 				E('span', _('Theme')),
 				E('select', {
-					class: 'cbi-input-select ace-toolbar-select',
-					change: ui.createHandlerFn(this, ev => editor && editor.setTheme('ace/theme/' + ev.target.value))
+					class: 'ace-toolbar-select',
+					change: (ev) => editor && editor.setTheme('ace/theme/' + ev.target.value)
 				}, themes.map(([id, name]) =>
 					E('option', { value: id, selected: id === 'monokai' || undefined }, name))
 				),
 				E('span', _('Font')),
 				E('select', {
-					class: 'cbi-input-select ace-toolbar-select',
-					change: ui.createHandlerFn(this, ev => editor && editor.setFontSize(ev.target.value + 'px'))
-				}, [
-					E('option', { value: '12' }, '12px'),
-					E('option', { value: '14', selected: true }, '14px'),
-					E('option', { value: '16' }, '16px')
-				]),
-				E('input', {
-					type: 'checkbox', checked: true, id: 'wrapCheckbox',
-					change: ui.createHandlerFn(this, ev => editor && editor.setOption('wrap', ev.target.checked))
-				}),
-				E('label', { style: 'display:flex;align-items:center;gap:5px;', for: 'wrapCheckbox' }, _('wrap')),
-				E('input', {
-					type: 'checkbox', id: 'editCheckbox', checked: !!editable || undefined,
-					change: ui.createHandlerFn(this, ev => {
-						if (!editor) return;
-						const isChecked = ev.target.checked;
-						editor.setReadOnly(!isChecked);
-						saveBtn.style.display = isChecked ? 'block' : 'none';
-						changeIndicator.style.display = (hasUnsavedChanges && isChecked) ? 'inline' : 'none';
-						const modalTitle = document.querySelector('.modal h4');
-						if (modalTitle)
-							modalTitle.textContent = isChecked ? _('edit mode') : _('view mode');
-					})
-				}),
-				E('label', { style: 'display:flex;align-items:center;gap:5px;', for: 'editCheckbox' }, _('Edit')),
+					class: 'ace-toolbar-select',
+					change: (ev) => editor && editor.setFontSize(ev.target.value + 'px')
+				}, ['12', '13', '14', '15', '16'].map(id =>
+					E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
+				)),
+				wrapCheckbox, E('label', { for: 'wrapCheckbox' }, _('wrap')),
+				editCheckbox, E('label', { for: 'editCheckbox' }, _('Edit')),
 				changeIndicator, btnFull, btnExit
 			])
 		]);
-
 		const fullscreenWrapper = E('div', { class: 'ace-fullscreen-wrapper' }, [
-			E('div', { class: 'ace-editor-container', style: 'width:auto;' }, [toolbar, container]),
+			E('div', { class: 'ace-editor-container' }, [toolbar, container]),
 			E('div', { style: 'display:flex;gap:.5em;justify-content:space-around;padding-top:8px;' }, [
 				E('button', {
-					class: 'btn cbi-button-positive important',
+					class: 'btn cbi-button-action',
 					click: ui.createHandlerFn(this, () => editor && this.copyText(editor.getValue()))
 				}, _('Copy')),
 				saveBtn,
 				E('button', {
 					class: 'btn',
 					click: ui.createHandlerFn(this, () => {
-						if (this._isFullscreen) btnExit.click();;
-						L.hideModal();
+						if (editor && editor.getValue() !== originalContent)
+							if (!confirm(_('You have unsaved changes. Discard them?'))) return;
+						if (this._isFullscreen) btnExit.click();
+						hideModal();
 					})
-				}, editable ? _('Cancel') : _('Close'))
+				}, _('Close'))
 			])
 		]);
-		fsConfig.wrapper = fullscreenWrapper;
+
+		btnFull.onclick = btnExit.onclick = ui.createHandlerFn(this, 'toggleFS', {
+			wrapper: fullscreenWrapper, container, btnFull, btnExit, getEditor: () => editor
+		});
 
 		L.showModal(editable ? _('edit mode') : _('view mode'), [
-			E('style', ['.modal > h4{text-align:center;color:red;}']),
-			E('p', { class: 'modal-custom-path' }, [
-				E('span', {}, _('Ace Editor version: %s').format(ace.version)),
-				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
-				E('span', {}, _('Size: %s').format(file.size)),
-				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
-				E('span', {}, _('Lines: %d').format(content.split('\n').length)),
-				E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
-				E('span', {}, _('Source: %s').format(file.path))
-			]), fullscreenWrapper
+			E('style', [
+				'.modal > h4{text-align:center;}',
+				'.ace-toolbar-select { height:25px!important; padding: 0 4px !important; min-width:13%!important; }'
+			]),
+			E('div', { style: 'font-size: 0.9em; color: #666; margin-bottom: 8px; text-align: center;' }, [
+				_('Ace Editor version: %s').format(ace.version), ' | ',
+				_('Size: %s').format(file.size), ' | ',
+				_('Source: %s').format(file.path)
+			]),
+			fullscreenWrapper
 		]);
 
 		requestAnimationFrame(() => {
-			this.initAceEditor(containerId, {
-				content, editable, syntaxid, mode, changeIndicator, saveBtn,
-				onChange: (ed, hasChanges) => {
-					hasUnsavedChanges = hasChanges;
-				}
+			this.initAceEditor({
+				content, editable, syntaxid,
+				mode, changeIndicator, saveBtn,
+				originalContent, wrapCheckbox,
+				editCheckbox, containerId
 			}).then(ed => {
 				editor = ed;
 				editor.resize();
 			});
+
+			if (container) {
+				container.addEventListener('keydown', (e) => {
+					if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+						e.preventDefault();
+						e.stopPropagation();
+						if (saveBtn.style.display !== 'none')
+							saveBtn.click();
+					}
+				}, true);
+			}
 			this.Draggable();
 		});
 	},
@@ -578,97 +584,85 @@ return view.extend({
 		const originalContent = content;
 		const textarea = E('textarea', {
 			class: 'cbi-input-text', readonly: !editable || undefined, type: 'text',
+			input: function (ev) {
+				const isDirty = ev.target.value !== originalContent;
+				saveBtn.style.display = (isDirty && !ev.target.readOnly) ? 'inline-block' : 'none';
+			},
 			style: 'width:100%;height:320px;font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;'
 		}, content);
-
-		const btnFull = E('button', { class: 'btn', style: 'padding: 0 8px; margin-left:auto;' }, _('full screen'));
-		const btnExit = E('button', { class: 'btn', style: 'display:none;margin-left:auto;' }, _('Exit full screen'));
-		const fsConfig = { wrapper: null, container: textarea, btnFull, btnExit, getEditor: () => null };
-		const toggleFn = ui.createHandlerFn(this, 'toggleFullscreenLogic', fsConfig);
-		btnFull.onclick = btnExit.onclick = toggleFn;
-
-		const info = E('p', { class: 'modal-custom-path' }, [
-			E('span', {}, _('Size: %s').format(file.size)),
-			E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
-			E('span', {}, _('Lines: %d').format(content.split('\n').length)),
-			E('span', { style: 'margin:0 12px;color:#666;' }, '|'),
-			E('span', {}, _('Source: %s').format(file.path))
-		]);
-
 		const saveBtn = E('button', {
 			class: 'btn cbi-button-positive important',
-			style: `display:${editable ? 'inline-block' : 'none'};`,
+			style: `display:none`,
 			click: ui.createHandlerFn(this, () => {
-				const newContent = textarea.value;
-				if (newContent === originalContent)
-					return this.modalnotify(null, E('p', _('The file content has not changed')), 3000);
-				fs.write(file.path, newContent).then(() => {
-					L.hideModal();
+				fs.write(file.path, textarea.value).then(() => {
+					hideModal();
 					this.showNotification(_('%s File saved successfully!').format(file.path), '', 'success');
 					this.reload();
 				}).catch(error => this.modalnotify(null, E('p', _('Save failed: %s').format(error.message || error)), '', 'warning'));
 			})
 		}, _('Save'));
-
-		const cancelBtn = E('button', {
-			class: 'btn',
-			click: ui.createHandlerFn(this, () => {
-				if (textarea.value !== originalContent && !textarea.readOnly)
-					if (!confirm(_('You have unsaved changes. Discard them?'))) return;
-				if (this._isFullscreen) btnExit.click();
-				L.hideModal();
-			})
-		}, editable ? _('Cancel') : _('Close'));
-
+		const btnFull = E('button', { class: 'btn', style: 'padding: 0 8px; margin-left:auto;' }, _('full screen'));
+		const btnExit = E('button', { class: 'btn', style: 'display:none;margin-left:auto;' }, _('Exit full screen'));
 		const modeToggle = E('div', { class: 'ace-toolbar' }, [
-			E('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
+			E('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
 				E('span', _('Font')),
 				E('select', {
-					class: 'cbi-input-select ace-toolbar-select',
+					class: 'cbi-input-select', style: 'width: 35%;',
 					change: ui.createHandlerFn(this, ev => textarea.style.fontSize = ev.target.value + 'px')
-				}, [
-					E('option', { value: '12' }, '12px'),
-					E('option', { value: '14', selected: true }, '14px'),
-					E('option', { value: '16' }, '16px')
-				]),
+				}, ['12', '13', '14', '15', '16'].map(id =>
+					E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
+				)),
 				E('input', {
-					type: 'checkbox', checked: true, id: 'wrapCheckboxSimple',
+					type: 'checkbox', checked: true, id: 'wrapCheckbox',
 					change: ui.createHandlerFn(this, ev =>
 						textarea.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre')
 				}),
-				E('label', { style: 'display:flex;align-items:center;gap:5px;', for: 'wrapCheckboxSimple' }, _('wrap')),
+				E('label', { style: 'display:flex;align-items:center;gap:5px;', for: 'wrapCheckbox' }, _('wrap')),
 				E('input', {
-					id: 'editCheckboxSimple', type: 'checkbox',
+					id: 'editCheckbox', type: 'checkbox',
 					checked: !!editable || undefined,
 					change: ui.createHandlerFn(this, ev => {
 						const isChecked = ev.target.checked;
 						textarea.readOnly = !isChecked;
-						saveBtn.style.display = isChecked ? 'inline-block' : 'none';
-						cancelBtn.textContent = isChecked ? _('Cancel') : _('Close');
-						const modalTitle = document.querySelector('.modal h4');
-						if (modalTitle) modalTitle.textContent = isChecked ? _('edit mode') : _('view mode');
+						document.querySelector('.modal h4')
+							.textContent = isChecked ? _('edit mode') : _('view mode');
 					})
 				}),
-				E('label', { style: 'display:flex;align-items:center;gap:5px;', for: 'editCheckboxSimple' }, _('Edit')),
+				E('label', { style: 'display:flex;align-items:center;gap:5px;', for: 'editCheckbox' }, _('Edit')),
 				btnFull, btnExit
 			])
 		]);
-
 		const fullscreenWrapper = E('div', { class: 'ace-fullscreen-wrapper' }, [
 			modeToggle, textarea,
 			E('div', { style: 'display:flex;justify-content:space-around;gap:0.5em;margin-top:8px;' }, [
 				E('button', {
-					class: 'btn cbi-button-positive important',
+					class: 'btn cbi-button-positive',
 					click: ui.createHandlerFn(this, 'copyText', textarea.value)
 				}, _('Copy')),
-				saveBtn, cancelBtn
+				saveBtn,
+				E('button', {
+					class: 'btn',
+					click: ui.createHandlerFn(this, () => {
+						if (textarea.value !== originalContent && !textarea.readOnly)
+							if (!confirm(_('You have unsaved changes. Discard them?'))) return;
+						if (this._isFullscreen) btnExit.click();
+						hideModal();
+					})
+				}, _('Close'))
 			])
 		]);
-		fsConfig.wrapper = fullscreenWrapper;
+		btnFull.onclick = btnExit.onclick = ui.createHandlerFn(this, 'toggleFS', {
+			wrapper: fullscreenWrapper, container: textarea, btnFull, btnExit, getEditor: () => null
+		});
 
 		L.showModal(editable ? _('edit mode') : _('view mode'), [
-			E('style', ['.modal > h4{text-align:center;color:red;}']),
-			info, fullscreenWrapper
+			E('style', ['.modal > h4{text-align:center;}']),
+			E('div', { style: 'font-size: 0.9em; color: #666; margin-bottom: 8px; text-align: center;' }, [
+				_('Size: %s').format(file.size), ' | ',
+				_('Lines: %d').format(content.split('\n').length), ' | ',
+				_('Source: %s').format(file.path)
+			]),
+			fullscreenWrapper
 		]);
 		requestAnimationFrame(() => this.Draggable());
 	},
@@ -689,7 +683,7 @@ return view.extend({
 		const fileElem = E('span', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;' }, [
 			E('span', _('file permissions')),
 			E('select', {
-				class: 'cbi-input-select ace-toolbar-select',
+				class: 'ace-toolbar-select',
 				change: ui.createHandlerFn(this, ev => filePerm = ev.target.value)
 			}, permissions.map(([id, name]) =>
 				E('option', { value: id, selected: id === filePerm || undefined }, name)
@@ -702,25 +696,23 @@ return view.extend({
 						E('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
 							E('span', _('Syntax')),
 							E('select', {
-								class: 'cbi-input-select ace-toolbar-select', id: syntaxid,
+								class: 'ace-toolbar-select', id: syntaxid,
 								change: ui.createHandlerFn(this, ev => editor && editor.session.setMode('ace/mode/' + ev.target.value))
 							}, modes.map(([id, name]) => E('option', { value: id, selected: id === mode || undefined }, name))
 							),
 							E('span', _('Theme')),
 							E('select', {
-								class: 'cbi-input-select ace-toolbar-select',
+								class: 'ace-toolbar-select',
 								change: ui.createHandlerFn(this, ev => editor && editor.setTheme('ace/theme/' + ev.target.value))
 							}, themes.map(([id, name]) => E('option', { value: id, selected: id === 'monokai' || undefined }, name))
 							),
 							E('span', _('Font')),
 							E('select', {
-								class: 'cbi-input-select ace-toolbar-select',
+								class: 'ace-toolbar-select',
 								change: ui.createHandlerFn(this, ev => editor && editor.setFontSize(ev.target.value + 'px'))
-							}, [
-								E('option', { value: '12' }, '12px'),
-								E('option', { value: '14', selected: true }, '14px'),
-								E('option', { value: '16' }, '16px')
-							]),
+							}, ['12', '13', '14', '15', '16'].map(id =>
+								E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
+							)),
 							fileElem
 						])
 					]),
@@ -781,7 +773,7 @@ return view.extend({
 					E('span', { id: 'dirperm' }, [
 						E('span', _('Directory permissions')),
 						E('select', {
-							class: 'cbi-input-select ace-toolbar-select',
+							class: 'ace-toolbar-select',
 							change: ui.createHandlerFn(this, ev => dirPerm = ev.target.value)
 						}, permissions.map(([id, name]) =>
 							E('option', { value: id, selected: id === dirPerm || undefined }, name)
@@ -806,7 +798,7 @@ return view.extend({
 				E('button', {
 					class: 'btn cbi-button-positive important',
 					click: ui.createHandlerFn(this, () => {
-						L.hideModal();
+						hideModal();
 						const content = (window._aceReady && editor) ? editor.getValue() : fileContent;
 						const p = fullDir ? fs.exec('/bin/mkdir', ['-p', '-m', dirPerm, fullDir]) : Promise.resolve();
 						p.then(res => {
@@ -830,13 +822,13 @@ return view.extend({
 						});
 					})
 				}, _('Create')),
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
+				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
 			])
 		]);
 
 		requestAnimationFrame(() => {
 			if (window._aceReady)
-				this.initAceEditor(containerId, { editable: true }).then(ed => {
+				this.initAceEditor({ containerId, editable: true }).then(ed => {
 					editor = ed;
 					setmode();
 				});
@@ -890,14 +882,14 @@ return view.extend({
 				}),
 			]),
 			E('div', { class: 'right' }, [
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel')),
+				E('button', { class: 'btn', click: hideModal }, _('Cancel')),
 				' ',
 				E('button', {
 					class: 'btn cbi-button-positive important',
 					click: ui.createHandlerFn(this, () => {
 						if (!newname || newname === oldname)
 							return this.modalnotify(null, E('p', _('Please enter a new name')), 3000);
-						L.hideModal();
+						hideModal();
 						fs.exec('/bin/mv', [path, path.replace(/[^/]+$/, newname)]).then(r => {
 							if (r.code !== 0)
 								return this.modalnotify(null, E('p', _('Rename failed: %s').format(r.stderr)), '', 'error');
@@ -929,14 +921,14 @@ return view.extend({
 				E('label', { class: 'modal-custom-label' }, _('Permission')),
 				E('select', {
 					class: 'cbi-input-select', style: 'flex:1',
-					change: ui.createHandlerFn(this, ev => val = ev.target.value)
+					change: ui.createHandlerFn(this, () => val = ev.target.value)
 				}, permissions.map(([id, name]) =>
 					E('option', { value: id, selected: id === permissionNum || undefined }, name)
 				))
 			]),
 
 			E('div', { class: 'right' }, [
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel')),
+				E('button', { class: 'btn', click: hideModal }, _('Cancel')),
 				' ',
 				E('button', {
 					class: 'btn cbi-button-positive important',
@@ -944,7 +936,7 @@ return view.extend({
 						if (!val)
 							return this.showNotification(_('Please select a new value'), 5000, 'error');
 
-						L.hideModal();
+						hideModal();
 						fs.exec('/bin/chmod', [val, path])
 							.then(r => {
 								if (r.code !== 0) throw new Error(r.stderr);
@@ -962,7 +954,6 @@ return view.extend({
 	deleteFile: function (files) {
 		files = [].concat(files);
 		if (files.length === 0) return;
-
 		const previewList = files.slice(0, 5).map(f => f.name).join('\n');
 		const moreSuffix = files.length > 5 ? '\n...' : '';
 
@@ -987,17 +978,15 @@ return view.extend({
 					? _('Delete "%s"?').format(files[0].name)
 					: _('Delete %d selected items?').format(files.length),
 				E('div', { class: 'file-preview' },
-					files.length === 1 ? '' : _('Items to be deleted:\n%s%s').format(previewList, moreSuffix)
+					files.length === 1 ? '' : _('Items to be deleted:') + '\n%s%s'.format(previewList, moreSuffix)
 				)
 			]),
-
 			E('div', { class: 'button-row' }, [
 				E('button', {
 					class: 'btn cbi-button-negative important',
-					click: ui.createHandlerFn(this, (ev) => {
+					click: ui.createHandlerFn(this, ev => {
 						ev.target.disabled = true;
 						ev.target.textContent = _('Deleting...');
-
 						const paths = files.map(({ path, isLink }) => {
 							if (isLink) {
 								const linkInfo = this.parseLinkString(path);
@@ -1006,7 +995,7 @@ return view.extend({
 							return path;
 						});
 
-						L.hideModal();
+						hideModal();
 						fs.exec('/bin/rm', ['-rf', ...paths]).then(r => {
 							if (r.code !== 0) throw new Error(r.stderr);
 							this.clearSelectedFiles();
@@ -1022,7 +1011,7 @@ return view.extend({
 						});
 					})
 				}, _('Confirm Delete')),
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel'))
+				E('button', { class: 'btn', click: hideModal }, _('Cancel'))
 			])
 		]);
 	},
@@ -1030,8 +1019,8 @@ return view.extend({
 	createLink: function (path) {
 		let linkPath = '', isHardLink = false;
 		const pathInput = E('input', {
-			class: 'cbi-input-text', style: 'flex:1', type: 'text',
-			placeholder: '/path/to/target',
+			class: 'cbi-input-text', style: 'flex:1',
+			placeholder: '/path/to/target', type: 'text',
 			change: ui.createHandlerFn(this, ev => linkPath = ev.target.value.trim())
 		});
 
@@ -1040,12 +1029,10 @@ return view.extend({
 			E('div', { class: 'modal-custom-path' }, [
 				E('strong', _('Source: %s').format(path))
 			]),
-
 			E('div', { class: 'modal-custom-row' }, [
 				E('label', { class: 'modal-custom-label' }, _('Target')),
 				pathInput
 			]),
-
 			E('div', { class: 'modal-custom-row', style: 'padding-top:0' }, [
 				E('label', { class: 'modal-custom-label' }),
 				E('div', { style: 'display:flex; align-items:center; gap:5px;' }, [
@@ -1056,9 +1043,8 @@ return view.extend({
 					E('label', { for: 'is_hardlink', style: 'font-size:12px; cursor:pointer;' }, _('Create hard link'))
 				])
 			]),
-
 			E('div', { class: 'right' }, [
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel')),
+				E('button', { class: 'btn', click: hideModal }, _('Cancel')),
 				' ',
 				E('button', {
 					class: 'btn cbi-button-positive important',
@@ -1067,7 +1053,7 @@ return view.extend({
 						if (!finalPath)
 							return this.showNotification(_('Please enter a valid target path'), 3000, 'error');
 
-						L.hideModal();
+						hideModal();
 						const args = isHardLink ? [path, finalPath] : ['-s', path, finalPath];
 						fs.exec('/bin/ln', args).then(r => {
 							if (r.code !== 0) throw new Error(r.stderr);
@@ -1119,7 +1105,7 @@ return view.extend({
 				}),
 			]),
 			E('div', { class: 'right' }, [
-				E('button', { class: 'btn', click: L.hideModal }, _('Cancel')),
+				E('button', { class: 'btn', click: hideModal }, _('Cancel')),
 				' ',
 				E('button', {
 					class: 'btn cbi-button-positive important',
@@ -1128,7 +1114,7 @@ return view.extend({
 						if (!name.endsWith('.tar.gz')) name += '.tar.gz';
 
 						const out = `/tmp/${name}`;
-						L.hideModal();
+						hideModal();
 						this.showNotification(_('Packaging... please wait'), 0, 'info');
 
 						const args = (isBatch ? files : [files])
@@ -1337,24 +1323,23 @@ return view.extend({
 	},
 
 	hideContextMenu: function () {
-		const menu = document.querySelector('.file-context-menu');
-		if (menu) menu.remove();
-
+		if (this._menu)
+			this._menu.remove();
 		if (this._contextMenuHandler) {
 			document.removeEventListener('click', this._contextMenuHandler);
 			this._contextMenuHandler = null;
 		}
 	},
 
-	initAceEditor: function (containerId, options = {}) {
+	initAceEditor: function (options = {}) {
 		const defaults = {
 			content: '',
 			mode: 'text',
+			containerId: '',
 			saveBtn: null,
-			onChange: null,
-			onError: null,
 			editable: false,
 			syntaxid: null,
+			editCheckbox: null,
 			wrapCheckbox: null,
 			changeIndicator: null,
 			originalContent: undefined
@@ -1364,7 +1349,7 @@ return view.extend({
 
 		return new Promise((resolve, reject) => {
 			const init = () => {
-				const el = document.getElementById(containerId);
+				const el = document.getElementById(config.containerId);
 				if (!el || !el.offsetHeight)
 					return requestAnimationFrame(init);
 
@@ -1374,6 +1359,7 @@ return view.extend({
 					editor.setOptions({
 						fontSize: 14,
 						showPrintMargin: false,
+						highlightActiveLine: true,
 						readOnly: !config.editable,
 						wrap: config.wrapCheckbox
 							? !!config.wrapCheckbox.checked
@@ -1386,28 +1372,22 @@ return view.extend({
 					editor.session.setUseWorker(false);
 					editor.setValue(config.content || '', -1);
 
-					if (typeof config.originalContent !== 'string')
-						config.originalContent = editor.getValue();
-
 					if (config.syntaxid) {
 						const sel = document.getElementById(config.syntaxid);
 						if (sel && config.mode) sel.value = config.mode;
 					};
 
-					if (config.onChange || config.changeIndicator) {
+					if (config.changeIndicator || config.saveBtn) {
 						editor.session.on('change', () => {
-							const hasUnsavedChanges =
-								editor.getValue() !== config.originalContent;
+							const isDirty = editor.getValue() !== config.originalContent;
 
-							if (config.onChange) config.onChange(editor, hasUnsavedChanges);
-							if (config.changeIndicator && config.changeIndicator.style) {
-								config.changeIndicator.style.display =
-									(hasUnsavedChanges && !editor.getReadOnly())
-										? 'inline'
-										: 'none';
-							};
+							if (config.changeIndicator)
+								config.changeIndicator.style.display = isDirty ? 'inline' : 'none';
+
+							if (config.saveBtn)
+								config.saveBtn.style.display = isDirty ? 'block' : 'none';
 						});
-					};
+					}
 
 					if (config.editable && config.saveBtn) {
 						editor.commands.addCommand({
@@ -1422,12 +1402,17 @@ return view.extend({
 							editor.setOption('wrap', !!config.wrapCheckbox.checked);
 						});
 					};
+
+					if (config.editCheckbox) {
+						config.editCheckbox.addEventListener('change', () => {
+							editor.setOption('readOnly', !config.editCheckbox.checked);
+						});
+					}
 					resolve(editor);
 				} catch (err) {
 					reject(err);
 				}
 			};
-
 			requestAnimationFrame(init);
 		});
 	},
