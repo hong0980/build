@@ -31,6 +31,9 @@ msgstr "共 %d 个项目 • 总计 %s"
 msgid "Create file (directory)"
 msgstr "新建文件(文件夹)"
 
+msgid "name(path)"
+msgstr "名称(路径)"
+
 msgid "Edit file"
 msgstr "编辑内容"
 
@@ -261,6 +264,9 @@ msgstr "批量删除"
 
 msgid "Batch Download"
 msgstr "批量下载"
+
+msgid "Number of files: %d"
+msgstr "文件数量：%d"
 
 msgid "Deselect"
 msgstr "取消选择"
