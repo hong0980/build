@@ -283,17 +283,14 @@ msgstr "保存的文件名"
 msgid "Package and Download"
 msgstr "打包并下载"
 
-msgid "Packaging... please wait"
-msgstr "正在打包，请稍候..."
-
 msgid "Download started: %s"
 msgstr "开始下载：%s"
 
 msgid "Read failed: %s"
 msgstr "读取失败：%s"
 
-msgid "Successfully uploaded: %s"
-msgstr "上传成功：%s"
+msgid "File \"%s\" uploaded to \"%s\""
+msgstr "文件 \"%s\" 已上传至 \"%s\""
 
 msgid "Upload failed: %s"
 msgstr "上传失败：%s"
@@ -304,8 +301,8 @@ msgstr "已成功复制到剪贴板！"
 msgid "Copy failed!"
 msgstr "复制失败！"
 
-msgid "Please enter link path"
-msgstr "请输入链接路径"
+msgid "Please enter a valid target path"
+msgstr "请输入有效的目标路径"
 
 msgid "%s Link created successfully: %s"
 msgstr "%s 链接创建成功：%s"
