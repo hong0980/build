@@ -412,7 +412,6 @@ return view.extend({
 	},
 
 	showFileEditor: function (file, editable) {
-		console.log(file)
 		const fileSize = this.parseSizeToBytes(file.size);
 		const maxSize = editable ? 512 * 1024 : 1024 * 1024;
 		const maxSizeStr = editable ? '512KB' : '1MB';
@@ -431,9 +430,9 @@ return view.extend({
 		let path = file.linkTarget || file.path;
 		path = path.startsWith('/') ? path : '/' + path;
 
-		fs.stat(path).then(r => {
+		return fs.stat(path).then(r => {
 			if (r.type === 'file') {
-				fs.read_direct(path).then(content => {
+				return fs.read_direct(path).then(content => {
 					if (content.indexOf('\0') !== -1)
 						throw new Error(_('This is a binary file and %s').format(action));
 
@@ -512,11 +511,13 @@ return view.extend({
 			click: ui.createHandlerFn(this, () => {
 				if (!editor) return;
 				const val = editor.getValue();
-				fs.write(file.path, val).then(() => {
-					ui.hideModal();
-					this.showNotification(_('%s File saved successfully!').format(file.path), '', 'success');
-					this.reload();
-				}).catch(error => this.modalnotify(null, E('p', _('Save failed: %s').format(error.message || error)), '', 'warning'));
+				fs.write(file.path, val)
+					.then(() => {
+						this.showNotification(_('%s File saved successfully!').format(file.path), '', 'success');
+						this.reload();
+					})
+					.catch(error => this.modalnotify(null, E('p', _('Save failed: %s').format(error.message || error)), '', 'warning'))
+					.finally(() => ui.hideModal());
 			})
 		}, _('Save'));
 		const btnFull = E('button', { class: 'btn', style: 'padding: 0 8px; margin-left:auto;' }, _('full screen'));
@@ -622,11 +623,13 @@ return view.extend({
 		const saveBtn = E('button', {
 			class: 'btn cbi-button-positive important', style: `display:none`,
 			click: ui.createHandlerFn(this, () => {
-				fs.write(file.path, textarea.value).then(() => {
-					ui.hideModal();
-					this.showNotification(_('%s File saved successfully!').format(file.path), '', 'success');
-					this.reload();
-				}).catch(error => this.modalnotify(null, E('p', _('Save failed: %s').format(error.message || error)), '', 'warning'));
+				fs.write(file.path, textarea.value)
+					.then(() => {
+						this.showNotification(_('%s File saved successfully!').format(file.path), '', 'success');
+						this.reload();
+					})
+					.catch(error => this.modalnotify(null, E('p', _('Save failed: %s').format(error.message || error)), '', 'warning'))
+					.finally(() => ui.hideModal());
 			})
 		}, _('Save'));
 		const btnFull = E('button', { class: 'btn', style: 'padding: 0 8px; margin-left:auto;' }, _('full screen'));
@@ -834,28 +837,27 @@ return view.extend({
 					id: 'create', style: 'display:none;',
 					class: 'btn cbi-button-positive important',
 					click: ui.createHandlerFn(this, () => {
-						ui.hideModal();
 						const content = (window._aceReady && editor) ? editor.getValue() : fileContent;
-						const p = fullDir ? fs.exec('/bin/mkdir', ['-p', '-m', dirPerm, fullDir]) : Promise.resolve();
+						const p = fullDir ? fs.exec('/bin/mkdir', ['-p', '-m', dirPerm, fullDir]) : Promise.resolve({ code: 0 });
 						p.then(res => {
 							if (res && res.code !== 0) throw new Error(res.stderr);
 
 							if (!fullFile) {
 								this.showNotification(_('Directory %s created successfully').format(fullDir), '', 'success');
-								this.reload(fullDir);
-								return;
+								return this.reload(fullDir);
 							}
 
-							return fs.write(fullFile, content).then(() => {
-								return fs.exec('/bin/chmod', [filePerm, fullFile]);
-							}).then(res => {
-								if (res && res.code !== 0) throw new Error(res.stderr);
-								this.reload(fullDir);
-								this.showNotification(_('File %s created successfully').format(fullFile), '', 'success');
-							});
+							return fs.write(fullFile, content)
+								.then(() => fs.exec('/bin/chmod', [filePerm, fullFile]))
+								.then(res => {
+									if (res && res.code !== 0) throw new Error(res.stderr);
+									this.showNotification(_('File %s created successfully').format(fullFile), '', 'success');
+									return this.reload(fullDir);
+								});
 						}).catch(e => {
 							this.modalnotify(null, E('p', _('Create failed: %s').format(e.message || e)), '', 'error');
-						});
+							throw e;
+						}).finally(() => ui.hideModal());
 					})
 				}, _('Create')),
 				' ',
@@ -921,13 +923,17 @@ return view.extend({
 					click: ui.createHandlerFn(this, () => {
 						if (!newname || newname === oldname)
 							return this.modalnotify(null, E('p', _('Please enter a new name')), 3000);
-						ui.hideModal();
-						fs.exec('/bin/mv', [path, path.replace(/[^/]+$/, newname)]).then(r => {
+
+						return fs.exec('/bin/mv', [path, path.replace(/[^/]+$/, newname)]).then(r => {
 							if (r.code !== 0)
-								return this.modalnotify(null, E('p', _('Rename failed: %s').format(r.stderr)), '', 'error');
-							this.reload();
+								throw new Error(r.stderr || _('Unknown error during rename'));
+
 							this.showNotification(_('Renamed: %s to %s').format(path, newname), '', 'success');
-						});
+							return this.reload();
+						}).catch(e => {
+							this.modalnotify(null, E('p', _('Rename failed: %s').format(e.message || e)), '', 'error');
+							throw e;
+						}).finally(() => ui.hideModal());
 					})
 				}, _('Rename'))
 			])
@@ -966,15 +972,15 @@ return view.extend({
 						if (!val)
 							return this.showNotification(_('Please select a new value'), 5000, 'error');
 
-						ui.hideModal();
-						fs.exec('/bin/chmod', [val, path])
+						return fs.exec('/bin/chmod', [val, path])
 							.then(r => {
 								if (r.code !== 0) throw new Error(r.stderr);
 								this.reload();
 								this.showNotification(_('Permissions updated: %s').format(path), 2000, 'success');
 							})
 							.catch(e =>
-								this.showNotification(_('Failed to change permissions: %s').format(e.message || e), 5000, 'error'));
+								this.showNotification(_('Failed to change permissions: %s').format(e.message || e), 5000, 'error'))
+							.finally(() => ui.hideModal());
 					})
 				}, _('Apply'))
 			])
@@ -1013,7 +1019,7 @@ return view.extend({
 					click: ui.createHandlerFn(this, ev => {
 						if (paths.length === 0) return;
 						ev.target.textContent = _('Deleting...');
-						fs.exec('/bin/rm', ['-rf', ...paths]).then(r => {
+						return fs.exec('/bin/rm', ['-rf', ...paths]).then(r => {
 							if (r.code !== 0) throw new Error(r.stderr);
 							this.manageFiles('clear');
 							this.reload();
@@ -1065,14 +1071,16 @@ return view.extend({
 						if (!linkPath)
 							return this.showNotification(_('Please enter a valid target path'), 3000, 'error');
 
-						ui.hideModal();
 						const args = isHardLink ? [path, linkPath] : ['-s', path, linkPath];
-						fs.exec('/bin/ln', args).then(r => {
-							if (r.code !== 0) throw new Error(r.stderr);
-							this.reload();
-							this.showNotification(_('Link "%s" created successfully').format(linkPath), '', 'success');
-						}).catch(e =>
-							this.showNotification(_('Failed to create link: %s').format(e.message || e), 5000, 'error'));
+						return fs.exec('/bin/ln', args)
+							.then(r => {
+								if (r.code !== 0) throw new Error(r.stderr);
+								this.reload();
+								this.showNotification(_('Link "%s" created successfully').format(linkPath), '', 'success');
+							})
+							.catch(e =>
+								this.showNotification(_('Failed to create link: %s').format(e.message || e), 5000, 'error'))
+							.finally(() => ui.hideModal());
 					})
 				}, _('Apply'))
 			])
@@ -1130,7 +1138,7 @@ return view.extend({
 							.map(({ path }) => `"${path.replace(/^\//, '').replace(/"/g, '\\"')}"`)
 							.join(' ');
 
-						fs.exec('/bin/sh', ['-c', `tar -czf "${out}" -C / -- ${args}`])
+						return fs.exec('/bin/sh', ['-c', `tar -czf "${out}" -C / -- ${args}`])
 							.then(r => {
 								if (r.code !== 0) throw new Error(r.stderr);
 								this.startDownload(out, name);
