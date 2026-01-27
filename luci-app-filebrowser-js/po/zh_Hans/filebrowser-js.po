@@ -172,17 +172,17 @@ msgstr "以 '/' 开头表示绝对路径"
 msgid "No '/' at start for Current path"
 msgstr "开头无 '/' 表示当前所在路径"
 
-msgid "This will create a file at: %s"
-msgstr "将在该位置创建文件：%s"
+msgid "File path: %s"
+msgstr "文件路径：%s"
 
-msgid "This will create a directory at: %s"
-msgstr "将在该位置创建目录：%s"
+msgid "Directory path: %s"
+msgstr "目录路径：%s"
 
 msgid "Directory %s created successfully"
 msgstr "目录 %s 创建成功"
 
-msgid "Created successfully: %s"
-msgstr "创建成功：%s"
+msgid "File %s created successfully"
+msgstr "文件 %s 创建成功"
 
 msgid "Create failed: %s"
 msgstr "创建失败：%s"

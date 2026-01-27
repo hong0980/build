@@ -5,7 +5,12 @@
 'require view';
 
 const CSS = `
-.modal > h4 {text-align:center;color:red;}
+.modal > h4 {
+	text-align:center;
+	color:red;
+	cursor:move;
+	userSelect:none;
+}
 .file-name-cell:hover {
 	background: #f5f7fa;
 }
@@ -158,54 +163,89 @@ const modes = [
 ];
 
 return view.extend({
-	load: function (p = null) {
+	parseLsOutput: function (path, out) {
+		const files = [];
+		(out || '').trim().split('\n').forEach(line => {
+			const m = line.match(/^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+\s+\S+)\s+\S+\s+(.+)$/);
+			if (!m) return;
+			const [, perm, , owner, , size, date, name] = m;
+			const isDir = perm[0] === 'd';
+
+			let linkName = '', linkTarget = null;
+			if (perm[0] === 'l') {
+				const m2 = name.match(/^(.*?)\s+->\s+(.*)$/);
+				if (m2) {
+					linkName = m2[1];
+					linkTarget = m2[2];
+				}
+			}
+
+			files.push({
+				perm, owner, date, isDir, linkTarget,
+				size: isDir ? '' : size, linkName, name,
+				permissionNum: this.permissionsToOctal(perm),
+				path: (path + '/' + name).replace(/\/+/g, '/')
+			});
+		});
+
+		return files.sort((a, b) => {
+			if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+			if (a.linkTarget !== b.linkTarget) return a.linkTarget ? 1 : -1;
+			return a.name.localeCompare(b.name);
+		});
+	},
+
+	load: function (p = null, useCache = false) {
+		this._cache = this._cache || new Map();
+
+		const TTL = 300000;
+		const now = Date.now();
+
+		for (const [k, v] of this._cache) {
+			if (v.data && now - v.time > TTL) this._cache.delete(k);
+		};
+
 		let path = (typeof p === 'string' ? p : (location.hash.slice(1) || '/'));
 		path = path.replace(/\/+/g, '/').replace(/(.+)\/$/, '$1');
 
-		return fs.exec_direct('/bin/ls', ['-Ah', '--full-time', path]).then(out => {
-			const files = [];
-			out.trim().split('\n').forEach(line => {
-				if (!line.trim()) return;
+		if (useCache && this._cache.has(path)) {
+			return this._cache.get(path).promise;
+		};
 
-				const m = line.match(
-					/^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+\s+\S+)\s+\S+\s+(.+)$/
-				);
-				if (!m) return;
-
-				const [, perm, , owner, , size, date, name] = m;
-				const isDir = perm[0] === 'd';
-				const isLink = perm[0] === 'l';
-
-				files.push({
-					perm: perm, isLink: isLink, isDir,
-					size: isDir ? '' : size, name, owner, date,
-					permissionNum: this.permissionsToOctal(perm),
-					path: (`${path}/${name}`).replace(/\/+/g, '/')
-				});
+		const promise = fs.exec_direct('/bin/ls', ['-Ah', '--full-time', path])
+			.then(out => {
+				const data = { path, files: this.parseLsOutput(path, out) };
+				this._cache.set(path, { time: Date.now(), data, promise: Promise.resolve(data) });
+				return data;
+			})
+			.catch(err => {
+				this._cache.delete(path);
+				throw err;
 			});
 
-			files.sort((a, b) => {
-				if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-				if (a.isLink !== b.isLink) return a.isLink ? 1 : -1;
-				return a.name.localeCompare(b.name);
-			});
-
-			return { path, files };
-		}).catch(() => ({ path, files: [] }));
+		this._cache.set(path, { time: Date.now(), data: null, promise });
+		return promise;
 	},
 
 	render: function (data) {
 		if (!window._popBound) {
 			window._popBound = true;
 			window.addEventListener('popstate', e => {
-				if (e.state && e.state.path && e.state.path !== this._path)
-					this.reload(e.state.path);
+				const path = e.state?.path || location.hash.slice(1) || '/';
+				if (e.state?.data && Date.now() - (e.state.timestamp || 0) < 300000) {
+					this.render(e.state.data);
+				} else {
+					this.load(path, true).then(d => this.render(d));
+				}
 			});
 		};
-		this._path = data.path;
-		if (history.state?.path !== data.path)
-			history.pushState({ path: data.path, data: data }, '', '#' + data.path);
+		if (!history.state || history.state.path !== data.path) {
+			history.pushState({
+				path: data.path, data: data, timestamp: Date.now()
+			}, '', '#' + data.path);
+		};
 
+		this._path = data.path;
 		const root = this._root || (this._root = E('div'));
 		root.innerHTML = '';
 
@@ -232,7 +272,7 @@ return view.extend({
 		]);
 
 		const totalSize = files.reduce((s, f) =>
-			(!f.isDir && !f.isLink) ? s + this.parseSizeToBytes(f.size) : s, 0);
+			(!f.isDir && !f.linkTarget) ? s + this.parseSizeToBytes(f.size) : s, 0);
 
 		const table = new ui.Table(
 			[_('Name'), _('owner'), _('Size'), _('Change the time'), _('Rights'), _('')],
@@ -241,7 +281,7 @@ return view.extend({
 		);
 
 		table.update(files.map(f => {
-			const icon = f.isDir ? '📂' : (f.isLink ? '🔗' : '📄');
+			const icon = f.isDir ? '📂' : (f.linkTarget ? '🔗' : '📄');
 			const nameText = f.name.length > 18
 				? `${f.name.slice(0, 11)}...${f.name.slice(-7)}`
 				: f.name;
@@ -250,8 +290,11 @@ return view.extend({
 				E('input', {
 					type: 'checkbox', 'data-path': f.path,
 					change: ev => {
-						ev.target.closest('tr')?.classList.toggle('selected', ev.target.checked);
-						this.toggleBatchBar();
+						const row = ev.target.closest('tr');
+						if (row) {
+							row.classList.toggle('selected', ev.target.checked);
+							this.toggleBatchBar();
+						}
 					}
 				}),
 				E('div', {
@@ -292,15 +335,15 @@ return view.extend({
 				E('div', { class: 'inline-form-group' }, [
 					E('button', {
 						class: 'btn cbi-button-remove',
-						click: ui.createHandlerFn(this, () => this.deleteFile(this.getSelectedFiles()))
+						click: ui.createHandlerFn(this, () => this.deleteFile(this.manageFiles('get')))
 					}, [_('Batch delete'), E('span', { id: 'delete-count' })]),
 					E('button', {
 						class: 'btn cbi-button-action',
-						click: ui.createHandlerFn(this, () => this.downloadFile(this.getSelectedFiles()))
+						click: ui.createHandlerFn(this, () => this.downloadFile(this.manageFiles('get')))
 					}, [_('Batch Download'), E('span', { id: 'download-count' })]),
 					E('button', {
 						class: 'btn cbi-button-remove',
-						click: ui.createHandlerFn(this, 'clearSelectedFiles')
+						click: ui.createHandlerFn(this, 'manageFiles', 'clear')
 					}, _('Deselect'))
 				])
 			]),
@@ -337,7 +380,7 @@ return view.extend({
 			!file.isDir && [_('Edit'), () => this.showFileEditor(file, true)],
 			[_('Rename'), () => this.renameFile(file.path)],
 			[_('Modify permissions'), () => this.chmodFile(file)],
-			!file.isLink && [_('Create link'), () => this.createLink(file.path)],
+			!file.linkTarget && [_('Create link'), () => this.createLink(file.path)],
 			[_('Delete file'), () => this.deleteFile(file)],
 			[_('download file'), () => this.downloadFile(file)],
 			[_('upload file'), ev => this.Upload(ev)]
@@ -369,6 +412,7 @@ return view.extend({
 	},
 
 	showFileEditor: function (file, editable) {
+		console.log(file)
 		const fileSize = this.parseSizeToBytes(file.size);
 		const maxSize = editable ? 512 * 1024 : 1024 * 1024;
 		const maxSizeStr = editable ? '512KB' : '1MB';
@@ -384,24 +428,20 @@ return view.extend({
 			);
 		};
 
-		let path = file.isLink
-			? (this.parseLinkString(file.path)?.targetPath || file.path)
-			: file.path;
+		let path = file.linkTarget || file.path;
 		path = path.startsWith('/') ? path : '/' + path;
 
 		fs.stat(path).then(r => {
 			if (r.type === 'file') {
-				return fs.read_direct(path).then(content => {
+				fs.read_direct(path).then(content => {
 					if (content.indexOf('\0') !== -1)
 						throw new Error(_('This is a binary file and %s').format(action));
 
-					ui.hideModal();
 					window._aceReady
 						? this.showAceEditor(file, content, editable)
 						: this.showSimpleEditor(file, content, editable);
 				})
 			} else if (r.type === 'directory') {
-				ui.hideModal();
 				this.reload(path);
 			} else throw new Error(_('Unknown file type'));
 		}).catch((e) =>
@@ -573,7 +613,7 @@ return view.extend({
 		const originalContent = content;
 		const textarea = E('textarea', {
 			class: 'cbi-input-text', readonly: !editable || undefined, type: 'text',
-			input: function (ev) {
+			input: ev => {
 				const isDirty = ev.target.value !== originalContent;
 				saveBtn.style.display = (isDirty && !ev.target.readOnly) ? 'inline-block' : 'none';
 			},
@@ -708,7 +748,20 @@ return view.extend({
 				])
 				: E('div', [
 					E('style', ['.ace-toolbar-select {max-width:100%;flex:1;}']),
-					E('div', { class: 'ace-toolbar inline-form-group' }, [...fileElem]),
+					E('div', { class: 'ace-toolbar inline-form-group' }, [
+						E('span', _('Font')),
+						E('select', {
+							class: 'ace-toolbar-select',
+							change: (ev) => {
+								const container = ev.target.closest('div').parentNode;
+								const textarea = container.querySelector('textarea');
+								textarea.style.fontSize = ev.target.value + 'px';
+							}
+						}, ['12', '13', '14', '15', '16'].map(id =>
+							E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
+						)),
+						...fileElem
+					]),
 					E('textarea', {
 						placeholder: _('Enter text here'),
 						class: 'cbi-input-text', type: 'text',
@@ -746,8 +799,8 @@ return view.extend({
 				const targetHint = E('div', {
 					class: 'modal-custom-path', style: `color:#007bff;font-size:13px;${fullFile ? 'margin:0;' : ''}`
 				}, fullFile
-					? '📄 ' + _('This will create a file at: %s').format(fullFile)
-					: '📂 ' + _('This will create a directory at: %s').format(fullDir)
+					? '📄 ' + _('File path: %s').format(fullFile)
+					: '📂 ' + _('Directory path: %s').format(fullDir)
 				);
 				if (fullFile) {
 					ev.target.after(targetHint);
@@ -762,7 +815,7 @@ return view.extend({
 			}
 		});
 		L.showModal(_('Create file (directory)'), [
-			E('style', ['.modal {padding: 1em .3em .3em .3em;}',]),
+			E('style', ['.modal {padding: 1em .3em .3em .3em;}']),
 			E('div', { class: 'inline-form-group' }, [
 				E('span', _('name(path)')), pathInput,
 				E('span', { id: 'dirperm', class: 'inline-form-group', style: 'display:none;' }, [
@@ -798,7 +851,7 @@ return view.extend({
 							}).then(res => {
 								if (res && res.code !== 0) throw new Error(res.stderr);
 								this.reload(fullDir);
-								this.showNotification(_('Created successfully: %s').format(fullFile), '', 'success');
+								this.showNotification(_('File %s created successfully').format(fullFile), '', 'success');
 							});
 						}).catch(e => {
 							this.modalnotify(null, E('p', _('Create failed: %s').format(e.message || e)), '', 'error');
@@ -856,9 +909,8 @@ return view.extend({
 			E('div', { class: 'modal-custom-row' }, [
 				E('label', { class: 'modal-custom-label' }, _('newname')),
 				E('input', {
-					class: 'cbi-input-text', value: oldname,
-					id: 'nameinput', style: 'flex:1', type: 'text',
-					change: ui.createHandlerFn(this, ev => newname = ev.target.value.trim())
+					value: oldname, id: 'nameinput', style: 'flex:1',
+					change: ev => newname = ev.target.value.trim()
 				}),
 			]),
 			E('div', { class: 'right' }, [
@@ -899,7 +951,7 @@ return view.extend({
 				E('label', { class: 'modal-custom-label' }, _('Permission')),
 				E('select', {
 					class: 'cbi-input-select', style: 'flex:1',
-					change: () => val = ev.target.value
+					change: ev => val = ev.target.value
 				}, permissions.map(([id, name]) =>
 					E('option', { value: id, selected: id === permissionNum || undefined }, name)
 				))
@@ -933,8 +985,9 @@ return view.extend({
 	deleteFile: function (files) {
 		files = L.toArray(files);
 		if (files.length === 0) return;
-		const previewList = files.slice(0, 5).map(f => f.name).join('\n');
-		const moreSuffix = files.length > 5 ? '\n...' : '';
+		const paths = files.map(({ name, linkName }) => this._path + '/' + (linkName || name));
+		const previewList = paths.slice(0, 5).map(f => f).join('\n');
+		const moreSuffix = paths.length > 5 ? '\n...' : '';
 
 		L.showModal(_('Delete project'), [
 			E('style', [
@@ -958,20 +1011,11 @@ return view.extend({
 				E('button', {
 					class: 'btn cbi-button-negative important',
 					click: ui.createHandlerFn(this, ev => {
-						ev.target.disabled = true;
+						if (paths.length === 0) return;
 						ev.target.textContent = _('Deleting...');
-						const paths = files.map(({ path, isLink }) => {
-							if (isLink) {
-								const linkInfo = this.parseLinkString(path);
-								return linkInfo ? linkInfo.linkPath : path;
-							}
-							return path;
-						});
-
-						ui.hideModal();
 						fs.exec('/bin/rm', ['-rf', ...paths]).then(r => {
 							if (r.code !== 0) throw new Error(r.stderr);
-							this.clearSelectedFiles();
+							this.manageFiles('clear');
 							this.reload();
 							this.showNotification(
 								files.length === 1
@@ -981,7 +1025,7 @@ return view.extend({
 							);
 						}).catch(e => {
 							this.showNotification(_('Delete failed: %s').format(e.message || e), 5000, 'error');
-						});
+						}).finally(() => ui.hideModal());
 					})
 				}, _('Confirm Delete')),
 				E('button', { class: 'btn', click: ui.hideModal }, _('Cancel'))
@@ -997,7 +1041,7 @@ return view.extend({
 			E('div', { class: 'modal-custom-row' }, [
 				E('label', { class: 'modal-custom-label' }, _('Target')),
 				E('input', {
-					style: 'flex:1', type: 'text',
+					style: 'flex:1',
 					placeholder: '/path/to/target', id: 'linkPath',
 					change: ev => linkPath = ev.target.value.trim()
 				})
@@ -1049,12 +1093,11 @@ return view.extend({
 
 	downloadFile: function (files) {
 		const isBatch = Array.isArray(files);
-
 		if (!isBatch && !files.isDir) {
-			const path = files.isLink
-				? this.parseLinkString(files.path)?.targetPath
+			const path = files.linkName
+				? this._path + '/' + files.linkName
 				: files.path;
-			return this.startDownload(path, files.name);
+			return this.startDownload(path, (files.linkTarget?.split('/').pop() || files.name));
 		};
 
 		const defaultName = isBatch ? 'files-' + Date.now() : (files.name || 'archive');
@@ -1067,10 +1110,9 @@ return view.extend({
 			E('div', { class: 'modal-custom-row' }, [
 				E('label', { class: 'modal-custom-label' }, _('Filename')),
 				E('input', {
-					id: 'pack-name', class: 'cbi-input-text',
-					type: 'text', style: 'flex:1',
 					value: defaultName + '.tar.gz',
-					Change: (ev) => nameInput = ev.target.value
+					id: 'pack-name', style: 'flex:1',
+					change: (ev) => nameInput = ev.target.value
 				}),
 			]),
 			E('div', { class: 'right' }, [
@@ -1083,22 +1125,22 @@ return view.extend({
 						if (!name.endsWith('.tar.gz')) name += '.tar.gz';
 
 						const out = `/tmp/${name}`;
-						ui.hideModal();
-
-						const args = (isBatch ? files : [files])
+						const args = files
+							.filter(({ linkTarget }) => !linkTarget)
 							.map(({ path }) => `"${path.replace(/^\//, '').replace(/"/g, '\\"')}"`)
 							.join(' ');
 
 						fs.exec('/bin/sh', ['-c', `tar -czf "${out}" -C / -- ${args}`])
 							.then(r => {
 								if (r.code !== 0) throw new Error(r.stderr);
-								return this.startDownload(out, name);
+								this.startDownload(out, name);
+								this.manageFiles('clear');
 							})
-							.then(() => {
-								this.clearSelectedFiles();
-								setTimeout(() => fs.remove(out).catch(() => {}), 30000);
-							})
-							.catch(e => this.showNotification(_('Download failed: %s').format(e.message), 5000, 'error'));
+							.catch(e => this.showNotification(_('Download failed: %s').format(e.message), 5000, 'error'))
+							.finally(() => {
+								fs.remove(out).catch(() => {});
+								ui.hideModal();
+							});
 					})
 				}, isBatch ? _('Package and Download') : _('Download'))
 			])
@@ -1133,7 +1175,7 @@ return view.extend({
 		const tmpPath = '/tmp/luci-upload-' + Math.random().toString(36).substring(2, 9);
 		ui.uploadFile(tmpPath)
 			.then(reply => {
-				const destPath = `${this._path}/${reply.name}`.replace(/\/+/g, '/');
+				const destPath = `${this._path}/${reply.name}`;
 				return fs.exec('/bin/mv', [tmpPath, destPath]).then(res => {
 					if (res.code !== 0) throw new Error(res.stderr);
 					this.reload();
@@ -1205,7 +1247,7 @@ return view.extend({
 	toggleBatchBar: function () {
 		const deleteCount = this._root.querySelector('#delete-count');
 		const downloadCount = this._root.querySelector('#download-count');
-		const selectedCount = this.getSelectedFiles().length;
+		const selectedCount = this.manageFiles('count');
 
 		if (deleteCount)
 			deleteCount.textContent = selectedCount > 0 ? `(${selectedCount})` : '';
@@ -1214,7 +1256,7 @@ return view.extend({
 		if (selectedCount > 0) {
 			ui.showIndicator('selected-files',
 				_('%d files selected').format(selectedCount),
-				() => this.clearSelectedFiles(),
+				() => this.manageFiles('clear'),
 				'active'
 			);
 		} else {
@@ -1380,21 +1422,34 @@ return view.extend({
 		});
 	},
 
-	getSelectedFiles: function () {
-		const map = new Map(this.currentFiles.map(f => [f.path, f]));
-		return Array.from(
-			this._root.querySelectorAll('.file-checkbox input[type="checkbox"]:checked'),
-			cb => map.get(cb.dataset.path)
-		).filter(Boolean);
-	},
+	manageFiles(action = 'get') {
+		const { _path, _root, currentFiles } = this;
 
-	clearSelectedFiles: function () {
-		this._root.querySelectorAll('.file-checkbox input:checked')
-			.forEach(cb => {
-				cb.checked = false;
-				cb.closest('tr')?.classList.remove('selected');
-			});
-		this.toggleBatchBar();
+		if (!this._fileMap || this._fileMapVersion !== _path) {
+			this._fileMap = new Map(currentFiles.map(f => [f.path, f]));
+			this._fileMapVersion = _path;
+		};
+
+		const checkedBoxes = Array.from(_root.querySelectorAll('.file-checkbox input:checked'));
+
+		switch (action) {
+			case 'get':
+				return checkedBoxes.map(cb => this._fileMap.get(cb.dataset.path)).filter(Boolean);
+
+			case 'clear':
+				checkedBoxes.forEach(cb => {
+					cb.checked = false;
+					cb.closest('tr')?.classList.remove('selected');
+				});
+				this.toggleBatchBar();
+				return true;
+
+			case 'count':
+				return checkedBoxes.length;
+
+			case 'has':
+				return checkedBoxes.length > 0;
+		}
 	},
 
 	copyText: function (text) {
@@ -1418,20 +1473,8 @@ return view.extend({
 		}
 	},
 
-	parseLinkString: function (path) {
-		if (!path || typeof path !== 'string') return null;
-		const match = path.match(/^(.*?)\s+->\s+(.*)$/);
-		if (!match) return null;
-
-		return {
-			original: path,
-			linkPath: match[1].trim(),
-			targetPath: match[2].trim()
-		};
-	},
-
 	parseSizeToBytes: function (s) {
-		const units = { K: 1024, M: 1024 ** 2, G: 1024 ** 3 };
+		const units = { K: 1024, M: 1024 ** 2, G: 1024 ** 3, T: 1024 ** 4 };
 		const match = s.match(/^([\d.]+)([KMGT]?)/i);
 		if (!match) return 0;
 
@@ -1512,10 +1555,6 @@ return view.extend({
 		modal.removeAttribute('style');
 
 		const dragArea = modal.querySelector('h4');
-		if (!dragArea) return;
-		dragArea.style.cursor = 'move';
-		dragArea.style.userSelect = 'none';
-
 		const rect = modal.getBoundingClientRect();
 		Object.assign(modal.style, {
 			position: 'fixed', margin: '0', transform: 'none',
