@@ -121,6 +121,20 @@ tr.selected {
 	text-align: center;
 }
 
+.fb-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding:0 0 8px;
+}
+.fb-container.floating {
+	position:fixed;
+    z-index: 850;
+	border: 1px solid #ccc;
+	padding: 4px;
+	background: #f0f0f0;
+	border-radius: 5px;
+}
 @media (max-width: 768px) {
 	.batch-action-bar {
 		left: 50%;
@@ -163,38 +177,6 @@ const modes = [
 ];
 
 return view.extend({
-	parseLsOutput: function (path, out) {
-		const files = [];
-		(out || '').trim().split('\n').forEach(line => {
-			const m = line.match(/^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+\s+\S+)\s+\S+\s+(.+)$/);
-			if (!m) return;
-			const [, perm, , owner, , size, date, name] = m;
-			const isDir = perm[0] === 'd';
-
-			let linkName = '', linkTarget = null;
-			if (perm[0] === 'l') {
-				const m2 = name.match(/^(.*?)\s+->\s+(.*)$/);
-				if (m2) {
-					linkName = m2[1];
-					linkTarget = m2[2];
-				}
-			}
-
-			files.push({
-				perm, owner, date, isDir, linkTarget,
-				size: isDir ? '' : size, linkName, name,
-				permissionNum: this.permissionsToOctal(perm),
-				path: (path + '/' + name).replace(/\/+/g, '/')
-			});
-		});
-
-		return files.sort((a, b) => {
-			if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-			if (a.linkTarget !== b.linkTarget) return a.linkTarget ? 1 : -1;
-			return a.name.localeCompare(b.name);
-		});
-	},
-
 	load: function (p = null, useCache = false) {
 		this._cache = this._cache || new Map();
 
@@ -272,7 +254,7 @@ return view.extend({
 		]);
 
 		const totalSize = files.reduce((s, f) =>
-			(!f.isDir && !f.linkTarget) ? s + this.parseSizeToBytes(f.size) : s, 0);
+			(!f.isDir && !f.linkName) ? s + this.parseSizeToBytes(f.size) : s, 0);
 
 		const table = new ui.Table(
 			[_('Name'), _('owner'), _('Size'), _('Change the time'), _('Rights'), _('')],
@@ -281,7 +263,7 @@ return view.extend({
 		);
 
 		table.update(files.map(f => {
-			const icon = f.isDir ? '📂' : (f.linkTarget ? '🔗' : '📄');
+			const icon = f.isDir ? '📂' : (f.linkName ? '🔗' : '📄');
 			const nameText = f.name.length > 18
 				? `${f.name.slice(0, 11)}...${f.name.slice(-7)}`
 				: f.name;
@@ -320,7 +302,7 @@ return view.extend({
 		root.append(
 			E('style', CSS),
 			E('h2', _('File management')),
-			E('p', { style: 'display:flex;justify-content:space-between;align-items:center;margin-top:10px;' }, [
+			E('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:0 0 8px;' }, [
 				crumbs,
 				E('div', { class: 'inline-form-group' }, [
 					E('span', { style: 'color:#666;font-size:12px;' },
@@ -330,6 +312,26 @@ return view.extend({
 						click: ui.createHandlerFn(this, 'reload')
 					}, _('Reload page'))
 				])
+			]),
+			E('div', { class: "fb-container" }, [
+				E('button', { class: "btn cbi-button-save", click: ui.createHandlerFn(this, 'createnew') }, _('Create')),
+				this._path === '/'
+					? ''
+					: E('button', {
+						class: "btn cbi-button-apply",
+						click: ui.createHandlerFn(this, () => {
+							return this.reload(this._path.replace(/\/[^\/]+\/?$/, '') || '/');
+						})
+					}, _('Back to previous')),
+				E('input', { id: 'current-path', style: 'width:100%', value: this._path }),
+				E('button', {
+					class: "btn cbi-button cbi-button-apply",
+					click: ui.createHandlerFn(this, () => {
+						const val = document.getElementById("current-path").value.trim();
+						return val && this.reload(val);
+					})
+				}, _('Go to directory')),
+				E('button', { class: "btn cbi-button-action important", click: ui.createHandlerFn(this, 'Upload') }, _('Upload')),
 			]),
 			E('div', { class: 'batch-action-bar' }, [
 				E('div', { class: 'inline-form-group' }, [
@@ -355,9 +357,32 @@ return view.extend({
 				requestIdleCallback(() => this.preloadAceEditor(), { timeout: 1500 });
 			} else {
 				setTimeout(this.preloadAceEditor.bind(this), 800);
-			}
-		}
+			};
+		};
+		function fixFloat() {
+			const container = root.querySelector('.fb-container');
+			if (!container) return;
 
+			const navH = document.querySelector('header')?.offsetHeight || 0;
+			const offset = container.offsetTop;
+
+			const check = () => {
+				if (window.scrollY > offset - navH) {
+					container.style.cssText = `top:${navH}px;width:${root.offsetWidth}px;`;
+					container.classList.add('floating');
+				} else {
+					container.style.cssText = '';
+					container.classList.remove('floating');
+				};
+			};
+
+			window.removeEventListener('scroll', check);
+			window.addEventListener('scroll', check);
+			window.addEventListener('resize', check);
+			check();
+		};
+
+		setTimeout(fixFloat, 100);
 		return root;
 	},
 
@@ -380,10 +405,10 @@ return view.extend({
 			!file.isDir && [_('Edit'), () => this.showFileEditor(file, true)],
 			[_('Rename'), () => this.renameFile(file.path)],
 			[_('Modify permissions'), () => this.chmodFile(file)],
-			!file.linkTarget && [_('Create link'), () => this.createLink(file.path)],
+			!file.linkName && [_('Create link'), () => this.createLink(file.path)],
 			[_('Delete file'), () => this.deleteFile(file)],
 			[_('download file'), () => this.downloadFile(file)],
-			[_('upload file'), ev => this.Upload(ev)]
+			[_('upload file'), ev => this.Upload()]
 		].filter(Boolean).forEach(([label, action]) => {
 			menu.appendChild(E('div', {
 				class: 'item',
@@ -427,9 +452,7 @@ return view.extend({
 			);
 		};
 
-		let path = file.linkTarget || file.path;
-		path = path.startsWith('/') ? path : '/' + path;
-
+		let path = file.path;
 		return fs.stat(path).then(r => {
 			if (r.type === 'file') {
 				return fs.read_direct(path).then(content => {
@@ -445,40 +468,6 @@ return view.extend({
 			} else throw new Error(_('Unknown file type'));
 		}).catch((e) =>
 			this.showNotification(_('Failed to read file: %s').format(e.message), 8000, 'error'));
-	},
-
-	toggleFS: function (config) {
-		this._isFullscreen = !this._isFullscreen;
-		const { wrapper, container, btnFull, btnExit } = config;
-
-		if (!this._escHandler) {
-			this._escHandler = (e) => {
-				if (e.key === 'Escape' && this._isFullscreen)
-					this.toggleFS(config);
-			};
-		}
-
-		if (this._isFullscreen) {
-			document.addEventListener('keydown', this._escHandler);
-			config.originalParent = wrapper.parentNode;
-			config.originalNext = wrapper.nextSibling;
-
-			document.body.appendChild(wrapper);
-			wrapper.classList.add('ace-fullscreen');
-			container.style.height = '100%';
-			container.style.flex = '1';
-		} else {
-			document.removeEventListener('keydown', this._escHandler);
-			if (config.originalParent)
-				config.originalParent.insertBefore(wrapper, config.originalNext);
-
-			wrapper.classList.remove('ace-fullscreen');
-			container.style.height = '320px';
-			container.style.flex = '';
-		}
-
-		btnFull.style.display = this._isFullscreen ? 'none' : 'block';
-		btnExit.style.display = this._isFullscreen ? 'block' : 'none';
 	},
 
 	showAceEditor: function (file, content, editable) {
@@ -621,7 +610,7 @@ return view.extend({
 			style: 'width:100%;height:320px;font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;'
 		}, content);
 		const saveBtn = E('button', {
-			class: 'btn cbi-button-positive important', style: `display:none`,
+			class: 'btn cbi-button-positive important', style: 'display:none',
 			click: ui.createHandlerFn(this, () => {
 				fs.write(file.path, textarea.value)
 					.then(() => {
@@ -800,7 +789,7 @@ return view.extend({
 				fullFile = result.isFile ? formatPath(base + result.path) : null;
 
 				const targetHint = E('div', {
-					class: 'modal-custom-path', style: `color:#007bff;font-size:13px;${fullFile ? 'margin:0;' : ''}`
+					class: 'modal-custom-path', style: `background:#f9d5d5;font-size:13px;${fullFile ? 'margin:0;' : ''}`
 				}, fullFile
 					? '📄 ' + _('File path: %s').format(fullFile)
 					: '📂 ' + _('Directory path: %s').format(fullDir)
@@ -991,7 +980,7 @@ return view.extend({
 	deleteFile: function (files) {
 		files = L.toArray(files);
 		if (files.length === 0) return;
-		const paths = files.map(({ name, linkName }) => this._path + '/' + (linkName || name));
+		const paths = files.map(({ path }) => path);
 		const previewList = paths.slice(0, 5).map(f => f).join('\n');
 		const moreSuffix = paths.length > 5 ? '\n...' : '';
 
@@ -1102,10 +1091,7 @@ return view.extend({
 	downloadFile: function (files) {
 		const isBatch = Array.isArray(files);
 		if (!isBatch && !files.isDir) {
-			const path = files.linkName
-				? this._path + '/' + files.linkName
-				: files.path;
-			return this.startDownload(path, (files.linkTarget?.split('/').pop() || files.name));
+			return this.startDownload(files.path, (files.linkName || files.name));
 		};
 
 		const defaultName = isBatch ? 'files-' + Date.now() : (files.name || 'archive');
@@ -1134,7 +1120,7 @@ return view.extend({
 
 						const out = `/tmp/${name}`;
 						const args = files
-							.filter(({ linkTarget }) => !linkTarget)
+							.filter(({ linkName }) => !linkName)
 							.map(({ path }) => `"${path.replace(/^\//, '').replace(/"/g, '\\"')}"`)
 							.join(' ');
 
@@ -1194,6 +1180,72 @@ return view.extend({
 			.finally(() => fs.remove(tmpPath).catch(() => {}));
 	},
 
+	toggleFS: function (config) {
+		this._isFullscreen = !this._isFullscreen;
+		const { wrapper, container, btnFull, btnExit } = config;
+
+		if (!this._escHandler) {
+			this._escHandler = (e) => {
+				if (e.key === 'Escape' && this._isFullscreen)
+					this.toggleFS(config);
+			};
+		}
+
+		if (this._isFullscreen) {
+			document.addEventListener('keydown', this._escHandler);
+			config.originalParent = wrapper.parentNode;
+			config.originalNext = wrapper.nextSibling;
+
+			document.body.appendChild(wrapper);
+			wrapper.classList.add('ace-fullscreen');
+			container.style.height = '100%';
+			container.style.flex = '1';
+		} else {
+			document.removeEventListener('keydown', this._escHandler);
+			if (config.originalParent)
+				config.originalParent.insertBefore(wrapper, config.originalNext);
+
+			wrapper.classList.remove('ace-fullscreen');
+			container.style.height = '320px';
+			container.style.flex = '';
+		}
+
+		btnFull.style.display = this._isFullscreen ? 'none' : 'block';
+		btnExit.style.display = this._isFullscreen ? 'block' : 'none';
+	},
+
+	parseLsOutput: function (path, out) {
+		const files = [];
+		(out || '').trim().split('\n').forEach(line => {
+			const m = line.match(/^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+\s+\S+)\s+\S+\s+(.+)$/);
+			if (!m) return;
+			const [, perm, , owner, , size, date, name] = m;
+			const isDir = perm[0] === 'd';
+
+			let linkName = '', linkTarget = null;
+			if (perm[0] === 'l') {
+				const m2 = name.match(/^(.*?)\s+->\s+(.*)$/);
+				if (m2) {
+					linkName = m2[1];
+					linkTarget = m2[2];
+				}
+			}
+
+			files.push({
+				perm, owner, linkTarget, linkName,
+				size: isDir ? '' : size, name, date, isDir,
+				permissionNum: this.permissionsToOctal(perm),
+				path: (path + '/' + (linkName || name)).replace(/\/+/g, '/')
+			});
+		});
+
+		return files.sort((a, b) => {
+			if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+			if (a.linkName !== b.linkName) return a.linkName ? 1 : -1;
+			return a.name.localeCompare(b.name);
+		});
+	},
+
 	detectFileMode: function (filename, content) {
 		const name = filename.toLowerCase();
 		const ext = name.includes('.') ? name.split('.').pop() : '';
@@ -1218,15 +1270,33 @@ return view.extend({
 			if (trimmed[0] === '{' || trimmed[0] === '[') {
 				try { JSON.parse(trimmed); return 'json'; } catch (e) {}
 			}
-
 			if (/^\s*<\?xml\b/i.test(trimmed)) return 'xml';
 			if (/<html\b/i.test(trimmed) || /<!doctype\s+html/i.test(trimmed)) return 'html';
 
+			if (trimmed.startsWith('---') || /^\s*[\w.-]+\s*:\s+\S/m.test(trimmed)) {
+				if (!trimmed.includes('=')) return 'yaml';
+			}
+
 			if (trimmed[0] === '#') {
-				if (trimmed.includes(':') && !trimmed.includes('=')) return 'yaml';
+				if (/^#\s+[^:]+$/.test(firstLine)) return 'markdown';
+				if (trimmed.startsWith('#!')) return 'sh';
+				if (trimmed.includes(': ') && !trimmed.includes('=')) return 'yaml';
+
 				return 'sh';
 			}
 		}
+
+		const shFeatures = [
+			/^\s*\[\s+.*?\s+\]\s+(&&|\|\|)/,
+			/^\s*(if|case|while|for|function)\b/m,
+			/^\s*\w+=\".*?\"\s*(;|&&|\|\||$)/m,
+			/(\||&&|\|\|)\s*\/(usr\/|bin\/|sbin\/)/
+		];
+
+		if (shFeatures.some(re => re.test(trimmed))) {
+			return 'sh';
+		}
+
 		return 'text';
 	},
 

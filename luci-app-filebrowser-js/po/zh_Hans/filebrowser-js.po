@@ -1,6 +1,12 @@
 msgid "Root"
 msgstr "根目录"
 
+msgid "Go to directory"
+msgstr "转到目录"
+
+msgid "Back to previous"
+msgstr "返回上级"
+
 msgid "Reload page"
 msgstr "刷新页面"
 
