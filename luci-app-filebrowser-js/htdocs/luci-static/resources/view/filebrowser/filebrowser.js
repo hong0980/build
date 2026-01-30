@@ -21,10 +21,10 @@ tr.selected {
 	line-height: 1.6em;
 }
 .inline-form-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap:wrap;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap:wrap;
 }
 .file-context-menu {
 	margin: 0;
@@ -39,18 +39,18 @@ tr.selected {
 	box-shadow: 2px 2px 6px rgba(0,0,0,.1);
 }
 .file-context-menu .item {
-    color: #333;
-    display: block;
-    cursor: pointer;
-    padding: 5px 10px;
-    transition: all 0.3s ease-in-out;
+	color: #333;
+	display: block;
+	cursor: pointer;
+	padding: 5px 10px;
+	transition: all 0.3s ease-in-out;
 }
 .file-context-menu .item:hover {
-    color: #fff;
-    background-color: #007bff;
+	color: #fff;
+	background-color: #007bff;
 }
 .file-context-menu .item:not(:last-child) {
-    border-bottom: 1px solid #ddd;
+	border-bottom: 1px solid #ddd;
 }
 
 .file-checkbox {
@@ -122,14 +122,14 @@ tr.selected {
 }
 
 .fb-container {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding:0 0 8px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding:0 0 8px;
+	transition: all 0.3s ease;
 }
 .fb-container.floating {
 	position:fixed;
-    z-index: 850;
 	border: 1px solid #ccc;
 	padding: 4px;
 	background: #f0f0f0;
@@ -181,18 +181,15 @@ return view.extend({
 		this._cache = this._cache || new Map();
 
 		const TTL = 300000;
-		const now = Date.now();
-
 		for (const [k, v] of this._cache) {
-			if (v.data && now - v.time > TTL) this._cache.delete(k);
+			if (v.data && Date.now() - v.time > TTL) this._cache.delete(k);
 		};
 
-		let path = (typeof p === 'string' ? p : (location.hash.slice(1) || '/'));
-		path = path.replace(/\/+/g, '/').replace(/(.+)\/$/, '$1');
+		const path = (typeof p === 'string' ? p : (location.hash.slice(1) || '/'))
+			.replace(/\/+/g, '/').replace(/(.+)\/$/, '$1');
 
-		if (useCache && this._cache.has(path)) {
+		if (useCache && this._cache.has(path))
 			return this._cache.get(path).promise;
-		};
 
 		const promise = fs.exec_direct('/bin/ls', ['-Ah', '--full-time', path])
 			.then(out => {
@@ -206,6 +203,8 @@ return view.extend({
 			});
 
 		this._cache.set(path, { time: Date.now(), data: null, promise });
+		this._isMobile = ('ontouchstart' in window && window.innerWidth <= 768)
+			|| /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 		return promise;
 	},
 
@@ -302,19 +301,30 @@ return view.extend({
 		root.append(
 			E('style', CSS),
 			E('h2', _('File management')),
-			E('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:0 0 8px;' }, [
+			E('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:8px 0 8px;' }, [
 				crumbs,
-				E('div', { class: 'inline-form-group' }, [
-					E('span', { style: 'color:#666;font-size:12px;' },
-						_('%d items • Total %s').format(files.length, this.formatSizeHuman(totalSize))),
-					E('button', {
-						class: 'btn cbi-button-positive important',
-						click: ui.createHandlerFn(this, 'reload')
-					}, _('Reload page'))
-				])
+				E('span', { style: 'color:#666;font-size:12px;' },
+					_('%d items • Total %s').format(files.length, this.formatSizeHuman(totalSize))),
 			]),
 			E('div', { class: "fb-container" }, [
-				E('button', { class: "btn cbi-button-save", click: ui.createHandlerFn(this, 'createnew') }, _('Create')),
+				E('button', {
+					class: "btn cbi-button-save", id: 'createnew',
+					click: ui.createHandlerFn(this, 'createnew')
+				}, _('Create')),
+				// E('button', { class: "btn cbi-button-action important", click: ui.createHandlerFn(this, 'Upload') }, _('Upload')),
+				E('input', { id: 'current-path', style: 'width:100%', value: this._path }),
+				E('button', {
+					class: "btn cbi-button cbi-button-apply",
+					click: ui.createHandlerFn(this, () => {
+						const path = document.getElementById("current-path").value
+							.trim().replace(/\/+/g, '/').replace(/(.+)\/$/, '$1');
+						if (!path || path === this._path) return;
+
+						fs.stat(path)
+							.then(r => r.type === 'directory' && this.reload(r.path))
+							.catch(e => this.showNotification(_('%s: %s').format(path, e.message), 6000, 'error'));
+					})
+				}, _('Go to')),
 				this._path === '/'
 					? ''
 					: E('button', {
@@ -322,16 +332,7 @@ return view.extend({
 						click: ui.createHandlerFn(this, () => {
 							return this.reload(this._path.replace(/\/[^\/]+\/?$/, '') || '/');
 						})
-					}, _('Back to previous')),
-				E('input', { id: 'current-path', style: 'width:100%', value: this._path }),
-				E('button', {
-					class: "btn cbi-button cbi-button-apply",
-					click: ui.createHandlerFn(this, () => {
-						const val = document.getElementById("current-path").value.trim();
-						return val && this.reload(val);
-					})
-				}, _('Go to directory')),
-				E('button', { class: "btn cbi-button-action important", click: ui.createHandlerFn(this, 'Upload') }, _('Upload')),
+					}, _('Back'))
 			]),
 			E('div', { class: 'batch-action-bar' }, [
 				E('div', { class: 'inline-form-group' }, [
@@ -359,30 +360,41 @@ return view.extend({
 				setTimeout(this.preloadAceEditor.bind(this), 800);
 			};
 		};
-		function fixFloat() {
-			const container = root.querySelector('.fb-container');
-			if (!container) return;
 
-			const navH = document.querySelector('header')?.offsetHeight || 0;
+		function fixFloat() {
+			const header = document.querySelector('header');
+			const container = root.querySelector('.fb-container');
+			const createnew = document.getElementById('createnew');
+			if (!container || !header) return;
+
+			const navH = header.offsetHeight || 0;
 			const offset = container.offsetTop;
+			const headerZIndex = parseInt(getComputedStyle(header).zIndex, 10) || 799;
 
 			const check = () => {
 				if (window.scrollY > offset - navH) {
-					container.style.cssText = `top:${navH}px;width:${root.offsetWidth}px;`;
+					if (this._isMobile)
+						createnew.style.display = 'none';
+
+					container.style.cssText = `top:${navH}px;width:${root.offsetWidth}px;z-index:${headerZIndex - 1}`;
 					container.classList.add('floating');
 				} else {
+					createnew.style.display = 'block';
 					container.style.cssText = '';
 					container.classList.remove('floating');
 				};
 			};
 
-			window.removeEventListener('scroll', check);
-			window.addEventListener('scroll', check);
-			window.addEventListener('resize', check);
+			['scroll', 'resize'].forEach(e =>
+				window.addEventListener(e, e === 'resize'
+					? () => setTimeout(check, 100) : check
+				)
+			);
+
 			check();
 		};
 
-		setTimeout(fixFloat, 100);
+		setTimeout(L.bind(fixFloat, this), 100);
 		return root;
 	},
 
@@ -509,7 +521,7 @@ return view.extend({
 					.finally(() => ui.hideModal());
 			})
 		}, _('Save'));
-		const btnFull = E('button', { class: 'btn', style: 'padding: 0 8px; margin-left:auto;' }, _('full screen'));
+		const btnFull = E('button', { class: 'btn', style: 'padding: 0 8px;margin-left:auto;' }, _('full screen'));
 		const btnExit = E('button', { class: 'btn', style: 'display:none;margin-left:auto;' }, _('Exit full screen'));
 		const toolbar = E('div', { class: 'ace-toolbar' }, [
 			E('div', { class: 'inline-form-group' }, [
@@ -564,7 +576,7 @@ return view.extend({
 		L.showModal(editable ? _('edit mode') : _('view mode'), [
 			E('style', [
 				'.modal {padding: 1em .3em .3em .3em;}',
-				'.ace-toolbar-select { height:25px!important; padding: 0 4px !important; min-width:13%!important; }'
+				'.ace-toolbar-select { height:25px!important;padding: 0 4px !important;min-width:13%!important; }'
 			]),
 			E('div', { class: 'modal-custom-path' }, [
 				_('Ace Editor version: %s').format(ace.version), ' | ',
@@ -621,13 +633,13 @@ return view.extend({
 					.finally(() => ui.hideModal());
 			})
 		}, _('Save'));
-		const btnFull = E('button', { class: 'btn', style: 'padding: 0 8px; margin-left:auto;' }, _('full screen'));
+		const btnFull = E('button', { class: 'btn', style: 'padding: 0 8px;margin-left:auto;' }, _('full screen'));
 		const btnExit = E('button', { class: 'btn', style: 'display:none;margin-left:auto;' }, _('Exit full screen'));
 		const modeToggle = E('div', { class: 'ace-toolbar' }, [
 			E('div', { class: 'inline-form-group' }, [
 				E('span', _('Font')),
 				E('select', {
-					class: 'cbi-input-select', style: 'width: 35%;',
+					class: 'cbi-input-select', style: 'width:35%;',
 					change: ev => textarea.style.fontSize = ev.target.value + 'px'
 				}, ['12', '13', '14', '15', '16'].map(id =>
 					E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
@@ -789,7 +801,7 @@ return view.extend({
 				fullFile = result.isFile ? formatPath(base + result.path) : null;
 
 				const targetHint = E('div', {
-					class: 'modal-custom-path', style: `background:#f9d5d5;font-size:13px;${fullFile ? 'margin:0;' : ''}`
+					class: 'modal-custom-path', style: `background:#ffe6e6;font-size:13px;${fullFile ? 'margin:0;' : ''}`
 				}, fullFile
 					? '📄 ' + _('File path: %s').format(fullFile)
 					: '📂 ' + _('Directory path: %s').format(fullDir)
@@ -991,7 +1003,7 @@ return view.extend({
 				'.modal-delete-msg {text-align:center;font-weight:bold;color:#dc3545;font-size:1.1em;}'
 			]),
 			E('div', { class: 'modal-delete-warning' }, [
-				E('strong', { style: 'color:#856404; display:block;' }, _('⚠️ Warning:')),
+				E('strong', { style: 'color:#856404;display:block;' }, _('⚠️ Warning:')),
 				E('span', { style: 'color:#856404;' }, _('This action is irreversible! Files will be permanently removed.'))
 			]),
 			E('div', { class: 'modal-delete-msg' }, [
@@ -1048,7 +1060,7 @@ return view.extend({
 						type: 'checkbox', id: 'is_hardlink',
 						change: ev => isHardLink = ev.target.checked
 					}),
-					E('label', { for: 'is_hardlink', style: 'font-size:12px; cursor:pointer;' }, _('Create hard link'))
+					E('label', { for: 'is_hardlink', style: 'font-size:12px;cursor:pointer;' }, _('Create hard link'))
 				])
 			]),
 			E('div', { class: 'right' }, [
@@ -1595,14 +1607,14 @@ return view.extend({
 		const notification = E('div', {
 			class: 'file-notification',
 			style: `
-            position: fixed; top: 20px; right: 20px; z-index: 20000;
-            padding: 12px 24px; border-radius: 4px; color: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            cursor: pointer; font-weight: 500;
-            background: ${colors[type] || colors.info};
-            opacity: 0; transform: translateX(30px);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        `, click: ui.createHandlerFn(this, ev => {
+			position:fixed;top:20px;right:20px;z-index:20000;
+			padding:12px 24px;border-radius:4px;color:white;
+			box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+			cursor:pointer;font-weight:500;
+			background:${colors[type] || colors.info};
+			opacity:0;transform:translateX(30px);
+			transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		`, click: ui.createHandlerFn(this, ev => {
 				ev.target.style.opacity = '0';
 				setTimeout(() => ev.target.remove(), 300);
 			})
@@ -1691,10 +1703,10 @@ return view.extend({
 			}
 		}, [
 			E('div', { style: 'flex:10' }),
-			E('div', { style: 'flex:1 1 auto; display:flex' }, [
+			E('div', { style: 'flex:1 1 auto;display:flex' }, [
 				E('button', {
 					class: 'btn',
-					style: 'margin-left:auto; margin-top:auto',
+					style: 'margin-left:auto;margin-top:auto',
 					click: function (ev) {
 						dom.parent(ev.target, '.alert-message').classList.add('fade-out');
 					},
