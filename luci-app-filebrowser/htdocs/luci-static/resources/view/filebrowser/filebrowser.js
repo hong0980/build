@@ -238,24 +238,25 @@ return view.extend({
 		this.currentFiles = data.files || [];
 		const files = this.currentFiles;
 		const parts = data.path.split('/').filter(Boolean);
-		let cur = '';
+		let path = '';
 
 		const crumbs = E('div', [
-			E('span', {
-				style: 'cursor:pointer;color:#0066cc',
+			E('a', {
+				href: '#',
 				click: ui.createHandlerFn(this, 'reload', '/')
-			}, _('Root')),
-			...parts.flatMap(p => {
-				cur += '/' + p;
-				return [
-					E('span', '/'),
-					E('span', {
-						style: 'cursor:pointer;color:#0066cc',
-						click: ui.createHandlerFn(this, 'reload', cur)
-					}, p)
-				];
-			})
+			}, E('em', _('(root)')))
 		]);
+
+		parts.forEach(p => {
+			path += '/' + p;
+			dom.append(crumbs, [
+				E('span', ' / '),
+				E('a', {
+					href: '#',
+					click: ui.createHandlerFn(this, 'reload', path)
+				}, p)
+			]);
+		});
 
 		const totalSize = files.reduce((s, f) =>
 			(!f.isDir && !f.linkName) ? s + this.parseSizeToBytes(f.size) : s, 0);
@@ -289,8 +290,8 @@ return view.extend({
 				}, [
 					E('span', {
 						title: f.name,
-						click: f.isDir ? ui.createHandlerFn(this, 'reload', f.path) : null,
-						style: `${f.isDir ? 'cursor:pointer;color:#0066cc;' : ''}display:inline-block;`
+						style: `${f.isDir ? 'color:#0066cc;' : ''}cursor:pointer;`,
+						click: ui.createHandlerFn(this, f.isDir ? 'reload' : 'showFileEditor', f, false)
 					}, `${icon} ${nameText}`)
 				])
 			]);
@@ -324,8 +325,11 @@ return view.extend({
 							.trim().replace(/\/+/g, '/').replace(/(.+)\/$/, '$1');
 						if (!path || path === this._path) return;
 
-						fs.stat(path)
-							.then(r => r.type === 'directory' && this.reload(r.path))
+						return fs.stat(path)
+							.then(r => {
+								if (r.type !== 'directory') throw new Error(_('Not a directory'));
+								return this.reload(r.path)
+							})
 							.catch(e => this.showNotification(_('%s: %s').format(path, e.message), 6000, 'error'));
 					})
 				}, _('Go to')),
@@ -403,7 +407,8 @@ return view.extend({
 	},
 
 	reload: function (p) {
-		return this.load(p || this._path).then(d => this.render(d));
+		const path = (typeof p === 'string' ? p : p?.path) || this._path;
+		return this.load(path).then(d => this.render(d));
 	},
 
 	showContextMenu: function (ev, file) {
@@ -1243,26 +1248,25 @@ return view.extend({
 			const [perm, , owner, , size, d1, d2] = parts;
 			const date = `${d1} ${d2}`;
 			const isDir = perm[0] === 'd';
-			const isLink = perm[0] === 'l';
 			let name = parts.slice(8).join(' ');
 			let linkName = '', linkTarget = null;
 
-			if (isLink) {
+			if (perm[0] === 'l') {
 				const arrowIdx = name.indexOf(' -> ');
 				linkName = name;
 				if (arrowIdx !== -1) {
 					linkName = name.substring(0, arrowIdx);
 					linkTarget = name.substring(arrowIdx + 4);
-				}
-			}
+				};
+			};
 
 			files.push({
-				date, isDir, owner, linkTarget, linkName,
-				size: (isDir || isLink) ? '' : size, perm, name,
+				date, isDir, owner, linkTarget, name,
+				size: isDir ? '' : size, perm, linkName,
 				permissionNum: this.permissionsToOctal(perm),
 				path: (path + '/' + (linkName || name)).replace(/\/+/g, '/')
 			});
-		}
+		};
 
 		return files.sort((a, b) => {
 			if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;

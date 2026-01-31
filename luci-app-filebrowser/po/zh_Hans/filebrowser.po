@@ -4,6 +4,9 @@ msgstr "根目录"
 msgid "Go to"
 msgstr "转到"
 
+msgid "Not a directory"
+msgstr "不是一个目录"
+
 msgid "Back"
 msgstr "后退"
 
