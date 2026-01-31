@@ -177,6 +177,7 @@ const modes = [
 ];
 
 return view.extend({
+	styleInjected: false,
 	load: function (p = null, useCache = false) {
 		this._cache = this._cache || new Map();
 
@@ -209,6 +210,10 @@ return view.extend({
 	},
 
 	render: function (data) {
+		if (!this.styleInjected) {
+			document.head.appendChild(E('style', { id: 'fb-css' }, CSS));
+			this.styleInjected = true;
+		}
 		if (!window._popBound) {
 			window._popBound = true;
 			window.addEventListener('popstate', e => {
@@ -299,7 +304,6 @@ return view.extend({
 		}));
 
 		root.append(
-			E('style', CSS),
 			E('h2', _('File management')),
 			E('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:8px 0 8px;' }, [
 				crumbs,
@@ -464,7 +468,7 @@ return view.extend({
 			);
 		};
 
-		let path = file.path;
+		let path = file.linkTarget || file.path;
 		return fs.stat(path).then(r => {
 			if (r.type === 'file') {
 				return fs.read_direct(path).then(content => {
@@ -487,6 +491,7 @@ return view.extend({
 		const originalContent = content;
 		const containerId = 'ace-' + Date.now();
 		const syntaxid = 'syntax-' + Date.now();
+		const path = file.linkTarget || file.path;
 		const mode = this.detectFileMode(file.name, content);
 		const container = E('div', { id: containerId, style: 'width:100%;height:320px;border:1px solid #ccc;' });
 		const changeIndicator = E('span', {
@@ -512,9 +517,9 @@ return view.extend({
 			click: ui.createHandlerFn(this, () => {
 				if (!editor) return;
 				const val = editor.getValue();
-				fs.write(file.path, val)
+				fs.write(path, val)
 					.then(() => {
-						this.showNotification(_('%s File saved successfully!').format(file.path), '', 'success');
+						this.showNotification(_('%s File saved successfully!').format(path), '', 'success');
 						this.reload();
 					})
 					.catch(error => this.modalnotify(null, E('p', _('Save failed: %s').format(error.message || error)), '', 'warning'))
@@ -581,7 +586,7 @@ return view.extend({
 			E('div', { class: 'modal-custom-path' }, [
 				_('Ace Editor version: %s').format(ace.version), ' | ',
 				_('Size: %s').format(file.size), ' | ',
-				_('Source: %s').format(file.path)
+				_('Source: %s').format(path)
 			]),
 			fullscreenWrapper
 		]);
@@ -692,7 +697,7 @@ return view.extend({
 			E('div', { class: 'modal-custom-path' }, [
 				_('Size: %s').format(file.size), ' | ',
 				_('Lines: %d').format(content.split('\n').length), ' | ',
-				_('Source: %s').format(file.path)
+				_('Source: %s').format(file.linkTarget || file.path)
 			]),
 			fullscreenWrapper
 		]);
@@ -1228,28 +1233,36 @@ return view.extend({
 
 	parseLsOutput: function (path, out) {
 		const files = [];
-		(out || '').trim().split('\n').forEach(line => {
-			const m = line.match(/^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+\s+\S+)\s+\S+\s+(.+)$/);
-			if (!m) return;
-			const [, perm, , owner, , size, date, name] = m;
-			const isDir = perm[0] === 'd';
+		if (!out) return files;
 
+		const lines = out.trim().split('\n');
+		for (let i = 0; i < lines.length; i++) {
+			const parts = lines[i].split(/\s+/);
+			if (parts.length < 9) continue;
+
+			const [perm, , owner, , size, d1, d2] = parts;
+			const date = `${d1} ${d2}`;
+			const isDir = perm[0] === 'd';
+			const isLink = perm[0] === 'l';
+			let name = parts.slice(8).join(' ');
 			let linkName = '', linkTarget = null;
-			if (perm[0] === 'l') {
-				const m2 = name.match(/^(.*?)\s+->\s+(.*)$/);
-				if (m2) {
-					linkName = m2[1];
-					linkTarget = m2[2];
+
+			if (isLink) {
+				const arrowIdx = name.indexOf(' -> ');
+				linkName = name;
+				if (arrowIdx !== -1) {
+					linkName = name.substring(0, arrowIdx);
+					linkTarget = name.substring(arrowIdx + 4);
 				}
 			}
 
 			files.push({
-				perm, owner, linkTarget, linkName,
-				size: isDir ? '' : size, name, date, isDir,
+				date, isDir, owner, linkTarget, linkName,
+				size: (isDir || isLink) ? '' : size, perm, name,
 				permissionNum: this.permissionsToOctal(perm),
 				path: (path + '/' + (linkName || name)).replace(/\/+/g, '/')
 			});
-		});
+		}
 
 		return files.sort((a, b) => {
 			if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
