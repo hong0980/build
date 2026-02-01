@@ -3,6 +3,7 @@
 'require ui';
 'require dom';
 'require view';
+'require request';
 
 const CSS = `
 .modal > h4 {
@@ -63,7 +64,7 @@ tr.selected {
 	position: fixed; /* 固定定位 */
 	top: 50px; /* 距离顶部50像素 */
 	right: 0px; /* 距离右侧0像素 */
-	z-index: 100; /* 层级索引 */
+	z-index: 1000; /* 层级索引 */
 	background: #fff; /* 背景色白色 */
 	border: 1px solid #ccc; /* 边框：1像素实线灰色 */
 	border-radius: 5px; /* 边框圆角8像素 */
@@ -1188,18 +1189,95 @@ return view.extend({
 	},
 
 	Upload: function () {
-		const tmpPath = '/tmp/luci-upload-' + Math.random().toString(36).substring(2, 9);
-		ui.uploadFile(tmpPath)
-			.then(reply => {
-				const destPath = `${this._path}/${reply.name}`;
-				return fs.exec('/bin/mv', [tmpPath, destPath]).then(res => {
-					if (res.code !== 0) throw new Error(res.stderr);
-					this.reload();
-					this.showNotification(_('File "%s" uploaded to "%s"').format(reply.name, this._path), '', 'success');
-				});
-			})
-			.catch(e => this.modalnotify(null, E('p', e.message), 5000))
-			.finally(() => fs.remove(tmpPath).catch(() => {}));
+		L.showModal(_('Upload'), [
+			E('div', { class: 'upload ace-toolbar inline-form-group' }, [
+				E('input', {
+					type: 'file',
+					change: function (ev) {
+						const form = ev.target.parentNode;
+						const nameinput = document.getElementById('nameinput')
+						const uploadbtn = form.querySelector('button.cbi-button-save');
+						nameinput.value = ev.target.value.replace(/^.+[\/\\]/, '');
+						uploadbtn.disabled = false;
+					}
+				}),
+				E('input', { type: 'text', placeholder: _('Filename'), id: 'nameinput' }),
+				E('button', {
+					disabled: true,
+					class: 'btn cbi-button-save',
+					click: ui.createHandlerFn(this, (ev) => {
+						ev.preventDefault();
+						const form = ev.target.parentNode;
+						const fileinput = form.querySelector('input[type="file"]');
+						const nameinput = document.getElementById('nameinput');
+						const filename = (nameinput?.value || '').trim();
+
+						if (!filename || !fileinput?.files?.[0])
+							return Promise.resolve();
+
+						const isAbsolute = filename.startsWith('/');
+						const reloadPath = isAbsolute
+							? filename.substring(0, filename.lastIndexOf('/')) : this._path;
+						const directoryCheck = isAbsolute
+							? fs.stat(reloadPath).catch(() => {
+								throw new Error(_('%s 目录不存在').format(reloadPath));
+							})
+							: Promise.resolve();
+						const fullPath = isAbsolute ? filename : `${this._path}/${filename}`;
+						const uploadUrl = `${L.env.cgi_base}/cgi-upload`;
+						const progress = L.bind((btn, ev) => {
+							const percent = (ev.loaded / ev.total) * 100;
+							btn.firstChild.data = '%.2f%%'.format(percent);
+						}, this, ev.target);
+
+						const data = new FormData();
+						data.append('filename', fullPath);
+						data.append('sessionid', L.env.sessionid);
+						data.append('filedata', fileinput.files[0]);
+
+						return directoryCheck
+							.then(() => request.post(uploadUrl, data, { progress }))
+							.then(L.bind((path, ev, res) => {
+								const reply = res.json();
+								if (L.isObject(reply) && reply.failure) {
+									this.showNotification(_('Upload request failed: %s').format(reply.message), 5000, 'error');
+									return Promise.reject(reply.message);
+								}
+
+								const displayName = isAbsolute
+									? filename.split('/').pop() : filename;
+
+								return this.reload(reloadPath).then(() =>
+									this.showNotification(
+										_('File "%s" uploaded to "%s"').format(displayName, this._path), '', 'success'
+									));
+							}, this, this._path, ev))
+							.catch((error) => {
+								this.showNotification(_('Upload failed: %s').format(error.message), 5000, 'error');
+								return Promise.reject(error);
+							})
+							.finally(() => ui.hideModal());
+					})
+				}, _('Upload file'))
+			]),
+
+			E('div', { class: 'right' }, [
+				E('button', { class: 'btn', click: ui.hideModal }, _('Cancel'))
+			])
+		]);
+
+		requestAnimationFrame(() => {
+			const nameinput = document.getElementById('nameinput')
+			ui.addValidator(nameinput, 'string', true, function (value) {
+				if (!value.startsWith('/')) return true;
+				value = value.trim().replace(/^(\/[^\/]+).*$/, '$1');
+				const res = this.parsePath(value);
+				if (!res.valid)
+					return res.error ? _(res.error) : _('Invalid path format');
+				return true;
+			}.bind(this));
+			this.Draggable()
+		});
 	},
 
 	toggleFS: function (config) {

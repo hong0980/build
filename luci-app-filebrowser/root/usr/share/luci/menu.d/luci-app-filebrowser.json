@@ -1,6 +1,7 @@
 {
 	"admin/system/filebrowser": {
 		"title": "File management",
+		"order": 12,
 		"action": {
 			"type": "view",
 			"path": "filebrowser/filebrowser"
