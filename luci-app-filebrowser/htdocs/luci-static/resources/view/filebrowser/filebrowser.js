@@ -178,7 +178,6 @@ const modes = [
 ];
 
 return view.extend({
-	styleInjected: false,
 	load: function (p = null, useCache = false) {
 		this._cache = this._cache || new Map();
 
@@ -214,7 +213,7 @@ return view.extend({
 		if (!this.styleInjected) {
 			document.head.appendChild(E('style', { id: 'fb-css' }, CSS));
 			this.styleInjected = true;
-		}
+		};
 		if (!window._popBound) {
 			window._popBound = true;
 			window.addEventListener('popstate', e => {
@@ -270,8 +269,8 @@ return view.extend({
 
 		table.update(files.map(f => {
 			const icon = f.isDir ? '📂' : (f.linkName ? '🔗' : '📄');
-			const nameText = f.name.length > 18
-				? `${f.name.slice(0, 11)}...${f.name.slice(-7)}`
+			const nameText = f.name.length > 20
+				? `${f.name.slice(0, 15)}...${f.name.slice(-5)}`
 				: f.name;
 
 			const nameCell = E('div', { class: 'file-checkbox' }, [
@@ -1219,9 +1218,14 @@ return view.extend({
 						const reloadPath = isAbsolute
 							? filename.substring(0, filename.lastIndexOf('/')) : this._path;
 						const directoryCheck = isAbsolute
-							? fs.stat(reloadPath).catch(() => {
-								throw new Error(_('%s 目录不存在').format(reloadPath));
-							})
+							? fs.stat(reloadPath)
+								.catch(() => {
+									throw new Error(_('Directory "%s" does not exist').format(reloadPath));
+								})
+								.then(r => {
+									if (r.type !== 'directory')
+										throw new Error(_('The path "%s" is not a directory').format(reloadPath));
+								})
 							: Promise.resolve();
 						const fullPath = isAbsolute ? filename : `${this._path}/${filename}`;
 						const uploadUrl = `${L.env.cgi_base}/cgi-upload`;
@@ -1249,7 +1253,7 @@ return view.extend({
 
 								return this.reload(reloadPath).then(() =>
 									this.showNotification(
-										_('File "%s" uploaded to "%s"').format(displayName, this._path), '', 'success'
+										_('File "%s" uploaded to "%s"').format(displayName, reloadPath), '', 'success'
 									));
 							}, this, this._path, ev))
 							.catch((error) => {

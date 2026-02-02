@@ -301,6 +301,12 @@ msgstr "读取失败：%s"
 msgid "File \"%s\" uploaded to \"%s\""
 msgstr "文件 \"%s\" 已上传至 \"%s\""
 
+msgid "The path \"%s\" is not a directory"
+msgstr "路径 \"%s\" 不是目录"
+
+msgid "Directory \"%s\" does not exist"
+msgstr "目录 \"%s\" 不存在"
+
 msgid "Upload failed: %s"
 msgstr "上传失败：%s"
 
