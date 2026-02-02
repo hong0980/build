@@ -743,207 +743,248 @@ return view.extend({
 	},
 
 	createnew: function () {
-		let fileContent = '', fullDir, fullFile, result;
-		let mode, editor = null, dirPerm = '755', filePerm = '644';
+		let fileContent = '', editor = null;
+		let dirPerm = '755', filePerm = '644';
 		const syntaxid = 'syntax-' + Date.now();
 		const containerId = 'ace-' + Date.now();
-		const setmode = () => {
-			if (result && result.file && editor) {
-				mode = this.detectFileMode(result.file, null);
-				editor.session.setMode(`ace/mode/${mode}`);
-				const modeElem = document.getElementById(syntaxid);
-				if (modeElem) modeElem.value = mode;
-			}
+		const updateSyntaxMode = (fileName) => {
+			if (!fileName || !editor) return;
+			const mode = this.detectFileMode(fileName, null);
+			editor.session.setMode(`ace/mode/${mode}`);
+			const modeElem = document.getElementById(syntaxid);
+			if (modeElem) modeElem.value = mode;
 		};
-		const fileElem = [
+
+		const permissionSelector = (currentPerm, onChange) => [
 			E('span', _('file permissions')),
 			E('select', {
 				class: 'ace-toolbar-select',
-				change: ev => filePerm = ev.target.value
+				change: ev => onChange(ev.target.value)
 			}, permissions.map(([id, name]) =>
-				E('option', { value: id, selected: id === filePerm || undefined }, name)
+				E('option', { value: id, selected: id === currentPerm || undefined }, name)
 			))
 		];
-		const toolbar = E('span', { style: 'display:none;' }, [
-			window._aceReady
-				? E('span', [
-					E('div', [
-						E('div', { class: 'ace-toolbar inline-form-group' }, [
-							E('span', _('Syntax')),
-							E('select', {
-								class: 'ace-toolbar-select', id: syntaxid,
-								change: ev => editor && editor.session.setMode('ace/mode/' + ev.target.value)
-							}, modes.map(([id, name]) => E('option', { value: id, selected: id === mode || undefined }, name))
-							),
-							E('span', _('Theme')),
-							E('select', {
-								class: 'ace-toolbar-select',
-								change: ev => editor && editor.setTheme('ace/theme/' + ev.target.value)
-							}, themes.map(([id, name]) => E('option', { value: id, selected: id === 'monokai' || undefined }, name))
-							),
-							E('span', _('Font')),
-							E('select', {
-								class: 'ace-toolbar-select',
-								change: ev => editor && editor.setFontSize(ev.target.value + 'px')
-							}, ['12', '13', '14', '15', '16'].map(id =>
-								E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
-							)),
-							...fileElem
-						])
-					]),
-					E('div', { id: containerId, style: 'width:100%;height:250px;' })
+
+		const aceToolbar = window._aceReady ? E('span', [
+			E('div', [
+				E('div', { class: 'ace-toolbar inline-form-group' }, [
+					E('span', _('Syntax')),
+					E('select', {
+						class: 'ace-toolbar-select', id: syntaxid,
+						change: ev => editor && editor.session.setMode('ace/mode/' + ev.target.value)
+					}, modes.map(([id, name]) => E('option', { value: id }, name))),
+					E('span', _('Theme')),
+					E('select', {
+						class: 'ace-toolbar-select',
+						change: ev => editor && editor.setTheme('ace/theme/' + ev.target.value)
+					}, themes.map(([id, name]) =>
+						E('option', { value: id, selected: id === 'monokai' || undefined }, name)
+					)),
+					E('span', _('Font')),
+					E('select', {
+						class: 'ace-toolbar-select',
+						change: ev => editor && editor.setFontSize(ev.target.value + 'px')
+					}, ['12', '13', '14', '15', '16'].map(id =>
+						E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
+					)),
+					...permissionSelector(filePerm, val => filePerm = val)
 				])
-				: E('div', [
-					E('style', ['.ace-toolbar-select {max-width:100%;flex:1;}']),
-					E('div', { class: 'ace-toolbar inline-form-group' }, [
-						E('span', _('Font')),
-						E('select', {
-							class: 'ace-toolbar-select',
-							change: (ev) => {
-								const container = ev.target.closest('div').parentNode;
-								const textarea = container.querySelector('textarea');
-								textarea.style.fontSize = ev.target.value + 'px';
-							}
-						}, ['12', '13', '14', '15', '16'].map(id =>
-							E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
-						)),
-						...fileElem
-					]),
-					E('textarea', {
-						placeholder: _('Enter text here'),
-						class: 'cbi-input-text', type: 'text',
-						style: 'width:100%;height:250px;font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;',
-						change: ev => fileContent = ev.target.value
-					}),
-				])
-		]);
+			]),
+			E('div', { id: containerId, style: 'width:100%;height:250px;' })
+		]) : '';
+
+		const simpleEditor = !window._aceReady ? E('div', [
+			E('style', ['.ace-toolbar-select {max-width:100%;flex:1;}']),
+			E('div', { class: 'ace-toolbar inline-form-group' }, [
+				E('span', _('Font')),
+				E('select', {
+					class: 'ace-toolbar-select',
+					change: (ev) => {
+						const textarea = ev.target.closest('div').parentNode.querySelector('textarea');
+						if (textarea) textarea.style.fontSize = ev.target.value + 'px';
+					}
+				}, ['12', '13', '14', '15', '16'].map(id =>
+					E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
+				)),
+				...permissionSelector(filePerm, val => filePerm = val)
+			]),
+			E('textarea', {
+				placeholder: _('Enter text here'),
+				class: 'cbi-input-text',
+				style: 'width:100%;height:250px;font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;',
+				input: ev => fileContent = ev.target.value
+			})
+		]) : '';
+
+		const editorContainer = E('div', {
+			id: 'editor-wrapper', style: 'display:none;'
+		}, [aceToolbar, simpleEditor].filter(Boolean));
 
 		const pathInput = E('input', {
-			style: 'flex:1;', title: [
-				" 📂 " + _("End with '/' to create a Directory"),
-				" 📄 " + _("No '/' at end to create a File"),
-				" 🚩 " + _("Start with '/' for Absolute path"),
-				" 🏠 " + _("No '/' at start for Current path")
-			].join("\n"),
+			id: 'path-input', style: 'flex:1;',
 			placeholder: _('e.g. file.txt or folder/'),
-			input: ev => {
-				document.querySelectorAll('.modal-custom-path').forEach(hint => hint.remove());
-				const val = ev.target.value.trim();
-				result = val ? this.parsePath(val) : null;
-				if (!result || !result.valid) {
-					toolbar.style.display = 'none';
-					return;
-				};
-				const formatPath = (p) => p.replace(/\/+/g, '/');
-				const base = result.isAbsolute ? '' : this._path + '/';
-				fullDir = formatPath(result.isDir ? base + result.path : base + result.dir);
-				fullFile = result.isFile ? formatPath(base + result.path) : null;
-
-				const targetHint = E('div', {
-					class: 'modal-custom-path', style: `background:#ffe6e6;font-size:13px;${fullFile ? 'margin:0;' : ''}`
-				}, fullFile
-					? '📄 ' + _('File path: %s').format(fullFile)
-					: '📂 ' + _('Directory path: %s').format(fullDir)
-				);
-				if (fullFile) {
-					ev.target.after(targetHint);
-					toolbar.style.display = 'block';
-					dirperm.style.display = 'none';
-				} else if (fullDir) {
-					toolbar.after(targetHint);
-					toolbar.style.display = 'none';
-					dirperm.style.display = 'flex';
-				};
-				setmode();
-			}
+			title: [
+				"📂 " + _("End with '/' to create a Directory"),
+				"📄 " + _("No '/' at end to create a File"),
+				"🚩 " + _("Start with '/' for Absolute path"),
+				"🏠 " + _("No '/' at start for Current path")
+			].join("\n")
 		});
+
+		const dirPermSelector = E('span', {
+			id: 'dirperm', class: 'inline-form-group', style: 'display:none;'
+		}, [
+			E('span', _('Directory permissions')),
+			E('select', {
+				style: 'flex:1;',
+				change: ev => dirPerm = ev.target.value
+			}, permissions.map(([id, name]) =>
+				E('option', { value: id, selected: id === dirPerm || undefined }, name)
+			))
+		]);
+
+		const createButton = E('button', {
+			id: 'create-btn', style: 'display:none;',
+			class: 'btn cbi-button-positive important',
+			click: ui.createHandlerFn(this, () => {
+				const pathValue = pathInput.value.trim();
+				const result = this.parsePath(pathValue);
+
+				if (!result.valid) {
+					return this.showNotification(
+						result.error || _('Invalid path'), 3000, 'error'
+					);
+				}
+
+				const base = result.isAbsolute ? '' : this._path + '/';
+				const fullDir = (result.isDir ? base + result.path : base + result.dir)
+					.replace(/\/+/g, '/');
+				const fullFile = result.isFile ? (base + result.path).replace(/\/+/g, '/') : null;
+				const content = window._aceReady && editor ? editor.getValue() : fileContent;
+				const createDirPromise = fullDir
+					? fs.exec('/bin/mkdir', ['-p', '-m', dirPerm, fullDir])
+					: Promise.resolve({ code: 0 });
+
+				createDirPromise
+					.then(res => {
+						if (res && res.code !== 0) {
+							throw new Error(res.stderr || _('Failed to create directory'));
+						}
+
+						if (!fullFile) {
+							this.showNotification(_('Directory %s created successfully').format(fullDir), 2000, 'success');
+							return this.reload(fullDir);
+						}
+
+						return fs.write(fullFile, content, parseInt(filePerm, 8))
+							.then(() => {
+								this.showNotification(
+									_('File %s created successfully').format(fullFile), 2000, 'success');
+								return this.reload(fullDir);
+							});
+					})
+					.catch(e => {
+						this.modalnotify(null, E('p', _('Create failed: %s').format(e.message || e)), '', 'error');
+					})
+					.finally(() => ui.hideModal());
+			})
+		}, _('Create'));
+
 		L.showModal(_('Create file (directory)'), [
 			E('style', ['.modal {padding: 1em .3em .3em .3em;}']),
 			E('div', { class: 'inline-form-group' }, [
-				E('span', _('name(path)')), pathInput,
-				E('span', { id: 'dirperm', class: 'inline-form-group', style: 'display:none;' }, [
-					E('span', _('Directory permissions')),
-					E('select', {
-						style: 'flex:1;',
-						change: ev => dirPerm = ev.target.value
-					}, permissions.map(([id, name]) =>
-						E('option', { value: id, selected: id === dirPerm || undefined }, name)
-					))
-				]),
+				E('span', _('name(path)')),
+				pathInput, dirPermSelector
 			]),
-			toolbar,
+			editorContainer,
 			E('div', { class: 'right' }, [
-				E('button', {
-					id: 'create', style: 'display:none;',
-					class: 'btn cbi-button-positive important',
-					click: ui.createHandlerFn(this, () => {
-						const content = (window._aceReady && editor) ? editor.getValue() : fileContent;
-						const p = fullDir ? fs.exec('/bin/mkdir', ['-p', '-m', dirPerm, fullDir]) : Promise.resolve({ code: 0 });
-						p.then(res => {
-							if (res && res.code !== 0) throw new Error(res.stderr);
-
-							if (!fullFile) {
-								this.showNotification(_('Directory %s created successfully').format(fullDir), '', 'success');
-								return this.reload(fullDir);
-							}
-
-							return fs.write(fullFile, content, parseInt(filePerm, 8))
-								.then(() => {
-									this.showNotification(_('File %s created successfully').format(fullFile), '', 'success');
-									return this.reload(fullDir);
-								});
-						}).catch(e => {
-							this.modalnotify(null, E('p', _('Create failed: %s').format(e.message || e)), '', 'error');
-							throw e;
-						}).finally(() => ui.hideModal());
-					})
-				}, _('Create')),
+				createButton,
 				' ',
 				E('button', { class: 'btn', click: ui.hideModal }, _('Cancel'))
 			])
 		]);
 
+		const updateUIState = () => {
+			const pathValue = pathInput.value.trim();
+			document.querySelectorAll('.modal-custom-path').forEach(el => el.remove());
+			const result = this.parsePath(pathValue);
+
+			if (!pathValue || !result.valid) {
+				createButton.style.display = 'none';
+				editorContainer.style.display = 'none';
+				dirPermSelector.style.display = 'none';
+				return;
+			}
+
+			createButton.style.display = 'inline-block';
+			const base = result.isAbsolute ? '' : this._path + '/';
+			const fullDir = (result.isDir ? base + result.path : base + result.dir)
+				.replace(/\/+/g, '/');
+			const fullFile = result.isFile ? (base + result.path).replace(/\/+/g, '/') : null;
+			const pathHint = E('div', {
+				class: 'modal-custom-path',
+				style: `background:#e8f5e9;font-size:13px;${fullFile ? 'margin:0;' : ''}`
+			}, fullFile
+				? '📄 ' + _('File path: %s').format(fullFile)
+				: '📂 ' + _('Directory path: %s').format(fullDir)
+			);
+
+			if (fullFile) {
+				pathInput.after(pathHint);
+				editorContainer.style.display = 'block';
+				dirPermSelector.style.display = 'none';
+				updateSyntaxMode(result.file);
+			} else {
+				editorContainer.after(pathHint);
+				editorContainer.style.display = 'none';
+				dirPermSelector.style.display = 'flex';
+			}
+		};
+
 		requestAnimationFrame(() => {
-			if (window._aceReady)
+			if (window._aceReady) {
 				this.initAceEditor({ containerId, editable: true }).then(ed => {
 					editor = ed;
-					setmode();
 				});
-			ui.addValidator(pathInput, 'string', false, function (value) {
-				result = this.parsePath(value.trim());
-				const create = document.getElementById('create');
-				const dirperm = document.getElementById('dirperm');
-				if (result.valid) {
-					create.style.display = 'inline-block';
-					return true
-				} else {
-					create.style.display = 'none';
-					return result.error ? _(result.error) : _('Invalid path format');
-				}
-			}.bind(this));
+			}
+
+			pathInput.addEventListener('input', updateUIState);
+			ui.addValidator(pathInput, 'string', false, (value) => {
+				const result = this.parsePath(value.trim());
+				return result.valid || (result.error ? _(result.error) : _('Invalid path format'));
+			});
+
 			this.Draggable();
+			pathInput.focus();
 		});
 	},
 
 	parsePath: function (path) {
-		const isValidChar = /^[A-Za-z0-9._\-\/~@()+,=]+$/.test(path);
-		if (!isValidChar) {
+		if (!path) return { valid: false };
+		if (!/^[A-Za-z0-9._\-\/~@()+,=]+$/.test(path))
 			return { valid: false, error: _('Path contains unsupported characters') };
-		}
-
-		if (path.includes('..')) {
+		if (path.includes('..'))
 			return { valid: false, error: _('Path contains illegal segment (..)') };
-		}
 
+		const isAbsolute = path.startsWith('/');
 		const isDir = path.endsWith('/');
 		const isFile = !isDir;
-		const last = isFile ? path.slice(path.lastIndexOf('/') + 1) : '';
-		const dir = isFile ? path.slice(0, path.lastIndexOf('/') + 1) : path;
+		let fileName = '', dirPath = path;
 
+		if (isFile) {
+			const lastSlashIdx = path.lastIndexOf('/');
+			if (lastSlashIdx === -1) {
+				fileName = path;
+				dirPath = '';
+			} else {
+				fileName = path.substring(lastSlashIdx + 1);
+				dirPath = path.substring(0, lastSlashIdx + 1);
+			}
+		}
 		return {
-			isFile, isDir, dir, path,
-			file: last, valid: true,
-			isAbsolute: path.startsWith('/')
+			valid: true, isFile, isDir,
+			isAbsolute, path, file: fileName,
+			dir: dirPath || (isDir ? path : path + '/')
 		};
 	},
 
