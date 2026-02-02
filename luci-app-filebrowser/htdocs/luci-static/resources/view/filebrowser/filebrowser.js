@@ -10,7 +10,9 @@ const CSS = `
 	text-align:center;
 	color:red;
 	cursor:move;
-	userSelect:none;
+	user-select:none;
+	-webkit-user-select:none;
+	-moz-user-select:none;
 }
 .file-name-cell:hover {
 	background: #f5f7fa;
@@ -67,7 +69,7 @@ tr.selected {
 	z-index: 1000; /* 层级索引 */
 	background: #fff; /* 背景色白色 */
 	border: 1px solid #ccc; /* 边框：1像素实线灰色 */
-	border-radius: 5px; /* 边框圆角8像素 */
+	border-radius: 5px; /* 边框圆角5像素 */
 	padding: 5px; /* 内边距5像素 */
 }
 .ace-fullscreen {
@@ -178,13 +180,22 @@ const modes = [
 ];
 
 return view.extend({
+	styleInjected: false,
+	_editorPool: null,
+
 	load: function (p = null, useCache = false) {
 		this._cache = this._cache || new Map();
+		if (!this._lastCleanup || Date.now() - this._lastCleanup > 60000) {
+			this._lastCleanup = Date.now();
+			const TTL = 300000;
+			const now = Date.now();
 
-		const TTL = 300000;
-		for (const [k, v] of this._cache) {
-			if (v.data && Date.now() - v.time > TTL) this._cache.delete(k);
-		};
+			const toDelete = [];
+			for (const [k, v] of this._cache) {
+				if (v.data && now - v.time > TTL) toDelete.push(k);
+			}
+			toDelete.forEach(k => this._cache.delete(k));
+		}
 
 		const path = (typeof p === 'string' ? p : (location.hash.slice(1) || '/'))
 			.replace(/\/+/g, '/').replace(/(.+)\/$/, '$1');
@@ -204,16 +215,25 @@ return view.extend({
 			});
 
 		this._cache.set(path, { time: Date.now(), data: null, promise });
-		this._isMobile = ('ontouchstart' in window && window.innerWidth <= 768)
-			|| /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+		if (this._isMobile === undefined) {
+			this._isMobile = ('ontouchstart' in window && window.innerWidth <= 768)
+				|| /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+		}
+
 		return promise;
 	},
 
 	render: function (data) {
+		if (this._scrollCleanup) {
+			this._scrollCleanup();
+			this._scrollCleanup = null;
+		}
+
 		if (!this.styleInjected) {
 			document.head.appendChild(E('style', { id: 'fb-css' }, CSS));
 			this.styleInjected = true;
-		};
+		}
 		if (!window._popBound) {
 			window._popBound = true;
 			window.addEventListener('popstate', e => {
@@ -237,6 +257,10 @@ return view.extend({
 
 		this.currentFiles = data.files || [];
 		const files = this.currentFiles;
+
+		this._fileMap = new Map(files.map(f => [f.path, f]));
+		this._fileMapVersion = data.path;
+
 		const parts = data.path.split('/').filter(Boolean);
 		let path = '';
 
@@ -269,20 +293,13 @@ return view.extend({
 
 		table.update(files.map(f => {
 			const icon = f.isDir ? '📂' : (f.linkName ? '🔗' : '📄');
-			const nameText = f.name.length > 20
-				? `${f.name.slice(0, 15)}...${f.name.slice(-5)}`
+			const nameText = f.name.length > 18
+				? `${f.name.slice(0, 11)}...${f.name.slice(-7)}`
 				: f.name;
 
 			const nameCell = E('div', { class: 'file-checkbox' }, [
 				E('input', {
-					type: 'checkbox', 'data-path': f.path,
-					change: ev => {
-						const row = ev.target.closest('tr');
-						if (row) {
-							row.classList.toggle('selected', ev.target.checked);
-							this.toggleBatchBar();
-						}
-					}
+					type: 'checkbox', 'data-path': f.path
 				}),
 				E('div', {
 					class: 'file-name-cell', style: 'flex:1',
@@ -303,6 +320,17 @@ return view.extend({
 
 			return [nameCell, f.owner, f.size, f.date, `[${f.permissionNum}] ${f.perm}`, f.isDir ? '' : btn];
 		}));
+
+		const tableNode = table.node || table.render().querySelector('table');
+		tableNode.addEventListener('change', (ev) => {
+			if (ev.target.type === 'checkbox' && ev.target.closest('.file-checkbox')) {
+				const row = ev.target.closest('tr');
+				if (row) {
+					row.classList.toggle('selected', ev.target.checked);
+					this.toggleBatchBar();
+				}
+			}
+		});
 
 		root.append(
 			E('h2', _('File management')),
@@ -393,11 +421,16 @@ return view.extend({
 				};
 			};
 
-			['scroll', 'resize'].forEach(e =>
-				window.addEventListener(e, e === 'resize'
-					? () => setTimeout(check, 100) : check
-				)
-			);
+			const throttledCheck = this.throttle(check.bind(this), 16);
+			const debouncedCheck = this.debounce(check.bind(this), 100);
+
+			window.addEventListener('scroll', throttledCheck, { passive: true });
+			window.addEventListener('resize', debouncedCheck);
+
+			this._scrollCleanup = () => {
+				window.removeEventListener('scroll', throttledCheck);
+				window.removeEventListener('resize', debouncedCheck);
+			};
 
 			check();
 		};
@@ -597,7 +630,7 @@ return view.extend({
 		]);
 
 		requestAnimationFrame(() => {
-			this.initAceEditor({
+			this.getOrCreateEditor(containerId, {
 				content, editable, syntaxid,
 				mode, changeIndicator, saveBtn,
 				originalContent, wrapCheckbox,
@@ -794,17 +827,13 @@ return view.extend({
 			].join("\n"),
 			placeholder: _('e.g. file.txt or folder/'),
 			input: ev => {
-				const create = document.getElementById('create');
 				document.querySelectorAll('.modal-custom-path').forEach(hint => hint.remove());
 				const val = ev.target.value.trim();
-				if (!val) {
-					create.style.display = 'none';
+				result = val ? this.parsePath(val) : null;
+				if (!result || !result.valid) {
 					toolbar.style.display = 'none';
-					document.getElementById('dirperm').style.display = 'none';
 					return;
 				};
-				result = this.parsePath(val);
-				create.style.display = 'inline-block';
 				const formatPath = (p) => p.replace(/\/+/g, '/');
 				const base = result.isAbsolute ? '' : this._path + '/';
 				fullDir = formatPath(result.isDir ? base + result.path : base + result.dir);
@@ -819,11 +848,11 @@ return view.extend({
 				if (fullFile) {
 					ev.target.after(targetHint);
 					toolbar.style.display = 'block';
-					document.getElementById('dirperm').style.display = 'none';
+					dirperm.style.display = 'none';
 				} else if (fullDir) {
 					toolbar.after(targetHint);
 					toolbar.style.display = 'none';
-					document.getElementById('dirperm').style.display = 'flex';
+					dirperm.style.display = 'flex';
 				};
 				setmode();
 			}
@@ -858,10 +887,8 @@ return view.extend({
 								return this.reload(fullDir);
 							}
 
-							return fs.write(fullFile, content)
-								.then(() => fs.exec('/bin/chmod', [filePerm, fullFile]))
-								.then(res => {
-									if (res && res.code !== 0) throw new Error(res.stderr);
+							return fs.write(fullFile, content, parseInt(filePerm, 8))
+								.then(() => {
 									this.showNotification(_('File %s created successfully').format(fullFile), '', 'success');
 									return this.reload(fullDir);
 								});
@@ -883,33 +910,39 @@ return view.extend({
 					setmode();
 				});
 			ui.addValidator(pathInput, 'string', false, function (value) {
-				const res = this.parsePath(value.trim());
-				if (!res.valid)
-					return res.error ? _(res.error) : _('Invalid path format');
-				return true;
+				result = this.parsePath(value.trim());
+				const create = document.getElementById('create');
+				const dirperm = document.getElementById('dirperm');
+				if (result.valid) {
+					create.style.display = 'inline-block';
+					return true
+				} else {
+					create.style.display = 'none';
+					return result.error ? _(result.error) : _('Invalid path format');
+				}
 			}.bind(this));
 			this.Draggable();
 		});
 	},
 
 	parsePath: function (path) {
-		if (!/^[A-Za-z0-9._\-\/~@()+,=]+$/.test(path))
+		const isValidChar = /^[A-Za-z0-9._\-\/~@()+,=]+$/.test(path);
+		if (!isValidChar) {
 			return { valid: false, error: _('Path contains unsupported characters') };
+		}
 
-		if (path.split('/').includes('..'))
+		if (path.includes('..')) {
 			return { valid: false, error: _('Path contains illegal segment (..)') };
+		}
 
-		const parts = path.split('/');
-		const last = parts.pop() || '';
 		const isDir = path.endsWith('/');
 		const isFile = !isDir;
-		const dir = isFile
-			? path.slice(0, path.lastIndexOf('/') + 1)
-			: (path.endsWith('/') ? path : path + '/');
+		const last = isFile ? path.slice(path.lastIndexOf('/') + 1) : '';
+		const dir = isFile ? path.slice(0, path.lastIndexOf('/') + 1) : path;
 
 		return {
 			isFile, isDir, dir, path,
-			file: isFile ? last : '', valid: true,
+			file: last, valid: true,
 			isAbsolute: path.startsWith('/')
 		};
 	},
@@ -1090,7 +1123,7 @@ return view.extend({
 								this.showNotification(_('Link "%s" created successfully').format(linkPath), '', 'success');
 							})
 							.catch(e =>
-								this.showNotification(_('Failed to create link: %s').format(e.message || e), 5000, 'error'))
+								this.showNotification(_('Failed to create link: %s').format(e.message || e), 8000, 'error'))
 							.finally(() => ui.hideModal());
 					})
 				}, _('Apply'))
@@ -1319,12 +1352,15 @@ return view.extend({
 	},
 
 	parseLsOutput: function (path, out) {
-		const files = [];
-		if (!out) return files;
+		if (!out) return [];
 
+		const files = [];
 		const lines = out.trim().split('\n');
-		for (let i = 0; i < lines.length; i++) {
-			const parts = lines[i].split(/\s+/);
+		const lineCount = lines.length;
+		const spaceRe = /\s+/, arrowStr = ' -> ';
+
+		for (let i = 0; i < lineCount; i++) {
+			const parts = lines[i].split(spaceRe);
 			if (parts.length < 9) continue;
 
 			const [perm, , owner, , size, d1, d2] = parts;
@@ -1334,101 +1370,129 @@ return view.extend({
 			let linkName = '', linkTarget = null;
 
 			if (perm[0] === 'l') {
-				const arrowIdx = name.indexOf(' -> ');
-				linkName = name;
+				const arrowIdx = name.indexOf(arrowStr);
 				if (arrowIdx !== -1) {
 					linkName = name.substring(0, arrowIdx);
 					linkTarget = name.substring(arrowIdx + 4);
-				};
-			};
+				} else {
+					linkName = name;
+				}
+			}
 
 			files.push({
 				date, isDir, owner, linkTarget, name,
 				size: isDir ? '' : size, perm, linkName,
 				permissionNum: this.permissionsToOctal(perm),
-				path: (path + '/' + (linkName || name)).replace(/\/+/g, '/')
+				path: `${path}/${linkName || name}`.replace(/\/+/g, '/')
 			});
-		};
+		}
 
 		return files.sort((a, b) => {
 			if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
 			if (a.linkName !== b.linkName) return a.linkName ? 1 : -1;
-			return a.name.localeCompare(b.name);
+			return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
 		});
 	},
 
 	detectFileMode: function (filename, content) {
-		const name = filename.toLowerCase();
-		const ext = name.includes('.') ? name.split('.').pop() : '';
-		const extMap = {
-			js: 'javascript', json: 'json', html: 'html', htm: 'html',
-			css: 'css', xml: 'xml', py: 'python', sh: 'sh', bash: 'sh',
-			php: 'php', lua: 'lua', pl: 'perl', rb: 'ruby', md: 'markdown',
-			yaml: 'yaml', yml: 'yaml', uc: 'javascript', ut: 'javascript',
-			ts: 'javascript', toml: 'toml', svg: 'html',
-			config: 'sh', mk: 'makefile', Makefile: 'makefile'
-		};
-
-		if (extMap[ext]) return extMap[ext];
-		if (name === 'makefile') return 'makefile';
-
-		const trimmed = (content || '').trim();
-		const firstLine = trimmed.split('\n')[0] || '';
-		const byShebang = this.detectByShebang(firstLine);
-		if (byShebang) return byShebang;
-
-		if (trimmed) {
-			if (trimmed[0] === '{' || trimmed[0] === '[') {
-				try { JSON.parse(trimmed); return 'json'; } catch (e) {}
-			}
-			if (/^\s*<\?xml\b/i.test(trimmed)) return 'xml';
-			if (/<html\b/i.test(trimmed) || /<!doctype\s+html/i.test(trimmed)) return 'html';
-
-			if (trimmed.startsWith('---') || /^\s*[\w.-]+\s*:\s+\S/m.test(trimmed)) {
-				if (!trimmed.includes('=')) return 'yaml';
-			}
-
-			if (trimmed[0] === '#') {
-				if (/^#\s+[^:]+$/.test(firstLine)) return 'markdown';
-				if (trimmed.startsWith('#!')) return 'sh';
-				if (trimmed.includes(': ') && !trimmed.includes('=')) return 'yaml';
-
-				return 'sh';
-			}
+		if (!this._extMap) {
+			this._extMap = new Map([
+				['js', 'javascript'], ['json', 'json'], ['html', 'html'], ['htm', 'html'],
+				['css', 'css'], ['xml', 'xml'], ['py', 'python'], ['sh', 'sh'], ['bash', 'sh'],
+				['php', 'php'], ['lua', 'lua'], ['pl', 'perl'], ['rb', 'ruby'], ['md', 'markdown'],
+				['yaml', 'yaml'], ['yml', 'yaml'], ['uc', 'javascript'], ['ut', 'javascript'],
+				['ts', 'javascript'], ['toml', 'toml'], ['svg', 'html'],
+				['config', 'sh'], ['mk', 'makefile']
+			]);
 		}
 
-		const shFeatures = [
-			/^\s*\[\s+.*?\s+\]\s+(&&|\|\|)/,
-			/^\s*(if|case|while|for|function)\b/m,
-			/^\s*\w+=\".*?\"\s*(;|&&|\|\||$)/m,
-			/(\||&&|\|\|)\s*\/(usr\/|bin\/|sbin\/)/
-		];
+		const lowerName = filename.toLowerCase();
 
-		if (shFeatures.some(re => re.test(trimmed))) {
+		if (lowerName === 'makefile') return 'makefile';
+
+		const dotIdx = lowerName.lastIndexOf('.');
+		if (dotIdx > 0) {
+			const ext = lowerName.substring(dotIdx + 1);
+			const mode = this._extMap.get(ext);
+			if (mode) return mode;
+		}
+
+		if (!content) return 'text';
+		const trimmed = content.trim();
+		if (!trimmed) return 'text';
+
+		const firstLineEnd = trimmed.indexOf('\n');
+		const firstLine = firstLineEnd === -1 ? trimmed : trimmed.substring(0, firstLineEnd);
+
+		if (firstLine.startsWith('#!')) {
+			const mode = this.detectByShebang(firstLine);
+			if (mode) return mode;
+		}
+
+		const firstChar = trimmed[0];
+		if (firstChar === '{' || firstChar === '[') {
+			try {
+				JSON.parse(trimmed);
+				return 'json';
+			} catch (e) {}
+		}
+
+		if (trimmed.startsWith('<?xml')) return 'xml';
+
+		const lowerTrimmed = trimmed.toLowerCase();
+		if (lowerTrimmed.includes('<html') || lowerTrimmed.startsWith('<!doctype html')) {
+			return 'html';
+		}
+
+		if (trimmed.startsWith('---') || /^\s*[\w.-]+\s*:\s+\S/m.test(trimmed)) {
+			if (!trimmed.includes('=')) return 'yaml';
+		}
+
+		if (firstChar === '#') {
+			if (/^#\s+[^:]+$/.test(firstLine)) return 'markdown';
+
+			if (trimmed.includes(': ') && !trimmed.includes('=')) return 'yaml';
+
 			return 'sh';
+		}
+
+		if (!this._shFeatures) {
+			this._shFeatures = [
+				/^\s*\[\s+.*?\s+\]\s+(&&|\|\|)/,
+				/^\s*(if|case|while|for|function)\b/m,
+				/^\s*\w+=\".*?\"\s*(;|&&|\|\||$)/m,
+				/(\||&&|\|\|)\s*\/(usr\/|bin\/|sbin\/)/
+			];
+		}
+
+		for (const re of this._shFeatures) {
+			if (re.test(trimmed)) return 'sh';
 		}
 
 		return 'text';
 	},
 
 	detectByShebang: function (firstLine) {
-		if (!firstLine || !firstLine.startsWith('#!'))
-			return null;
+		if (!firstLine || !firstLine.startsWith('#!')) return null;
 
-		const s = firstLine.toLowerCase();
-		const patterns = [
-			{ re: /\/lua\b/, mode: 'lua' },
-			{ re: /(ba)?sh\b|busybox\b/, mode: 'sh' },
-			{ re: /node\b|ucode\b/, mode: 'javascript' },
-			{ re: /python\d?(\.\d+)?\b/, mode: 'python' },
-			{ re: /perl\b/, mode: 'perl' },
-			{ re: /ruby\b/, mode: 'ruby' },
-			{ re: /php\b/, mode: 'php' },
-			{ re: /[zkp]sh\b/, mode: 'sh' },
-		];
+		if (!this._shebangPatterns) {
+			this._shebangPatterns = [
+				{ test: (s) => s.includes('/lua'), mode: 'lua' },
+				{ test: (s) => /(?:ba)?sh|busybox/.test(s), mode: 'sh' },
+				{ test: (s) => /node|ucode/.test(s), mode: 'javascript' },
+				{ test: (s) => /python\d?(?:\.\d+)?/.test(s), mode: 'python' },
+				{ test: (s) => s.includes('perl'), mode: 'perl' },
+				{ test: (s) => s.includes('ruby'), mode: 'ruby' },
+				{ test: (s) => s.includes('php'), mode: 'php' },
+				{ test: (s) => /[zkp]sh/.test(s), mode: 'sh' }
+			];
+		}
 
-		for (const { re, mode } of patterns)
-			if (re.test(s)) return mode;
+		const lower = firstLine.toLowerCase();
+
+		for (const { test, mode } of this._shebangPatterns) {
+			if (test(lower)) return mode;
+		}
 
 		return null;
 	},
@@ -1611,51 +1675,118 @@ return view.extend({
 		});
 	},
 
-	manageFiles(action = 'get') {
-		const { _path, _root, currentFiles } = this;
+	manageFiles: function (action = 'get') {
+		const { _root, _fileMap } = this;
+		if (!_root) return action === 'get' ? [] : 0;
 
-		if (!this._fileMap || this._fileMapVersion !== _path) {
-			this._fileMap = new Map(currentFiles.map(f => [f.path, f]));
-			this._fileMapVersion = _path;
-		};
+		if (!this._checkboxCache || Date.now() - (this._checkboxCacheTime || 0) > 100) {
+			this._checkboxCache = _root.querySelectorAll('.file-checkbox input[type="checkbox"]');
+			this._checkboxCacheTime = Date.now();
+		}
 
-		const checkedBoxes = Array.from(_root.querySelectorAll('.file-checkbox input:checked'));
-
+		const checkboxes = this._checkboxCache;
 		switch (action) {
-			case 'get':
-				return checkedBoxes.map(cb => this._fileMap.get(cb.dataset.path)).filter(Boolean);
+			case 'get': {
+				const selected = [];
+				for (const cb of checkboxes) {
+					if (cb.checked) {
+						const file = _fileMap.get(cb.dataset.path);
+						if (file) selected.push(file);
+					}
+				}
+				return selected;
+			}
 
-			case 'clear':
-				checkedBoxes.forEach(cb => {
-					cb.checked = false;
-					cb.closest('tr')?.classList.remove('selected');
-				});
+			case 'clear': {
+				const fragment = document.createDocumentFragment();
+				for (const cb of checkboxes) {
+					if (cb.checked) {
+						cb.checked = false;
+						const row = cb.closest('tr');
+						if (row) row.classList.remove('selected');
+					}
+				}
 				this.toggleBatchBar();
+				this._checkboxCacheTime = 0;
 				return true;
+			}
 
-			case 'count':
-				return checkedBoxes.length;
+			case 'count': {
+				let count = 0;
+				for (const cb of checkboxes) {
+					if (cb.checked) count++;
+				}
+				return count;
+			}
 
 			case 'has':
-				return checkedBoxes.length > 0;
+				for (const cb of checkboxes) {
+					if (cb.checked) return true;
+				}
+				return false;
+
+			default:
+				return action === 'get' ? [] : 0;
 		}
+	},
+
+	getOrCreateEditor: function (containerId, config) {
+		this._editorPool = this._editorPool || new Map();
+
+		for (const [id, editor] of this._editorPool) {
+			if (!document.getElementById(id)) {
+				this._editorPool.delete(id);
+
+				const newContainer = document.getElementById(containerId);
+				if (newContainer) {
+					editor.setValue('', -1);
+					editor.setReadOnly(false);
+
+					newContainer.innerHTML = '';
+					newContainer.appendChild(editor.container);
+					editor.resize();
+
+					if (config.mode) editor.session.setMode('ace/mode/' + config.mode);
+					if (config.content) editor.setValue(config.content, -1);
+					if (config.editable !== undefined) editor.setReadOnly(!config.editable);
+
+					this._editorPool.set(containerId, editor);
+					return Promise.resolve(editor);
+				}
+			}
+		}
+
+		return this.initAceEditor(config).then(editor => {
+			this._editorPool.set(containerId, editor);
+
+			if (this._editorPool.size > 3) {
+				const firstKey = this._editorPool.keys().next().value;
+				const oldEditor = this._editorPool.get(firstKey);
+				if (oldEditor.destroy) oldEditor.destroy();
+				this._editorPool.delete(firstKey);
+			}
+
+			return editor;
+		});
 	},
 
 	copyText: function (text) {
 		if (!text) return;
-
 		try {
-			const textarea = E('textarea', {
-				style: 'position:fixed;top:0;left:0;opacity:0;z-index:-1;pointer-events:none;'
-			}, text);
+			const textarea = document.createElement('textarea');
+			textarea.value = text;
+			textarea.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
 
 			document.body.appendChild(textarea);
 			textarea.select();
+			textarea.setSelectionRange(0, text.length);
+
 			const successful = document.execCommand('copy');
 			document.body.removeChild(textarea);
 
 			if (successful)
-				return this.showNotification(_('Copied to clipboard!'), '', 'success');
+				return this.showNotification(_('Copied to clipboard!'), 2000, 'success');
+
 			throw new Error('execCommand failed');
 		} catch (err) {
 			this.showNotification(_('Copy failed!'), 5000, 'error');
@@ -1663,63 +1794,103 @@ return view.extend({
 	},
 
 	parseSizeToBytes: function (s) {
-		const units = { K: 1024, M: 1024 ** 2, G: 1024 ** 3, T: 1024 ** 4 };
-		const match = s.match(/^([\d.]+)([KMGT]?)/i);
-		if (!match) return 0;
+		if (!s || typeof s !== 'string') return 0;
 
-		const num = parseFloat(match[1]);
-		const unit = match[2].toUpperCase();
-		return unit ? Math.round(num * units[unit]) : num;
+		if (!this._sizeUnits) {
+			this._sizeUnits = new Map([
+				['K', 1024],
+				['M', 1048576],
+				['G', 1073741824],
+				['T', 1099511627776]
+			]);
+		}
+
+		let num = '', unit = '';
+
+		for (let i = 0; i < s.length; i++) {
+			const c = s[i];
+			if (c >= '0' && c <= '9' || c === '.') {
+				num += c;
+			} else if (c !== ' ') {
+				unit = c.toUpperCase();
+				break;
+			}
+		}
+
+		const value = parseFloat(num);
+		if (isNaN(value)) return 0;
+
+		const multiplier = this._sizeUnits.get(unit);
+		return multiplier ? Math.round(value * multiplier) : Math.round(value);
 	},
 
-	formatSizeHuman: function (s) {
-		let n = parseInt(s, 10);
+	formatSizeHuman: function (bytes) {
+		const n = parseInt(bytes, 10);
 		if (isNaN(n) || n < 0) return '0B';
 
-		const units = [' B', ' KB', ' MB', ' GB'];
-		let i = 0;
-
-		while (n >= 1024 && i < units.length - 1) {
-			n /= 1024; i++;
-		}
-
-		return n.toFixed(n % 1 ? 2 : 0) + units[i];
+		if (n < 1024) return n + ' B';
+		if (n < 1048576) return (n / 1024).toFixed(n % 1024 ? 2 : 0) + ' KB';
+		if (n < 1073741824) return (n / 1048576).toFixed(n % 1048576 ? 2 : 0) + ' MB';
+		return (n / 1073741824).toFixed(n % 1073741824 ? 2 : 0) + ' GB';
 	},
 
-	permissionsToOctal: function (p) {
-		let v = '', o = '';
-		const m = { 'r': 4, 'w': 2, 'x': 1, 't': 1, '-': 0 };
-		for (let i = 1; i < p.length; i += 3) {
-			v = p.slice(i, i + 3).split('').reduce(function (a, c) {
-				return a + m[c];
-			}, 0);
-			o += v.toString(8);
+	permissionsToOctal: function (perm) {
+		if (!perm || perm.length < 10) return '000';
+
+		if (!this._permMap) {
+			this._permMap = { 'r': 4, 'w': 2, 'x': 1, 't': 1, 's': 1, '-': 0 };
 		}
-		return o;
+
+		let result = '';
+
+		for (let i = 1; i < 10; i += 3) {
+			const val = (this._permMap[perm[i]] || 0) +
+				(this._permMap[perm[i + 1]] || 0) +
+				(this._permMap[perm[i + 2]] || 0);
+			result += val;
+		}
+
+		return result;
 	},
 
-	showNotification: function (message, timeout, type = 'info') {
+	showNotification: function (message, timeout = 3000, type = 'info') {
+		if (!this._notificationQueue) this._notificationQueue = [];
 		const existing = document.querySelector('.file-notification');
-		if (existing) existing.remove();
+		if (existing && existing.textContent === message) return;
 
-		const colors = { success: '#4CAF50', error: 'red', warning: '#FF9800', info: '#2196F3' };
-		const notification = E('div', {
-			class: 'file-notification',
-			style: `
-			position:fixed;top:20px;right:20px;z-index:20000;
-			padding:12px 24px;border-radius:4px;color:white;
-			box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-			cursor:pointer;font-weight:500;
-			background:${colors[type] || colors.info};
-			opacity:0;transform:translateX(30px);
-			transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-		`, click: ui.createHandlerFn(this, ev => {
-				ev.target.style.opacity = '0';
-				setTimeout(() => ev.target.remove(), 300);
-			})
-		}, message);
+		const colors = {
+			success: '#4CAF50',
+			error: '#f44336',
+			warning: '#ff9800',
+			info: '#2196f3'
+		};
+
+		const notification = document.createElement('div');
+		notification.className = 'file-notification';
+		notification.textContent = message;
+		notification.style.cssText = `
+		position: fixed;
+		top: ${20 + this._notificationQueue.length * 70}px;
+		right: 20px;
+		z-index: 20000;
+		padding: 12px 24px;
+		border-radius: 4px;
+		color: white;
+		background: ${colors[type] || colors.info};
+		box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+		cursor: pointer;
+		font-weight: 500;
+		opacity: 0;
+		transform: translateX(30px);
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		max-width: 400px;
+		word-wrap: break-word;
+	`;
+
+		notification.onclick = () => this._removeNotification(notification);
 
 		document.body.appendChild(notification);
+		this._notificationQueue.push(notification);
 
 		requestAnimationFrame(() => {
 			requestAnimationFrame(() => {
@@ -1728,57 +1899,83 @@ return view.extend({
 			});
 		});
 
-		const duration = (typeof timeout === 'number' && timeout > 0) ? timeout : 3000;
-		setTimeout(() => {
-			if (notification && notification.parentNode) {
-				notification.style.opacity = '0';
-				notification.style.transform = 'translateX(30px)';
-				notification.addEventListener('transitionend', () => notification.remove(), { once: true });
+		const duration = typeof timeout === 'number' && timeout > 0 ? timeout : 3000;
+		setTimeout(() => this._removeNotification(notification), duration);
+	},
+
+	_removeNotification: function (notification) {
+		if (!notification || !notification.parentNode) return;
+
+		notification.style.opacity = '0';
+		notification.style.transform = 'translateX(30px)';
+
+		notification.addEventListener('transitionend', () => {
+			if (notification.parentNode) {
+				notification.parentNode.removeChild(notification);
 			}
-		}, duration);
+			const idx = this._notificationQueue.indexOf(notification);
+			if (idx > -1) this._notificationQueue.splice(idx, 1);
+
+			this._notificationQueue.forEach((n, i) => {
+				n.style.top = `${20 + i * 70}px`;
+			});
+		}, { once: true });
 	},
 
 	Draggable: function () {
 		const modal = document.querySelector('#modal_overlay .modal');
 		if (!modal) return;
-		modal.removeAttribute('style');
 
 		const dragArea = modal.querySelector('h4');
+		if (!dragArea) return;
+
 		const rect = modal.getBoundingClientRect();
-		Object.assign(modal.style, {
-			position: 'fixed', margin: '0', transform: 'none',
-			top: rect.top + 'px', left: rect.left + 'px'
-		});
+		let currentLeft = Math.round(rect.left);
+		let currentTop = Math.round(rect.top);
+
+		modal.style.cssText = `
+			position: fixed;
+			margin: 0;
+			left: ${currentLeft}px;
+			top: ${currentTop}px;
+			transform: none;
+		`;
 
 		const handleMouseDown = (e) => {
 			if (e.button !== 0 || e.target.closest('button, input, select, textarea, a, .btn')) return;
 
-			const dragData = {
-				startX: e.clientX,
-				startY: e.clientY,
-				startTop: parseFloat(modal.style.top) || 0,
-				startLeft: parseFloat(modal.style.left) || 0
-			};
+			const startX = e.clientX;
+			const startY = e.clientY;
+			const startLeft = currentLeft;
+			const startTop = currentTop;
 
 			modal.classList.add('dragging');
+			let rafId;
 
 			const handleMouseMove = (moveEvent) => {
-				let newTop = dragData.startTop + moveEvent.clientY - dragData.startY;
-				let newLeft = dragData.startLeft + moveEvent.clientX - dragData.startX;
+				if (rafId) return;
+				rafId = requestAnimationFrame(() => {
+					let nextLeft = startLeft + (moveEvent.clientX - startX);
+					let nextTop = startTop + (moveEvent.clientY - startY);
 
-				const viewW = window.innerWidth, viewH = window.innerHeight;
-				const modalW = modal.offsetWidth, headerH = dragArea.offsetHeight;
-				const edge = 40;
+					const viewW = window.innerWidth, viewH = window.innerHeight;
+					const modalW = modal.offsetWidth, headerH = dragArea.offsetHeight;
+					const edge = 40;
 
-				newTop = Math.max(0, Math.min(newTop, viewH - headerH));
-				newLeft = Math.max(edge - modalW, Math.min(newLeft, viewW - edge));
+					nextTop = Math.max(0, Math.min(nextTop, viewH - headerH));
+					nextLeft = Math.max(edge - modalW, Math.min(nextLeft, viewW - edge));
+					currentLeft = Math.round(nextLeft);
+					currentTop = Math.round(nextTop);
+					modal.style.left = currentLeft + 'px';
+					modal.style.top = currentTop + 'px';
 
-				modal.style.top = newTop + 'px';
-				modal.style.left = newLeft + 'px';
+					rafId = null;
+				});
 			};
 
 			const handleMouseUp = () => {
 				modal.classList.remove('dragging');
+				if (rafId) cancelAnimationFrame(rafId);
 				document.removeEventListener('mousemove', handleMouseMove);
 				document.removeEventListener('mouseup', handleMouseUp);
 			};
@@ -1787,7 +1984,6 @@ return view.extend({
 			document.addEventListener('mouseup', handleMouseUp);
 			e.preventDefault();
 		};
-
 		dragArea.addEventListener('mousedown', handleMouseDown);
 	},
 
@@ -1840,6 +2036,61 @@ return view.extend({
 
 		if (typeof timeout === 'number' && timeout > 0) setTimeout(() => fadeOutNotification(msg), timeout);
 		return msg;
+	},
+
+	debounce: function (func, wait, immediate = false) {
+		let timeout;
+
+		const debounced = function (...args) {
+			const context = this;
+			const later = () => {
+				timeout = null;
+				if (!immediate) func.apply(context, args);
+			};
+
+			const callNow = immediate && !timeout;
+			clearTimeout(timeout);
+			timeout = setTimeout(later, wait);
+
+			if (callNow) func.apply(context, args);
+		};
+
+		debounced.cancel = () => {
+			clearTimeout(timeout);
+			timeout = null;
+		};
+
+		return debounced;
+	},
+
+	throttle: function (func, limit, options = {}) {
+		const { leading = true, trailing = true } = options;
+		let timeout;
+		let previous = 0;
+
+		return function (...args) {
+			const context = this;
+			const now = Date.now();
+
+			if (!previous && !leading) previous = now;
+
+			const remaining = limit - (now - previous);
+
+			if (remaining <= 0 || remaining > limit) {
+				if (timeout) {
+					clearTimeout(timeout);
+					timeout = null;
+				}
+				previous = now;
+				func.apply(context, args);
+			} else if (!timeout && trailing) {
+				timeout = setTimeout(() => {
+					previous = leading ? Date.now() : 0;
+					timeout = null;
+					func.apply(context, args);
+				}, remaining);
+			}
+		};
 	},
 
 	handleSave: null,
