@@ -14,6 +14,7 @@ const CSS = `
 	-webkit-user-select:none;
 	-moz-user-select:none;
 }
+
 .file-name-cell:hover {
 	background: #f5f7fa;
 }
@@ -743,216 +744,182 @@ return view.extend({
 	},
 
 	createnew: function () {
-		let fileContent = '', editor = null;
-		let dirPerm = '755', filePerm = '644';
+		let mode, fileContent = '', fullDir, fullFile, result;
+		let editor = null, dirPerm = '755', filePerm = '644';
 		const syntaxid = 'syntax-' + Date.now();
 		const containerId = 'ace-' + Date.now();
-		const updateSyntaxMode = (fileName) => {
-			if (!fileName || !editor) return;
-			const mode = this.detectFileMode(fileName, null);
-			editor.session.setMode(`ace/mode/${mode}`);
-			const modeElem = document.getElementById(syntaxid);
-			if (modeElem) modeElem.value = mode;
+		const modal = document.querySelector('#modal_overlay .modal');
+
+		const setmode = () => {
+			if (result && result.file && editor) {
+				mode = this.detectFileMode(result.file, null);
+				editor.session.setMode(`ace/mode/${mode}`);
+				const modeElem = document.getElementById(syntaxid);
+				if (modeElem) modeElem.value = mode;
+			}
 		};
 
-		const permissionSelector = (currentPerm, onChange) => [
+		const fileElem = [
 			E('span', _('file permissions')),
 			E('select', {
 				class: 'ace-toolbar-select',
-				change: ev => onChange(ev.target.value)
+				change: ev => filePerm = ev.target.value
 			}, permissions.map(([id, name]) =>
-				E('option', { value: id, selected: id === currentPerm || undefined }, name)
+				E('option', { value: id, selected: id === filePerm || undefined }, name)
 			))
 		];
 
-		const aceToolbar = window._aceReady ? E('span', [
-			E('div', [
-				E('div', { class: 'ace-toolbar inline-form-group' }, [
-					E('span', _('Syntax')),
-					E('select', {
-						class: 'ace-toolbar-select', id: syntaxid,
-						change: ev => editor && editor.session.setMode('ace/mode/' + ev.target.value)
-					}, modes.map(([id, name]) => E('option', { value: id }, name))),
-					E('span', _('Theme')),
-					E('select', {
-						class: 'ace-toolbar-select',
-						change: ev => editor && editor.setTheme('ace/theme/' + ev.target.value)
-					}, themes.map(([id, name]) =>
-						E('option', { value: id, selected: id === 'monokai' || undefined }, name)
-					)),
-					E('span', _('Font')),
-					E('select', {
-						class: 'ace-toolbar-select',
-						change: ev => editor && editor.setFontSize(ev.target.value + 'px')
-					}, ['12', '13', '14', '15', '16'].map(id =>
-						E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
-					)),
-					...permissionSelector(filePerm, val => filePerm = val)
+		const toolbar = E('span', { style: 'display:none;' }, [
+			window._aceReady
+				? E('span', [
+					E('div', [
+						E('div', { class: 'ace-toolbar inline-form-group' }, [
+							E('span', _('Syntax')),
+							E('select', {
+								class: 'ace-toolbar-select', id: syntaxid,
+								change: ev => editor && editor.session.setMode('ace/mode/' + ev.target.value)
+							}, modes.map(([id, name]) => E('option', { value: id, selected: id === mode || undefined }, name))),
+							E('span', _('Theme')),
+							E('select', {
+								class: 'ace-toolbar-select',
+								change: ev => editor && editor.setTheme('ace/theme/' + ev.target.value)
+							}, themes.map(([id, name]) =>
+								E('option', { value: id, selected: id === 'monokai' || undefined }, name))
+							),
+							E('span', _('Font')),
+							E('select', {
+								class: 'ace-toolbar-select',
+								change: ev => editor && editor.setFontSize(ev.target.value + 'px')
+							}, ['12', '13', '14', '15', '16'].map(id =>
+								E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
+							)),
+							...fileElem
+						])
+					]),
+					E('div', { id: containerId, style: 'width:100%;height:250px;' })
 				])
-			]),
-			E('div', { id: containerId, style: 'width:100%;height:250px;' })
-		]) : '';
-
-		const simpleEditor = !window._aceReady ? E('div', [
-			E('style', ['.ace-toolbar-select {max-width:100%;flex:1;}']),
-			E('div', { class: 'ace-toolbar inline-form-group' }, [
-				E('span', _('Font')),
-				E('select', {
-					class: 'ace-toolbar-select',
-					change: (ev) => {
-						const textarea = ev.target.closest('div').parentNode.querySelector('textarea');
-						if (textarea) textarea.style.fontSize = ev.target.value + 'px';
-					}
-				}, ['12', '13', '14', '15', '16'].map(id =>
-					E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
-				)),
-				...permissionSelector(filePerm, val => filePerm = val)
-			]),
-			E('textarea', {
-				placeholder: _('Enter text here'),
-				class: 'cbi-input-text',
-				style: 'width:100%;height:250px;font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;',
-				input: ev => fileContent = ev.target.value
-			})
-		]) : '';
-
-		const editorContainer = E('div', {
-			id: 'editor-wrapper', style: 'display:none;'
-		}, [aceToolbar, simpleEditor].filter(Boolean));
+				: E('div', [
+					E('style', ['.ace-toolbar-select {max-width:100%;flex:1;}']),
+					E('div', { class: 'ace-toolbar inline-form-group' }, [
+						E('span', _('Font')),
+						E('select', {
+							class: 'ace-toolbar-select',
+							change: ev => {
+								const container = ev.target.closest('div').parentNode;
+								const textarea = container.querySelector('textarea');
+								textarea.style.fontSize = ev.target.value + 'px';
+							}
+						}, ['12', '13', '14', '15', '16'].map(id =>
+							E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
+						)),
+						...fileElem
+					]),
+					E('textarea', {
+						style: 'width:100%;height:250px;font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;',
+						change: ev => fileContent = ev.target.value
+					}),
+				])
+		]);
 
 		const pathInput = E('input', {
-			id: 'path-input', style: 'flex:1;',
-			placeholder: _('e.g. file.txt or folder/'),
-			title: [
-				"📂 " + _("End with '/' to create a Directory"),
-				"📄 " + _("No '/' at end to create a File"),
-				"🚩 " + _("Start with '/' for Absolute path"),
-				"🏠 " + _("No '/' at start for Current path")
-			].join("\n")
+			style: 'flex:1;', title: [
+				" 📂 " + _("End with '/' to create a Directory"),
+				" 📄 " + _("No '/' at end to create a File"),
+				" 🚩 " + _("Start with '/' for Absolute path"),
+				" 🏠 " + _("No '/' at start for Current path")
+			].join("\n"),
+			placeholder: _('e.g. file.txt or folder/')
 		});
 
-		const dirPermSelector = E('span', {
-			id: 'dirperm', class: 'inline-form-group', style: 'display:none;'
-		}, [
-			E('span', _('Directory permissions')),
-			E('select', {
-				style: 'flex:1;',
-				change: ev => dirPerm = ev.target.value
-			}, permissions.map(([id, name]) =>
-				E('option', { value: id, selected: id === dirPerm || undefined }, name)
-			))
-		]);
+		const updateUI = () => {
+			document.querySelectorAll('.modal-custom-path').forEach(hint => hint.remove());
+			const create = document.getElementById('create');
+			const dirperm = document.getElementById('dirperm');
+			result = this.parsePath(pathInput.value);
+			const { valid, isAbsolute, isDir, isFile, path, dir } = result;
 
-		const createButton = E('button', {
-			id: 'create-btn', style: 'display:none;',
-			class: 'btn cbi-button-positive important',
-			click: ui.createHandlerFn(this, () => {
-				const pathValue = pathInput.value.trim();
-				const result = this.parsePath(pathValue);
-
-				if (!result.valid) {
-					return this.showNotification(
-						result.error || _('Invalid path'), 3000, 'error'
-					);
-				}
-
-				const base = result.isAbsolute ? '' : this._path + '/';
-				const fullDir = (result.isDir ? base + result.path : base + result.dir)
-					.replace(/\/+/g, '/');
-				const fullFile = result.isFile ? (base + result.path).replace(/\/+/g, '/') : null;
-				const content = window._aceReady && editor ? editor.getValue() : fileContent;
-				const createDirPromise = fullDir
-					? fs.exec('/bin/mkdir', ['-p', '-m', dirPerm, fullDir])
-					: Promise.resolve({ code: 0 });
-
-				createDirPromise
-					.then(res => {
-						if (res && res.code !== 0) {
-							throw new Error(res.stderr || _('Failed to create directory'));
-						}
-
-						if (!fullFile) {
-							this.showNotification(_('Directory %s created successfully').format(fullDir), 2000, 'success');
-							return this.reload(fullDir);
-						}
-
-						return fs.write(fullFile, content, parseInt(filePerm, 8))
-							.then(() => {
-								this.showNotification(
-									_('File %s created successfully').format(fullFile), 2000, 'success');
-								return this.reload(fullDir);
-							});
-					})
-					.catch(e => {
-						this.modalnotify(null, E('p', _('Create failed: %s').format(e.message || e)), '', 'error');
-					})
-					.finally(() => ui.hideModal());
-			})
-		}, _('Create'));
-
-		L.showModal(_('Create file (directory)'), [
-			E('style', ['.modal {padding: 1em .3em .3em .3em;}']),
-			E('div', { class: 'inline-form-group' }, [
-				E('span', _('name(path)')),
-				pathInput, dirPermSelector
-			]),
-			editorContainer,
-			E('div', { class: 'right' }, [
-				createButton,
-				' ',
-				E('button', { class: 'btn', click: ui.hideModal }, _('Cancel'))
-			])
-		]);
-
-		const updateUIState = () => {
-			const pathValue = pathInput.value.trim();
-			document.querySelectorAll('.modal-custom-path').forEach(el => el.remove());
-			const result = this.parsePath(pathValue);
-
-			if (!pathValue || !result.valid) {
-				createButton.style.display = 'none';
-				editorContainer.style.display = 'none';
-				dirPermSelector.style.display = 'none';
+			if (!valid) {
+				[create, toolbar, dirperm].forEach(el => el.style.display = 'none');
 				return;
 			}
 
-			createButton.style.display = 'inline-block';
-			const base = result.isAbsolute ? '' : this._path + '/';
-			const fullDir = (result.isDir ? base + result.path : base + result.dir)
-				.replace(/\/+/g, '/');
-			const fullFile = result.isFile ? (base + result.path).replace(/\/+/g, '/') : null;
-			const pathHint = E('div', {
-				class: 'modal-custom-path',
-				style: `background:#e8f5e9;font-size:13px;${fullFile ? 'margin:0;' : ''}`
+			const base = isAbsolute ? '' : this._path + '/';
+			fullDir = isDir ? base + path : base + dir;
+			fullFile = isFile ? (base + path) : null;
+
+			const targetHint = E('div', {
+				class: 'modal-custom-path', style: `background:#e8f5e9;font-size:13px;${fullFile ? 'margin:0;' : ''}`
 			}, fullFile
 				? '📄 ' + _('File path: %s').format(fullFile)
 				: '📂 ' + _('Directory path: %s').format(fullDir)
 			);
 
+			create.style.display = 'inline-block';
+			modal.style.padding = fullFile ? '1em .3em .3em' : '1em 1em .5em';
+
 			if (fullFile) {
-				pathInput.after(pathHint);
-				editorContainer.style.display = 'block';
-				dirPermSelector.style.display = 'none';
-				updateSyntaxMode(result.file);
-			} else {
-				editorContainer.after(pathHint);
-				editorContainer.style.display = 'none';
-				dirPermSelector.style.display = 'flex';
-			}
+				pathInput.after(targetHint);
+				toolbar.style.display = 'block';
+				dirperm.style.display = 'none';
+				setmode();
+			} else if (fullDir) {
+				toolbar.after(targetHint);
+				toolbar.style.display = 'none';
+				dirperm.style.display = 'flex';
+			};
 		};
 
-		requestAnimationFrame(() => {
-			if (window._aceReady) {
-				this.initAceEditor({ containerId, editable: true }).then(ed => {
-					editor = ed;
-				});
-			}
+		L.showModal(_('Create file (directory)'), [
+			E('div', { class: 'inline-form-group' }, [
+				E('span', _('name(path)')), pathInput,
+				E('span', { id: 'dirperm', class: 'inline-form-group', style: 'display:none;' }, [
+					E('span', _('Directory permissions')),
+					E('select', {
+						style: 'flex:1;',
+						change: ev => dirPerm = ev.target.value
+					}, permissions.map(([id, name]) =>
+						E('option', { value: id, selected: id === dirPerm || undefined }, name)
+					))
+				]),
+			]),
+			toolbar,
+			E('div', { class: 'right' }, [
+				E('button', {
+					id: 'create', style: 'display:none;',
+					class: 'btn cbi-button-positive important',
+					click: ui.createHandlerFn(this, () => {
+						const content = (window._aceReady && editor) ? editor.getValue() : fileContent;
+						const p = fullDir ? fs.exec('/bin/mkdir', ['-p', '-m', dirPerm, fullDir]) : Promise.resolve({ code: 0 });
+						p.then(res => {
+							if (res && res.code !== 0) throw new Error(res.stderr);
+							if (!fullFile) {
+								this.showNotification(_('Directory %s created successfully').format(fullDir), '', 'success');
+								return this.reload(fullDir);
+							}
 
-			pathInput.addEventListener('input', updateUIState);
-			ui.addValidator(pathInput, 'string', false, (value) => {
-				const result = this.parsePath(value.trim());
-				return result.valid || (result.error ? _(result.error) : _('Invalid path format'));
-			});
+							return fs.write(fullFile, content, parseInt(filePerm, 8))
+								.then(() => {
+									this.showNotification(_('File %s created successfully').format(fullFile), '', 'success');
+									return this.reload(fullDir);
+								});
+						}).catch(e => {
+							this.modalnotify(null, E('p', _('Create failed: %s').format(e.message || e)), '', 'error');
+							throw e;
+						}).finally(() => ui.hideModal());
+					})
+				}, _('Create')),
+				' ',
+				E('button', { class: 'btn', click: ui.hideModal }, _('Cancel'))
+			])
+		]);
+
+		requestAnimationFrame(() => {
+			if (window._aceReady)
+				this.initAceEditor({ containerId, editable: true })
+					.then(ed => { editor = ed; setmode(); });
+
+			pathInput.addEventListener('input', updateUI);
+			ui.addValidator(pathInput, 'string', false, () => result.valid || result.error);
 
 			this.Draggable();
 			pathInput.focus();
@@ -960,31 +927,21 @@ return view.extend({
 	},
 
 	parsePath: function (path) {
+		path = path.trim().replace(/\/+/g, '/');
 		if (!path) return { valid: false };
 		if (!/^[A-Za-z0-9._\-\/~@()+,=]+$/.test(path))
 			return { valid: false, error: _('Path contains unsupported characters') };
 		if (path.includes('..'))
 			return { valid: false, error: _('Path contains illegal segment (..)') };
 
-		const isAbsolute = path.startsWith('/');
 		const isDir = path.endsWith('/');
-		const isFile = !isDir;
-		let fileName = '', dirPath = path;
+		const lastSlash = path.lastIndexOf('/');
+		const file = isDir ? '' : (lastSlash === -1 ? path : path.substring(lastSlash + 1));
+		const dir = isDir ? path : (lastSlash === -1 ? '' : path.substring(0, lastSlash + 1));
 
-		if (isFile) {
-			const lastSlashIdx = path.lastIndexOf('/');
-			if (lastSlashIdx === -1) {
-				fileName = path;
-				dirPath = '';
-			} else {
-				fileName = path.substring(lastSlashIdx + 1);
-				dirPath = path.substring(0, lastSlashIdx + 1);
-			}
-		}
 		return {
-			valid: true, isFile, isDir,
-			isAbsolute, path, file: fileName,
-			dir: dirPath || (isDir ? path : path + '/')
+			valid: true, isFile: !isDir, isDir, isAbsolute: path.startsWith('/'),
+			path, file, dir: dir || (isDir ? path : path + '/')
 		};
 	},
 
@@ -1009,16 +966,17 @@ return view.extend({
 						if (!newname || newname === oldname)
 							return this.modalnotify(null, E('p', _('Please enter a new name')), 3000);
 
-						return fs.exec('/bin/mv', [path, path.replace(/[^/]+$/, newname)]).then(r => {
-							if (r.code !== 0)
-								throw new Error(r.stderr || _('Unknown error during rename'));
+						return fs.exec('/bin/mv', [path, path.replace(/[^/]+$/, newname)])
+							.then(r => {
+								if (r.code !== 0)
+									throw new Error(r.stderr || _('Unknown error during rename'));
 
-							this.showNotification(_('Renamed: %s to %s').format(path, newname), '', 'success');
-							return this.reload();
-						}).catch(e => {
-							this.modalnotify(null, E('p', _('Rename failed: %s').format(e.message || e)), '', 'error');
-							throw e;
-						}).finally(() => ui.hideModal());
+								this.showNotification(_('Renamed: %s to %s').format(path, newname), '', 'success');
+								return this.reload();
+							}).catch(e => {
+								this.modalnotify(null, E('p', _('Rename failed: %s').format(e.message || e)), '', 'error');
+								throw e;
+							}).finally(() => ui.hideModal());
 					})
 				}, _('Rename'))
 			])
@@ -1173,14 +1131,13 @@ return view.extend({
 
 		requestAnimationFrame(() => {
 			const pathInput = document.getElementById('linkPath');
-			ui.addValidator(pathInput, 'string', false, function (value) {
-				const result = this.parsePath(value.trim());
-				if (!result.valid)
-					return result.error ? _(result.error) : _('Invalid path format');
-
-				return true;
-			}.bind(this), 'blur', 'keyup');
+			ui.addValidator(pathInput, 'string', false,
+				(value) => {
+					const result = this.parsePath(value);
+					return result.valid || result.error;
+				});
 			this.Draggable();
+			pathInput.focus();
 		});
 	},
 
@@ -1262,98 +1219,81 @@ return view.extend({
 	},
 
 	Upload: function () {
-		L.showModal(_('Upload'), [
-			E('div', { class: 'upload ace-toolbar inline-form-group' }, [
-				E('input', {
-					type: 'file',
-					change: function (ev) {
-						const form = ev.target.parentNode;
-						const nameinput = document.getElementById('nameinput')
-						const uploadbtn = form.querySelector('button.cbi-button-save');
-						nameinput.value = ev.target.value.replace(/^.+[\/\\]/, '');
-						uploadbtn.disabled = false;
-					}
-				}),
-				E('input', { type: 'text', placeholder: _('Filename'), id: 'nameinput' }),
-				E('button', {
-					disabled: true,
-					class: 'btn cbi-button-save',
-					click: ui.createHandlerFn(this, (ev) => {
-						ev.preventDefault();
-						const form = ev.target.parentNode;
-						const fileinput = form.querySelector('input[type="file"]');
-						const nameinput = document.getElementById('nameinput');
-						const filename = (nameinput?.value || '').trim();
+		const nameInput = E('input', { type: 'text', placeholder: _('Filename'), style: 'flex:1' });
+		const fileInput = E('input', {
+			type: 'file',
+			change: ui.createHandlerFn(this, ev => {
+				const name = ev.target.value.split(/[\\/]/).pop();
+				if (!name) return;
+				nameInput.value = name;
+				row.style.display = 'flex';
+				uploadBtn.disabled = false;
+				nameInput.focus();
+			})
+		});
+		const uploadBtn = E('button', {
+			class: 'btn cbi-button-save', disabled: true,
+			click: ui.createHandlerFn(this, (ev) => {
+				const filename = (nameInput?.value || '').trim();
+				const file = fileInput?.files?.[0];
+				if (!filename || !file) return Promise.resolve();
 
-						if (!filename || !fileinput?.files?.[0])
-							return Promise.resolve();
+				const isAbsolute = filename.startsWith('/');
+				const fullPath = isAbsolute ? filename : `${this._path}/${filename}`;
+				const reloadPath = isAbsolute ? filename.substring(0, filename.lastIndexOf('/')) : this._path;
+				const displayName = isAbsolute ? filename.split('/').pop() : filename;
 
-						const isAbsolute = filename.startsWith('/');
-						const reloadPath = isAbsolute
-							? filename.substring(0, filename.lastIndexOf('/')) : this._path;
-						const directoryCheck = isAbsolute
-							? fs.stat(reloadPath)
-								.catch(() => {
-									throw new Error(_('Directory "%s" does not exist').format(reloadPath));
-								})
-								.then(r => {
-									if (r.type !== 'directory')
-										throw new Error(_('The path "%s" is not a directory').format(reloadPath));
-								})
-							: Promise.resolve();
-						const fullPath = isAbsolute ? filename : `${this._path}/${filename}`;
-						const uploadUrl = `${L.env.cgi_base}/cgi-upload`;
-						const progress = L.bind((btn, ev) => {
-							const percent = (ev.loaded / ev.total) * 100;
-							btn.firstChild.data = '%.2f%%'.format(percent);
-						}, this, ev.target);
+				const data = new FormData();
+				data.append('filename', fullPath);
+				data.append('sessionid', L.env.sessionid);
+				data.append('filedata', file);
 
-						const data = new FormData();
-						data.append('filename', fullPath);
-						data.append('sessionid', L.env.sessionid);
-						data.append('filedata', fileinput.files[0]);
+				const directoryCheck = isAbsolute
+					? fs.stat(reloadPath)
+						.catch(() => { throw new Error(_('Directory "%s" does not exist').format(reloadPath)) })
+						.then(r => {
+							if (r.type !== 'directory') throw new Error(_('The path "%s" is not a directory').format(reloadPath));
+						})
+					: Promise.resolve();
+				const progress = L.bind((btn, ev) => {
+					const percent = (ev.loaded / ev.total) * 100;
+					btn.firstChild.data = '%.2f%%'.format(percent);
+				}, this, ev.target);
 
-						return directoryCheck
-							.then(() => request.post(uploadUrl, data, { progress }))
-							.then(L.bind((path, ev, res) => {
-								const reply = res.json();
-								if (L.isObject(reply) && reply.failure) {
-									this.showNotification(_('Upload request failed: %s').format(reply.message), 5000, 'error');
-									return Promise.reject(reply.message);
-								}
+				return directoryCheck
+					.then(() => request.post(`${L.env.cgi_base}/cgi-upload`, data, { progress }))
+					.then(res => {
+						const reply = res.json();
+						if (L.isObject(reply) && reply.failure) throw new Error(reply.message);
 
-								const displayName = isAbsolute
-									? filename.split('/').pop() : filename;
-
-								return this.reload(reloadPath).then(() =>
-									this.showNotification(
-										_('File "%s" uploaded to "%s"').format(displayName, reloadPath), '', 'success'
-									));
-							}, this, this._path, ev))
-							.catch((error) => {
-								this.showNotification(_('Upload failed: %s').format(error.message), 5000, 'error');
-								return Promise.reject(error);
-							})
-							.finally(() => ui.hideModal());
+						this.showNotification(_('File "%s" uploaded to "%s"').format(displayName, reloadPath), '', 'success');
+						this.reload(reloadPath)
 					})
-				}, _('Upload file'))
-			]),
+					.catch(err => {
+						this.showNotification(_('Upload failed: %s').format(err.message), 5000, 'error');
+					})
+					.finally(() => ui.hideModal());
+			})
+		}, _('Upload file'));
+		const row = E('div', {
+			class: 'inline-form-group', style: 'display:none'
+		}, [_('name(path)'), nameInput, uploadBtn]);
 
+		L.showModal(_('Upload'), [
+			E('div', [fileInput]), row,
 			E('div', { class: 'right' }, [
 				E('button', { class: 'btn', click: ui.hideModal }, _('Cancel'))
 			])
 		]);
 
 		requestAnimationFrame(() => {
-			const nameinput = document.getElementById('nameinput')
-			ui.addValidator(nameinput, 'string', true, function (value) {
-				if (!value.startsWith('/')) return true;
-				value = value.trim().replace(/^(\/[^\/]+).*$/, '$1');
-				const res = this.parsePath(value);
-				if (!res.valid)
-					return res.error ? _(res.error) : _('Invalid path format');
-				return true;
-			}.bind(this));
+			ui.addValidator(nameInput, 'string', true,
+				(value) => {
+					if (!value.startsWith('/')) return true;
+					value = value.trim().replace(/^(\/[^\/]+).*$/, '$1');
+					const result = this.parsePath(value);
+					return result.valid || result.error;
+				});
 			this.Draggable()
 		});
 	},
