@@ -1362,6 +1362,7 @@ return view.extend({
 
 		btnFull.style.display = this._isFullscreen ? 'none' : 'block';
 		btnExit.style.display = this._isFullscreen ? 'block' : 'none';
+		setTimeout(() => window.ace.edit(container.id)?.resize(), 100);
 	},
 
 	parseLsOutput: function (path, out) {
