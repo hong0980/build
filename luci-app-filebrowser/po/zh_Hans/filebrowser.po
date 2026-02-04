@@ -298,6 +298,9 @@ msgstr "开始下载：%s"
 msgid "Read failed: %s"
 msgstr "读取失败：%s"
 
+msgid "Select file"
+msgstr "选择文件"
+
 msgid "File \"%s\" uploaded to \"%s\""
 msgstr "文件 \"%s\" 已上传至 \"%s\""
 
