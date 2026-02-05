@@ -226,7 +226,6 @@ return view.extend({
 	},
 
 	render: function (data) {
-		this._isFullscreen = false;
 		if (this._scrollCleanup) {
 			this._scrollCleanup();
 			this._scrollCleanup = null;
@@ -288,7 +287,7 @@ return view.extend({
 			(!f.isDir && !f.linkName) ? s + this.parseSizeToBytes(f.size) : s, 0);
 
 		const table = new ui.Table(
-			[_('Name'), _('owner'), _('Size'), _('Change the time'), _('Rights'), _('')],
+			[_('Name'), _('owner'), _('Size'), _('Change the time'), _('Rights'), _('Menu')],
 			{ sortable: true, classes: 'cbi-section-table' },
 			E('em', _('No files found'))
 		);
@@ -410,9 +409,7 @@ return view.extend({
 
 			const check = () => {
 				if (window.scrollY > offset - navH) {
-					if (this._isMobile)
-						createnew.style.display = 'none';
-
+					if (this._isMobile) createnew.style.display = 'none';
 					container.style.cssText = `top:${navH}px;width:${root.offsetWidth}px;z-index:${headerZIndex - 1}`;
 					container.classList.add('floating');
 				} else {
@@ -527,7 +524,6 @@ return view.extend({
 
 	showAceEditor: function (file, content, editable) {
 		let editor = null;
-		this._isFullscreen = false;
 		const originalContent = content;
 		const containerId = 'ace-' + Date.now();
 		const syntaxid = 'syntax-' + Date.now();
@@ -573,19 +569,19 @@ return view.extend({
 				E('span', _('Syntax')),
 				E('select', {
 					id: syntaxid, class: 'ace-toolbar-select',
-					change: ev => editor && editor.session.setMode('ace/mode/' + ev.target.value)
+					change: ev => editor?.session.setMode('ace/mode/' + ev.target.value)
 				}, modes.map(([id, name]) => E('option', { value: id, selected: id === mode || undefined }, name))),
 				E('span', _('Theme')),
 				E('select', {
 					class: 'ace-toolbar-select',
-					change: ev => editor && editor.setTheme('ace/theme/' + ev.target.value)
+					change: ev => editor?.setTheme('ace/theme/' + ev.target.value)
 				}, themes.map(([id, name]) =>
 					E('option', { value: id, selected: id === 'monokai' || undefined }, name))
 				),
 				E('span', _('Font')),
 				E('select', {
 					class: 'ace-toolbar-select',
-					change: ev => editor && editor.setFontSize(ev.target.value + 'px')
+					change: ev => editor?.setFontSize(ev.target.value + 'px')
 				}, ['12', '13', '14', '15', '16'].map(id =>
 					E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
 				)),
@@ -605,7 +601,7 @@ return view.extend({
 				E('button', {
 					class: 'btn',
 					click: ui.createHandlerFn(this, () => {
-						if (editor && editor.getValue() !== originalContent)
+						if (editor?.getValue() !== originalContent)
 							if (!confirm(_('You have unsaved changes. Discard them?'))) return;
 						if (this._isFullscreen) btnExit.click();
 						ui.hideModal();
@@ -657,7 +653,6 @@ return view.extend({
 	},
 
 	showSimpleEditor: function (file, content, editable) {
-		this._isFullscreen = false;
 		const originalContent = content;
 		const textarea = E('textarea', {
 			class: 'cbi-input-text', readonly: !editable || undefined, type: 'text',
@@ -747,7 +742,6 @@ return view.extend({
 
 	createnew: function () {
 		const id = Date.now();
-		this._isFullscreen = false;
 		let dirPerm = '755', filePerm = '644';
 		let fileContent = '', fullDir, fullFile, result, editor = null;
 		const modal = document.querySelector('#modal_overlay .modal');
@@ -1334,31 +1328,23 @@ return view.extend({
 	},
 
 	toggleFS: function (config) {
-		const isFull = this._isFullscreen = !this._isFullscreen;
 		const { wrapper, container, btnFull, btnExit } = config;
-		const aceEl = container.querySelector('.ace_editor');
-		const h = isFull ? '100%' : '320px';
-
-		this._escHandler = this._escHandler || ((e) => e.key === 'Escape' && this._isFullscreen && this.toggleFS(config));
-		document[isFull ? 'addEventListener' : 'removeEventListener']('keydown', this._escHandler);
+		const isFull = this._isFullscreen = !this._isFullscreen;
 
 		if (isFull) {
-			config.originalParent = wrapper.parentNode;
-			config.originalNext = wrapper.nextSibling;
+			config.parent = wrapper.parentNode;
+			config.next = wrapper.nextSibling;
 			document.body.appendChild(wrapper);
-		} else if (config.originalParent) {
-			config.originalParent.insertBefore(wrapper, config.originalNext);
+		} else if (config.parent) {
+			config.parent.insertBefore(wrapper, config.next);
 		}
 
 		wrapper.classList.toggle('ace-fullscreen', isFull);
-		container.style.cssText = aceEl
-			? `width:100%;height:${h};border:1px solid #ccc;${isFull ? 'flex:1 1 0%;' : ''}`
-			: `width:100%;height:${h};font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;`;
 
-		if (aceEl) {
-			Object.assign(aceEl.style, { height: h, flex: isFull ? '1 1 0%' : '' });
-			requestAnimationFrame(() => container.env?.editor?.resize());
-		}
+		const aceEl = container.querySelector('.ace_editor');
+		(aceEl || container).style.height = isFull ? '100%' : '320px';
+		aceEl && aceEl.env.editor.resize();
+
 		btnFull.style.display = isFull ? 'none' : '';
 		btnExit.style.display = isFull ? '' : 'none';
 	},

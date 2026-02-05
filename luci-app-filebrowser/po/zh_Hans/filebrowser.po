@@ -34,6 +34,9 @@ msgstr "文件夹是空的"
 msgid "Open"
 msgstr "打开"
 
+msgid "Menu"
+msgstr "菜单"
+
 msgid "Open menu"
 msgstr "打开菜单"
 
