@@ -226,6 +226,7 @@ return view.extend({
 	},
 
 	render: function (data) {
+		this._isFullscreen = false;
 		if (this._scrollCleanup) {
 			this._scrollCleanup();
 			this._scrollCleanup = null;
@@ -307,19 +308,18 @@ return view.extend({
 					contextmenu: ui.createHandlerFn(this, ev => this.showContextMenu(ev, f))
 				}, [
 					E('span', {
-						title: f.name,
+						title: _('Open') + ' ' + f.name,
 						style: `${f.isDir ? 'color:#0066cc;' : ''}cursor:pointer;`,
 						click: ui.createHandlerFn(this, f.isDir ? 'reload' : 'showFileEditor', f, false)
 					}, `${icon} ${nameText}`)
 				])
 			]);
-
 			const btn = E('button', {
-				class: 'btn cbi-button-edit',
-				click: ui.createHandlerFn(this, 'showFileEditor', f, false)
-			}, _('open'));
+				class: 'btn cbi-button-positive', title: _('Open menu'),
+				click: ui.createHandlerFn(this, ev => this.showContextMenu(ev, f))
+			}, '☰');
 
-			return [nameCell, f.owner, f.size, f.date, `[${f.permissionNum}] ${f.perm}`, f.isDir ? '' : btn];
+			return [nameCell, f.owner, f.size, f.date, `[${f.permissionNum}] ${f.perm}`, btn];
 		}));
 
 		const tableNode = table.node || table.render().querySelector('table');
@@ -527,6 +527,7 @@ return view.extend({
 
 	showAceEditor: function (file, content, editable) {
 		let editor = null;
+		this._isFullscreen = false;
 		const originalContent = content;
 		const containerId = 'ace-' + Date.now();
 		const syntaxid = 'syntax-' + Date.now();
@@ -656,6 +657,7 @@ return view.extend({
 	},
 
 	showSimpleEditor: function (file, content, editable) {
+		this._isFullscreen = false;
 		const originalContent = content;
 		const textarea = E('textarea', {
 			class: 'cbi-input-text', readonly: !editable || undefined, type: 'text',
@@ -745,6 +747,7 @@ return view.extend({
 
 	createnew: function () {
 		const id = Date.now();
+		this._isFullscreen = false;
 		let dirPerm = '755', filePerm = '644';
 		let fileContent = '', fullDir, fullFile, result, editor = null;
 		const modal = document.querySelector('#modal_overlay .modal');
@@ -788,7 +791,7 @@ return view.extend({
 							...fileElem
 						])
 					]),
-					E('div', { id: containerId, style: 'width:100%;height:250px;' })
+					E('div', { id: containerId, style: 'width:100%;height:320px;' })
 				])
 				: E('span', [
 					E('div', [
@@ -809,7 +812,7 @@ return view.extend({
 					]),
 					E('textarea', {
 						id: textareaId, input: ev => fileContent = ev.target.value,
-						style: 'width:100%;height:250px;font-family:Consolas;background:#212121;color:#fff;font-size:14px;'
+						style: 'width:100%;height:320px;font-family:Consolas;background:#212121;color:#fff;font-size:14px;'
 					}),
 				])
 		]);
@@ -1331,38 +1334,33 @@ return view.extend({
 	},
 
 	toggleFS: function (config) {
-		this._isFullscreen = !this._isFullscreen;
+		const isFull = this._isFullscreen = !this._isFullscreen;
 		const { wrapper, container, btnFull, btnExit } = config;
+		const aceEl = container.querySelector('.ace_editor');
+		const h = isFull ? '100%' : '320px';
 
-		if (!this._escHandler) {
-			this._escHandler = (e) => {
-				if (e.key === 'Escape' && this._isFullscreen)
-					this.toggleFS(config);
-			};
-		}
+		this._escHandler = this._escHandler || ((e) => e.key === 'Escape' && this._isFullscreen && this.toggleFS(config));
+		document[isFull ? 'addEventListener' : 'removeEventListener']('keydown', this._escHandler);
 
-		if (this._isFullscreen) {
-			document.addEventListener('keydown', this._escHandler);
+		if (isFull) {
 			config.originalParent = wrapper.parentNode;
 			config.originalNext = wrapper.nextSibling;
-
 			document.body.appendChild(wrapper);
-			wrapper.classList.add('ace-fullscreen');
-			container.style.height = '100%';
-			container.style.flex = '1';
-		} else {
-			document.removeEventListener('keydown', this._escHandler);
-			if (config.originalParent)
-				config.originalParent.insertBefore(wrapper, config.originalNext);
-
-			wrapper.classList.remove('ace-fullscreen');
-			container.style.height = '320px';
-			container.style.flex = '';
+		} else if (config.originalParent) {
+			config.originalParent.insertBefore(wrapper, config.originalNext);
 		}
 
-		btnFull.style.display = this._isFullscreen ? 'none' : 'block';
-		btnExit.style.display = this._isFullscreen ? 'block' : 'none';
-		setTimeout(() => window.ace.edit(container.id)?.resize(), 100);
+		wrapper.classList.toggle('ace-fullscreen', isFull);
+		container.style.cssText = aceEl
+			? `width:100%;height:${h};border:1px solid #ccc;${isFull ? 'flex:1 1 0%;' : ''}`
+			: `width:100%;height:${h};font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;`;
+
+		if (aceEl) {
+			Object.assign(aceEl.style, { height: h, flex: isFull ? '1 1 0%' : '' });
+			requestAnimationFrame(() => container.env?.editor?.resize());
+		}
+		btnFull.style.display = isFull ? 'none' : '';
+		btnExit.style.display = isFull ? '' : 'none';
 	},
 
 	parseLsOutput: function (path, out) {

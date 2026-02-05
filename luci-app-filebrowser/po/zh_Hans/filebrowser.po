@@ -31,8 +31,11 @@ msgstr "权限"
 msgid "No files found"
 msgstr "文件夹是空的"
 
-msgid "open"
+msgid "Open"
 msgstr "打开"
+
+msgid "Open menu"
+msgstr "打开菜单"
 
 msgid "%d items • Total %s"
 msgstr "共 %d 个项目 • 总计 %s"
