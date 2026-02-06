@@ -654,7 +654,7 @@ return view.extend({
 
 	showSimpleEditor: function (file, content, editable) {
 		const originalContent = content;
-		const textarea = E('textarea', {
+		const container = E('textarea', {
 			class: 'cbi-input-text', readonly: !editable || undefined, type: 'text',
 			input: ev => {
 				const isDirty = ev.target.value !== originalContent;
@@ -665,7 +665,7 @@ return view.extend({
 		const saveBtn = E('button', {
 			class: 'btn cbi-button-positive important', style: 'display:none',
 			click: ui.createHandlerFn(this, () => {
-				fs.write(file.path, textarea.value)
+				fs.write(file.path, container.value)
 					.then(() => {
 						this.showNotification(_('%s File saved successfully!').format(file.path), '', 'success');
 						this.reload();
@@ -681,14 +681,14 @@ return view.extend({
 				E('span', _('Font')),
 				E('select', {
 					class: 'cbi-input-select', style: 'width:35%;',
-					change: ev => textarea.style.fontSize = ev.target.value + 'px'
+					change: ev => container.style.fontSize = ev.target.value + 'px'
 				}, ['12', '13', '14', '15', '16'].map(id =>
 					E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
 				)),
 				E('input', {
 					type: 'checkbox', checked: true, id: 'wrapCheckbox',
 					change: ev =>
-						textarea.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre'
+						container.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre'
 				}),
 				E('label', { class: 'inline-form-group', for: 'wrapCheckbox' }, _('wrap')),
 				E('input', {
@@ -696,7 +696,7 @@ return view.extend({
 					checked: !!editable || undefined,
 					change: ev => {
 						const isChecked = ev.target.checked;
-						textarea.readOnly = !isChecked;
+						container.readOnly = !isChecked;
 						document.querySelector('.modal h4')
 							.textContent = isChecked ? _('edit mode') : _('view mode');
 					}
@@ -706,17 +706,17 @@ return view.extend({
 			])
 		]);
 		const fullscreenWrapper = E('div', [
-			modeToggle, textarea,
+			modeToggle, container,
 			E('div', { style: 'display:flex;justify-content:space-around;padding:.5em;' }, [
 				E('button', {
 					class: 'btn cbi-button-positive',
-					click: ui.createHandlerFn(this, 'copyText', textarea.value)
+					click: ui.createHandlerFn(this, 'copyText', container.value)
 				}, _('Copy')),
 				saveBtn,
 				E('button', {
 					class: 'btn',
 					click: ui.createHandlerFn(this, () => {
-						if (textarea.value !== originalContent && !textarea.readOnly)
+						if (container.value !== originalContent && !container.readOnly)
 							if (!confirm(_('You have unsaved changes. Discard them?'))) return;
 						if (this._isFullscreen) btnExit.click();
 						ui.hideModal();
@@ -725,7 +725,7 @@ return view.extend({
 			])
 		]);
 		btnFull.onclick = btnExit.onclick = ui.createHandlerFn(this, 'toggleFS', {
-			wrapper: fullscreenWrapper, container: textarea, btnFull, btnExit
+			wrapper: fullscreenWrapper, container, btnFull, btnExit
 		});
 
 		L.showModal(editable ? _('edit mode') : _('view mode'), [
@@ -758,7 +758,7 @@ return view.extend({
 			btnFull, btnExit
 		];
 
-		const toolbar = E('span', { style: 'display:none;' }, [
+		const toolbar = E('div', { style: 'display:none;' }, [
 			window._aceReady
 				? E('span', [
 					E('div', [
@@ -825,19 +825,8 @@ return view.extend({
 			const container = document.getElementById(window._aceReady ? containerId : textareaId);
 			this.toggleFS({ wrapper: toolbar, container, btnFull, btnExit });
 
-			if (!this._isFullscreen) {
-				const inlineFormGroup = modal.querySelector('.inline-form-group');
-				if (inlineFormGroup?.contains(toolbar))
-					inlineFormGroup.removeChild(toolbar);
-
-				const rightDiv = modal.querySelector('.right');
-				if (rightDiv) modal.insertBefore(toolbar, rightDiv);
-
-				toolbar.style.display = 'block';
-				if (container) container.style.height = '250px';
-				if (editor) editor.resize();
-				requestAnimationFrame(() => pathInput.dispatchEvent(new Event('input')));
-			}
+			const rightDiv = modal.querySelector('.right');
+			if (!this._isFullscreen) modal.insertBefore(toolbar, rightDiv);
 		});
 
 		const setmode = () => {
@@ -902,7 +891,8 @@ return view.extend({
 						E('option', { value: id, selected: id === dirPerm || undefined }, name)
 					))
 				]),
-			]), toolbar,
+			]),
+			toolbar,
 			E('div', { class: 'right' }, [
 				E('button', {
 					id: 'create', style: 'display:none;',
