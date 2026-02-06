@@ -824,7 +824,6 @@ return view.extend({
 		btnFull.onclick = btnExit.onclick = ui.createHandlerFn(this, () => {
 			const container = document.getElementById(window._aceReady ? containerId : textareaId);
 			this.toggleFS({ wrapper: toolbar, container, btnFull, btnExit });
-
 			const rightDiv = modal.querySelector('.right');
 			if (!this._isFullscreen) modal.insertBefore(toolbar, rightDiv);
 		});
@@ -891,14 +890,13 @@ return view.extend({
 						E('option', { value: id, selected: id === dirPerm || undefined }, name)
 					))
 				]),
-			]),
-			toolbar,
+			]), toolbar,
 			E('div', { class: 'right' }, [
 				E('button', {
 					id: 'create', style: 'display:none;',
 					class: 'btn cbi-button-positive important',
 					click: ui.createHandlerFn(this, () => {
-						const content = window._aceReady && editor ? editor.getValue() : fileContent;
+						const content = editor ? editor.getValue() : fileContent;
 						const p = fullDir
 							? fs.exec('/bin/mkdir', ['-p', '-m', dirPerm, fullDir])
 							: Promise.resolve({ code: 0 });
@@ -1333,8 +1331,7 @@ return view.extend({
 
 		const aceEl = container.querySelector('.ace_editor');
 		(aceEl || container).style.height = isFull ? '100%' : '320px';
-		aceEl && aceEl.env.editor.resize();
-
+		aceEl?.env.editor.resize();
 		btnFull.style.display = isFull ? 'none' : '';
 		btnExit.style.display = isFull ? '' : 'none';
 	},
