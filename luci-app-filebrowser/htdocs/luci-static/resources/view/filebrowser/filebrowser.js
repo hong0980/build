@@ -75,10 +75,10 @@ tr.selected {
 }
 .ace-fullscreen {
 	inset: 0;
+	display: flex;
 	z-index: 9999;
 	position: fixed;
 	background: #fff;
-	display: flex;
 	flex-direction: column;
 }
 
@@ -287,7 +287,7 @@ return view.extend({
 			(!f.isDir && !f.linkName) ? s + this.parseSizeToBytes(f.size) : s, 0);
 
 		const table = new ui.Table(
-			[_('Name'), _('owner'), _('Size'), _('Change the time'), _('Rights'), _('Menu')],
+			[_('Name'), _('Menu'), _('owner'), _('Size'), _('Change the time'), _('Rights')],
 			{ sortable: true, classes: 'cbi-section-table' },
 			E('em', _('No files found'))
 		);
@@ -318,7 +318,7 @@ return view.extend({
 				click: ui.createHandlerFn(this, ev => this.showContextMenu(ev, f))
 			}, '☰');
 
-			return [nameCell, f.owner, f.size, f.date, `[${f.permissionNum}] ${f.perm}`, btn];
+			return [nameCell, btn, f.owner, f.size, f.date, `[${f.permissionNum}] ${f.perm}`];
 		}));
 
 		const tableNode = table.node || table.render().querySelector('table');
@@ -453,14 +453,14 @@ return view.extend({
 		this._menu = menu;
 
 		[
-			[_('Create file (directory)'), () => this.createnew()],
 			!file.isDir && [_('Edit'), () => this.showFileEditor(file, true)],
 			[_('Rename'), () => this.renameFile(file.path)],
 			[_('Modify permissions'), () => this.chmodFile(file)],
 			!file.linkName && [_('Create link'), () => this.createLink(file.path)],
 			[_('Delete file'), () => this.deleteFile(file)],
 			[_('download file'), () => this.downloadFile(file)],
-			[_('upload file'), ev => this.Upload()]
+			[_('upload file'), ev => this.Upload()],
+			[_('Create file (directory)'), () => this.createnew()]
 		].filter(Boolean).forEach(([label, action]) => {
 			menu.appendChild(E('div', {
 				class: 'item',
@@ -742,13 +742,29 @@ return view.extend({
 
 	createnew: function () {
 		const id = Date.now();
-		let dirPerm = '755', filePerm = '644';
+		let dirPerm = '755', filePerm = '644', isFullState = false;
 		let fileContent = '', fullDir, fullFile, result, editor = null;
 		const modal = document.querySelector('#modal_overlay .modal');
 		const syntaxid = `syntax-${id}`, containerId = `ace-${id}`, textareaId = `textarea-${id}`;
 		const btnFull = E('button', { class: 'btn', style: 'padding:0 8px;margin-left:auto;' }, _('full screen'));
 		const btnExit = E('button', { class: 'btn', style: 'display:none;margin-left:auto;' }, _('Exit full screen'));
+		const pathInput = E('input', {
+			style: 'flex:1;', title: [
+				" 📂 " + _("End with '/' to create a Directory"),
+				" 📄 " + _("No '/' at end to create a File"),
+				" 🚩 " + _("Start with '/' for Absolute path"),
+				" 🏠 " + _("No '/' at start for Current path")
+			].join("\n"),
+			placeholder: _('e.g. file.txt or folder/')
+		});
 		const fileElem = [
+			E('span', _('Font')),
+			E('select', {
+				class: 'ace-toolbar-select',
+				change: ev => editor?.setFontSize(ev.target.value + 'px')
+			}, ['12', '13', '14', '15', '16'].map(id =>
+				E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
+			)),
 			E('span', _('file permissions')),
 			E('select', {
 				class: 'ace-toolbar-select', change: ev => filePerm = ev.target.value
@@ -760,7 +776,7 @@ return view.extend({
 
 		const toolbar = E('div', { style: 'display:none;' }, [
 			window._aceReady
-				? E('span', [
+				? E('div', { class: 'ace-editor-container' }, [
 					E('div', [
 						E('div', { class: 'ace-toolbar inline-form-group' }, [
 							E('span', _('Syntax')),
@@ -775,34 +791,15 @@ return view.extend({
 							}, themes.map(([id, name]) =>
 								E('option', { value: id, selected: id === 'monokai' || undefined }, name))
 							),
-							E('span', _('Font')),
-							E('select', {
-								class: 'ace-toolbar-select',
-								change: ev => editor?.setFontSize(ev.target.value + 'px')
-							}, ['12', '13', '14', '15', '16'].map(id =>
-								E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
-							)),
 							...fileElem
 						])
 					]),
 					E('div', { id: containerId, style: 'width:100%;height:320px;' })
 				])
-				: E('span', [
+				: E('div', { class: 'ace-editor-container' }, [
 					E('div', [
 						E('style', '.ace-toolbar-select {max-width:100%;flex:1;}'),
-						E('div', { class: 'ace-toolbar inline-form-group' }, [
-							E('span', _('Font')),
-							E('select', {
-								class: 'ace-toolbar-select',
-								change: ev => {
-									const textarea = document.getElementById(textareaId);
-									if (textarea) textarea.style.fontSize = ev.target.value + 'px';
-								}
-							}, ['12', '13', '14', '15', '16'].map(id =>
-								E('option', { value: id, selected: id === '14' || undefined }, id + 'px')
-							)),
-							...fileElem
-						]),
+						E('div', { class: 'ace-toolbar inline-form-group' }, [...fileElem]),
 					]),
 					E('textarea', {
 						id: textareaId, input: ev => fileContent = ev.target.value,
@@ -811,21 +808,27 @@ return view.extend({
 				])
 		]);
 
-		const pathInput = E('input', {
-			style: 'flex:1;', title: [
-				" 📂 " + _("End with '/' to create a Directory"),
-				" 📄 " + _("No '/' at end to create a File"),
-				" 🚩 " + _("Start with '/' for Absolute path"),
-				" 🏠 " + _("No '/' at start for Current path")
-			].join("\n"),
-			placeholder: _('e.g. file.txt or folder/')
-		});
-
 		btnFull.onclick = btnExit.onclick = ui.createHandlerFn(this, () => {
-			const container = document.getElementById(window._aceReady ? containerId : textareaId);
-			this.toggleFS({ wrapper: toolbar, container, btnFull, btnExit });
+			const isFull = isFullState = !isFullState;
+			toolbar.classList.toggle('ace-fullscreen', isFull);
+
 			const rightDiv = modal.querySelector('.right');
-			if (!this._isFullscreen) modal.insertBefore(toolbar, rightDiv);
+			const targetDiv = toolbar.querySelector('.ace-editor-container');
+			if (isFull) {
+				rightDiv._originalParent = rightDiv.parentElement;
+				targetDiv.appendChild(rightDiv);
+			} else if (!isFull && rightDiv._originalParent) {
+				rightDiv._originalParent.appendChild(rightDiv);
+				delete rightDiv._originalParent;
+			}
+
+			const container = document.getElementById(window._aceReady ? containerId : textareaId);
+			container.style.height = isFull ? '100%' : '320px';
+			rightDiv.style.margin = isFull ? '5px 0' : '';
+			toolbar.style.marginBottom = isFull ? '0em' : '';
+			btnFull.style.display = isFull ? 'none' : '';
+			btnExit.style.display = isFull ? '' : 'none';
+			editor?.resize();
 		});
 
 		const setmode = () => {
@@ -868,7 +871,7 @@ return view.extend({
 
 			if (isFile) {
 				pathInput.after(targetHint);
-				toolbar.style.display = 'block';
+				toolbar.style.display = 'flex';
 				dirperm.style.display = 'none';
 				setmode();
 			} else {
@@ -1331,7 +1334,7 @@ return view.extend({
 
 		const aceEl = container.querySelector('.ace_editor');
 		(aceEl || container).style.height = isFull ? '100%' : '320px';
-		aceEl?.env.editor.resize();
+		aceEl && aceEl.env.editor.resize();
 		btnFull.style.display = isFull ? 'none' : '';
 		btnExit.style.display = isFull ? '' : 'none';
 	},
