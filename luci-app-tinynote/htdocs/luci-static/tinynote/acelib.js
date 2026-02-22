@@ -67,7 +67,7 @@ function renderAceEditor(id, model, only, theme = 'monokai', font_size, height) 
         wrap: true,
         showPrintMargin: true,
     });
-    
+
     id.on("input", function () {
         $textarea.val(id.getValue());
         updateDisplay(id, $(`#${xid}TextSize`), $(`#${xid}AceLineColumn`));

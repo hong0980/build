@@ -177,7 +177,7 @@ const modes = [
 	['html', 'HTML'], ['json', 'JSON'], ['python', 'Python'],
 	['text', 'Text'], ['css', 'CSS'], ['yaml', 'YAML'],
 	['xml', 'XML'], ['toml', 'Toml'], ["sql", "SQL"],
-	["diff", "patch(diff)"], ["makefile", "Makefile"]
+	["diff", "patch(diff)"]
 ];
 
 return view.extend({
@@ -1387,17 +1387,13 @@ return view.extend({
 			this._extMap = new Map([
 				['js', 'javascript'], ['json', 'json'], ['html', 'html'], ['htm', 'html'],
 				['css', 'css'], ['xml', 'xml'], ['py', 'python'], ['sh', 'sh'], ['bash', 'sh'],
-				['php', 'php'], ['lua', 'lua'], ['pl', 'perl'], ['rb', 'ruby'], ['md', 'markdown'],
-				['yaml', 'yaml'], ['yml', 'yaml'], ['uc', 'javascript'], ['ut', 'javascript'],
-				['ts', 'javascript'], ['toml', 'toml'], ['svg', 'html'],
-				['config', 'sh'], ['mk', 'makefile']
+				['php', 'php'], ['lua', 'lua'], ['pl', 'perl'], ['rb', 'ruby'], ['yaml', 'yaml'],
+				['yml', 'yaml'], ['uc', 'javascript'], ['ut', 'javascript'], ['ts', 'javascript'],
+				['toml', 'toml'], ['svg', 'html']
 			]);
 		}
 
 		const lowerName = filename.toLowerCase();
-
-		if (lowerName === 'makefile') return 'makefile';
-
 		const dotIdx = lowerName.lastIndexOf('.');
 		if (dotIdx > 0) {
 			const ext = lowerName.substring(dotIdx + 1);
@@ -1437,10 +1433,7 @@ return view.extend({
 		}
 
 		if (firstChar === '#') {
-			if (/^#\s+[^:]+$/.test(firstLine)) return 'markdown';
-
 			if (trimmed.includes(': ') && !trimmed.includes('=')) return 'yaml';
-
 			return 'sh';
 		}
 
@@ -1786,10 +1779,8 @@ return view.extend({
 
 		if (!this._sizeUnits) {
 			this._sizeUnits = new Map([
-				['K', 1024],
-				['M', 1048576],
-				['G', 1073741824],
-				['T', 1099511627776]
+				['K', 1024], ['M', 1048576],
+				['G', 1073741824], ['T', 1099511627776]
 			]);
 		}
 
@@ -1847,10 +1838,8 @@ return view.extend({
 		if (existing && existing.textContent === message) return;
 
 		const colors = {
-			success: '#4CAF50',
-			error: '#f44336',
-			warning: '#ff9800',
-			info: '#2196f3'
+			success: '#4CAF50', error: '#f44336',
+			warning: '#ff9800', info: '#2196f3'
 		};
 
 		const notification = document.createElement('div');
@@ -2053,8 +2042,7 @@ return view.extend({
 
 	throttle: function (func, limit, options = {}) {
 		const { leading = true, trailing = true } = options;
-		let timeout;
-		let previous = 0;
+		let timeout, previous = 0;
 
 		return function (...args) {
 			const context = this;

@@ -16,9 +16,9 @@
     }
 </style>
 <link rel="stylesheet" href="/luci-static/tinynote/bulma.css"/>
-<script src="https://cdn.staticfile.net/ace/1.32.3/ace.min.js"></script>
-<script src="https://cdn.staticfile.net/jquery/2.2.4/jquery.min.js"></script>
-<script src="https://cdn.staticfile.net/clipboard.js/2.0.0/clipboard.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.43.3/ace.min.js"></script>
+<script src="/luci-static/tinynote/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.11/clipboard.min.js"></script>
 <script>
     $(document).ready(function() {
         <%  local con = require "luci.model.uci".cursor():get_all("luci", "tinynote")
