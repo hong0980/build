@@ -1,0 +1,20 @@
+{
+  "luci-app-tinynote": {
+    "description": "Tinynote File Access",
+    "read": {
+      "uci": [ "luci" ],
+      "file": {
+        "/bin/sh": [ "exec" ],
+        "/bin/mv": [ "exec" ],
+        "/bin/rm": [ "exec" ],
+        "/bin/mkdir": [ "exec" ],
+        "/bin/chmod": [ "exec" ],
+        "*": [ "list", "read", "stat" ]
+    }
+    },
+    "write": {
+      "uci": [ "luci" ],
+      "file": { "*": [ "write", "remove" ] }
+    }
+  }
+}
