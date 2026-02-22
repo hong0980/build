@@ -162,7 +162,6 @@ return view.extend({
 		const urls = Array.isArray(cdns) ? cdns : [cdns];
 
 		return new Promise(resolve => {
-			// 检查是否已加载
 			if (checkFn && checkFn()) {
 				return resolve(true);
 			}
@@ -299,14 +298,12 @@ return view.extend({
 
 				const cdn = cdns[i++];
 
-				// 加载 CSS
 				const css = document.createElement('link');
 				css.rel = 'stylesheet';
 				css.href = cdn.css;
 				css.onerror = () => { css.remove(); load(); };
 				document.head.appendChild(css);
 
-				// 加载 JS
 				const script = document.createElement('script');
 				script.src = cdn.js;
 				script.onload = () => {
@@ -369,7 +366,6 @@ return view.extend({
 		});
 	},
 
-	// 新增：加载其他常用库
 	loadLibrary: function (name) {
 		const libs = {
 			jquery: {
@@ -425,7 +421,6 @@ return view.extend({
 		return this.loadJS(lib.urls, lib.check);
 	},
 
-	// 新增：加载 CSS 库
 	loadCSSLibrary: function (name) {
 		const libs = {
 			bulma: [
@@ -475,14 +470,6 @@ return view.extend({
 			document.head.appendChild(E('style', { id: 'fb-css' }, CSS));
 			this.styleInjected = true;
 		}
-		// this.loadLibrary('jquery').then(success => {
-		// 	if (success) {
-		// 		console.log('jQuery version:', $.fn.jquery);
-		// 	}
-		// });
-		// this.loadLibrary('screenfull').then((t) => {
-		// 	console.log(screenfull.isEnabled)
-		// });
 		let m, s, o;
 		const con = uci.get_first('luci', 'tinynote');
 		const note_sum = parseInt(con.note_sum) || 1;
@@ -498,7 +485,6 @@ return view.extend({
 		s.tab("ace", _("Ace Support"));
 		s.tab("codemirror", _("CodeMirror Support"));
 
-		// Basic Settings
 		o = s.taboption("note", form.Value, 'note_path', _('Save Path'));
 		o.default = "/etc/tinynote";
 
@@ -509,6 +495,8 @@ return view.extend({
 
 		o = s.taboption("note", form.ListValue, 'note_suffix', _('Text Type'));
 		o.default = 'txt';
+		// o.depends('enable', '1');
+		// o.depends('aceenable', '1');
 		note_type_array.forEach(([val, text]) => o.value(val, text));
 
 		let aceenable = s.taboption("note", form.Flag, 'aceenable', _('Enable Ace Support'));
@@ -519,7 +507,6 @@ return view.extend({
 		enable.depends('aceenable', '0');
 		enable.depends('aceenable', null);
 
-		// Ace Settings
 		o = s.taboption("ace", form.Flag, 'aceonly', _('Read-Only Mode'));
 		o.depends('aceenable', '1');
 		o.enabled = 'true';
@@ -545,7 +532,6 @@ return view.extend({
 		o.default = '300';
 		o.datatype = 'range(100,1000)';
 
-		// CodeMirror Settings
 		o = s.taboption("codemirror", form.Flag, 'only', _('Read-Only Mode'));
 		o.depends('enable', '1');
 		o.enabled = 'true';
@@ -576,7 +562,6 @@ return view.extend({
 		o.default = '940';
 		o.datatype = 'range(100,2000)';
 
-		// File Editor Section
 		s = m.section(form.NamedSection, 'tinynote', 'tinynote');
 		for (let i = 1; i <= note_sum; i++) {
 			const tabId = `file${i}`;
@@ -598,89 +583,22 @@ return view.extend({
 			o.disabled = 'false';
 			o.default = 'false';
 
-			if (code_aceenable || code_cmenable) {
-				o = s.taboption(tabId, form.DummyValue, `_editor${i}`);
-				o.rawhtml = true;
-				o.render = L.bind(function () {
-					const currentCon = uci.get_first('luci', 'tinynote');
-					const useCustomSettings = currentCon[`enablenote${i}`] === 'true';
-					const fileType = useCustomSettings && currentCon[`model_note${i}`]
-						? currentCon[`model_note${i}`]
-						: note_suffix;
-					let fileReadOnly;
-					if (useCustomSettings) {
-						fileReadOnly = currentCon[`only_note${i}`] === 'true';
-					} else {
-						fileReadOnly = code_aceenable
-							? (currentCon.aceonly === 'true')
-							: (currentCon.only === 'true');
-					}
-					const id = `editor-${i}`;
-					const height = code_aceenable ? (currentCon.aceheight || '500') : (currentCon.height || '500');
-					const button = E('div', [
-						E('div', { style: 'margin-top: 10px;padding:0 0 8px;' }, [
-							E('button', {
-								class: 'btn cbi-button-save',
-								style: fileReadOnly ? 'opacity: 0.5; cursor: not-allowed; pointer-events: none;' : '',
-								click: ui.createHandlerFn(this, ev => {
-									ev.preventDefault();
-									const editor = (code_aceenable ? this.aceEditors : this.cmEditors)[id];
-									if (!editor) return ui.addNotification(null, E('p', _('Editor not ready')), 'error');
-									fs.write(actualFilePath, editor.getValue())
-										.then(() => ui.addNotification(null, E('p', _('Saved')), 'success'))
-										.catch(err => ui.addNotification(null, E('p', _('Failed: ') + err), 'error'));
-								})
-							}, _('Save') + ' ' + _('Note %s').format(String(i).padStart(2, '0'))),
-							E('button', {
-								class: 'btn cbi-button-reset',
-								style: 'margin-left: 5px;',
-								click: ui.createHandlerFn(this, ev => {
-									ev.preventDefault();
-									const editor = (code_aceenable ? this.aceEditors : this.cmEditors)[id];
-									if (!editor) return ui.addNotification(null, E('p', _('Editor not ready')), 'error');
-									fs.read(actualFilePath).then(content => {
-										if (code_aceenable) {
-											editor.setValue(content || '', -1);
-											editor.clearSelection();
-										} else {
-											editor.setValue(content || '');
-										}
-										ui.addNotification(null, E('p', _('Reloaded')), 'success');
-									}).catch(err => ui.addNotification(null, E('p', _('Failed: ') + err), 'error'));
-								})
-							}, _('Reload') + ' ' + _('Note %s').format(String(i).padStart(2, '0'))),
-						])
-					]);
-					return E('div', {}, [
-						code_aceenable
-							? E('div', { id: id, style: `height:${height}px;border:1px solid #ccc;border-radius:4px;` })
-							: E('textarea', { id: id, style: `width:100%;height:${height}px;` }),
-
-					]);
-				}, this);
-			} else {
-				o = s.taboption(tabId, form.TextValue, `content${i}`);
-				o.rows = 25;
-				o.monospace = true;
-				o.load = () => {
-					const currentCon = uci.get_first('luci', 'tinynote');
-					const useCustom = currentCon[`enablenote${i}`] === 'true';
-					const fileType = useCustom && currentCon[`model_note${i}`]
-						? currentCon[`model_note${i}`]
-						: note_suffix;
-					const actualPath = `${note_path}/note${String(i).padStart(2, '0')}.${fileType}`;
-					return fs.read(actualPath).catch(() => '');
-				};
-				o.write = (sid, val) => {
-					const currentCon = uci.get_first('luci', 'tinynote');
-					const useCustom = currentCon[`enablenote${i}`] === 'true';
-					const fileType = useCustom && currentCon[`model_note${i}`]
-						? currentCon[`model_note${i}`]
-						: note_suffix;
-					const actualPath = `${note_path}/note${String(i).padStart(2, '0')}.${fileType}`;
-					return fs.write(actualPath, val || '');
-				};
-			}
+			o = s.taboption(tabId, form.DummyValue, `_editor${i}`);
+			o.rawhtml = true;
+			o.render = L.bind(function () {
+				const currentCon = uci.get_first('luci', 'tinynote');
+				const useCustomSettings = currentCon[`enablenote${i}`] === 'true';
+				const fileType = useCustomSettings && currentCon[`model_note${i}`]
+					? currentCon[`model_note${i}`]
+					: note_suffix;
+				const id = `editor-${i}`;
+				const height = code_aceenable ? (currentCon.aceheight || '300') : (currentCon.height || '300');
+				return E('div', {}, [
+					code_aceenable
+						? E('div', { id: id, style: `height:${height}px;border:1px solid #ccc;border-radius:4px;` })
+						: E('textarea', { id: id, style: `width:100%;height:${height}px;` }),
+				]);
+			}, this);
 		}
 
 		note_path && fs.stat(note_path)
@@ -706,6 +624,59 @@ return view.extend({
 			})
 			.then(() => {
 				const currentCon = uci.get_first('luci', 'tinynote');
+				const fallbackToTextarea = () => {
+					for (let i = 1; i <= note_sum; i++) {
+						const useCustom = currentCon[`enablenote${i}`] === 'true';
+						const fileType = useCustom && currentCon[`model_note${i}`]
+							? currentCon[`model_note${i}`]
+							: note_suffix;
+						const filePath = `${note_path}/note${String(i).padStart(2, '0')}.${fileType}`;
+						const fileReadOnly = useCustom
+							? (currentCon[`only_note${i}`] === 'true')
+							: false;
+
+						setTimeout(() => {
+							const id = `editor-${i}`;
+							const el = document.getElementById(id);
+							if (!el) return;
+							const parentNode = el.parentNode;
+							const height = el.style.height || '300px';
+							const textarea = document.createElement('textarea');
+							textarea.style.cssText = `width:100%;height:${height};font-family:Consolas;background-color:#212121;color:#fff;font-size:13px;box-sizing:border-box;border:none;padding:8px;resize:vertical;`;
+							textarea.readOnly = fileReadOnly;
+
+							const getEditor = () => ({
+								getValue: () => textarea.value,
+								setValue: (v) => { textarea.value = v; }
+							});
+
+							const wrapperDiv = buildToolbar.call(this, getEditor, filePath, id, () => {}, currentCon);
+							wrapperDiv.appendChild(textarea);
+							wrapperDiv.appendChild(E('div', { class: 'column m-0 aceStatusBar' }, [
+								E('div', { class: 'column is-two-thirds p-0 pl-0 status-left', id: `${id}LineColumn` }, 'Ln: 0 '),
+								E('div', { class: 'column is-one-thirds p-0 has-text-centered status-right', id: `${id}TextSize` }, 'Size: 0 Bytes')
+							]));
+							parentNode.innerHTML = '';
+							parentNode.appendChild(wrapperDiv);
+
+							const updateStatus = () => {
+								const content = textarea.value;
+								const lines = content ? content.split('\n').length : 0;
+								document.getElementById(`${id}LineColumn`).textContent = `Line: ${lines}`;
+								document.getElementById(`${id}TextSize`).textContent = `Size: ${new Blob([content]).size} Bytes`;
+							};
+							textarea.addEventListener('input', updateStatus);
+
+							fs.read(filePath).then(content => {
+								textarea.value = content || '';
+								updateStatus();
+							}).catch(() => {});
+
+							const btn = buildButton(i, id, filePath, fileReadOnly);
+							if (btn) parentNode.appendChild(btn);
+						}, i * 100);
+					}
+				};
 				const buildButton = (i, id, filePath, fileReadOnly) => {
 					return E('div', { style: 'margin-top:10px;padding:0 0 8px;' }, [
 						E('button', {
@@ -730,13 +701,11 @@ return view.extend({
 						}, _('Reload') + ' ' + _('Note %s').format(String(i).padStart(2, '0')))
 					]);
 				};
-
 				function svgIcon(name) {
 					const span = document.createElement('span');
 					span.innerHTML = ICONS[name] || '';
 					return span.firstChild;
 				};
-
 				function buildToolbar(getEditor, filePath, id, resizeFn, currentCon) {
 					return E('div', { class: 'aceEditorBorder', id: `${id}-wrapper` }, [
 						E('div', { class: 'aceEditorMenu' }, [
@@ -831,7 +800,10 @@ return view.extend({
 				}
 				if (code_aceenable) {
 					return this.preloadAceEditor().then(() => {
-						if (!window._aceReady) return;
+						if (!window._aceReady) {
+							fallbackToTextarea();
+							return;
+						}
 
 						for (let i = 1; i <= note_sum; i++) {
 							const useCustom = currentCon[`enablenote${i}`] === 'true';
@@ -884,7 +856,10 @@ return view.extend({
 					});
 				} else if (code_cmenable) {
 					return this.preloadCodeMirror().then(() => {
-						if (!window._cmReady) return;
+						if (!window._cmReady) {
+							fallbackToTextarea();
+							return;
+						}
 
 						const themesToLoad = new Set();
 						const modesToLoad = new Set();
@@ -967,6 +942,8 @@ return view.extend({
 							}
 						});
 					});
+				} else {
+					fallbackToTextarea();
 				}
 			})
 			.catch(() => {});
@@ -1072,14 +1049,13 @@ return view.extend({
 
 						// 读取旧文件内容，写入新文件，删除旧文件
 						cleanupPromises.push(
-							// fs.read(oldPath).then(content => {
-							fs.write(newPath, templates[newFile.type]).then(() => {
-								// 只有当文件类型真的改变时才删除旧文件
-								if (oldPath !== newPath) {
-									return fs.remove(oldPath).catch(() => {});
-								}
-							})
-							// }).catch(() => {})
+							fs.read(oldPath).then(content => {
+								return fs.write(newPath, content).then(() => {
+									// 只有当文件类型真的改变时才删除旧文件
+									if (oldPath !== newPath)
+										return fs.remove(oldPath).catch(() => {});
+								});
+							}).catch(() => {})
 						);
 					}
 				}
@@ -1117,40 +1093,4 @@ return view.extend({
 				console.error('Save/Cleanup error:', err);
 			});
 	},
-
-	// handleSaveApply: function (ev, mode) {
-	// 	const oldCon = uci.get_first('luci', 'tinynote');
-	// 	const oldCfg = {
-	// 		path: oldCon.note_path || '/etc/tinynote',
-	// 		sum: parseInt(oldCon.note_sum) || 1,
-	// 		suffix: oldCon.note_suffix || 'txt'
-	// 	};
-
-	// 	return this.super('handleSaveApply', [ev, mode]).then(() => uci.load('luci')).then(() => {
-	// 		const newCon = uci.get_first('luci', 'tinynote');
-	// 		const newCfg = {
-	// 			path: newCon.note_path || '/etc/tinynote',
-	// 			sum: parseInt(newCon.note_sum) || 1,
-	// 			suffix: newCon.note_suffix || 'txt'
-	// 		};
-
-	// 		if (oldCfg.path !== newCfg.path || oldCfg.sum !== newCfg.sum || oldCfg.suffix !== newCfg.suffix) {
-	// 			const cleanPath = oldCfg.path !== newCfg.path ? oldCfg.path : newCfg.path;
-	// 			return fs.list(cleanPath).then(files => {
-	// 				if (!files) return;
-	// 				const deletes = files.filter(f => {
-	// 					const match = f.name.match(/^note(\d{2})\.(.+)$/);
-	// 					if (!match) return false;
-	// 					const num = parseInt(match[1]);
-	// 					const ext = match[2];
-	// 					return oldCfg.path !== newCfg.path || num > newCfg.sum || ext !== newCfg.suffix;
-	// 				}).map(f => fs.remove(`${cleanPath}/${f.name}`).catch(() => {}));
-
-	// 				return Promise.all(deletes).then(() =>
-	// 					ui.addNotification(null, E('p', _('Config saved, old files cleaned')), 'info')
-	// 				);
-	// 			}).catch(() => {});
-	// 		}
-	// 	});
-	// }
 });
