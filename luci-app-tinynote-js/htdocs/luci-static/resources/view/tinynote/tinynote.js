@@ -63,12 +63,8 @@ const CSS = `
 	background-color: #363636;
 }
 .editorMenu a {
-	display: flex;
-	margin: 0 5px;
 	color: #f5f5f5;
 	cursor: pointer;
-	align-items: center;
-	text-decoration: none;
 	transition: border-color 0.2s;
 	border-bottom: 2px solid transparent;
 }
@@ -113,13 +109,21 @@ const CSS = `
 	padding-right: 10px;
 }
 .fullScreen {
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	width: 100%;
-	z-index: 9999;
+	inset: 0;
 	position: fixed;
+	z-index: 9999;
+	display: flex;
+	flex-direction: column;
+}
+.fullScreen .editorBody {
+	flex: 1;
+	min-height: 0;
+}
+.fullScreen .CodeMirror,
+.fullScreen .ace_editor,
+.fullScreen textarea {
+	height: 100% !important;
+	width: 100% !important;
 }
 
 @media screen and (max-width: 767px) {
@@ -432,7 +436,7 @@ return view.extend({
 		o.enabled = 'true';
 		o.disabled = 'false';
 
-		o = s.taboption("ace", form.ListValue, 'acetheme', _('Theme'));
+		o = s.taboption("ace", form.Value, 'acetheme', _('Theme'));
 		o.depends('aceenable', '1');
 		o.default = 'monokai';
 		ace_theme_array.forEach(([val, text]) => o.value(val, text));
@@ -451,31 +455,33 @@ return view.extend({
 		o.depends('aceenable', '1');
 		o.default = '300';
 		o.datatype = 'range(100,1000)';
+		['200', '250', '300', '350'].forEach(v => o.value(v, v));
 
 		o = s.taboption("codemirror", form.Flag, 'only', _('Read-Only Mode'));
 		o.depends('cmenable', '1');
 		o.enabled = 'true';
 		o.disabled = 'false';
 
-		o = s.taboption("codemirror", form.ListValue, 'cmtheme', _('Theme'));
+		o = s.taboption("codemirror", form.Value, 'cmtheme', _('Theme'));
 		o.depends('cmenable', '1');
 		o.default = 'monokai';
 		codemirror_theme_array.forEach(([val, text]) => o.value(val, text));
 
-		o = s.taboption("codemirror", form.ListValue, 'font_size', _('Font Size'));
+		o = s.taboption("codemirror", form.ListValue, 'cmfont_size', _('Font Size'));
 		o.depends('cmenable', '1');
 		o.default = '13';
 		['10', '12', '13', '14', '15', '16'].forEach(size => o.value(size, size + 'px'));
 
-		o = s.taboption("codemirror", form.ListValue, 'line_spacing', _('Line Spacing'));
+		o = s.taboption("codemirror", form.ListValue, 'cmline_spacing', _('Line Spacing'));
 		o.depends('cmenable', '1');
 		o.default = '1.2';
 		['1.0', '1.2', '1.3', '1.5'].forEach(v => o.value(v, v));
 
-		o = s.taboption("codemirror", form.Value, 'height', _('Display Height'));
+		o = s.taboption("codemirror", form.Value, 'cmheight', _('Display Height'));
 		o.depends('cmenable', '1');
 		o.default = '300';
 		o.datatype = 'range(100,1000)';
+		['200', '250', '300', '350'].forEach(v => o.value(v, v));
 
 		if (note_sum > 0) {
 			s = m.section(form.NamedSection, 'tinynote', 'tinynote');
@@ -508,7 +514,7 @@ return view.extend({
 						? currentCon[`model_note${i}`]
 						: note_suffix;
 					const id = `editor-${i}`;
-					const height = code_aceenable ? (currentCon.aceheight || '300') : (currentCon.height || '300');
+					const height = code_aceenable ? (currentCon.aceheight || '300') : (currentCon.cmheight || '300');
 					return E('div', {}, [
 						code_aceenable
 							? E('div', { id: id, style: `height:${height}px;border:1px solid #ccc;border-radius:4px;` })
@@ -666,93 +672,84 @@ return view.extend({
 											}
 										})
 									}, ['12', '13', '14', '15', '16'].map(id =>
-										E('option', { value: id, selected: id === (con.acefont_size || con.font_size || '14') || undefined }, id + 'px')
+										E('option', { value: id, selected: id === (con.acefont_size || con.cmfont_size || '14') || undefined }, id + 'px')
 									)),
 								]),
-								E('a', {
-									title: _('Save'), click: ui.createHandlerFn(this, () => {
-										fs.write(filePath, getEditor().getValue())
-											.then(() => this.showNotification(_('保存成功'), 3000, 'success'))
-											.catch(err => this.showNotification(_('保存出错: %s').format(err.message), 3000, 'error'));
-									})
-								}, [svgIcon('save')]),
-								E('a', {
-									title: _('Upload File'), click: ui.createHandlerFn(this, () => {
-										const fileInput = document.createElement('input');
-										fileInput.type = 'file';
-										fileInput.onchange = (e) => {
-											const file = e.target.files[0];
-											if (!file) return;
-											const reader = new FileReader();
-											reader.readAsText(file, 'UTF-8');
-											reader.onload = (ev) => {
-												const content = ev.target.result;
-												getEditor().setValue(content, -1);
-												fs.write(filePath, content)
-													.then(() => this.showNotification(_('替换成功'), 3000, 'success'))
-													.catch(err => this.showNotification(_('替换出错: %s').format(err.message), 3000, 'error'));
+								E('div', { class: 'inline-form-group status-right' }, [
+									E('a', {
+										title: _('Save'), click: ui.createHandlerFn(this, () => {
+											fs.write(filePath, getEditor().getValue())
+												.then(() => this.showNotification(_('保存成功'), 3000, 'success'))
+												.catch(err => this.showNotification(_('保存出错: %s').format(err.message), 3000, 'error'));
+										})
+									}, [svgIcon('save')]),
+									E('a', {
+										click: ui.createHandlerFn(this, () => {
+											const fileInput = document.createElement('input');
+											fileInput.type = 'file';
+											fileInput.onchange = (e) => {
+												const file = e.target.files[0];
+												if (!file) return;
+												const reader = new FileReader();
+												reader.readAsText(file, 'UTF-8');
+												reader.onload = (ev) => {
+													const content = ev.target.result;
+													getEditor().setValue(content, -1);
+													fs.write(filePath, content)
+														.then(() => this.showNotification(_('替换成功'), 3000, 'success'))
+														.catch(err => this.showNotification(_('替换出错: %s').format(err.message), 3000, 'error'));
+												};
 											};
-										};
-										fileInput.click();
-									})
-								}, [svgIcon('Upload')]),
-								E('a', {
-									title: _('Download'), click: ui.createHandlerFn(this, () => {
-										const content = getEditor().getValue().trim();
-										if (!content) return;
-										const a = document.createElement('a');
-										a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
-										a.download = 'data.txt';
-										a.click();
-										setTimeout(() => URL.revokeObjectURL(a.href), 100);
-									})
-								}, [svgIcon('download')]),
-								E('a', { title: _('Clear'), click: () => getEditor().setValue('', -1) }, [svgIcon('delete')]),
-								E('a', {
-									title: _('Copy'), click: ui.createHandlerFn(this, () => {
-										const content = getEditor().getValue().trim();
-										if (!content) { this.showNotification(_('内容为空'), 3000, 'error'); return; }
-										const ta = document.createElement('textarea');
-										ta.value = content;
-										ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
-										document.body.appendChild(ta);
-										ta.select();
-										try {
-											document.execCommand('copy');
-											this.showNotification(_('内容已复制'), 3000, 'success');
-										} catch (e) {
-											this.showNotification(_('复制出错'), 3000, 'error');
-										} finally {
-											document.body.removeChild(ta);
-										}
-									})
-								}, [svgIcon('copy')]),
-								E('a', {
-									title: _('full screen'),
-									click: ui.createHandlerFn(this, ev => {
-										const wrapper = document.getElementById(`${id}-wrapper`);
-										const editorEl = wrapper.querySelector('.ace_editor, .CodeMirror, textarea');
-										const isFull = wrapper.classList.toggle('fullScreen');
-										const btn = ev.currentTarget;
-										btn.title = isFull ? _('Exit full screen') : _('full screen');
-										btn.innerHTML = ICONS[isFull ? 'close_fullscreen' : 'open_fullscreen'];
-
-										const setSize = (h) => Object.assign(editorEl.style, { height: h + 'px', width: '100%' });
-
-										if (isFull) {
-											requestAnimationFrame(() => {
-												const menuH = wrapper.querySelector('.editorMenu').offsetHeight;
-												const statusH = wrapper.querySelector('.statusBar').offsetHeight;
-												setSize(wrapper.offsetHeight - menuH - statusH);
-												resizeFn();
-											});
-										} else {
-											setSize(currentCon.aceheight || currentCon.height || '300');
+											fileInput.click();
+										}), title: _('Upload File')
+									}, [svgIcon('Upload')]),
+									E('a', {
+										click: ui.createHandlerFn(this, () => {
+											const content = getEditor().getValue().trim();
+											if (!content) return;
+											const a = document.createElement('a');
+											a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
+											a.download = 'data.txt';
+											a.click();
+											setTimeout(() => URL.revokeObjectURL(a.href), 100);
+										}), title: _('Download')
+									}, [svgIcon('download')]),
+									E('a', {
+										click: ui.createHandlerFn(this, () => {
+											const content = getEditor().getValue().trim();
+											if (!content) { this.showNotification(_('内容为空'), 3000, 'error'); return; }
+											const ta = document.createElement('textarea');
+											ta.value = content;
+											ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
+											document.body.appendChild(ta);
+											ta.select();
+											try {
+												document.execCommand('copy');
+												this.showNotification(_('内容已复制'), 3000, 'success');
+											} catch (e) {
+												this.showNotification(_('复制出错'), 3000, 'error');
+											} finally {
+												document.body.removeChild(ta);
+											}
+										}), title: _('Copy')
+									}, [svgIcon('copy')]),
+									E('a', { click: () => getEditor().setValue('', -1), title: _('Clear') }, [svgIcon('delete')]),
+									E('a', {
+										click: ui.createHandlerFn(this, ev => {
+											const wrapper = document.getElementById(id);
+											const isFull = wrapper.classList.toggle('fullScreen');
+											const btn = ev.currentTarget;
+											btn.title = isFull ? _('Exit full screen') : _('full screen');
+											btn.innerHTML = ICONS[isFull ? 'close_fullscreen' : 'open_fullscreen'];
+											if (!isFull) {
+												const editorEl = wrapper.querySelector('.ace_editor, .CodeMirror, textarea');
+												Object.assign(editorEl.style, { height: (currentCon.aceheight || currentCon.cmheight || 300) + 'px', width: '100%' });
+												setTimeout(() => wrapper.scrollIntoView({ block: 'center' }), 0);
+											}
 											resizeFn();
-											setTimeout(() => wrapper.scrollIntoView({ block: 'center' }), 0);
-										}
-									})
-								}, [svgIcon('open_fullscreen')])
+										}), title: _('full screen')
+									}, [svgIcon('open_fullscreen')])
+								]),
 							]),
 						]);
 					}
@@ -772,12 +769,12 @@ return view.extend({
 									const parentNode = el.parentNode;
 									const filePath = `${note_path}/note${String(i).padStart(2, '0')}.${fileType}`;
 									if (this.aceEditors[id]) this.aceEditors[id].destroy();
-									const editorDiv = E('div', { id: id + '_ace', style: `height:${currentCon.aceheight || '300'}px;width:100%;` });
+									const editorDiv = E('div', { id: id + '_ace', class: 'editorBody', style: `height:${currentCon.aceheight || '300'}px;width:100%;` });
 									const wrapperDiv = buildToolbar.call(this, i, () => this.aceEditors[id], filePath, () => this.aceEditors[id].resize(), currentCon);
 									wrapperDiv.appendChild(editorDiv);
 									wrapperDiv.appendChild(E('div', { class: 'statusBar' }, [
-										E('div', { class: 'status-left', id: `${id}AceLine` }, 'Ln: 1;Col: 1;Max Col: 1'),
-										E('div', { class: 'status-right', id: `${id}TextSize` }, 'Size: 0 Bytes')
+										E('div', { class: 'status-left', id: `${id}AceLine` }),
+										E('div', { class: 'status-right', id: `${id}TextSize` })
 									]));
 
 									parentNode.innerHTML = '';
@@ -800,7 +797,10 @@ return view.extend({
 										document.getElementById(`${edId}AceLine`).textContent = `Ln: ${pos.row + 1}; Col: ${pos.column + 1}; Max Col: ${ed.session.getLine(pos.row)?.length || 0}`;
 										document.getElementById(`${edId}TextSize`).textContent = `Size: ${new Blob([content]).size} Bytes`;
 									};
-									fs.read(filePath).then(content => { editor.setValue(content || '', -1); updateUIStatus(editor, id); });
+									fs.read(filePath).then(content => {
+										editor.setValue(content || '', -1);
+										updateUIStatus(editor, id);
+									});
 									editor.on('change', () => updateUIStatus(editor, id));
 									editor.selection.on('changeCursor', () => updateUIStatus(editor, id));
 								}, i * 100);
@@ -845,12 +845,12 @@ return view.extend({
 										if (!el) return;
 										const parentNode = el.parentNode;
 										const filePath = `${note_path}/note${String(i).padStart(2, '0')}.${fileType}`;
-										const editorDiv = E('div', { id: id + '_cm' });
+										const editorDiv = E('div', { id: id + '_cm', class: 'editorBody' });
 										const wrapperDiv = buildToolbar.call(this, i, () => this.cmEditors[id], filePath, () => this.cmEditors[id].refresh(), currentCon);
 										wrapperDiv.appendChild(editorDiv);
 										wrapperDiv.appendChild(E('div', { class: 'statusBar' }, [
-											E('div', { class: 'status-left', id: `${id}CmLine` }, 'Ln: 1; Col: 1'),
-											E('div', { class: 'status-right', id: `${id}TextSize` }, 'Size: 0 Bytes')
+											E('div', { class: 'status-left', id: `${id}CmLine` }),
+											E('div', { class: 'status-right', id: `${id}TextSize` })
 										]));
 
 										parentNode.innerHTML = '';
@@ -864,10 +864,10 @@ return view.extend({
 											theme: currentCon.cmtheme || 'monokai', readOnly: fileReadOnly,
 											lineWrapping: true, indentUnit: 4, tabSize: 4
 										});
-										// editor.setSize(currentCon.width, currentCon.height);
-										editor.getWrapperElement().style.fontSize = (currentCon.font_size || '13') + 'px';
+										editor.setSize(null, currentCon.cmheight || '300');
+										editor.getWrapperElement().style.fontSize = (currentCon.cmfont_size || '13') + 'px';
 										editor.getWrapperElement().style.fontFamily = "'Consolas', 'Monaco', 'Courier New', monospace";
-										editor.getWrapperElement().style.lineHeight = currentCon.line_spacing || '1.2';
+										editor.getWrapperElement().style.lineHeight = currentCon.cmline_spacing || '1.2';
 										editor.refresh();
 										this.cmEditors[id] = editor;
 
@@ -877,7 +877,10 @@ return view.extend({
 											document.getElementById(`${edId}CmLine`).textContent = `Ln: ${cursor.line + 1}; Col: ${cursor.ch + 1}`;
 											document.getElementById(`${edId}TextSize`).textContent = `Size: ${new Blob([content]).size} Bytes`;
 										};
-										fs.read(filePath).then(content => { editor.setValue(content || ''); updateUIStatus(editor, id); }).catch(() => editor.setValue(''));
+										fs.read(filePath).then(content => {
+											editor.setValue(content || '');
+											updateUIStatus(editor, id);
+										}).catch(() => editor.setValue(''));
 										editor.on('change', () => updateUIStatus(editor, id));
 										editor.on('cursorActivity', () => updateUIStatus(editor, id));
 									}, i * 200);
