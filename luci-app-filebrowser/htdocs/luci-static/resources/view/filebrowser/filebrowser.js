@@ -166,10 +166,27 @@ const permissions = [
 ];
 
 const themes = [
-	["monokai", "Monokai"], ["dracula", "Dracula"], ["one_dark", "One Dark"],
-	["github_dark", "GitHub Dark"], ["solarized_light", "Solarized Light"],
-	["solarized_dark", "Solarized Dark"], ["tomorrow", "Tomorrow"], ["github", "GitHub"],
-	["tomorrow_night", "Tomorrow Night"], ["terminal", "Terminal"]
+	['monokai', 'Monokai (Dark)'],
+	['dracula', 'Dracula (Dark)'],
+	['tomorrow_night', 'Tomorrow Night (Dark)'],
+	['one_dark', 'One Dark (Dark)'],
+	['nord_dark', 'Nord Dark (Dark)'],
+	['gruvbox', 'Gruvbox (Dark)'],
+	['cobalt', 'Cobalt (Dark)'],
+	['vibrant_ink', 'Vibrant Ink (Dark)'],
+	['twilight', 'Twilight (Dark)'],
+	['chaos', 'Chaos (Dark)'],
+	['terminal', 'Terminal (Dark)'],
+	['github', 'GitHub (Light)'],
+	['xcode', 'Xcode (Light)'],
+	['chrome', 'Chrome (Light)'],
+	['eclipse', 'Eclipse (Light)'],
+	['textmate', 'TextMate (Light)'],
+	['dawn', 'Dawn (Light)'],
+	['dreamweaver', 'Dreamweaver (Light)'],
+	['crimson_editor', 'Crimson Editor (Light)'],
+	['clouds', 'Clouds (Light)'],
+	['kuroir', 'Kuroir (Light)']
 ];
 
 const modes = [
