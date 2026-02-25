@@ -5,12 +5,13 @@
 'require form';
 'require view';
 
-const note_type_array = [
-	['lua', 'Lua', 'lua', 'lua'],
-	['sh', 'Shell Script', 'sh', 'shell'],
-	['py', 'Python', 'python', 'python'],
-	['txt', 'Plain Text', 'text', 'null']
-];
+const note_type_array = {
+	lua: { label: 'Lua', aceMode: 'lua', cmMode: 'lua' },
+	sh: { label: 'Shell Script', aceMode: 'sh', cmMode: 'shell' },
+	py: { label: 'Python', aceMode: 'python', cmMode: 'python' },
+	js: { label: 'JavaScript', aceMode: 'javascript', cmMode: 'javascript' },
+	txt: { label: 'Plain Text', aceMode: 'text', cmMode: null },
+};
 
 const ace_theme_array = [
 	['monokai', 'Monokai (Dark)'],
@@ -51,7 +52,8 @@ const codemirror_theme_array = [
 const templates = {
 	sh: "#!/bin/sh /etc/rc.common\n",
 	py: "#!/usr/bin/env python\nimport os, re, sys, time\n",
-	lua: "#!/usr/bin/env lua\nlocal fs = require 'nixio.fs'\nlocal sys  = require 'luci.sys'\nlocal util = require 'luci.util'\nlocal uci = require 'luci.model.uci'.cursor()\n"
+	lua: "#!/usr/bin/env lua\nlocal fs = require 'nixio.fs'\nlocal sys  = require 'luci.sys'\nlocal util = require 'luci.util'\nlocal uci = require 'luci.model.uci'.cursor()\n",
+	js: "'use strict';\n",
 };
 
 const CSS = `
@@ -73,7 +75,7 @@ const CSS = `
 	border-bottom-color: #f5f5f5;
 }
 
-.inline-form-group {
+.icon, .inline-form-group {
 	gap: 8px;
 	display: flex;
 	flex-wrap:wrap;
@@ -133,11 +135,12 @@ const CSS = `
 }`
 
 const ICONS = {
-	Upload: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M5,4V6H19V4H5M5,14H9V20H15V14H19L12,7L5,14Z"/></svg>',
-	save: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>',
-	download: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M17,13L12,18L7,13H10V9H14V13M19.35,10.04C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.04C2.34,8.36 0,10.91 0,14A6,6 0 0,0 6,20H19A5,5 0 0,0 24,15C24,12.36 21.95,10.22 19.35,10.04Z"/></svg>',
-	delete: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>',
 	copy: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"/></svg>',
+	save: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>',
+	wrap: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M4,6H20V8H4V6M4,11H17A3,3 0 0,1 20,14A3,3 0 0,1 17,17H15V19L12,16L15,13V15H17A1,1 0 0,0 18,14A1,1 0 0,0 17,13H4V11M4,18H10V20H4V18Z"/></svg>',
+	delete: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>',
+	Upload: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M5,4V6H19V4H5M5,14H9V20H15V14H19L12,7L5,14Z"/></svg>',
+	download: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M17,13L12,18L7,13H10V9H14V13M19.35,10.04C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.04C2.34,8.36 0,10.91 0,14A6,6 0 0,0 6,20H19A5,5 0 0,0 24,15C24,12.36 21.95,10.22 19.35,10.04Z"/></svg>',
 	open_fullscreen: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"/></svg>',
 	close_fullscreen: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"/></svg>'
 };
@@ -417,11 +420,11 @@ return view.extend({
 		o.rmempty = false;
 		o.datatype = "range(1,20)";
 
-		o = s.taboption("note", form.ListValue, 'note_suffix', _('Text Type'));
+		o = s.taboption("note", form.Value, 'note_suffix', _('Text Type'));
 		o.default = 'txt';
+		Object.entries(note_type_array).forEach(([ext, { label }]) => o.value(ext, label));
 		// o.depends('cmenable', '1');
 		// o.depends('aceenable', '1');
-		note_type_array.forEach(([val, text]) => o.value(val, text));
 
 		let aceenable = s.taboption("note", form.Flag, 'aceenable', _('Enable Ace Support'));
 		aceenable.depends('cmenable', '0');
@@ -497,7 +500,7 @@ return view.extend({
 				o = s.taboption(tabId, form.ListValue, `model_note${i}`, _('Type'));
 				o.depends(`enablenote${i}`, 'true');
 				o.rmempty = true;
-				note_type_array.forEach(([val, text]) => o.value(val, text));
+				Object.entries(note_type_array).forEach(([ext, { label }]) => o.value(ext, label));
 
 				o = s.taboption(tabId, form.Flag, `only_note${i}`, _('Read-only'));
 				o.depends(`enablenote${i}`, 'true');
@@ -507,26 +510,27 @@ return view.extend({
 
 				o = s.taboption(tabId, form.DummyValue, `_editor${i}`);
 				o.rawhtml = true;
-				o.render = L.bind(function () {
-					const currentCon = uci.get_first('luci', 'tinynote');
-					const useCustomSettings = currentCon[`enablenote${i}`] === 'true';
-					const fileType = useCustomSettings && currentCon[`model_note${i}`]
-						? currentCon[`model_note${i}`]
-						: note_suffix;
+				o.render = function () {
 					const id = `editor-${i}`;
-					const height = code_aceenable ? (currentCon.aceheight || '300') : (currentCon.cmheight || '300');
+					const currentCon = uci.get_first('luci', 'tinynote');
+					const height = currentCon[code_aceenable ? 'aceheight' : 'cmheight'] || 300;
 					return E('div', {}, [
 						code_aceenable
 							? E('div', { id: id, style: `height:${height}px;border:1px solid #ccc;border-radius:4px;` })
 							: E('textarea', { id: id, style: `width:100%;height:${height}px;` }),
 					]);
-				}, this);
+				};
 			}
 
 			fs.stat(note_path)
 				.catch(() => fs.exec('/bin/mkdir', ['-p', note_path]))
 				.then(() => {
 					const currentCon = uci.get_first('luci', 'tinynote');
+					function svgIcon(name) {
+						const span = document.createElement('span');
+						span.innerHTML = (ICONS[name] || '').trim();
+						return span.querySelector('svg');
+					}
 					const fallbackToTextarea = () => {
 						for (let i = 1; i <= note_sum; i++) {
 							const useCustom = currentCon[`enablenote${i}`] === 'true';
@@ -545,13 +549,19 @@ return view.extend({
 								const parentNode = el.parentNode;
 								const height = el.style.height || '300px';
 								const textarea = document.createElement('textarea');
-								textarea.style.cssText = `width:100%;height:${height};font-family:Consolas;background-color:#212121;color:#fff;font-size:13px;box-sizing:border-box;border:none;padding:8px;resize:vertical;border-radius:0px`;
+								textarea.style.cssText = `width:100%;height:${height};font-family:Consolas;background-color:#212121;color:#fff;font-size:13px;box-sizing:border-box;border:none;padding:8px;resize:vertical;border-radius:0px;white-space:nowrap;overflow-x:auto`;
 								textarea.readOnly = fileReadOnly;
 
 								const getEditor = () => ({
 									getValue: () => textarea.value,
 									setValue: (v) => { textarea.value = v; }
 								});
+								const updateStatus = () => {
+									const content = textarea.value;
+									const lines = content ? content.split('\n').length : 0;
+									document.getElementById(`${id}LineColumn`).textContent = `Line: ${lines}`;
+									document.getElementById(`${id}TextSize`).textContent = `Size: ${new Blob([content]).size} Bytes`;
+								};
 
 								const wrapperDiv = buildToolbar.call(this, i, getEditor, filePath, () => {}, currentCon);
 								wrapperDiv.appendChild(textarea);
@@ -561,13 +571,8 @@ return view.extend({
 								]));
 								parentNode.innerHTML = '';
 								parentNode.appendChild(wrapperDiv);
-
-								const updateStatus = () => {
-									const content = textarea.value;
-									const lines = content ? content.split('\n').length : 0;
-									document.getElementById(`${id}LineColumn`).textContent = `Line: ${lines}`;
-									document.getElementById(`${id}TextSize`).textContent = `Size: ${new Blob([content]).size} Bytes`;
-								};
+								if (!this.taEditors) this.taEditors = {};
+								this.taEditors[id] = getEditor();
 								textarea.addEventListener('input', updateStatus);
 
 								fs.read(filePath).then(content => {
@@ -586,7 +591,7 @@ return view.extend({
 							E('button', {
 								class: 'btn cbi-button-save', disabled: fileReadOnly ? '' : null,
 								click: ui.createHandlerFn(this, () => {
-									const editor = this.aceEditors[id] || this.cmEditors[id];
+									const editor = this.aceEditors[id] || this.cmEditors[id] || this.taEditors?.[id];
 									const content = editor?.getValue();
 									content && fs.write(filePath, content)
 										.then(() => this.showNotification(_('保存成功'), 3000, 'success'))
@@ -596,7 +601,7 @@ return view.extend({
 							E('button', {
 								class: 'btn cbi-button-reset', style: 'margin-left:5px;',
 								click: ui.createHandlerFn(this, () => {
-									const editor = this.aceEditors[id] || this.cmEditors[id];
+									const editor = this.aceEditors[id] || this.cmEditors[id] || this.taEditors?.[id];
 									fs.read(filePath).then(content => {
 										editor?.setValue(content || '', -1);
 										this.showNotification(_('已重载'), 3000, 'success');
@@ -605,11 +610,6 @@ return view.extend({
 							}, _('Reload') + ' ' + _('Note %s').format(String(i).padStart(2, '0')))
 						]);
 					};
-					function svgIcon(name) {
-						const span = document.createElement('span');
-						span.innerHTML = (ICONS[name] || '').trim();
-						return span.querySelector('svg');
-					}
 					function buildToolbar(i, getEditor, filePath, resizeFn, currentCon) {
 						const id = `editor-${i}-wrapper`;
 						return E('div', { id: id }, [
@@ -621,13 +621,13 @@ return view.extend({
 											E('select', {
 												change: ui.createHandlerFn(this, ev => {
 													const editor = getEditor();
-													const modeMap = note_type_array.find(t => t[0] === ev.target.value);
+													const selected = ev.target.value;
 													if (code_aceenable) {
-														const mode = modeMap ? modeMap[2] : 'text';
+														const mode = note_type_array[selected]?.aceMode ?? 'text';
 														editor?.session?.setMode('ace/mode/' + mode);
 													} else if (code_cmenable) {
-														const mode = modeMap ? modeMap[3] : null;
-														if (mode && mode !== 'null') {
+														const mode = note_type_array[selected]?.cmMode ?? null;
+														if (mode) {
 															this.loadCMResource('mode', mode).then(() => {
 																editor?.setOption('mode', mode);
 															});
@@ -636,8 +636,9 @@ return view.extend({
 														}
 													}
 												})
-											}, note_type_array.map(([id, name]) =>
-												E('option', { value: id, selected: id === (con[`model_note${i}`] || con.note_suffix || '') || undefined }, name))),
+											}, Object.entries(note_type_array).map(([ext, { label }]) =>
+												E('option', { value: ext, selected: ext === (con[`model_note${i}`] || con.note_suffix || '') || undefined }, label)
+											)),
 											E('span', _('Theme')),
 											E('select', {
 												change: ui.createHandlerFn(this, ev => {
@@ -671,17 +672,17 @@ return view.extend({
 												if (ta) ta.style.fontSize = val + 'px';
 											}
 										})
-									}, ['12', '13', '14', '15', '16'].map(id =>
-										E('option', { value: id, selected: id === (con.acefont_size || con.cmfont_size || '14') || undefined }, id + 'px')
+									}, ['12', '13', '14', '15', '16'].map(sz =>
+										E('option', { value: sz, selected: sz === (con.acefont_size || con.cmfont_size || '14') || undefined }, sz + 'px')
 									)),
 								]),
-								E('div', { class: 'inline-form-group status-right' }, [
+								E('div', { class: 'icon status-right' }, [
 									E('a', {
-										title: _('Save'), click: ui.createHandlerFn(this, () => {
+										click: ui.createHandlerFn(this, () => {
 											fs.write(filePath, getEditor().getValue())
 												.then(() => this.showNotification(_('保存成功'), 3000, 'success'))
 												.catch(err => this.showNotification(_('保存出错: %s').format(err.message), 3000, 'error'));
-										})
+										}), title: _('Save')
 									}, [svgIcon('save')]),
 									E('a', {
 										click: ui.createHandlerFn(this, () => {
@@ -709,7 +710,7 @@ return view.extend({
 											if (!content) return;
 											const a = document.createElement('a');
 											a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
-											a.download = 'data.txt';
+											a.download = filePath.split('/').pop();
 											a.click();
 											setTimeout(() => URL.revokeObjectURL(a.href), 100);
 										}), title: _('Download')
@@ -736,6 +737,32 @@ return view.extend({
 									E('a', { click: () => getEditor().setValue('', -1), title: _('Clear') }, [svgIcon('delete')]),
 									E('a', {
 										click: ui.createHandlerFn(this, ev => {
+											const editor = getEditor();
+											const btn = ev.currentTarget;
+
+											if (code_aceenable) {
+												const wrapped = editor.getSession().getUseWrapMode();
+												editor.getSession().setUseWrapMode(!wrapped);
+												btn.style.opacity = wrapped ? '0.45' : '1';
+												btn.title = wrapped ? _('wrap') : _('close Wrap');
+											} else if (code_cmenable) {
+												const wrapped = editor.getOption('lineWrapping');
+												editor.setOption('lineWrapping', !wrapped);
+												btn.style.opacity = wrapped ? '0.45' : '1';
+												btn.title = wrapped ? _('wrap') : _('close Wrap');
+											} else {
+												const wrapperEl = document.getElementById(id);
+												const ta = wrapperEl.querySelector('textarea');
+												const wrapped = ta.style.whiteSpace !== 'nowrap';
+												ta.style.whiteSpace = wrapped ? 'nowrap' : 'pre-wrap';
+												ta.style.overflowX = wrapped ? 'auto' : 'hidden';
+												btn.style.opacity = wrapped ? '0.45' : '1';
+												btn.title = wrapped ? _('wrap') : _('close Wrap');
+											}
+										}), title: _('wrap'), style: 'opacity:0.45'
+									}, [svgIcon('wrap')]),
+									E('a', {
+										click: ui.createHandlerFn(this, ev => {
 											const wrapper = document.getElementById(id);
 											const isFull = wrapper.classList.toggle('fullScreen');
 											const btn = ev.currentTarget;
@@ -759,8 +786,7 @@ return view.extend({
 								const useCustom = currentCon[`enablenote${i}`] === 'true';
 								const fileType = useCustom && currentCon[`model_note${i}`] ? currentCon[`model_note${i}`] : note_suffix;
 								const fileReadOnly = useCustom ? (currentCon[`only_note${i}`] === 'true') : (currentCon.aceonly === 'true');
-								const modeMap = note_type_array.find(t => t[0] === fileType);
-								const mode = modeMap ? modeMap[2] : 'text';
+								const mode = note_type_array[fileType]?.aceMode ?? 'text';
 
 								setTimeout(() => {
 									const id = `editor-${i}`;
@@ -816,8 +842,7 @@ return view.extend({
 								const fileType = useCustom && currentCon[`model_note${i}`]
 									? currentCon[`model_note${i}`]
 									: note_suffix;
-								const modeMap = note_type_array.find(t => t[0] === fileType);
-								const mode = modeMap ? modeMap[3] : 'null';
+								const mode = note_type_array[fileType]?.cmMode ?? null;
 
 								themesToLoad.add(currentCon.cmtheme || 'monokai');
 								if (mode !== 'null') modesToLoad.add(mode);
@@ -836,8 +861,7 @@ return view.extend({
 									const fileReadOnly = useCustom
 										? (currentCon[`only_note${i}`] === 'true')
 										: (currentCon.only === 'true');
-									const modeMap = note_type_array.find(t => t[0] === fileType);
-									const mode = modeMap ? modeMap[3] : 'null';
+									const mode = note_type_array[fileType]?.cmMode ?? null;
 
 									setTimeout(() => {
 										const id = `editor-${i}`;
@@ -862,7 +886,7 @@ return view.extend({
 										const editor = CodeMirror(editorDiv, {
 											lineNumbers: true, mode: mode === 'null' ? null : mode,
 											theme: currentCon.cmtheme || 'monokai', readOnly: fileReadOnly,
-											lineWrapping: true, indentUnit: 4, tabSize: 4
+											lineWrapping: false, indentUnit: 4, tabSize: 4
 										});
 										editor.setSize(null, currentCon.cmheight || '300');
 										editor.getWrapperElement().style.fontSize = (currentCon.cmfont_size || '13') + 'px';
