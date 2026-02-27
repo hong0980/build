@@ -1,0 +1,289 @@
+#!/bin/sh
+# /usr/sbin/easymesh-master
+# 主节点配对服务
+#
+# 职责：
+#   1. 广播临时配对 SSID "EasyMesh-Pairing"（无密码，DHCP 独立网段）
+#   2. 监听从节点配对请求（HTTP :4304）
+#   3. 在 LuCI 节点页展示待确认设备
+#   4. 用户点确认后下发完整 Mesh 配置给从节点
+#   5. 所有从节点确认完成（或超时）后自动关闭配对 SSID
+
+. /lib/functions.sh
+
+PAIRING_SSID="EasyMesh-Pairing"
+PAIRING_IFACE="mesh-pair-ap"     # 临时 AP 接口名
+PAIRING_SUBNET="172.31.255"      # 配对专用网段（不影响主 LAN）
+PAIRING_GW="${PAIRING_SUBNET}.1"
+MASTER_PORT=4304
+PAIR_DB="/tmp/easymesh_pairs"    # 目录，每个 token 一个文件
+APPROVED_DB="/tmp/easymesh_approved"
+LOG_TAG="easymesh-master"
+# 最后一个从节点确认后多少秒关闭配对 SSID
+PAIRING_CLOSE_DELAY=30
+
+log() { logger -t "$LOG_TAG" "$*"; echo "[$(date '+%H:%M:%S')] [master] $*"; }
+
+# ── 读取主节点要下发的配置 ───────────────────
+get_mesh_config_json() {
+    config_load easymesh
+    local mesh_id mesh_key ssid key mobility_domain
+    local ieee80211r ieee80211k ieee80211v mesh_band routing_algo
+    config_get mesh_id        global mesh_id         'OpenWrt-Mesh'
+    config_get mesh_key       global mesh_key         ''
+    config_get ssid           global ssid             'OpenWrt'
+    config_get key            global key              ''
+    config_get mobility_domain global mobility_domain 'aabb'
+    config_get ieee80211r     global ieee80211r        '1'
+    config_get ieee80211k     global ieee80211k        '1'
+    config_get ieee80211v     global ieee80211v        '1'
+    config_get mesh_band      global mesh_band         '5g'
+    config_get routing_algo   global routing_algo      'BATMAN_IV'
+
+    printf '{"status":"approved","mesh_id":"%s","mesh_key":"%s","ssid":"%s","wifi_key":"%s","mobility_domain":"%s","ieee80211r":"%s","ieee80211k":"%s","ieee80211v":"%s","mesh_band":"%s","routing_algo":"%s"}' \
+        "$mesh_id" "$mesh_key" "$ssid" "$key" "$mobility_domain" \
+        "$ieee80211r" "$ieee80211k" "$ieee80211v" "$mesh_band" "$routing_algo"
+}
+
+# ── 开启临时配对 AP ──────────────────────────
+start_pairing_ap() {
+    log "开启临时配对 AP: SSID=$PAIRING_SSID"
+
+    # 找第一个可用 phy
+    local phy
+    phy=$(iw phy 2>/dev/null | awk '/^phy/{print $1}' | head -1)
+    [ -z "$phy" ] && { log "找不到无线硬件"; return 1; }
+
+    # 创建 AP 接口
+    iw phy "$phy" interface add "$PAIRING_IFACE" type __ap 2>/dev/null || true
+    ip link set "$PAIRING_IFACE" up
+
+    # hostapd 配置（开放网络，独立 SSID）
+    cat > /tmp/easymesh_pairing_hostapd.conf << HAPD
+interface=$PAIRING_IFACE
+driver=nl80211
+ssid=$PAIRING_SSID
+hw_mode=g
+channel=6
+auth_algs=1
+wpa=0
+ignore_broadcast_ssid=0
+HAPD
+
+    hostapd -B /tmp/easymesh_pairing_hostapd.conf \
+        -P /tmp/easymesh_pairing_hostapd.pid 2>/dev/null
+
+    # 配对网段 IP 和 DHCP（dnsmasq 独立实例）
+    ip addr add "${PAIRING_GW}/24" dev "$PAIRING_IFACE" 2>/dev/null
+
+    dnsmasq \
+        --interface="$PAIRING_IFACE" \
+        --bind-interfaces \
+        --dhcp-range="${PAIRING_SUBNET}.100,${PAIRING_SUBNET}.200,10m" \
+        --dhcp-option=3,"$PAIRING_GW" \
+        --no-resolv --no-hosts \
+        --pid-file=/tmp/easymesh_pairing_dnsmasq.pid \
+        --log-facility=/tmp/easymesh_pairing_dnsmasq.log \
+        2>/dev/null
+
+    log "配对 AP 已启动（网段: ${PAIRING_SUBNET}.0/24，网关: $PAIRING_GW）"
+}
+
+# ── 关闭临时配对 AP ──────────────────────────
+stop_pairing_ap() {
+    log "关闭临时配对 AP"
+    kill "$(cat /tmp/easymesh_pairing_hostapd.pid 2>/dev/null)" 2>/dev/null
+    kill "$(cat /tmp/easymesh_pairing_dnsmasq.pid 2>/dev/null)" 2>/dev/null
+    iw dev "$PAIRING_IFACE" del 2>/dev/null
+    rm -f /tmp/easymesh_pairing_hostapd.conf \
+          /tmp/easymesh_pairing_hostapd.pid \
+          /tmp/easymesh_pairing_dnsmasq.pid
+    log "配对 AP 已关闭"
+}
+
+# ── HTTP 响应工具 ─────────────────────────────
+http_ok()  { printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n%s\n' "$1"; }
+http_404() { printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n'; }
+
+# ── 处理单次 HTTP 请求（由 nc 子进程调用）──────
+handle_request() {
+    local req_file="$1"
+    local method path body
+
+    # 解析请求行
+    read -r method path _ < "$req_file"
+    path="${path%%\?*}"       # 去掉 query string 用于路由
+    query="${1##*\?}"         # 保留 query string
+    query=$(grep -o '?.*' "$req_file" | head -1 | cut -c2-)
+
+    # 读取 body（POST）
+    body=$(tail -n1 "$req_file")
+
+    case "$path" in
+
+    /easymesh/generate-qr)
+        # LuCI 请求生成一次性配对 token
+        local qr_json
+        qr_json=$(/usr/sbin/easymesh-qr generate)
+        http_ok "$qr_json"
+        ;;
+
+    /easymesh/ping)
+        http_ok '{"type":"easymesh_master","version":"1"}'
+        ;;
+
+    /easymesh/pair)
+        local token node_json
+        token=$(echo "$body" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+        node_json=$(echo "$body" | grep -o '"node":{[^}]*}' | sed 's/"node"://')
+        [ -z "$token" ] && { printf 'HTTP/1.1 400 Bad Request\r\n\r\n'; return; }
+
+        mkdir -p "$PAIR_DB"
+        local ts
+        ts=$(date +%s)
+        echo "{\"token\":\"$token\",\"node\":${node_json:-{}},\"ts\":$ts,\"status\":\"pending\"}" \
+            > "${PAIR_DB}/${token}"
+
+        log "收到配对请求: token=$token node=$node_json"
+        # 写通知文件，供 LuCI 轮询
+        echo "$ts" > /tmp/easymesh_new_node_notify
+
+        http_ok '{"status":"pending"}'
+        ;;
+
+    /easymesh/config)
+        local token
+        token=$(echo "$query" | grep -o 'token=[^&]*' | cut -d= -f2)
+        if [ -f "${APPROVED_DB}/${token}" ]; then
+            http_ok "$(get_mesh_config_json)"
+        else
+            http_ok '{"status":"pending"}'
+        fi
+        ;;
+
+    /easymesh/confirm)
+        local token
+        token=$(echo "$query" | grep -o 'token=[^&]*' | cut -d= -f2)
+        [ -n "$token" ] && {
+            log "从节点已确认配置完成: token=$token"
+            touch "/tmp/easymesh_confirmed_${token}"
+            # 检查是否所有已批准节点都确认完成，是则延迟关闭配对 AP
+            check_all_confirmed
+        }
+        http_ok '{"status":"ok"}'
+        ;;
+
+    /easymesh/qr-config*)
+        # 从节点扫码后用 token 换取配置（一次性）
+        local token
+        token=$(echo "$query" | grep -o 'token=[^&]*' | cut -d= -f2)
+        local result
+        result=$(/usr/sbin/easymesh-qr verify "$token")
+        http_ok "$result"
+        # 记录这个节点已完成配对（用于 LuCI 展示）
+        echo "$result" | grep -q '"status":"approved"' && {
+            mkdir -p "$PAIR_DB"
+            local ts
+            ts=$(date +%s)
+            local node_mac
+            node_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
+            echo "{\"token\":\"$token\",\"node\":{\"mac\":\"${node_mac:-unknown}\"},\"ts\":$ts,\"status\":\"approved\"}" \
+                > "${PAIR_DB}/${token}"
+        }
+        ;;
+
+    /easymesh/nodes)
+        # LuCI 查询待确认节点列表
+        mkdir -p "$PAIR_DB"
+        local nodes="["
+        local first=1
+        for f in "${PAIR_DB}"/*; do
+            [ -f "$f" ] || continue
+            [ "$first" = "0" ] && nodes="${nodes},"
+            nodes="${nodes}$(cat "$f")"
+            first=0
+        done
+        nodes="${nodes}]"
+        http_ok "$nodes"
+        ;;
+
+    /easymesh/approve)
+        local token
+        token=$(echo "$body" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+        [ -n "$token" ] && approve_node "$token"
+        http_ok '{"status":"ok"}'
+        ;;
+
+    /easymesh/reject)
+        local token
+        token=$(echo "$body" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+        [ -n "$token" ] && rm -f "${PAIR_DB}/${token}" "${APPROVED_DB}/${token}"
+        http_ok '{"status":"ok"}'
+        ;;
+
+    *)
+        http_404
+        ;;
+    esac
+}
+
+approve_node() {
+    local token="$1"
+    log "批准节点: token=$token"
+    mkdir -p "$APPROVED_DB"
+    touch "${APPROVED_DB}/${token}"
+    # 更新 pair DB 中的状态
+    [ -f "${PAIR_DB}/${token}" ] && \
+        sed -i 's/"status":"pending"/"status":"approved"/' "${PAIR_DB}/${token}"
+}
+
+check_all_confirmed() {
+    # 如果所有已批准的节点都已确认，安排关闭配对 AP
+    local approved_count confirmed_count=0
+    approved_count=$(ls "${APPROVED_DB}" 2>/dev/null | wc -l)
+    [ "$approved_count" -eq 0 ] && return
+
+    for token in $(ls "${APPROVED_DB}" 2>/dev/null); do
+        [ -f "/tmp/easymesh_confirmed_${token}" ] && confirmed_count=$((confirmed_count + 1))
+    done
+
+    if [ "$confirmed_count" -ge "$approved_count" ]; then
+        log "所有节点配置完成（${confirmed_count}/${approved_count}），${PAIRING_CLOSE_DELAY}s 后关闭配对 AP"
+        ( sleep "$PAIRING_CLOSE_DELAY"; stop_pairing_ap ) &
+    fi
+}
+
+# ── 主循环：轻量 HTTP 服务（nc 逐连接处理）────
+run_http_server() {
+    log "HTTP 配对服务启动，监听 :${MASTER_PORT}"
+    while true; do
+        local req_file="/tmp/easymesh_req_$$_$(date +%s%N 2>/dev/null || date +%s)"
+        # nc 读入请求写到临时文件，再调用处理函数
+        nc -l -p "$MASTER_PORT" > "$req_file" 2>/dev/null << NCEOF | handle_request "$req_file"
+NCEOF
+        # 更通用的方式：用 pipe
+        mkfifo /tmp/easymesh_fifo_$$ 2>/dev/null
+        handle_request_piped() {
+            handle_request /tmp/easymesh_req_$$
+        }
+        nc -l -p "$MASTER_PORT" -e sh -c \
+            "cat > /tmp/easymesh_req_$$; /usr/sbin/easymesh-master --handle /tmp/easymesh_req_$$" \
+            2>/dev/null || {
+            # fallback：不支持 -e 的 nc（如 OpenWrt 默认 busybox nc）
+            nc -l -p "$MASTER_PORT" > /tmp/easymesh_req_$$ 2>/dev/null
+            handle_request "/tmp/easymesh_req_$$" | nc -l -p "$MASTER_PORT" 2>/dev/null
+        }
+        rm -f "/tmp/easymesh_req_$$" "/tmp/easymesh_fifo_$$"
+    done
+}
+
+# ── 入口 ─────────────────────────────────────
+if [ "$1" = "--handle" ]; then
+    handle_request "$2"
+    exit 0
+fi
+
+# 主流程
+mkdir -p "$PAIR_DB" "$APPROVED_DB"
+start_pairing_ap
+run_http_server

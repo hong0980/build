@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>EasyMesh 节点配对</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 360px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 16px;
+    padding: 32px 24px;
+    text-align: center;
+  }
+
+  .logo { font-size: 48px; margin-bottom: 16px; }
+
+  h1 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    color: #7d8590;
+    line-height: 1.6;
+    margin-bottom: 28px;
+  }
+
+  /* 状态视图切换 */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* 扫码按钮 */
+  .scan-btn {
+    width: 100%;
+    padding: 14px;
+    background: #2ea44f;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.2s, transform 0.1s;
+  }
+  .scan-btn:active { background: #2dbe4e; transform: scale(0.98); }
+
+  /* 摄像头视图 */
+  #camera-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+    margin-bottom: 16px;
+  }
+  #video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .scan-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .scan-frame {
+    width: 60%;
+    aspect-ratio: 1;
+    border: 2px solid #2ea44f;
+    border-radius: 8px;
+    box-shadow: 0 0 0 1000px rgba(0,0,0,0.4);
+    animation: scan-pulse 2s ease-in-out infinite;
+  }
+  @keyframes scan-pulse {
+    0%,100% { border-color: #2ea44f; box-shadow: 0 0 0 1000px rgba(0,0,0,0.4), 0 0 12px rgba(46,164,79,0.4); }
+    50% { border-color: #3dd56d; box-shadow: 0 0 0 1000px rgba(0,0,0,0.4), 0 0 20px rgba(46,164,79,0.7); }
+  }
+  .cancel-btn {
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    color: #7d8590;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  /* 进度状态 */
+  .progress-list {
+    text-align: left;
+    margin: 20px 0;
+  }
+  .progress-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 14px;
+    color: #7d8590;
+    border-bottom: 1px solid #21262d;
+    transition: color 0.3s;
+  }
+  .progress-item:last-child { border-bottom: none; }
+  .progress-item.done { color: #e6edf3; }
+  .progress-item.active { color: #2ea44f; }
+  .progress-item.error { color: #f85149; }
+  .step-icon { font-size: 16px; width: 24px; text-align: center; flex-shrink: 0; }
+
+  /* 旋转加载 */
+  .spin {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 成功/失败 */
+  .result-icon { font-size: 56px; margin-bottom: 16px; }
+  .result-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .result-desc { font-size: 13px; color: #7d8590; line-height: 1.6; }
+
+  .retry-btn {
+    margin-top: 20px;
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    color: #2ea44f;
+    border: 1px solid #2ea44f;
+    border-radius: 10px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  canvas#qr-canvas { display: none; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">🕸</div>
+  <h1>EasyMesh 节点配对</h1>
+  <p class="subtitle">扫描主节点上显示的二维码，自动完成 Mesh 组网配置</p>
+
+  <!-- 视图1：准备扫码 -->
+  <div class="view active" id="view-ready">
+    <button class="scan-btn" onclick="startScan()">
+      <span>📷</span> 扫描主节点二维码
+    </button>
+    <p style="margin-top:14px;font-size:12px;color:#7d8590">
+      请先在主节点 LuCI → EasyMesh → 显示配对码
+    </p>
+  </div>
+
+  <!-- 视图2：摄像头扫码 -->
+  <div class="view" id="view-camera">
+    <div id="camera-container">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="scan-overlay">
+        <div class="scan-frame"></div>
+      </div>
+    </div>
+    <canvas id="qr-canvas"></canvas>
+    <button class="cancel-btn" onclick="stopScan()">取消</button>
+  </div>
+
+  <!-- 视图3：配对进行中 -->
+  <div class="view" id="view-pairing">
+    <div class="progress-list" id="progress-list">
+      <div class="progress-item" id="step-qr">
+        <span class="step-icon">✓</span>
+        <span>读取二维码</span>
+      </div>
+      <div class="progress-item" id="step-connect">
+        <span class="step-icon spin">⟳</span>
+        <span>连接主节点...</span>
+      </div>
+      <div class="progress-item" id="step-config">
+        <span class="step-icon">○</span>
+        <span>获取 Mesh 配置</span>
+      </div>
+      <div class="progress-item" id="step-apply">
+        <span class="step-icon">○</span>
+        <span>应用配置并重启</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 视图4：成功 -->
+  <div class="view" id="view-success">
+    <div class="result-icon">🎉</div>
+    <div class="result-title">配对成功！</div>
+    <div class="result-desc">
+      本节点已成功加入 Mesh 网络。<br>
+      路由器即将重启（约30秒），<br>
+      重启后将自动连接 Mesh 网络。
+    </div>
+    <div style="margin-top:20px;padding:12px;background:#0d1117;border-radius:8px;font-size:12px;color:#7d8590">
+      重启完成后，可将本节点移到需要扩展覆盖的位置
+    </div>
+  </div>
+
+  <!-- 视图5：失败 -->
+  <div class="view" id="view-error">
+    <div class="result-icon">❌</div>
+    <div class="result-title">配对失败</div>
+    <div class="result-desc" id="error-msg">请检查主节点是否正常运行</div>
+    <button class="retry-btn" onclick="showView('view-ready')">重新尝试</button>
+  </div>
+</div>
+
+<!-- 引入 jsQR 用于二维码解码 -->
+<script src="jsqr.min.js"></script>
+<script>
+var stream = null;
+var scanTimer = null;
+var video = document.getElementById('video');
+var canvas = document.getElementById('qr-canvas');
+var ctx = canvas.getContext('2d');
+
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ── 摄像头扫码 ────────────────────────────
+async function startScan() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 640 } }
+    });
+    video.srcObject = stream;
+    showView('view-camera');
+    scanTimer = requestAnimationFrame(scanFrame);
+  } catch(e) {
+    showError('无法访问摄像头：' + e.message + '\n请确认浏览器已授权摄像头权限');
+  }
+}
+
+function stopScan() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  if (scanTimer) { cancelAnimationFrame(scanTimer); scanTimer = null; }
+  showView('view-ready');
+}
+
+function scanFrame() {
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    var img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    // jsQR 解码
+    if (typeof jsQR !== 'undefined') {
+      var code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+      if (code && code.data) {
+        stopScan();
+        handleQRCode(code.data);
+        return;
+      }
+    }
+  }
+  scanTimer = requestAnimationFrame(scanFrame);
+}
+
+// ── 处理扫到的二维码内容 ─────────────────
+function handleQRCode(raw) {
+  var data;
+  try { data = JSON.parse(raw); } catch(e) {
+    showError('二维码格式无效，请在主节点重新生成配对码');
+    return;
+  }
+
+  if (!data.ip || !data.token) {
+    showError('二维码内容不完整，请重新生成');
+    return;
+  }
+
+  // 检查有效期
+  if (data.expire && Date.now() / 1000 > data.expire) {
+    showError('配对码已过期（有效期10分钟），请在主节点重新生成');
+    return;
+  }
+
+  // 开始配对流程
+  showView('view-pairing');
+  stepDone('step-qr');
+  doPairing(data.ip, data.token);
+}
+
+// ── 步骤状态更新 ──────────────────────────
+function stepDone(id)   { setStep(id, '✓', 'done'); }
+function stepActive(id, txt) { setStep(id, '⟳', 'active', txt, true); }
+function stepError(id, txt)  { setStep(id, '✗', 'error', txt); }
+
+function setStep(id, icon, cls, txt, spin) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'progress-item ' + cls;
+  el.querySelector('.step-icon').innerHTML = spin
+    ? '<span class="spin">' + icon + '</span>'
+    : icon;
+  if (txt) el.querySelector('span:last-child').textContent = txt;
+}
+
+// ── 向本机后端发起配对（调用 /cgi-bin/easymesh-pair）─
+async function doPairing(masterIp, token) {
+  try {
+    // 调用本机 CGI，传入主节点 IP 和 token
+    // CGI 负责连接主节点、拉取配置、写入UCI
+    stepActive('step-connect', '连接主节点 ' + masterIp + '...');
+
+    var resp = await fetch('/cgi-bin/easymesh-pair', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ master_ip: masterIp, token: token }),
+      signal: AbortSignal.timeout(120000)  // 2分钟超时
+    });
+
+    var result = await resp.json();
+
+    if (result.step === 'connected') {
+      stepDone('step-connect');
+      stepActive('step-config', '获取 Mesh 配置...');
+    }
+    if (result.step === 'config_received') {
+      stepDone('step-config');
+      stepActive('step-apply', '写入配置并重启...');
+    }
+    if (result.status === 'ok') {
+      stepDone('step-connect');
+      stepDone('step-config');
+      stepDone('step-apply');
+      setTimeout(() => showView('view-success'), 500);
+    } else {
+      throw new Error(result.error || '未知错误');
+    }
+
+  } catch(e) {
+    showError('配对失败：' + e.message);
+  }
+}
+
+function showError(msg) {
+  document.getElementById('error-msg').textContent = msg;
+  showView('view-error');
+}
+</script>
+</body>
+</html>

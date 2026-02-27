@@ -40,10 +40,71 @@ return view.extend({
 
 	render: function(data) {
 		var m, s, o;
-		var wirelessStatus = data[3];
+
+		/* ── 顶部配对码区域 ── */
+		var qrSection = E('div', {
+			style: 'background:#161b22;border:1px solid #30363d;border-radius:12px;' +
+			       'padding:20px 24px;margin-bottom:20px'
+		}, [
+			E('div', { style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:16px' }, [
+				E('div', {}, [
+					E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:4px' },
+						'📱 ' + _('添加新节点')),
+					E('div', { style: 'font-size:12px;color:#7d8590' },
+						_('生成配对码 → 新节点浏览器扫描 → 自动完成组网'))
+				]),
+				E('button', {
+					id: 'btn-gen-qr',
+					class: 'cbi-button cbi-button-action',
+					style: 'white-space:nowrap;padding:8px 16px',
+					click: function() { generateQR(this); }
+				}, _('生成配对码'))
+			]),
+
+			/* 二维码展示区（初始隐藏）*/
+			E('div', { id: 'qr-area', style: 'display:none' }, [
+				E('div', { style: 'display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap' }, [
+					/* 二维码图 */
+					E('div', {
+						id: 'qr-canvas-wrap',
+						style: 'background:#fff;border-radius:8px;padding:10px;flex-shrink:0'
+					}),
+					/* 使用说明 */
+					E('div', { style: 'flex:1;min-width:200px' }, [
+						E('ol', {
+							style: 'padding-left:18px;font-size:13px;line-height:2;color:#e6edf3'
+						}, [
+							E('li', {}, _('将新节点上电')),
+							E('li', {}, _('手机连接新节点 WiFi（默认 SSID: OpenWrt）')),
+							E('li', {}, [
+								_('浏览器打开 '),
+								E('code', { style: 'background:#0d1117;padding:1px 6px;border-radius:4px' },
+									'192.168.1.1/easymesh-pair')
+							]),
+							E('li', {}, _('扫描此二维码')),
+							E('li', {}, _('等待自动完成 ✓'))
+						]),
+						E('div', {
+							id: 'qr-expire',
+							style: 'margin-top:8px;font-size:12px;color:#e3b341'
+						})
+					])
+				])
+			])
+		]);
 
 		m = new form.Map('easymesh', _('EasyMesh 配置'),
-			_('基于 batman-adv + 802.11s 的无线 Mesh 网络。所有节点需使用相同的 Mesh ID 和密码。'));
+			_('基于 batman-adv + 802.11s 的无线 Mesh 网络。'));
+
+		m.on('render', function(node) {
+			node.insertBefore(qrSection, node.firstChild);
+			/* 动态加载 qrcode.js */
+			if (!window.QRCode) {
+				var s = document.createElement('script');
+				s.src = L.resourceCacheBusted('view/easymesh/qrcode.min.js');
+				document.head.appendChild(s);
+			}
+		});
 
 		/* ======================================
 		 * Section 1: 基本设置
@@ -217,3 +278,63 @@ return view.extend({
 		return uci.revertAll().then(L.bind(this.render, this));
 	}
 });
+
+/* ── 生成配对二维码（全局函数，由页面按钮调用）── */
+window.generateQR = function(btn) {
+	btn.disabled = true;
+	btn.textContent = '生成中...';
+
+	fetch('http://' + window.location.hostname + ':4304/easymesh/generate-qr', {
+		signal: AbortSignal.timeout(5000)
+	})
+	.then(function(r) { return r.json(); })
+	.then(function(data) {
+		if (!data.token) throw new Error('主节点未返回 token，请先保存并应用 EasyMesh 配置');
+
+		var qrArea = document.getElementById('qr-area');
+		var wrap   = document.getElementById('qr-canvas-wrap');
+		wrap.innerHTML = '';
+
+		var qrData = JSON.stringify({ ip: data.ip, token: data.token, expire: data.expire });
+
+		if (window.QRCode) {
+			new QRCode(wrap, {
+				text: qrData,
+				width: 160, height: 160,
+				correctLevel: QRCode.CorrectLevel.M
+			});
+		} else {
+			/* fallback：用 <img> 请求 Google Charts QR API（离线环境不可用时显示文本）*/
+			var img = document.createElement('img');
+			img.src = 'https://chart.googleapis.com/chart?chs=160x160&cht=qr&chl=' +
+			          encodeURIComponent(qrData);
+			img.onerror = function() { wrap.textContent = qrData; };
+			wrap.appendChild(img);
+		}
+
+		qrArea.style.display = 'block';
+		btn.textContent = '重新生成';
+		btn.disabled = false;
+
+		/* 倒计时显示有效期 */
+		var expireEl = document.getElementById('qr-expire');
+		var expire = data.expire;
+		var countdownTimer = setInterval(function() {
+			var left = Math.max(0, expire - Math.floor(Date.now() / 1000));
+			var m = Math.floor(left / 60);
+			var s = left % 60;
+			expireEl.textContent = left > 0
+				? '⏱ 配对码有效期：' + m + ':' + (s < 10 ? '0' : '') + s
+				: '⚠ 配对码已过期，请点"重新生成"';
+			if (left === 0) {
+				clearInterval(countdownTimer);
+				wrap.innerHTML = '<div style="color:#f85149;padding:20px;font-size:12px;text-align:center">已过期</div>';
+			}
+		}, 1000);
+	})
+	.catch(function(e) {
+		btn.disabled = false;
+		btn.textContent = '生成配对码';
+		alert('生成失败：' + e.message);
+	});
+};

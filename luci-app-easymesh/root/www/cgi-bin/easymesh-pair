@@ -1,0 +1,105 @@
+#!/bin/sh
+# /www/cgi-bin/easymesh-pair
+# 从节点配对 CGI
+# 被配对页面的 JS 调用，负责：
+#   1. 接收主节点 IP + token
+#   2. 连接主节点验证 token
+#   3. 拉取 Mesh 配置
+#   4. 写入 UCI 并重启服务
+
+MASTER_PORT=4304
+
+# ── CGI 头 ───────────────────────────────────
+printf 'Content-Type: application/json\r\n\r\n'
+
+# ── 读取 POST body ────────────────────────────
+read -r body
+
+# ── 解析 JSON（不依赖 jq）────────────────────
+json_get() { echo "$1" | grep -o "\"${2}\":\"[^\"]*\"" | head -1 | cut -d'"' -f4; }
+
+master_ip=$(json_get "$body" "master_ip")
+token=$(json_get "$body" "token")
+
+# ── 基本校验 ──────────────────────────────────
+if [ -z "$master_ip" ] || [ -z "$token" ]; then
+    echo '{"status":"error","error":"缺少 master_ip 或 token 参数"}'
+    exit 0
+fi
+
+# 简单校验 IP 格式
+echo "$master_ip" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || {
+    echo '{"status":"error","error":"无效的 IP 地址格式"}'
+    exit 0
+}
+
+# ── Step 1: 连接主节点，验证身份 ──────────────
+ping_resp=$(wget -q -T 5 -O- \
+    "http://${master_ip}:${MASTER_PORT}/easymesh/ping" 2>/dev/null)
+
+echo "$ping_resp" | grep -q '"easymesh_master"' || {
+    echo "{\"status\":\"error\",\"error\":\"无法连接主节点 ${master_ip}:${MASTER_PORT}，请确认主节点已启用 EasyMesh\"}"
+    exit 0
+}
+
+# ── Step 2: 用 token 向主节点请求配置 ─────────
+config_resp=$(wget -q -T 10 -O- \
+    "http://${master_ip}:${MASTER_PORT}/easymesh/qr-config?token=${token}" 2>/dev/null)
+
+# token 验证
+echo "$config_resp" | grep -q '"status":"expired"' && {
+    echo '{"status":"error","error":"配对码已过期，请在主节点重新生成"}'
+    exit 0
+}
+echo "$config_resp" | grep -q '"status":"invalid"' && {
+    echo '{"status":"error","error":"配对码无效，请重新扫描"}'
+    exit 0
+}
+echo "$config_resp" | grep -q '"status":"approved"' || {
+    echo "{\"status\":\"error\",\"error\":\"主节点拒绝配对请求，响应: ${config_resp}\"}"
+    exit 0
+}
+
+# ── Step 3: 解析并写入配置 ────────────────────
+mesh_id=$(json_get "$config_resp" "mesh_id")
+mesh_key=$(json_get "$config_resp" "mesh_key")
+ssid=$(json_get "$config_resp" "ssid")
+wifi_key=$(json_get "$config_resp" "wifi_key")
+mobility_domain=$(json_get "$config_resp" "mobility_domain")
+ieee80211r=$(json_get "$config_resp" "ieee80211r")
+ieee80211k=$(json_get "$config_resp" "ieee80211k")
+ieee80211v=$(json_get "$config_resp" "ieee80211v")
+mesh_band=$(json_get "$config_resp" "mesh_band")
+routing_algo=$(json_get "$config_resp" "routing_algo")
+
+[ -z "$mesh_id" ] && {
+    echo '{"status":"error","error":"配置数据不完整，缺少 mesh_id"}'
+    exit 0
+}
+
+uci batch << UCIEOF
+set easymesh.global.enabled=1
+set easymesh.global.role=slave
+set easymesh.global.mesh_id=$mesh_id
+set easymesh.global.mesh_key=$mesh_key
+set easymesh.global.ssid=$ssid
+set easymesh.global.key=$wifi_key
+set easymesh.global.mobility_domain=${mobility_domain:-aabb}
+set easymesh.global.ieee80211r=${ieee80211r:-1}
+set easymesh.global.ieee80211k=${ieee80211k:-1}
+set easymesh.global.ieee80211v=${ieee80211v:-1}
+set easymesh.global.mesh_band=${mesh_band:-5g}
+set easymesh.global.routing_algo=${routing_algo:-BATMAN_IV}
+set easymesh.global.backhaul=wireless
+commit easymesh
+UCIEOF
+
+# ── Step 4: 通知主节点配置已完成 ──────────────
+wget -q -T 5 -O/dev/null \
+    "http://${master_ip}:${MASTER_PORT}/easymesh/confirm?token=${token}" 2>/dev/null
+
+# ── 返回成功，延迟重启（给 HTTP 响应时间返回）──
+echo '{"status":"ok","step":"config_received"}'
+
+# 后台重启，不阻塞 CGI 响应
+( sleep 2; /etc/init.d/easymesh restart ) &
