@@ -1,92 +1,94 @@
-msgid "EASY MESH"
-msgstr "简单MESH"
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
 
-msgid "EasyMesh Configuration"
+msgid "EasyMesh 配置"
 msgstr "EasyMesh 配置"
 
-msgid "Configure wireless mesh network using Batman-adv"
-msgstr "使用 Batman-adv 配置 Mesh 无线网络"
+msgid "基于 batman-adv + 802.11s 的无线 Mesh 网络。所有节点需使用相同的 Mesh ID 和密码。"
+msgstr "基于 batman-adv + 802.11s 的无线 Mesh 网络。所有节点需使用相同的 Mesh ID 和密码。"
 
-msgid "<b>Active Mesh Nodes: %d</b>"
-msgstr "<b>活动 Mesh 节点：%d</b>"
+msgid "启用 EasyMesh"
+msgstr "启用 EasyMesh"
 
-msgid "Neighbor MAC"
-msgstr "MAC 地址"
+msgid "节点角色"
+msgstr "节点角色"
 
-msgid "Last Seen"
-msgstr "连接时间"
+msgid "主节点（连接光猫）"
+msgstr "主节点（连接光猫）"
 
-msgid "Link Quality"
-msgstr "连接时间"
+msgid "从节点（扩展覆盖）"
+msgstr "从节点（扩展覆盖）"
 
-msgid "Enable"
-msgstr "启用"
+msgid "回程方式"
+msgstr "回程方式"
 
-msgid "Enable or disable EASY MESH"
-msgstr "启用或禁用简单MESH"
+msgid "有线回程（推荐）"
+msgstr "有线回程（推荐）"
 
-msgid "Radio device"
-msgstr "无线设备"
+msgid "无线回程（5GHz）"
+msgstr "无线回程（5GHz）"
 
-msgid "The radio device which MESH use"
-msgstr "选择 MESH 组网的无线设备"
+msgid "自动选择（有线优先）"
+msgstr "自动选择（有线优先）"
 
-msgid "role"
-msgstr "角色"
+msgid "Mesh 回程网络"
+msgstr "Mesh 回程网络"
 
-msgid "off"
-msgstr "关闭"
+msgid "Mesh 网络 ID"
+msgstr "Mesh 网络 ID"
 
-msgid "host MESH"
-msgstr "主MESH"
+msgid "Mesh 密码（SAE 加密）"
+msgstr "Mesh 密码（SAE 加密）"
 
-msgid "son MESH"
-msgstr "子MESH"
+msgid "Mesh 回程频段"
+msgstr "Mesh 回程频段"
 
-msgid "AUTO"
-msgstr "自动"
+msgid "客户端 WiFi（AP）"
+msgstr "客户端 WiFi（AP）"
 
-msgid "Encryption"
-msgstr "加密"
+msgid "漫游设置（802.11r/k/v）"
+msgstr "漫游设置（802.11r/k/v）"
 
-msgid "Key"
-msgstr "密码"
+msgid "802.11r 快速 BSS 切换"
+msgstr "802.11r 快速 BSS 切换"
 
-msgid "Threshold for an good RSSI"
-msgstr "快速漫游接入值"
+msgid "漫游域 ID（Mobility Domain）"
+msgstr "漫游域 ID（Mobility Domain）"
 
-msgid "Threshold for an bad RSSI"
-msgstr "快速漫游踢出值"
+msgid "802.11k 邻居报告"
+msgstr "802.11k 邻居报告"
 
-msgid "AP MODE Enable"
-msgstr "启用AP模式"
+msgid "802.11v BSS 过渡管理"
+msgstr "802.11v BSS 过渡管理"
 
-msgid "Enable or disable AP MODE"
-msgstr "启用或禁用AP模式"
+msgid "Mesh 网络状态"
+msgstr "Mesh 网络状态"
 
-msgid "IPv4-Address"
-msgstr "IPv4 地址"
+msgid "发现邻居节点"
+msgstr "发现邻居节点"
 
-msgid "IPv4 netmask"
-msgstr "IPv4 子网掩码"
+msgid " 台"
+msgstr " 台"
 
-msgid "IPv4 gateway"
-msgstr "IPv4 网关"
+msgid "邻居 MAC 地址"
+msgstr "邻居 MAC 地址"
 
-msgid "Use custom DNS servers"
-msgstr "使用自定义的 DNS 服务器"
+msgid "链路质量"
+msgstr "链路质量"
 
-msgid "Enable 802.11k/v/r for improved roaming and network management. 802.11k provides neighbor reports, 802.11v supports load balancing, and 802.11r enables fast AP transitions."
-msgstr "启用 802.11k/v/r 以改善漫游和网络管理。802.11k 提供邻居报告，802.11v 支持负载均衡，802.11r 实现快速 AP 切换。"
+msgid "下一跳"
+msgstr "下一跳"
 
-msgid "RSSI threshold (dBm) for a good signal, used by DAWN to prefer stronger APs."
-msgstr "良好信号的 RSSI 阈值（dBm），DAWN 用以优先选择较强的 AP。"
+msgid "接口"
+msgstr "接口"
 
-msgid "RSSI threshold (dBm) for a bad signal, used by DAWN to trigger AP switching."
-msgstr "较差信号的 RSSI 阈值（dBm），DAWN 用以触发 AP 切换。"
+msgid "最后seen"
+msgstr "最后seen"
 
-msgid "Up"
-msgstr "上移"
+msgid "未启动"
+msgstr "未启动"
 
-msgid "Down"
-msgstr "下移"
+msgid "运行中"
+msgstr "运行中"

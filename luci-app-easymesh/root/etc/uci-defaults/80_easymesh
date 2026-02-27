@@ -1,0 +1,23 @@
+#!/bin/sh
+# UCI defaults for luci-app-easymesh
+# This script runs once after package install
+
+[ -f /etc/config/easymesh ] || {
+	uci set easymesh.global=easymesh
+	uci set easymesh.global.enabled=0
+	uci set easymesh.global.role=master
+	uci set easymesh.global.backhaul=wireless
+	uci set easymesh.global.mesh_id=OpenWrt-Mesh
+	uci set easymesh.global.mesh_key=meshpassword
+	uci set easymesh.global.mesh_band=5g
+	uci set easymesh.global.ssid=OpenWrt
+	uci set easymesh.global.ieee80211r=1
+	uci set easymesh.global.mobility_domain=aabb
+	uci commit easymesh
+}
+
+# 确保 init.d 脚本有执行权限并注册开机自启
+chmod +x /etc/init.d/easymesh
+/etc/init.d/easymesh enable
+
+exit 0

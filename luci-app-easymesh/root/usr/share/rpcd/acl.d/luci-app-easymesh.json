@@ -1,11 +1,27 @@
 {
-    "luci-app-easymesh": {
-        "description": "Grant UCI access for luci-app-easymesh",
-        "read": {
-            "uci": [ "easymesh" ]
-        },
-        "write": {
-            "uci": [ "easymesh" ]
-        }
-    }
+	"luci-app-easymesh": {
+		"description": "Grant UCI access for EasyMesh configuration",
+		"read": {
+			"uci": [ "easymesh", "wireless", "network", "batman-adv" ],
+			"ubus": {
+				"uci": [ "get", "changes" ],
+				"network.interface": [ "status", "dump" ],
+				"network.wireless": [ "status" ],
+				"luci": [ "getConntrackList" ]
+			},
+			"file": {
+				"/sys/kernel/debug/batman_adv/bat0/originators": [ "read" ],
+				"/sys/kernel/debug/batman_adv/bat0/neighbors": [ "read" ],
+				"/sys/kernel/debug/batman_adv/bat0/transtable_global": [ "read" ]
+			}
+		},
+		"write": {
+			"uci": [ "easymesh", "wireless", "network", "batman-adv" ],
+			"ubus": {
+				"uci": [ "add", "set", "delete", "apply", "confirm", "order" ],
+				"network": [ "restart" ],
+				"network.interface": [ "up", "down" ]
+			}
+		}
+	}
 }

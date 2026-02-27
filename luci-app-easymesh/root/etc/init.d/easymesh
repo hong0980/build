@@ -1,229 +1,277 @@
 #!/bin/sh /etc/rc.common
-START=99
-STOP=70
+# SPDX-License-Identifier: GPL-2.0-or-later
+# luci-app-easymesh - /etc/init.d/easymesh
+# 核心服务脚本：读取 /etc/config/easymesh，生成对应的
+# wireless / network / batman-adv UCI 配置并重启网络
 
-uci_changes() {
-	local changes=$(uci -q changes "$1")
-	[ -n "$changes" ] && uci_commit "$1" && return 0
-	return 1
+USE_PROCD=1
+START=95
+STOP=10
+
+PROG=/usr/bin/batctl
+UCI_APP=easymesh
+
+. /lib/functions.sh
+. /lib/functions/network.sh
+
+# ─────────────────────────────────────────────
+# 工具函数
+# ─────────────────────────────────────────────
+
+log() {
+	logger -t easymesh "$*"
+	echo "[easymesh] $*"
 }
 
-load_easymesh_config() {
-	ipaddr=$(uci_get network lan ipaddr)
-	mesh_bat0=$(uci_get network bat0 '')
-	lan=$(uci_get network lan ifname '')
-	brlan=$(uci_get network @device[0] name '')
+# 找出对应频段的 radio 设备名（radio0=2.4G, radio1=5G，部分设备相反）
+# 返回值写入变量 $1
+get_radio_for_band() {
+	local _var="$1"
+	local _band="$2"   # "2g" 或 "5g"
+	local _radio _found=""
 
-	config_get_bool kvr default kvr 0
-	config_get_bool enabled default enabled 0
-	config_get_bool ap_mode default ap_mode 0
-	config_get_bool encryption default encryption 0
-	config_get dns default dns ""
-	config_get key default key ""
-	config_get role default role ""
-	config_get ap_ipaddr default ap_ipaddr ""
-	config_get netmask default netmask ""
-	config_get gateway default gateway ""
-	config_get apRadio default apRadio ""
-	config_get mesh_id default mesh_id ""
-	config_get rssi_val default rssi_val ""
-	config_get low_rssi_val default low_rssi_val ""
-	config_get mobility_domain default mobility_domain ""
-
-    config_get dns_old default dns_old ""
-    config_get ipaddr_old default ipaddr_old ""
-    config_get netmask_old default netmask_old ""
-}
-
-configure_ap_mode() {
-	if [ "$ap_mode" -eq 1 -a "$ap_ipaddr" != "$ipaddr" ]; then
-		uci_set network lan ipaddr "$ap_ipaddr"
-		uci_set network lan netmask "$netmask"
-		uci_set network lan gateway "$gateway"
-		uci_add_list network lan dns "$dns"
-
-        uci_set dhcp lan ignore '1'
-		uci_set dhcp lan dynamicdhcp '0'
-		uci_remove dhcp lan ra
-		uci_remove dhcp lan dhcpv6
-		uci_remove dhcp lan ra_management
-        uci_set easymesh dns_old $dns
-        uci_set easymesh ipaddr_old $ipaddr
-        uci_set easymesh netmask_old $netmask
-
-		/etc/init.d/odhcpd stop && /etc/init.d/odhcpd disable
-		/etc/init.d/firewall stop && /etc/init.d/firewall disable >/dev/null 2>&1
-	elif [ "$ap_mode" -eq 1 -a -n "$ap_ipaddr" -o -n "$ipaddr_old" ]; then
-		if [ "$ap_ipaddr" = "$ipaddr_old" ]; then
-			uci_remove_list network lan dns "$dns_old"
-			uci_remove network lan gateway
-			uci_remove dhcp lan dynamicdhcp
-			uci_remove dhcp lan ignore
-            uci_set network lan netmask "$netmask_old"
-
-			/etc/init.d/odhcpd enable && /etc/init.d/odhcpd start
-			/etc/init.d/firewall enable && /etc/init.d/firewall start >/dev/null 2>&1
-		fi
-	fi
-}
-
-add_wifi_mesh() {
-	local cfg="$1"
-	mesh_mesh=$(uci_get wireless mesh_${cfg} '')
-	mesh_nwi_mesh=$(uci_get network nwi_mesh_${cfg} '')
-	mesh_apRadio=$(uci_get wireless mesh_${cfg} device '')
-
-	if [ "$mesh_nwi_mesh" != "interface" ]; then
-		uci_set network nwi_mesh_${cfg} interface
-		uci_set network nwi_mesh_${cfg} proto 'batadv_hardif'
-		uci_set network nwi_mesh_${cfg} master 'bat0'
-		uci_set network nwi_mesh_${cfg} mtu '1536'
-	fi
-
-	if [ "$mesh_mesh" != "wifi-iface" ]; then
-		uci_set wireless mesh_${cfg} wifi-iface
-		uci_set wireless mesh_${cfg} device "$cfg"
-		uci_set wireless mesh_${cfg} ifname mesh_${cfg}
-		uci_set wireless mesh_${cfg} network nwi_mesh_${cfg}
-		uci_set wireless mesh_${cfg} mode 'mesh'
-		uci_set wireless mesh_${cfg} mesh_id "$mesh_id"
-		uci_set wireless mesh_${cfg} mesh_fwding '0'
-		uci_set wireless mesh_${cfg} mesh_ttl '1'
-		uci_set wireless mesh_${cfg} mcast_rate '24000'
-		uci_set wireless mesh_${cfg} disabled '0'
-	fi
-
-	if [ "$mesh_mesh" = "wifi-iface" ] && [ "$mesh_apRadio" != "$cfg" ]; then
-		uci_set wireless mesh_${cfg} device "$cfg"
-	fi
-
-	if [ "$encryption" != 1 ]; then
-		uci_set wireless mesh_${cfg} encryption 'none'
-	else
-		uci_set wireless mesh_${cfg} encryption 'sae'
-		uci_set wireless mesh_${cfg} key "$key"
-	fi
-}
-
-configure_kvr() {
-	local cfg="$1"
-	if [ "$kvr" = 1 ]; then
-		uci_set wireless default_${cfg} ieee80211k 1 2>/dev/null
-		uci_set wireless default_${cfg} rrm_neighbor_report 1 2>/dev/null
-		uci_set wireless default_${cfg} rrm_beacon_report 1 2>/dev/null
-		uci_set wireless default_${cfg} ieee80211v 1 2>/dev/null
-		uci_set wireless default_${cfg} bss_transition 1 2>/dev/null
-		uci_set wireless default_${cfg} ieee80211r 1 2>/dev/null
-		uci_set wireless default_${cfg} encryption 'psk2+ccmp' 2>/dev/null
-		uci_set wireless default_${cfg} mobility_domain "$mobility_domain" 2>/dev/null
-		uci_set wireless default_${cfg} ft_over_ds 1 2>/dev/null
-		uci_set wireless default_${cfg} ft_psk_generate_local 1 2>/dev/null
-	else
-		uci_remove wireless default_${cfg} ieee80211k 2>/dev/null
-		uci_remove wireless default_${cfg} ieee80211v 2>/dev/null
-		uci_remove wireless default_${cfg} ieee80211r 2>/dev/null
-	fi
-}
-
-add_dawn() {
-	if [ "$kvr" = 1 ]; then
-		uci_set dawn @metric[0] rssi_val "$rssi_val"
-		uci_set dawn @metric[0] low_rssi_val "$low_rssi_val"
-	else
-		/etc/init.d/dawn stop && /etc/init.d/dawn disable
-		return
-	fi
-}
-
-remove_wifi_mesh() {
-	local cfg="$1"
-	mesh_nwi_mesh=$(uci_get network nwi_mesh_${cfg} '')
-	mesh_mesh=$(uci_get wireless mesh_${cfg} '')
-
-	if [ "$mesh_nwi_mesh" = "interface" ]; then
-		uci_remove network nwi_mesh_${cfg}
-	fi
-
-	if [ "$mesh_mesh" = "wifi-iface" ]; then
-		uci_remove wireless mesh_${cfg}
-	fi
-}
-
-set_easymesh() {
-	load_easymesh_config
 	config_load wireless
+	config_foreach _find_radio wifi-device
+	eval "$_var='$_found'"
+}
 
-	if [ "$enabled" = 1 ]; then
-		if [ "$mesh_bat0" != "interface" ]; then
-			uci_set network bat0 interface
-			uci_set network bat0 proto 'batadv'
-			uci_set network bat0 routing_algo 'BATMAN_IV'
-			uci_set network bat0 aggregated_ogms '1'
-			uci_set network bat0 ap_isolation '0'
-			uci_set network bat0 bonding '0'
-			uci_set network bat0 bridge_loop_avoidance '1'
-			uci_set network bat0 distributed_arp_table '1'
-			uci_set network bat0 fragmentation '1'
-			uci_set network bat0 hop_penalty '30'
-			uci_set network bat0 isolation_mark '0x00000000/0x00000000'
-			uci_set network bat0 log_level '0'
-			uci_set network bat0 multicast_fanout '16'
-			uci_set network bat0 multicast_mode '1'
-			uci_set network bat0 network_coding '0'
-			uci_set network bat0 orig_interval '1000'
-			uci_set network bat0 gw_mode "$role"
+_find_radio() {
+	local _name="$1"
+	local _band
+	config_get _band "$_name" band
 
-			if [ "$brlan" = "br-lan" ]; then
-				uci_add_list network @device[0] ports 'bat0'
-			else
-				uci_set network lan ifname "$lan bat0"
-			fi
-		fi
+	# 兼容 "2g"/"5g" 和 "2.4GHz"/"5GHz" 两种写法
+	case "$_band" in
+		2g|2.4GHz|bgn|bg|b)
+			[ "$_band_target" = "2g" ] && _found="$_name" ;;
+		5g|5GHz|an|a)
+			[ "$_band_target" = "5g" ] && _found="$_name" ;;
+	esac
+}
 
-		if [ "$apRadio" = "all" ]; then
-			config_foreach add_wifi_mesh wifi-device
-		else
-			[ -n "$(uci_get wireless "$apRadio" '')" ] && add_wifi_mesh "$apRadio"
-		fi
+# 删除本插件之前创建的所有 wifi-iface（通过 easymesh_managed=1 标记识别）
+cleanup_wireless() {
+	local _iface
+	config_load wireless
+	config_foreach _del_managed_iface wifi-iface
+}
 
-	else
-		if [ "$mesh_bat0" = "interface" ]; then
-			uci_remove network bat0
-			if [ "$brlan" = "br-lan" ]; then
-				uci_remove_list network @device[0] ports 'bat0'
-			else
-				uci_set network lan ifname "$(echo "$lan" | sed 's/ bat0//')"
-			fi
-		fi
+_del_managed_iface() {
+	local _name="$1"
+	local _managed
+	config_get _managed "$_name" easymesh_managed
+	[ "$_managed" = "1" ] && uci del wireless."$_name" && log "删除旧接口: $_name"
+}
 
-		config_foreach remove_wifi_mesh wifi-device
-	fi
-
-	config_foreach configure_kvr wifi-device
-	add_dawn
-	configure_ap_mode
-
-	for config in network dhcp wireless dawn easymesh; do
-		if uci_changes "$config"; then
-			case "$config" in
-				dawn) /etc/init.d/dawn reload ;;
-				dhcp) /etc/init.d/dnsmasq reload ;;
-				network|wireless) /etc/init.d/network reload || /etc/init.d/network restart ;;
-			esac
-		fi
+# 删除本插件管理的 network 接口
+cleanup_network() {
+	for _iface in mesh bat0; do
+		uci -q del network."$_iface" && log "删除旧网络接口: $_iface"
 	done
 }
 
-restart() {
-	[ -e '/etc/config/wireless' ] || return 1
-	config_load easymesh
-	config_foreach set_easymesh easymesh
+# ─────────────────────────────────────────────
+# 核心配置函数
+# ─────────────────────────────────────────────
+
+apply_config() {
+	local enabled role backhaul
+	local mesh_id mesh_key mesh_band
+	local ssid key
+	local ieee80211r mobility_domain ft_over_ds reassociation_deadline
+	local ieee80211k ieee80211v
+	local routing_algo mesh_fwding
+
+	# 读取 easymesh UCI
+	config_load "$UCI_APP"
+	config_get enabled  global enabled  '0'
+	config_get role     global role     'master'
+	config_get backhaul global backhaul 'wireless'
+
+	config_get mesh_id   global mesh_id   'OpenWrt-Mesh'
+	config_get mesh_key  global mesh_key  ''
+	config_get mesh_band global mesh_band '5g'
+
+	config_get ssid global ssid 'OpenWrt'
+	config_get key  global key  ''
+
+	config_get ieee80211r              global ieee80211r              '1'
+	config_get mobility_domain         global mobility_domain         'aabb'
+	config_get ft_over_ds              global ft_over_ds              '1'
+	config_get reassociation_deadline  global reassociation_deadline  '1000'
+	config_get ieee80211k              global ieee80211k              '1'
+	config_get ieee80211v              global ieee80211v              '1'
+	config_get routing_algo            global routing_algo            'BATMAN_IV'
+	config_get mesh_fwding             global mesh_fwding             '0'
+
+	# 先清理旧配置
+	cleanup_wireless
+	cleanup_network
+
+	if [ "$enabled" != "1" ]; then
+		log "EasyMesh 未启用，清理完成，退出"
+		uci commit wireless
+		uci commit network
+		reload_config
+		return 0
+	fi
+
+	# ── 找到对应 radio ──
+	local radio_mesh radio_ap
+
+	# Mesh 回程用指定频段
+	_band_target="$mesh_band"
+	config_load wireless
+	config_foreach _find_radio wifi-device
+	radio_mesh="$_found"
+
+	# AP 接口用另一个频段（或同频段，取 radio0 作为 2.4G AP 备选）
+	# 简单策略：如果 mesh 用 5G，AP 也用 5G（同 radio，不同 iface）
+	radio_ap="$radio_mesh"
+
+	if [ -z "$radio_mesh" ]; then
+		log "错误：找不到 ${mesh_band} 频段的 radio，请检查无线硬件"
+		return 1
+	fi
+
+	log "使用 radio: mesh=$radio_mesh  ap=$radio_ap"
+
+	# ── 配置 batman-adv ──
+	log "配置 batman-adv..."
+	uci set batman-adv.bat0=mesh
+	uci set batman-adv.bat0.interfaces='mesh0'
+	uci set batman-adv.bat0.routing_algo="$routing_algo"
+	uci set batman-adv.bat0.aggregated_ogms='true'
+	uci set batman-adv.bat0.orig_interval='1000'
+	uci commit batman-adv
+
+	# ── 配置 network ──
+	log "配置 network 接口..."
+
+	# mesh0 物理接口 → 作为 batman-adv 成员
+	uci set network.mesh=interface
+	uci set network.mesh.proto='batadv_hardif'
+	uci set network.mesh.master='bat0'
+	uci set network.mesh.mtu='1536'
+
+	# bat0 虚拟接口
+	uci set network.bat0=interface
+	uci set network.bat0.proto='batadv'
+	uci set network.bat0.routing_algo="$routing_algo"
+
+	if [ "$role" = "master" ]; then
+		# 主节点：bat0 桥接进 LAN，LAN 静态 IP
+		log "主节点模式：bat0 桥接到 LAN"
+		local lan_ifname
+		network_get_device lan_ifname lan
+		uci set network.lan.type='bridge'
+		# 把 bat0 加入 LAN bridge
+		local cur_ifnames
+		cur_ifnames=$(uci get network.lan.ifname 2>/dev/null || echo "")
+		echo "$cur_ifnames" | grep -qw "bat0" || \
+			uci set network.lan.ifname="${cur_ifnames} bat0"
+	else
+		# 从节点：bat0 作为独立接口，从主节点 DHCP 获取 IP；关闭 LAN DHCP
+		log "从节点模式：bat0 DHCP，禁用本机 DHCP server"
+		uci set network.bat0.proto='dhcp'
+		uci set dhcp.lan.ignore='1'
+	fi
+
+	uci commit network
+
+	# ── 配置无线 ──
+	log "配置 wireless 接口..."
+
+	# 1. Mesh 回程接口（802.11s）
+	uci set wireless.mesh0=wifi-iface
+	uci set wireless.mesh0.device="$radio_mesh"
+	uci set wireless.mesh0.mode='mesh'
+	uci set wireless.mesh0.mesh_id="$mesh_id"
+	uci set wireless.mesh0.mesh_fwding="$mesh_fwding"
+	uci set wireless.mesh0.mesh_rssi_threshold='-80'
+	uci set wireless.mesh0.network='mesh'
+	uci set wireless.mesh0.easymesh_managed='1'   # 标记为本插件管理
+
+	if [ -n "$mesh_key" ]; then
+		uci set wireless.mesh0.encryption='sae'
+		uci set wireless.mesh0.key="$mesh_key"
+	else
+		uci set wireless.mesh0.encryption='none'
+	fi
+
+	# 有线回程时无线 mesh 接口可关闭
+	if [ "$backhaul" = "wired" ]; then
+		uci set wireless.mesh0.disabled='1'
+		log "有线回程模式，无线 mesh 接口已禁用"
+	fi
+
+	# 2. AP 接口（对客户端）
+	uci set wireless.easymesh_ap=wifi-iface
+	uci set wireless.easymesh_ap.device="$radio_ap"
+	uci set wireless.easymesh_ap.mode='ap'
+	uci set wireless.easymesh_ap.ssid="$ssid"
+	uci set wireless.easymesh_ap.network='lan'
+	uci set wireless.easymesh_ap.easymesh_managed='1'
+
+	if [ -n "$key" ]; then
+		uci set wireless.easymesh_ap.encryption='psk2+ccmp'
+		uci set wireless.easymesh_ap.key="$key"
+	else
+		uci set wireless.easymesh_ap.encryption='none'
+	fi
+
+	# 漫游参数
+	if [ "$ieee80211r" = "1" ]; then
+		uci set wireless.easymesh_ap.ieee80211r='1'
+		uci set wireless.easymesh_ap.mobility_domain="$mobility_domain"
+		uci set wireless.easymesh_ap.ft_over_ds="$ft_over_ds"
+		uci set wireless.easymesh_ap.ft_psk_generate_local='1'
+		uci set wireless.easymesh_ap.reassociation_deadline="$reassociation_deadline"
+	fi
+	[ "$ieee80211k" = "1" ] && uci set wireless.easymesh_ap.ieee80211k='1'
+	[ "$ieee80211v" = "1" ] && uci set wireless.easymesh_ap.ieee80211v='1'
+
+	uci commit wireless
+
+	log "UCI 配置写入完成，重启无线和网络..."
 }
 
-stop() {
-	:
+# ─────────────────────────────────────────────
+# procd 接口
+# ─────────────────────────────────────────────
+
+start_service() {
+	apply_config
+
+	# 用 procd 启动一个 batctl 监控进程（保持服务存活以便 procd 管理）
+	procd_open_instance
+	procd_set_param command /bin/sh -c \
+		'while true; do sleep 30; batctl meshif bat0 o > /dev/null 2>&1 || true; done'
+	procd_set_param respawn 3600 5 0
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+
+	# 重启网络服务使配置生效
+	/etc/init.d/network restart &
 }
 
-start() {
-	:
+stop_service() {
+	log "停止 EasyMesh，清理配置..."
+	cleanup_wireless
+	cleanup_network
+	uci commit wireless
+	uci commit network
+	/etc/init.d/network restart &
+}
+
+reload_service() {
+	log "重新加载 EasyMesh 配置..."
+	stop_service
+	start_service
+}
+
+service_triggers() {
+	# 监听 easymesh UCI 变化，自动触发 reload
+	procd_add_reload_trigger "$UCI_APP"
 }
