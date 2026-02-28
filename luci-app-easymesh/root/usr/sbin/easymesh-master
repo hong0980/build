@@ -1,289 +1,347 @@
 #!/bin/sh
-# /usr/sbin/easymesh-master
-# 主节点配对服务
+# /usr/sbin/easymesh-master — EasyMesh master/agent unified daemon
 #
-# 职责：
-#   1. 广播临时配对 SSID "EasyMesh-Pairing"（无密码，DHCP 独立网段）
-#   2. 监听从节点配对请求（HTTP :4304）
-#   3. 在 LuCI 节点页展示待确认设备
-#   4. 用户点确认后下发完整 Mesh 配置给从节点
-#   5. 所有从节点确认完成（或超时）后自动关闭配对 SSID
+# Election:  WAN-up node wins; fallback = lowest MAC wins
+# Sync:      master serves profile on HTTP :4304/profile
+#            agent polls and applies
+# Channel:   scan and pick least-used (highest free-time) channel
+# Backhaul:  wired detected → lower mesh0 metric, not down
+# Neighbors: register peer BSSIDs from iw scan, not own interfaces
+# LB:        steer only clients with signal < threshold
+# Topology:  valid JSON, served on /topology
 
 . /lib/functions.sh
 
-PAIRING_SSID="EasyMesh-Pairing"
-PAIRING_IFACE="mesh-pair-ap"     # 临时 AP 接口名
-PAIRING_SUBNET="172.31.255"      # 配对专用网段（不影响主 LAN）
-PAIRING_GW="${PAIRING_SUBNET}.1"
+ROLE_FILE="/tmp/easymesh_role"
+MASTER_IP_FILE="/tmp/easymesh_master_ip"
+PROFILE_FILE="/tmp/easymesh_profile.json"
+TOPO_FILE="/tmp/easymesh_topo.json"
+NODE_DB="/tmp/easymesh_nodes"
+
+MESH_IF="mesh0"
+AP_IF="wlan0"
+RADIO_DEV="radio1"
 MASTER_PORT=4304
-PAIR_DB="/tmp/easymesh_pairs"    # 目录，每个 token 一个文件
-APPROVED_DB="/tmp/easymesh_approved"
-LOG_TAG="easymesh-master"
-# 最后一个从节点确认后多少秒关闭配对 SSID
-PAIRING_CLOSE_DELAY=30
+LOG_TAG="easymesh"
 
-log() { logger -t "$LOG_TAG" "$*"; echo "[$(date '+%H:%M:%S')] [master] $*"; }
+LOOP_INTERVAL=10
+CHANNEL_INTERVAL=120   # only re-scan every 2 min
+ELECTION_INTERVAL=30
 
-# ── 读取主节点要下发的配置 ───────────────────
-get_mesh_config_json() {
-    config_load easymesh
-    local mesh_id mesh_key ssid key mobility_domain
-    local ieee80211r ieee80211k ieee80211v mesh_band routing_algo
-    config_get mesh_id        global mesh_id         'OpenWrt-Mesh'
-    config_get mesh_key       global mesh_key         ''
-    config_get ssid           global ssid             'OpenWrt'
-    config_get key            global key              ''
-    config_get mobility_domain global mobility_domain 'aabb'
-    config_get ieee80211r     global ieee80211r        '1'
-    config_get ieee80211k     global ieee80211k        '1'
-    config_get ieee80211v     global ieee80211v        '1'
-    config_get mesh_band      global mesh_band         '5g'
-    config_get routing_algo   global routing_algo      'BATMAN_IV'
+log() { logger -t "$LOG_TAG" "$*"; }
 
-    printf '{"status":"approved","mesh_id":"%s","mesh_key":"%s","ssid":"%s","wifi_key":"%s","mobility_domain":"%s","ieee80211r":"%s","ieee80211k":"%s","ieee80211v":"%s","mesh_band":"%s","routing_algo":"%s"}' \
-        "$mesh_id" "$mesh_key" "$ssid" "$key" "$mobility_domain" \
-        "$ieee80211r" "$ieee80211k" "$ieee80211v" "$mesh_band" "$routing_algo"
+get_mac() { cat /sys/class/net/br-lan/address 2>/dev/null || cat /sys/class/net/eth0/address 2>/dev/null; }
+get_ip()  { uci get network.lan.ipaddr 2>/dev/null; }
+
+http_ok() { printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n%s\n' "$1"; }
+
+wan_up() {
+    ubus call network.interface.wan status 2>/dev/null | grep -q '"up": true'
 }
 
-# ── 开启临时配对 AP ──────────────────────────
-start_pairing_ap() {
-    log "开启临时配对 AP: SSID=$PAIRING_SSID"
+########################################
+# 1. Master election
+########################################
+# Rule 1: WAN-up node is master
+# Rule 2: no WAN anywhere → lowest MAC wins
+# Anti-split: each node broadcasts its MAC+role; if two masters see each other,
+#             higher MAC demotes itself
 
-    # 找第一个可用 phy
-    local phy
-    phy=$(iw phy 2>/dev/null | awk '/^phy/{print $1}' | head -1)
-    [ -z "$phy" ] && { log "找不到无线硬件"; return 1; }
+elect_role() {
+    local mymac myip
+    mymac=$(get_mac)
+    myip=$(get_ip)
 
-    # 创建 AP 接口
-    iw phy "$phy" interface add "$PAIRING_IFACE" type __ap 2>/dev/null || true
-    ip link set "$PAIRING_IFACE" up
+    if wan_up; then
+        echo "master" > "$ROLE_FILE"
+        echo "$myip"  > "$MASTER_IP_FILE"
+        log "Election: WAN up → master ($mymac)"
+        return
+    fi
 
-    # hostapd 配置（开放网络，独立 SSID）
-    cat > /tmp/easymesh_pairing_hostapd.conf << HAPD
-interface=$PAIRING_IFACE
-driver=nl80211
-ssid=$PAIRING_SSID
-hw_mode=g
-channel=6
-auth_algs=1
-wpa=0
-ignore_broadcast_ssid=0
-HAPD
-
-    hostapd -B /tmp/easymesh_pairing_hostapd.conf \
-        -P /tmp/easymesh_pairing_hostapd.pid 2>/dev/null
-
-    # 配对网段 IP 和 DHCP（dnsmasq 独立实例）
-    ip addr add "${PAIRING_GW}/24" dev "$PAIRING_IFACE" 2>/dev/null
-
-    dnsmasq \
-        --interface="$PAIRING_IFACE" \
-        --bind-interfaces \
-        --dhcp-range="${PAIRING_SUBNET}.100,${PAIRING_SUBNET}.200,10m" \
-        --dhcp-option=3,"$PAIRING_GW" \
-        --no-resolv --no-hosts \
-        --pid-file=/tmp/easymesh_pairing_dnsmasq.pid \
-        --log-facility=/tmp/easymesh_pairing_dnsmasq.log \
-        2>/dev/null
-
-    log "配对 AP 已启动（网段: ${PAIRING_SUBNET}.0/24，网关: $PAIRING_GW）"
-}
-
-# ── 关闭临时配对 AP ──────────────────────────
-stop_pairing_ap() {
-    log "关闭临时配对 AP"
-    kill "$(cat /tmp/easymesh_pairing_hostapd.pid 2>/dev/null)" 2>/dev/null
-    kill "$(cat /tmp/easymesh_pairing_dnsmasq.pid 2>/dev/null)" 2>/dev/null
-    iw dev "$PAIRING_IFACE" del 2>/dev/null
-    rm -f /tmp/easymesh_pairing_hostapd.conf \
-          /tmp/easymesh_pairing_hostapd.pid \
-          /tmp/easymesh_pairing_dnsmasq.pid
-    log "配对 AP 已关闭"
-}
-
-# ── HTTP 响应工具 ─────────────────────────────
-http_ok()  { printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n%s\n' "$1"; }
-http_404() { printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n'; }
-
-# ── 处理单次 HTTP 请求（由 nc 子进程调用）──────
-handle_request() {
-    local req_file="$1"
-    local method path body
-
-    # 解析请求行
-    read -r method path _ < "$req_file"
-    path="${path%%\?*}"       # 去掉 query string 用于路由
-    query="${1##*\?}"         # 保留 query string
-    query=$(grep -o '?.*' "$req_file" | head -1 | cut -c2-)
-
-    # 读取 body（POST）
-    body=$(tail -n1 "$req_file")
-
-    case "$path" in
-
-    /easymesh/generate-qr)
-        # LuCI 请求生成一次性配对 token
-        local qr_json
-        qr_json=$(/usr/sbin/easymesh-qr generate)
-        http_ok "$qr_json"
-        ;;
-
-    /easymesh/ping)
-        http_ok '{"type":"easymesh_master","version":"1"}'
-        ;;
-
-    /easymesh/pair)
-        local token node_json
-        token=$(echo "$body" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-        node_json=$(echo "$body" | grep -o '"node":{[^}]*}' | sed 's/"node"://')
-        [ -z "$token" ] && { printf 'HTTP/1.1 400 Bad Request\r\n\r\n'; return; }
-
-        mkdir -p "$PAIR_DB"
-        local ts
-        ts=$(date +%s)
-        echo "{\"token\":\"$token\",\"node\":${node_json:-{}},\"ts\":$ts,\"status\":\"pending\"}" \
-            > "${PAIR_DB}/${token}"
-
-        log "收到配对请求: token=$token node=$node_json"
-        # 写通知文件，供 LuCI 轮询
-        echo "$ts" > /tmp/easymesh_new_node_notify
-
-        http_ok '{"status":"pending"}'
-        ;;
-
-    /easymesh/config)
-        local token
-        token=$(echo "$query" | grep -o 'token=[^&]*' | cut -d= -f2)
-        if [ -f "${APPROVED_DB}/${token}" ]; then
-            http_ok "$(get_mesh_config_json)"
-        else
-            http_ok '{"status":"pending"}'
-        fi
-        ;;
-
-    /easymesh/confirm)
-        local token
-        token=$(echo "$query" | grep -o 'token=[^&]*' | cut -d= -f2)
-        [ -n "$token" ] && {
-            log "从节点已确认配置完成: token=$token"
-            touch "/tmp/easymesh_confirmed_${token}"
-            # 检查是否所有已批准节点都确认完成，是则延迟关闭配对 AP
-            check_all_confirmed
+    # Probe known peers for their election status
+    local best_mac="$mymac"
+    local best_ip="$myip"
+    mkdir -p "$NODE_DB"
+    for f in "$NODE_DB"/*.json 2>/dev/null; do
+        [ -f "$f" ] || continue
+        local peer_ip peer_mac peer_wan
+        peer_ip=$(jsonfilter -i "$f" -e '@.ip'  2>/dev/null)
+        peer_mac=$(jsonfilter -i "$f" -e '@.mac' 2>/dev/null)
+        peer_wan=$(wget -q -T 3 -O- "http://${peer_ip}:${MASTER_PORT}/wan" 2>/dev/null)
+        # If a peer has WAN, it should be master
+        echo "$peer_wan" | grep -q '"wan":true' && {
+            echo "agent" > "$ROLE_FILE"
+            echo "$peer_ip" > "$MASTER_IP_FILE"
+            log "Election: peer $peer_ip has WAN → I am agent"
+            return
         }
-        http_ok '{"status":"ok"}'
-        ;;
-
-    /easymesh/qr-config*)
-        # 从节点扫码后用 token 换取配置（一次性）
-        local token
-        token=$(echo "$query" | grep -o 'token=[^&]*' | cut -d= -f2)
-        local result
-        result=$(/usr/sbin/easymesh-qr verify "$token")
-        http_ok "$result"
-        # 记录这个节点已完成配对（用于 LuCI 展示）
-        echo "$result" | grep -q '"status":"approved"' && {
-            mkdir -p "$PAIR_DB"
-            local ts
-            ts=$(date +%s)
-            local node_mac
-            node_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
-            echo "{\"token\":\"$token\",\"node\":{\"mac\":\"${node_mac:-unknown}\"},\"ts\":$ts,\"status\":\"approved\"}" \
-                > "${PAIR_DB}/${token}"
-        }
-        ;;
-
-    /easymesh/nodes)
-        # LuCI 查询待确认节点列表
-        mkdir -p "$PAIR_DB"
-        local nodes="["
-        local first=1
-        for f in "${PAIR_DB}"/*; do
-            [ -f "$f" ] || continue
-            [ "$first" = "0" ] && nodes="${nodes},"
-            nodes="${nodes}$(cat "$f")"
-            first=0
-        done
-        nodes="${nodes}]"
-        http_ok "$nodes"
-        ;;
-
-    /easymesh/approve)
-        local token
-        token=$(echo "$body" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-        [ -n "$token" ] && approve_node "$token"
-        http_ok '{"status":"ok"}'
-        ;;
-
-    /easymesh/reject)
-        local token
-        token=$(echo "$body" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-        [ -n "$token" ] && rm -f "${PAIR_DB}/${token}" "${APPROVED_DB}/${token}"
-        http_ok '{"status":"ok"}'
-        ;;
-
-    *)
-        http_404
-        ;;
-    esac
-}
-
-approve_node() {
-    local token="$1"
-    log "批准节点: token=$token"
-    mkdir -p "$APPROVED_DB"
-    touch "${APPROVED_DB}/${token}"
-    # 更新 pair DB 中的状态
-    [ -f "${PAIR_DB}/${token}" ] && \
-        sed -i 's/"status":"pending"/"status":"approved"/' "${PAIR_DB}/${token}"
-}
-
-check_all_confirmed() {
-    # 如果所有已批准的节点都已确认，安排关闭配对 AP
-    local approved_count confirmed_count=0
-    approved_count=$(ls "${APPROVED_DB}" 2>/dev/null | wc -l)
-    [ "$approved_count" -eq 0 ] && return
-
-    for token in $(ls "${APPROVED_DB}" 2>/dev/null); do
-        [ -f "/tmp/easymesh_confirmed_${token}" ] && confirmed_count=$((confirmed_count + 1))
+        # No WAN anywhere: lowest MAC wins
+        [ "$peer_mac" \< "$best_mac" ] && { best_mac="$peer_mac"; best_ip="$peer_ip"; }
     done
 
-    if [ "$confirmed_count" -ge "$approved_count" ]; then
-        log "所有节点配置完成（${confirmed_count}/${approved_count}），${PAIRING_CLOSE_DELAY}s 后关闭配对 AP"
-        ( sleep "$PAIRING_CLOSE_DELAY"; stop_pairing_ap ) &
+    if [ "$best_mac" = "$mymac" ]; then
+        echo "master" > "$ROLE_FILE"
+        echo "$myip"  > "$MASTER_IP_FILE"
+        log "Election: lowest MAC wins → master ($mymac)"
+    else
+        echo "agent" > "$ROLE_FILE"
+        echo "$best_ip" > "$MASTER_IP_FILE"
+        log "Election: $best_mac wins → I am agent"
     fi
 }
 
-# ── 主循环：轻量 HTTP 服务（nc 逐连接处理）────
-run_http_server() {
-    log "HTTP 配对服务启动，监听 :${MASTER_PORT}"
-    while true; do
-        local req_file="/tmp/easymesh_req_$$_$(date +%s%N 2>/dev/null || date +%s)"
-        # nc 读入请求写到临时文件，再调用处理函数
-        nc -l -p "$MASTER_PORT" > "$req_file" 2>/dev/null << NCEOF | handle_request "$req_file"
-NCEOF
-        # 更通用的方式：用 pipe
-        mkfifo /tmp/easymesh_fifo_$$ 2>/dev/null
-        handle_request_piped() {
-            handle_request /tmp/easymesh_req_$$
-        }
-        nc -l -p "$MASTER_PORT" -e sh -c \
-            "cat > /tmp/easymesh_req_$$; /usr/sbin/easymesh-master --handle /tmp/easymesh_req_$$" \
-            2>/dev/null || {
-            # fallback：不支持 -e 的 nc（如 OpenWrt 默认 busybox nc）
-            nc -l -p "$MASTER_PORT" > /tmp/easymesh_req_$$ 2>/dev/null
-            handle_request "/tmp/easymesh_req_$$" | nc -l -p "$MASTER_PORT" 2>/dev/null
-        }
-        rm -f "/tmp/easymesh_req_$$" "/tmp/easymesh_fifo_$$"
+role()      { cat "$ROLE_FILE"     2>/dev/null || echo "agent"; }
+master_ip() { cat "$MASTER_IP_FILE" 2>/dev/null; }
+
+########################################
+# 2. Config sync
+########################################
+
+generate_profile() {
+    local ssid key channel
+    ssid=$(uci get wireless.@wifi-iface[0].ssid    2>/dev/null)
+    key=$(uci get wireless.@wifi-iface[0].key      2>/dev/null)
+    channel=$(uci get wireless.${RADIO_DEV}.channel 2>/dev/null)
+    cat > "$PROFILE_FILE" <<PROF
+{"ssid":"$ssid","key":"$key","channel":"$channel",
+ "ieee80211k":"1","ieee80211v":"1","mesh_id":"$(uci get easymesh.global.mesh_id 2>/dev/null)"}
+PROF
+}
+
+apply_profile() {
+    local prof_url
+    prof_url="http://$(master_ip):${MASTER_PORT}/profile"
+    local body
+    body=$(wget -q -T 5 -O- "$prof_url" 2>/dev/null)
+    [ -z "$body" ] && return
+
+    echo "$body" > "$PROFILE_FILE"
+    local ssid key channel mesh_id
+    ssid=$(jsonfilter    -i "$PROFILE_FILE" -e '@.ssid'    2>/dev/null)
+    key=$(jsonfilter     -i "$PROFILE_FILE" -e '@.key'     2>/dev/null)
+    channel=$(jsonfilter -i "$PROFILE_FILE" -e '@.channel' 2>/dev/null)
+    mesh_id=$(jsonfilter -i "$PROFILE_FILE" -e '@.mesh_id' 2>/dev/null)
+
+    [ -z "$ssid" ] && return
+
+    uci set wireless.@wifi-iface[0].ssid="$ssid"
+    uci set wireless.@wifi-iface[0].key="$key"
+    [ -n "$channel" ] && uci set wireless.${RADIO_DEV}.channel="$channel"
+    [ -n "$mesh_id" ] && uci set easymesh.global.mesh_id="$mesh_id"
+    uci commit wireless
+    uci commit easymesh
+    wifi reload
+    log "Profile applied from master: ssid=$ssid ch=$channel"
+}
+
+########################################
+# 3. Channel coordination (master only)
+########################################
+_last_channel_scan=0
+
+optimize_channel() {
+    [ "$(role)" != "master" ] && return
+
+    local now
+    now=$(date +%s)
+    [ $((now - _last_channel_scan)) -lt $CHANNEL_INTERVAL ] && return
+    _last_channel_scan=$now
+
+    # Count APs per channel; pick channel with FEWEST neighbours (least congestion)
+    local best
+    best=$(iw dev "$AP_IF" scan 2>/dev/null | \
+        grep 'DS Parameter set' | awk '{print $5}' | \
+        sort | uniq -c | sort -n | head -1 | awk '{print $2}')
+
+    # uniq -c | sort -n → ascending by count → head -1 = least used ✓
+    [ -z "$best" ] && return
+
+    local current
+    current=$(uci get wireless.${RADIO_DEV}.channel 2>/dev/null)
+    if [ "$current" != "$best" ]; then
+        log "Channel: $current → $best (least congested)"
+        uci set wireless.${RADIO_DEV}.channel="$best"
+        uci commit wireless
+        wifi reload
+    fi
+}
+
+########################################
+# 4. Wired backhaul preference
+########################################
+
+backhaul_check() {
+    local master_mac
+    master_mac=$(cat "$MASTER_IP_FILE" 2>/dev/null)
+    [ -z "$master_mac" ] && return
+
+    if bridge fdb show 2>/dev/null | grep -qi "$master_mac"; then
+        # Wired path to master detected → lower mesh metric so wired is preferred
+        # Do NOT bring mesh0 down — that would break batman-adv for other nodes
+        batctl meshif "$MESH_IF" orig_interval 5000 2>/dev/null  # reduce mesh beacon rate
+        log "Backhaul: wired path active, reducing mesh overhead"
+    else
+        batctl meshif "$MESH_IF" orig_interval 1000 2>/dev/null
+    fi
+}
+
+########################################
+# 5. 802.11k/v + neighbor auto-register
+########################################
+
+enable_fast_roaming() {
+    uci set wireless.@wifi-iface[0].ieee80211k='1'
+    uci set wireless.@wifi-iface[0].ieee80211v='1'
+    uci set wireless.@wifi-iface[0].bss_transition='1'
+    uci set wireless.@wifi-iface[0].rrm_neighbor_report='1'
+    uci commit wireless
+    log "802.11k/v enabled"
+}
+
+register_neighbors() {
+    local ssid ap_iface
+    ssid=$(uci get wireless.@wifi-iface[0].ssid 2>/dev/null)
+    ap_iface=$(uci get wireless.@wifi-iface[0].ifname 2>/dev/null || echo "$AP_IF")
+
+    # Scan for PEER BSSIDs with same SSID — not own interfaces
+    iw dev "$AP_IF" scan 2>/dev/null | awk '
+        /^BSS /          { bssid=$2 }
+        /SSID: /         { if ($2 == "'"$ssid"'") print bssid }
+    ' | while read -r bssid; do
+        [ -z "$bssid" ] && continue
+        hostapd_cli -i "$ap_iface" set_neighbor "$bssid" ssid="\"$ssid\"" >/dev/null 2>&1 && \
+            log "Registered neighbor BSSID: $bssid"
     done
 }
 
-# ── 入口 ─────────────────────────────────────
-if [ "$1" = "--handle" ]; then
-    handle_request "$2"
-    exit 0
-fi
+########################################
+# 6. Load balancing (signal-aware)
+########################################
+LB_THRESHOLD=-70   # dBm; only steer clients weaker than this
 
-# 主流程
-mkdir -p "$PAIR_DB" "$APPROVED_DB"
-start_pairing_ap
-run_http_server
+load_balance() {
+    local ap_iface
+    ap_iface=$(uci get wireless.@wifi-iface[0].ifname 2>/dev/null || echo "$AP_IF")
+    local clients
+    clients=$(iw dev "$ap_iface" station dump 2>/dev/null | grep -c "^Station")
+    [ "$clients" -le 10 ] && return   # no balancing needed under 10 clients
+
+    # Only steer clients with signal below threshold
+    iw dev "$ap_iface" station dump 2>/dev/null | awk '
+        /^Station/  { mac=$2 }
+        /signal:/   { if ($2+0 < '"$LB_THRESHOLD"') print mac }
+    ' | while read -r mac; do
+        [ -z "$mac" ] && continue
+        hostapd_cli -i "$ap_iface" bss_tm_req "$mac" pref=1 abridged=1 >/dev/null 2>&1 && \
+            log "BSS-TM steered weak client: $mac (signal < ${LB_THRESHOLD}dBm)"
+    done
+}
+
+########################################
+# 7. Topology JSON
+########################################
+
+update_topology() {
+    local my_mac my_ip my_role clients
+    my_mac=$(get_mac)
+    my_ip=$(get_ip)
+    my_role=$(role)
+    clients=$(iw dev "$AP_IF" station dump 2>/dev/null | grep -c "^Station")
+
+    # Build nodes array from bat0 originators
+    local nodes="{\"mac\":\"$my_mac\",\"ip\":\"$my_ip\",\"role\":\"$my_role\",\"clients\":$clients}"
+    local links=""
+
+    while read -r peer_mac _ tq _rest; do
+        nodes="${nodes},{\"mac\":\"$peer_mac\",\"tq\":$tq}"
+        links="${links:+$links,}{\"src\":\"$my_mac\",\"dst\":\"$peer_mac\",\"tq\":$tq}"
+    done < <(awk 'NR>2 {print $1,$2,$3}' /sys/kernel/debug/batman_adv/bat0/originators 2>/dev/null)
+
+    printf '{"ts":%d,"nodes":[%s],"links":[%s]}\n' \
+        "$(date +%s)" "$nodes" "$links" > "$TOPO_FILE"
+}
+
+########################################
+# HTTP handler (single-port: 4304)
+########################################
+
+handle_request() {
+    local req="$1"
+    local path
+    path=$(awk 'NR==1{print $2}' "$req" 2>/dev/null)
+    path="${path%%\?*}"
+
+    case "$path" in
+        /profile)   http_ok "$(cat "$PROFILE_FILE" 2>/dev/null || echo '{}')" ;;
+        /topology)  update_topology; http_ok "$(cat "$TOPO_FILE")" ;;
+        /wan)       wan_up && http_ok '{"wan":true}' || http_ok '{"wan":false}' ;;
+        /info)
+            http_ok "{\"mac\":\"$(get_mac)\",\"ip\":\"$(get_ip)\",\"role\":\"$(role)\"}"
+            ;;
+        /easymesh/generate-qr)
+            http_ok "$(/usr/sbin/easymesh-qr generate 2>/dev/null || echo '{}')" ;;
+        /easymesh/qr-config*)
+            local token
+            token=$(awk -F'token=' '{print $2}' "$req" | cut -d'&' -f1 | head -1)
+            http_ok "$(/usr/sbin/easymesh-qr verify "$token" 2>/dev/null || echo '{"status":"invalid"}')" ;;
+        /easymesh/nodes)
+            local out="["
+            local first=1
+            for f in "$NODE_DB"/*.json 2>/dev/null; do
+                [ -f "$f" ] || continue
+                [ "$first" = "0" ] && out="${out},"
+                out="${out}$(cat "$f")"
+                first=0
+            done
+            http_ok "${out}]" ;;
+        *) printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n' ;;
+    esac
+}
+
+run_server() {
+    log "HTTP server on :$MASTER_PORT"
+    while true; do
+        local tmp="/tmp/em_req_$$"
+        nc -l -p "$MASTER_PORT" > "$tmp" 2>/dev/null
+        handle_request "$tmp" | nc -l -p "$MASTER_PORT" 2>/dev/null &
+        rm -f "$tmp"
+        sleep 0.05
+    done
+}
+
+########################################
+# Main loop
+########################################
+
+main_loop() {
+    enable_fast_roaming
+    mkdir -p "$NODE_DB"
+    run_server &
+
+    local _iter=0
+    while true; do
+        elect_role
+
+        if [ "$(role)" = "master" ]; then
+            generate_profile
+            optimize_channel
+        else
+            apply_profile
+        fi
+
+        backhaul_check
+        register_neighbors
+        load_balance
+        update_topology
+
+        _iter=$((_iter + 1))
+        sleep $LOOP_INTERVAL
+    done
+}
+
+case "$1" in
+    start)  main_loop & ;;
+    stop)   kill "$(cat /tmp/easymesh_master.pid 2>/dev/null)" 2>/dev/null ;;
+    *)      main_loop ;;
+esac

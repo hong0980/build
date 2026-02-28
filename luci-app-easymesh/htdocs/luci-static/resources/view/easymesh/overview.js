@@ -229,13 +229,14 @@ return view.extend({
 		return m.render();
 	},
 
-	/* Load qrcode.min.js once, returns a Promise */
+	/* Load qrcode.min.js once, returns a Promise.
+	   Installed by Makefile to /www/luci-static/resources/view/easymesh/qrcode.min.js
+	   Served by uhttpd at /luci-static/resources/view/easymesh/qrcode.min.js */
 	loadQRLib: function() {
 		if (window.QRCode) return Promise.resolve();
-		/* qrcode.min.js is installed by Makefile to resources/view/easymesh/ */
 		return new Promise(function(resolve, reject) {
 			var s = document.createElement('script');
-			s.src = L.resourceCacheBusted('view/easymesh/qrcode.min.js');
+			s.src = '/easymesh-pair/qrcode.min.js';
 			s.onload  = function() {
 				if (window.QRCode) resolve();
 				else reject(new Error(_('Failed to load qrcode.min.js')));

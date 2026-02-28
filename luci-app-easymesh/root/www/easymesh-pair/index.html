@@ -85,10 +85,12 @@ canvas{display:none}
   </div>
 </div>
 
-<!-- jsqr.min.js is installed by the package Makefile into /www/easymesh-pair/ -->
-<script src="/easymesh-pair/jsqr.min.js"></script>
+<!-- jsqr.min.js installed to /www/easymesh-pair/jsqr.min.js
+     LuCI uhttpd webroot = /www/, so path = /easymesh-pair/jsqr.min.js -->
+<script src="/easymesh-pair/jsqr.min.js" onerror="jsqrFailed=true"></script>
 <script>
 var _stream = null, _raf = null;
+var jsqrFailed = false;   /* set to true by onerror above if file missing */
 var video  = document.getElementById('video');
 var canvas = document.getElementById('qr-canvas');
 var ctx    = canvas.getContext('2d');
@@ -127,7 +129,7 @@ function stopScan() {
 
 function tick() {
   /* Check jsQR loaded — if not, show error immediately instead of silently failing */
-  if (typeof jsQR === 'undefined') {
+  if (jsqrFailed || typeof jsQR === 'undefined') {
     stopScan();
     err('QR scanner library failed to load. Check that jsqr.min.js is installed in /www/easymesh-pair/');
     return;

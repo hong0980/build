@@ -260,3 +260,15 @@ msgstr "最后在线"
 
 msgid "Failed to load qrcode.min.js"
 msgstr "加载 qrcode.min.js 失败"
+
+msgid "Mesh Topology"
+msgstr "Mesh 拓扑"
+
+msgid "Live topology from batman-adv. Refreshes every 5 seconds."
+msgstr "来自 batman-adv 的实时拓扑，每 5 秒刷新。"
+
+msgid "Loading topology..."
+msgstr "正在加载拓扑..."
+
+msgid "Topology unavailable — master node not reachable."
+msgstr "拓扑不可用 — 主节点不可达。"

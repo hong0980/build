@@ -191,6 +191,31 @@ return view.extend({
 				})))
 		]));
 
+		/* Topology JSON card */
+		el.appendChild(E('div', { class: 'cbi-section' }, [
+			E('h3', {}, _('Mesh Topology')),
+			E('p', { class: 'cbi-section-descr' }, _('Live topology from batman-adv. Refreshes every 5 seconds.')),
+			E('div', { id: 'easymesh-topo' }, [
+				E('pre', {
+					id: 'easymesh-topo-json',
+					style: 'background:#0d1117;border:1px solid #30363d;border-radius:8px;' +
+					       'padding:12px;font-size:11px;color:#e6edf3;overflow-x:auto;' +
+					       'white-space:pre-wrap;max-height:300px;overflow-y:auto',
+				}, _('Loading topology...'))
+			])
+		]));
+
+		/* Fetch topology JSON and render it */
+		masterFetch('/easymesh/topology').then(function(topo) {
+			var el2 = document.getElementById('easymesh-topo-json');
+			if (!el2) return;
+			if (!topo || topo.error) {
+				el2.textContent = _('Topology unavailable — master node not reachable.');
+				return;
+			}
+			el2.textContent = JSON.stringify(topo, null, 2);
+		});
+
 		return el;
 	},
 

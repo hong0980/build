@@ -3,7 +3,7 @@
 include $(TOPDIR)/rules.mk
 
 LUCI_TITLE:=LuCI support for EasyMesh (batman-adv + 802.11s)
-LUCI_DEPENDS:=+kmod-batman-adv +batctl-full +wpad-mesh-openssl +dawn +uhttpd
+LUCI_DEPENDS:=+kmod-batman-adv +batctl-full +wpad-mesh-openssl +dawn +uhttpd +jsonfilter
 
 LUCI_PKGARCH:=all
 
@@ -49,9 +49,12 @@ define Package/luci-app-easymesh/install
 	$(INSTALL_BIN)  ./root/www/easymesh-pair/cgi-bin/pair \
 		$(1)/www/easymesh-pair/cgi-bin/pair
 
-	# Download JS libraries at build time
+	# Download JS libraries at build time — both go to /www/easymesh-pair/
+	# LuCI uhttpd serves /www/ as root, so they are accessible at:
+	#   /easymesh-pair/qrcode.min.js  (used by LuCI overview.js)
+	#   /easymesh-pair/jsqr.min.js    (used by pairing page index.html)
 	wget -q "$(QRCODEJS_URL)" \
-		-O "$(1)/www/luci-static/resources/view/easymesh/qrcode.min.js" \
+		-O "$(1)/www/easymesh-pair/qrcode.min.js" \
 		|| { echo "ERROR: Failed to download qrcode.min.js from $(QRCODEJS_URL)"; exit 1; }
 	wget -q "$(JSQR_URL)" \
 		-O "$(1)/www/easymesh-pair/jsqr.min.js" \
