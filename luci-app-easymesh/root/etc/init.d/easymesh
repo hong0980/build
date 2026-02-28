@@ -1,7 +1,5 @@
 #!/bin/sh /etc/rc.common
-# SPDX-License-Identifier: GPL-2.0-or-later
 # /etc/init.d/easymesh
-
 USE_PROCD=1
 START=95
 STOP=10
@@ -11,194 +9,243 @@ UCI_APP=easymesh
 . /lib/functions.sh
 . /lib/functions/network.sh
 
+# Read pairing params set by uci-defaults (auto-generated to avoid IP conflicts)
+get_pair_ip()   { uci get easymesh.global.pair_ip   2>/dev/null || echo "192.168.100.1"; }
+get_pair_ssid() { uci get easymesh.global.pair_ssid 2>/dev/null || echo "EasyMesh-Setup"; }
+
 log() { logger -t easymesh "$*"; echo "[easymesh] $*"; }
 
-_band_target=""
-_found=""
-
+# ─── 找指定频段的 radio ────────────────────────
+_band_target=""; _found=""
 _find_radio() {
-	local _name="$1"
-	local _band
-	config_get _band "$_name" band
-	case "$_band" in
-		2g|2.4GHz|bgn|bg|b) [ "$_band_target" = "2g" ] && _found="$_name" ;;
-		5g|5GHz|an|a)        [ "$_band_target" = "5g" ] && _found="$_name" ;;
-	esac
+    local _n="$1"; local _b
+    config_get _b "$_n" band
+    case "$_b" in
+        2g|2.4GHz|bgn|bg|b) [ "$_band_target" = "2g" ] && _found="$_n" ;;
+        5g|5GHz|an|a)        [ "$_band_target" = "5g" ] && _found="$_n" ;;
+    esac
+}
+get_radio() {
+    local _v="$1" _b="$2"; _found=""; _band_target="$_b"
+    config_load wireless; config_foreach _find_radio wifi-device
+    eval "$_v='$_found'"
 }
 
-get_radio_for_band() {
-	local _var="$1" _band="$2"
-	_found=""; _band_target="$_band"
-	config_load wireless
-	config_foreach _find_radio wifi-device
-	eval "$_var='$_found'"
+# ─── 清理本插件管理的接口 ─────────────────────
+_del_managed() {
+    local _n="$1"; local _m
+    config_get _m "$_n" easymesh_managed
+    [ "$_m" = "1" ] && uci -q del wireless."$_n" && log "删除旧接口: $_n"
 }
-
-_del_managed_iface() {
-	local _name="$1"
-	local _managed
-	config_get _managed "$_name" easymesh_managed
-	[ "$_managed" = "1" ] && uci -q del wireless."$_name" && log "删除旧接口: $_name"
-}
-
-cleanup_wireless() {
-	config_load wireless
-	config_foreach _del_managed_iface wifi-iface
-}
-
+cleanup_wireless() { config_load wireless; config_foreach _del_managed wifi-iface; }
 cleanup_network() {
-	uci -q del network.mesh
-	uci -q del network.bat0
-	uci -q del dhcp.lan.ignore
-	local ifnames
-	ifnames=$(uci get network.lan.ifname 2>/dev/null)
-	if echo "$ifnames" | grep -qw bat0; then
-		ifnames=$(echo "$ifnames" | tr ' ' '\n' | grep -v '^bat0$' | tr '\n' ' ' | sed 's/ $//')
-		uci set network.lan.ifname="$ifnames"
-	fi
+    uci -q del network.mesh; uci -q del network.bat0; uci -q del dhcp.lan.ignore
+    local ifn; ifn=$(uci get network.lan.ifname 2>/dev/null)
+    echo "$ifn" | grep -qw bat0 && {
+        ifn=$(echo "$ifn" | tr ' ' '\n' | grep -v '^bat0$' | tr '\n' ' ' | sed 's/ $//')
+        uci set network.lan.ifname="$ifn"
+    }
 }
 
+# ─── 恢复原始 IP（配对完成后调用）────────────
+restore_original_ip() {
+    local orig_ip orig_mask
+    config_load "$UCI_APP"
+    config_get orig_ip   global original_ip      ''
+    config_get orig_mask global original_netmask  '255.255.255.0'
+
+    local pair_ip; pair_ip=$(get_pair_ip)
+    if [ -n "$orig_ip" ] && [ "$orig_ip" != "$pair_ip" ]; then
+        log "Restoring LAN IP: $pair_ip -> $orig_ip"
+        uci set network.lan.ipaddr="$orig_ip"
+        uci set network.lan.netmask="$orig_mask"
+        uci commit network
+        # 清除已保存的原始 IP
+        uci del easymesh.global.original_ip   2>/dev/null
+        uci del easymesh.global.original_netmask 2>/dev/null
+        uci del easymesh.global.pairing_mode  2>/dev/null
+        uci commit easymesh
+    fi
+}
+
+# ─── 配对模式：广播 EasyMesh-Setup SSID ───────
+start_pairing_ap() {
+    local radio
+    get_radio radio "2g"
+    [ -z "$radio" ] && get_radio radio "5g"
+    [ -z "$radio" ] && { log "警告：找不到无线 radio，无法广播配对 SSID"; return; }
+
+    local pair_ssid; pair_ssid=$(get_pair_ssid)
+    local pair_ip; pair_ip=$(get_pair_ip)
+    log "Broadcasting pairing SSID: $pair_ssid (IP: $pair_ip)"
+    uci set wireless.easymesh_pair=wifi-iface
+    uci set wireless.easymesh_pair.device="$radio"
+    uci set wireless.easymesh_pair.mode='ap'
+    uci set wireless.easymesh_pair.ssid="$pair_ssid"
+    uci set wireless.easymesh_pair.network='lan'
+    uci set wireless.easymesh_pair.encryption='none'
+    uci set wireless.easymesh_pair.easymesh_managed='1'
+    uci commit wireless
+    wifi reload 2>/dev/null &
+}
+
+# ─── 应用完整 Mesh 配置 ────────────────────────
 apply_mesh_config() {
-	local role backhaul mesh_id mesh_key mesh_band ssid key
-	local ieee80211r mobility_domain ft_over_ds reassociation_deadline
-	local ieee80211k ieee80211v routing_algo mesh_fwding
+    local role backhaul mesh_id mesh_key mesh_band ssid key
+    local ieee80211r mobility_domain ft_over_ds reassociation_deadline
+    local ieee80211k ieee80211v routing_algo mesh_fwding
 
-	config_load "$UCI_APP"
-	config_get role              global role              'master'
-	config_get backhaul          global backhaul          'wireless'
-	config_get mesh_id           global mesh_id           'OpenWrt-Mesh'
-	config_get mesh_key          global mesh_key          ''
-	config_get mesh_band         global mesh_band         '5g'
-	config_get ssid              global ssid              'OpenWrt'
-	config_get key               global key               ''
-	config_get ieee80211r        global ieee80211r        '1'
-	config_get mobility_domain   global mobility_domain   'aabb'
-	config_get ft_over_ds        global ft_over_ds        '1'
-	config_get reassociation_deadline global reassociation_deadline '1000'
-	config_get ieee80211k        global ieee80211k        '1'
-	config_get ieee80211v        global ieee80211v        '1'
-	config_get routing_algo      global routing_algo      'BATMAN_IV'
-	config_get mesh_fwding       global mesh_fwding       '0'
+    config_load "$UCI_APP"
+    config_get role              global role              'slave'
+    config_get backhaul          global backhaul          'wireless'
+    config_get mesh_id           global mesh_id           'OpenWrt-Mesh'
+    config_get mesh_key          global mesh_key          ''
+    config_get mesh_band         global mesh_band         '5g'
+    config_get ssid              global ssid              'OpenWrt'
+    config_get key               global key               ''
+    config_get ieee80211r        global ieee80211r        '1'
+    config_get mobility_domain   global mobility_domain   'aabb'
+    config_get ft_over_ds        global ft_over_ds        '1'
+    config_get reassociation_deadline global reassociation_deadline '1000'
+    config_get ieee80211k        global ieee80211k        '1'
+    config_get ieee80211v        global ieee80211v        '1'
+    config_get routing_algo      global routing_algo      'BATMAN_IV'
+    config_get mesh_fwding       global mesh_fwding       '0'
 
-	cleanup_wireless
-	cleanup_network
+    cleanup_wireless
+    cleanup_network
 
-	local radio_mesh
-	get_radio_for_band radio_mesh "$mesh_band"
-	[ -z "$radio_mesh" ] && radio_mesh="radio0"
+    # 配对完成 → 恢复原始 IP
+    restore_original_ip
 
-	# batman-adv
-	uci set batman-adv.bat0=mesh
-	uci set batman-adv.bat0.interfaces='mesh0'
-	uci set batman-adv.bat0.routing_algo="$routing_algo"
-	uci set batman-adv.bat0.aggregated_ogms='true'
-	uci set batman-adv.bat0.orig_interval='1000'
-	uci commit batman-adv
+    local radio_mesh
+    get_radio radio_mesh "$mesh_band"
+    [ -z "$radio_mesh" ] && radio_mesh="radio0"
 
-	# network
-	uci set network.mesh=interface
-	uci set network.mesh.proto='batadv_hardif'
-	uci set network.mesh.master='bat0'
-	uci set network.mesh.mtu='1536'
-	uci set network.bat0=interface
-	uci set network.bat0.proto='batadv'
-	uci set network.bat0.routing_algo="$routing_algo"
+    # batman-adv
+    uci set batman-adv.bat0=mesh
+    uci set batman-adv.bat0.interfaces='mesh0'
+    uci set batman-adv.bat0.routing_algo="$routing_algo"
+    uci set batman-adv.bat0.aggregated_ogms='true'
+    uci set batman-adv.bat0.orig_interval='1000'
+    uci commit batman-adv
 
-	if [ "$role" = "master" ]; then
-		local cur_ifnames
-		cur_ifnames=$(uci get network.lan.ifname 2>/dev/null || echo "eth0")
-		echo "$cur_ifnames" | grep -qw bat0 || uci set network.lan.ifname="${cur_ifnames} bat0"
-		uci set network.lan.type='bridge'
-	else
-		uci set network.bat0.proto='dhcp'
-		uci set dhcp.lan.ignore='1'
-	fi
-	uci commit network
+    # network
+    uci set network.mesh=interface
+    uci set network.mesh.proto='batadv_hardif'
+    uci set network.mesh.master='bat0'
+    uci set network.mesh.mtu='1536'
+    uci set network.bat0=interface
+    uci set network.bat0.proto='batadv'
+    uci set network.bat0.routing_algo="$routing_algo"
 
-	# wireless: mesh 回程
-	uci set wireless.mesh0=wifi-iface
-	uci set wireless.mesh0.device="$radio_mesh"
-	uci set wireless.mesh0.mode='mesh'
-	uci set wireless.mesh0.mesh_id="$mesh_id"
-	uci set wireless.mesh0.mesh_fwding="$mesh_fwding"
-	uci set wireless.mesh0.mesh_rssi_threshold='-80'
-	uci set wireless.mesh0.network='mesh'
-	uci set wireless.mesh0.easymesh_managed='1'
-	if [ -n "$mesh_key" ]; then
-		uci set wireless.mesh0.encryption='sae'
-		uci set wireless.mesh0.key="$mesh_key"
-	else
-		uci set wireless.mesh0.encryption='none'
-	fi
-	[ "$backhaul" = "wired" ] && uci set wireless.mesh0.disabled='1'
+    if [ "$role" = "master" ]; then
+        log "主节点模式"
+        local cur; cur=$(uci get network.lan.ifname 2>/dev/null || echo "eth0")
+        echo "$cur" | grep -qw bat0 || uci set network.lan.ifname="$cur bat0"
+        uci set network.lan.type='bridge'
+    else
+        log "从节点模式"
+        uci set network.bat0.proto='dhcp'
+        uci set dhcp.lan.ignore='1'
+    fi
+    uci commit network
 
-	# wireless: AP
-	uci set wireless.easymesh_ap=wifi-iface
-	uci set wireless.easymesh_ap.device="$radio_mesh"
-	uci set wireless.easymesh_ap.mode='ap'
-	uci set wireless.easymesh_ap.ssid="$ssid"
-	uci set wireless.easymesh_ap.network='lan'
-	uci set wireless.easymesh_ap.easymesh_managed='1'
-	if [ -n "$key" ]; then
-		uci set wireless.easymesh_ap.encryption='psk2+ccmp'
-		uci set wireless.easymesh_ap.key="$key"
-	else
-		uci set wireless.easymesh_ap.encryption='none'
-	fi
-	[ "$ieee80211r" = "1" ] && {
-		uci set wireless.easymesh_ap.ieee80211r='1'
-		uci set wireless.easymesh_ap.mobility_domain="$mobility_domain"
-		uci set wireless.easymesh_ap.ft_over_ds="$ft_over_ds"
-		uci set wireless.easymesh_ap.ft_psk_generate_local='1'
-		uci set wireless.easymesh_ap.reassociation_deadline="$reassociation_deadline"
-	}
-	[ "$ieee80211k" = "1" ] && uci set wireless.easymesh_ap.ieee80211k='1'
-	[ "$ieee80211v" = "1" ] && uci set wireless.easymesh_ap.ieee80211v='1'
-	uci commit wireless
-	log "UCI 配置写入完成"
+    # wireless: mesh 回程
+    uci set wireless.mesh0=wifi-iface
+    uci set wireless.mesh0.device="$radio_mesh"
+    uci set wireless.mesh0.mode='mesh'
+    uci set wireless.mesh0.mesh_id="$mesh_id"
+    uci set wireless.mesh0.mesh_fwding="$mesh_fwding"
+    uci set wireless.mesh0.mesh_rssi_threshold='-80'
+    uci set wireless.mesh0.network='mesh'
+    uci set wireless.mesh0.easymesh_managed='1'
+    if [ -n "$mesh_key" ]; then
+        uci set wireless.mesh0.encryption='sae'
+        uci set wireless.mesh0.key="$mesh_key"
+    else
+        uci set wireless.mesh0.encryption='none'
+    fi
+    [ "$backhaul" = "wired" ] && uci set wireless.mesh0.disabled='1'
+
+    # wireless: AP
+    uci set wireless.easymesh_ap=wifi-iface
+    uci set wireless.easymesh_ap.device="$radio_mesh"
+    uci set wireless.easymesh_ap.mode='ap'
+    uci set wireless.easymesh_ap.ssid="$ssid"
+    uci set wireless.easymesh_ap.network='lan'
+    uci set wireless.easymesh_ap.easymesh_managed='1'
+    if [ -n "$key" ]; then
+        uci set wireless.easymesh_ap.encryption='psk2+ccmp'
+        uci set wireless.easymesh_ap.key="$key"
+    else
+        uci set wireless.easymesh_ap.encryption='none'
+    fi
+    [ "$ieee80211r" = "1" ] && {
+        uci set wireless.easymesh_ap.ieee80211r='1'
+        uci set wireless.easymesh_ap.mobility_domain="$mobility_domain"
+        uci set wireless.easymesh_ap.ft_over_ds="$ft_over_ds"
+        uci set wireless.easymesh_ap.ft_psk_generate_local='1'
+        uci set wireless.easymesh_ap.reassociation_deadline="$reassociation_deadline"
+    }
+    [ "$ieee80211k" = "1" ] && uci set wireless.easymesh_ap.ieee80211k='1'
+    [ "$ieee80211v" = "1" ] && uci set wireless.easymesh_ap.ieee80211v='1'
+    uci commit wireless
+    log "配置写入完成"
 }
 
+# ─── procd 服务 ───────────────────────────────
 start_service() {
-	local enabled role
-	config_load "$UCI_APP"
-	config_get enabled global enabled '0'
-	config_get role    global role    'master'
+    local enabled role pairing_mode
+    config_load "$UCI_APP"
+    config_get enabled      global enabled      '0'
+    config_get role         global role         'slave'
+    config_get pairing_mode global pairing_mode '0'
 
-	if [ "$enabled" = "1" ]; then
-		apply_mesh_config
-		/etc/init.d/network restart &
-		if [ "$role" = "master" ]; then
-			procd_open_instance "master"
-			procd_set_param command /usr/sbin/easymesh-master
-			procd_set_param respawn 60 5 0
-			procd_set_param stdout 1
-			procd_set_param stderr 1
-			procd_close_instance
-		fi
-	else
-		log "未检测到配置，启动自动配对 agent"
-		procd_open_instance "agent"
-		procd_set_param command /usr/sbin/easymesh-agent
-		procd_set_param respawn 30 5 0
-		procd_set_param stdout 1
-		procd_set_param stderr 1
-		procd_close_instance
-	fi
+    if [ "$enabled" = "1" ]; then
+        # ── 已配置：应用 Mesh 配置 ──
+        apply_mesh_config
+        /etc/init.d/network restart &
+
+        if [ "$role" = "master" ]; then
+            procd_open_instance "master"
+            procd_set_param command /usr/sbin/easymesh-master
+            procd_set_param respawn 60 5 0
+            procd_set_param stdout 1; procd_set_param stderr 1
+            procd_close_instance
+        fi
+
+    else
+        # ── 未配置：配对模式 ──
+        log "Entering pairing mode (LAN IP: $(get_pair_ip))"
+
+        # 广播配对专用 SSID（无密码）
+        start_pairing_ap
+
+        # Start pairing web service on port 80 (no IP conflict since pair_ip is unique)
+        procd_open_instance "pair-web"
+        procd_set_param command /usr/sbin/uhttpd \
+            -f \
+            -p 0.0.0.0:80 \
+            -h /www/easymesh-pair \
+            -x /cgi-bin \
+            -t 120 -T 30
+        procd_set_param respawn 10 5 0
+        procd_close_instance
+
+        # 提示信息写入系统日志，方便调试
+        log "Pairing page: http://$(get_pair_ip)/ (WiFi: $(get_pair_ssid))"
+    fi
 }
 
 stop_service() {
-	cleanup_wireless
-	cleanup_network
-	uci commit wireless
-	uci commit network
-	/etc/init.d/network restart &
+    cleanup_wireless
+    cleanup_network
+    uci commit wireless
+    uci commit network
+    /etc/init.d/network restart &
 }
 
-reload_service() {
-	stop_service
-	start_service
-}
+reload_service() { stop_service; start_service; }
 
-service_triggers() {
-	procd_add_reload_trigger "$UCI_APP"
-}
+service_triggers() { procd_add_reload_trigger "$UCI_APP"; }

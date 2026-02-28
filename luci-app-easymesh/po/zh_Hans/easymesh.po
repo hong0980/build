@@ -3,92 +3,260 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-msgid "EasyMesh 配置"
+# ── overview.js: QR section ───────────────────
+
+msgid "Add New Node"
+msgstr "添加新节点"
+
+msgid "Generate pairing code → slave scans → mesh configured automatically"
+msgstr "生成配对码 → 从节点扫描 → 自动完成组网"
+
+msgid "Generate Pairing Code"
+msgstr "生成配对码"
+
+msgid "Power on the new node"
+msgstr "将新节点通电"
+
+msgid "Connect phone to \"EasyMesh-Setup\" WiFi (no password)"
+msgstr "手机连接「EasyMesh-Setup」WiFi（无密码）"
+
+msgid "Open "
+msgstr "浏览器打开 "
+
+msgid " in browser"
+msgstr ""
+
+msgid "Scan this QR code"
+msgstr "扫描此二维码"
+
+msgid "Wait ~10 seconds — done automatically ✓"
+msgstr "等待约 10 秒，自动完成 ✓"
+
+msgid "Generating..."
+msgstr "生成中…"
+
+msgid "Regenerate"
+msgstr "重新生成"
+
+msgid "Code valid for: "
+msgstr "配对码有效期："
+
+msgid "Code expired — click Regenerate"
+msgstr "配对码已过期，请点击重新生成"
+
+msgid "Expired"
+msgstr "已过期"
+
+msgid "Master node returned no token. Save and apply EasyMesh config first."
+msgstr "主节点未返回 token，请先保存并应用 EasyMesh 配置。"
+
+msgid "Failed to generate QR code: "
+msgstr "生成配对码失败："
+
+# ── overview.js: form ─────────────────────────
+
+msgid "EasyMesh Configuration"
 msgstr "EasyMesh 配置"
 
-msgid "基于 batman-adv + 802.11s 的无线 Mesh 网络。所有节点需使用相同的 Mesh ID 和密码。"
-msgstr "基于 batman-adv + 802.11s 的无线 Mesh 网络。所有节点需使用相同的 Mesh ID 和密码。"
+msgid "Wireless mesh network based on batman-adv + 802.11s."
+msgstr "基于 batman-adv + 802.11s 的无线 Mesh 网络。"
 
-msgid "启用 EasyMesh"
+msgid "Basic Settings"
+msgstr "基本设置"
+
+msgid "Enable EasyMesh"
 msgstr "启用 EasyMesh"
 
-msgid "节点角色"
+msgid "Node Role"
 msgstr "节点角色"
 
-msgid "主节点（连接光猫）"
-msgstr "主节点（连接光猫）"
+msgid "Master handles DHCP and uplink. Slave extends coverage only."
+msgstr "主节点负责 DHCP 和上行；从节点仅做覆盖延伸。"
 
-msgid "从节点（扩展覆盖）"
-msgstr "从节点（扩展覆盖）"
+msgid "Master (connected to modem/ISP)"
+msgstr "主节点（连接光猫/ISP）"
 
-msgid "回程方式"
+msgid "Slave (extends coverage)"
+msgstr "从节点（扩展覆盖范围）"
+
+msgid "Backhaul Type"
 msgstr "回程方式"
 
-msgid "有线回程（推荐）"
+msgid "Wired is more stable. Wireless uses a dedicated 5 GHz band."
+msgstr "有线回程更稳定；无线回程使用独立 5GHz 频段。"
+
+msgid "Wired (recommended)"
 msgstr "有线回程（推荐）"
 
-msgid "无线回程（5GHz）"
+msgid "Wireless (5 GHz)"
 msgstr "无线回程（5GHz）"
 
-msgid "自动选择（有线优先）"
+msgid "Auto (wired preferred)"
 msgstr "自动选择（有线优先）"
 
-msgid "Mesh 回程网络"
+msgid "Mesh Backhaul"
 msgstr "Mesh 回程网络"
 
-msgid "Mesh 网络 ID"
+msgid "Internal wireless link between nodes, invisible to clients."
+msgstr "节点间内部无线链路，对客户端不可见。"
+
+msgid "Mesh Settings"
+msgstr "Mesh 设置"
+
+msgid "Advanced"
+msgstr "高级"
+
+msgid "Mesh Network ID"
 msgstr "Mesh 网络 ID"
 
-msgid "Mesh 密码（SAE 加密）"
+msgid "Must be identical on all nodes"
+msgstr "所有节点必须完全一致"
+
+msgid "Mesh Password (SAE)"
 msgstr "Mesh 密码（SAE 加密）"
 
-msgid "Mesh 回程频段"
+msgid "Must be identical on all nodes. Leave empty to disable encryption (not recommended)."
+msgstr "所有节点必须完全一致。留空则不加密（不推荐）。"
+
+msgid "Minimum 8 characters"
+msgstr "至少 8 位字符"
+
+msgid "Mesh Backhaul Band"
 msgstr "Mesh 回程频段"
 
-msgid "客户端 WiFi（AP）"
+msgid "2.4 GHz (better range, slower)"
+msgstr "2.4GHz（穿墙好，速度慢）"
+
+msgid "5 GHz (faster, recommended)"
+msgstr "5GHz（速度快，推荐）"
+
+msgid "batman-adv Routing Algorithm"
+msgstr "batman-adv 路由算法"
+
+msgid "(default, best compatibility)"
+msgstr "（默认，兼容性最好）"
+
+msgid "(more accurate, requires kernel support)"
+msgstr "（更精确，需要内核支持）"
+
+msgid "802.11s Native Forwarding"
+msgstr "802.11s 原生转发"
+
+msgid "Normally disabled — batman-adv handles forwarding."
+msgstr "通常关闭，转发由 batman-adv 负责。"
+
+msgid "Client WiFi (AP)"
 msgstr "客户端 WiFi（AP）"
 
-msgid "漫游设置（802.11r/k/v）"
+msgid "SSID visible to phones and laptops. Must be identical on all nodes for seamless roaming."
+msgstr "手机和电脑看到的 WiFi 名称，所有节点必须一致才能无缝漫游。"
+
+msgid "WiFi Name (SSID)"
+msgstr "WiFi 名称（SSID）"
+
+msgid "WiFi Password"
+msgstr "WiFi 密码"
+
+msgid "WPA2/WPA3. Leave empty for open network."
+msgstr "WPA2/WPA3 加密，留空为开放网络。"
+
+msgid "Roaming (802.11r/k/v)"
 msgstr "漫游设置（802.11r/k/v）"
 
-msgid "802.11r 快速 BSS 切换"
+msgid "Helps devices switch nodes quickly. Requires open-source mac80211 driver support."
+msgstr "帮助设备快速切换节点，需要开源 mac80211 驱动支持。"
+
+msgid "Fast Roaming"
+msgstr "快速漫游"
+
+msgid "802.11r Fast BSS Transition"
 msgstr "802.11r 快速 BSS 切换"
 
-msgid "漫游域 ID（Mobility Domain）"
-msgstr "漫游域 ID（Mobility Domain）"
+msgid "Greatly reduces disconnect time when switching nodes. Recommended."
+msgstr "大幅减少节点切换时的断线时间，推荐开启。"
 
-msgid "802.11k 邻居报告"
+msgid "Mobility Domain ID"
+msgstr "漫游域 ID"
+
+msgid "4-digit hex string. Must be identical on all nodes."
+msgstr "4 位十六进制字符串，所有节点必须一致。"
+
+msgid "802.11k Neighbor Report"
 msgstr "802.11k 邻居报告"
 
-msgid "802.11v BSS 过渡管理"
+msgid "Informs devices about nearby nodes to assist proactive roaming."
+msgstr "向设备通报附近节点，辅助主动漫游。"
+
+msgid "802.11v BSS Transition Management"
 msgstr "802.11v BSS 过渡管理"
 
-msgid "Mesh 网络状态"
-msgstr "Mesh 网络状态"
+msgid "Actively steers weak-signal devices to a better node."
+msgstr "主动引导信号弱的设备切换到更好的节点。"
 
-msgid "发现邻居节点"
-msgstr "发现邻居节点"
+msgid "FT over DS"
+msgstr "FT over DS"
 
-msgid " 台"
-msgstr " 台"
+msgid "Pre-negotiate keys over wired backbone for faster transition. Disable if issues occur."
+msgstr "通过有线骨干预协商密钥，切换更快。如遇问题可关闭。"
 
-msgid "邻居 MAC 地址"
-msgstr "邻居 MAC 地址"
+msgid "Reassociation Deadline (ms)"
+msgstr "重关联超时（毫秒）"
 
-msgid "链路质量"
-msgstr "链路质量"
+# ── nodes.js ──────────────────────────────────
 
-msgid "下一跳"
-msgstr "下一跳"
+msgid "device(s) requesting to join Mesh"
+msgstr "台设备申请加入 Mesh"
 
-msgid "接口"
-msgstr "接口"
+msgid "Approve to push config automatically. No action needed on the slave."
+msgstr "确认后自动推送配置，从节点无需任何操作。"
 
-msgid "最后seen"
-msgstr "最后seen"
+msgid "Unknown device"
+msgstr "未知设备"
 
-msgid "未启动"
+msgid "Join Mesh"
+msgstr "加入 Mesh"
+
+msgid "Reject"
+msgstr "拒绝"
+
+msgid "Approved. Pushing config to slave..."
+msgstr "已批准，正在向从节点推送配置…"
+
+msgid "Mesh Status"
+msgstr "Mesh 状态"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Not running"
 msgstr "未启动"
 
-msgid "运行中"
-msgstr "运行中"
+msgid "Neighbor nodes"
+msgstr "邻居节点"
+
+msgid "found"
+msgstr "台"
+
+msgid "Mesh Neighbors"
+msgstr "Mesh 邻居节点"
+
+msgid "TQ link quality: 255 = best. Refreshes every 5 seconds."
+msgstr "TQ 链路质量：255 为最佳，每 5 秒自动刷新。"
+
+msgid "No neighbors found. Verify all nodes share the same Mesh ID and password."
+msgstr "未发现邻居节点。请确认所有节点已启用 EasyMesh 且 Mesh ID/密码完全一致。"
+
+msgid "Link Quality (TQ)"
+msgstr "链路质量（TQ）"
+
+msgid "Next Hop"
+msgstr "下一跳"
+
+msgid "Interface"
+msgstr "接口"
+
+msgid "Last Seen"
+msgstr "最后在线"
+
+msgid "Failed to load qrcode.min.js"
+msgstr "加载 qrcode.min.js 失败"

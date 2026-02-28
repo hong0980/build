@@ -3,198 +3,188 @@
 'require rpc';
 'require poll';
 'require ui';
-'require uci';
-
-/*
- * nodes.js — 节点管理页
- * - 实时显示待配对申请（来源：UDP广播/临时AP/配网Mesh）
- * - 一键批准/拒绝
- * - 显示已组网的 batman-adv 邻居
- */
 
 var MASTER_PORT = 4304;
 
 var callReadFile = rpc.declare({
-	object: 'file', method: 'read', params: ['path'], expect: { data: '' }
+	object: 'file',
+	method: 'read',
+	params: ['path'],
+	expect: { data: '' }
 });
+
 var callNetworkDump = rpc.declare({
-	object: 'network.interface', method: 'dump', expect: { interface: [] }
+	object: 'network.interface',
+	method: 'dump',
+	expect: { interface: [] }
 });
 
 function masterFetch(path, method, body) {
 	return fetch('http://' + window.location.hostname + ':' + MASTER_PORT + path, {
-		method: method || 'GET',
+		method:  method || 'GET',
 		headers: body ? { 'Content-Type': 'application/json' } : {},
-		body: body ? JSON.stringify(body) : null,
-		signal: AbortSignal.timeout(4000)
+		body:    body ? JSON.stringify(body) : undefined,
+		signal:  AbortSignal.timeout(5000)
 	}).then(function(r) { return r.json(); }).catch(function() { return null; });
 }
 
 function parseOriginators(raw) {
-	if (!raw) return [];
-	return raw.trim().split('\n').slice(2).map(function(line) {
+	var nodes = [];
+	if (!raw) return nodes;
+	raw.trim().split('\n').slice(2).forEach(function(line) {
 		var p = line.trim().split(/\s+/);
-		return p.length >= 5 ? { mac: p[0], lastSeen: p[1], tq: parseInt(p[2]) || 0, nextHop: p[3], iface: p[4] } : null;
-	}).filter(Boolean);
+		if (p.length >= 5)
+			nodes.push({ mac: p[0], lastSeen: p[1], tq: parseInt(p[2]) || 0, nextHop: p[3], iface: p[4] });
+	});
+	return nodes;
 }
 
 function tqBar(tq) {
-	var pct = Math.round(tq / 255 * 100);
-	var c = pct >= 70 ? '#2ea44f' : pct >= 40 ? '#e3b341' : '#f85149';
-	return E('span', { style: 'display:inline-flex;align-items:center;gap:5px' }, [
-		E('span', { style: 'display:inline-block;width:50px;height:5px;background:#eee;border-radius:3px;overflow:hidden' }, [
-			E('span', { style: 'display:block;width:' + pct + '%;height:100%;background:' + c })
+	var pct   = Math.round(tq / 255 * 100);
+	var color = pct >= 70 ? '#2ea44f' : pct >= 40 ? '#e3b341' : '#f85149';
+	return E('div', { style: 'display:flex;align-items:center;gap:6px' }, [
+		E('div', { style: 'width:60px;height:5px;background:#30363d;border-radius:3px;overflow:hidden' }, [
+			E('div', { style: 'width:' + pct + '%;height:100%;background:' + color })
 		]),
-		E('small', { style: 'color:#888' }, pct + '%')
+		E('span', { style: 'font-size:11px;color:#7d8590' }, pct + '%')
 	]);
 }
 
-/* 发现来源标签 */
-function sourceTag(source) {
-	var map = {
-		'udp_broadcast': ['🔌', '有线广播', '#1f6feb'],
-		'http':          ['🌐', 'HTTP',     '#8250df'],
-		'temp_ap':       ['📡', '临时AP',   '#d29922'],
-		'provision_mesh':['🕸',  '配网Mesh', '#2ea44f']
-	};
-	var m = map[source] || ['❓', source, '#888'];
-	return E('span', {
-		style: 'font-size:11px;padding:2px 7px;border-radius:10px;background:' +
-		       m[2] + '22;color:' + m[2] + ';border:1px solid ' + m[2] + '44'
-	}, m[0] + ' ' + m[1]);
-}
-
-function renderPendingCard(node, onApprove, onReject) {
-	var info = {};
-	try { info = (typeof node.info === 'string') ? JSON.parse(node.info) : (node.info || {}); } catch(e) {}
+function pendingCard(node, onApprove, onReject) {
+	var info = node.node || {};
 	return E('div', {
-		style: 'display:flex;align-items:center;gap:12px;padding:14px 16px;' +
-		       'border:1px solid #e3b34166;border-radius:8px;background:#e3b34108;margin-bottom:8px'
+		style: 'border:1px solid #e3b341;border-radius:8px;padding:16px;' +
+		       'background:rgba(210,153,34,0.06);display:flex;' +
+		       'align-items:center;gap:12px;margin-bottom:10px'
 	}, [
-		E('span', { style: 'font-size:24px' }, '📡'),
-		E('div', { style: 'flex:1;min-width:0' }, [
-			E('div', { style: 'font-weight:600;margin-bottom:3px' },
-				info.hostname || _('未知设备')),
-			E('div', { style: 'font-size:12px;color:#888;font-family:monospace;margin-bottom:4px' },
-				(info.ip || '-') + ' · ' + (info.mac || '-')),
-			sourceTag(node.source || 'http')
+		E('div', { style: 'font-size:22px' }, '📡'),
+		E('div', { style: 'flex:1' }, [
+			E('strong', {}, info.hostname || _('Unknown device')),
+			E('div', { style: 'font-size:12px;color:#7d8590;font-family:monospace;margin-top:2px' },
+				(info.ip || '—') + ' · ' + (info.mac || '—'))
 		]),
 		E('button', {
 			class: 'cbi-button cbi-button-action',
-			style: 'background:#2ea44f;color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px',
+			style: 'background:#2ea44f;color:#fff;border:none;' +
+			       'padding:8px 18px;border-radius:6px;cursor:pointer',
 			click: onApprove
-		}, '✓ ' + _('加入 Mesh')),
+		}, '✓ ' + _('Join Mesh')),
 		E('button', {
 			class: 'cbi-button',
-			style: 'color:#f85149;border:1px solid #f8514966;background:transparent;' +
-			       'padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px;margin-left:6px',
+			style: 'color:#f85149;border:1px solid #f85149;background:transparent;' +
+			       'padding:8px 14px;border-radius:6px;cursor:pointer;margin-left:6px',
 			click: onReject
-		}, '✕')
+		}, '✕ ' + _('Reject'))
 	]);
 }
 
 return view.extend({
+
 	load: function() {
 		return Promise.all([
-			L.resolveDefault(callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }), ''),
-			L.resolveDefault(callNetworkDump(), []),
+			L.resolveDefault(
+				callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }), ''),
+			callNetworkDump(),
 			masterFetch('/easymesh/nodes')
 		]);
 	},
 
 	render: function(data) {
 		var self = this;
-		var root = E('div', { id: 'em-root' });
-		root.appendChild(self._build(data[0], data[1], data[2]));
+		var root = E('div', { id: 'easymesh-nodes-root' });
+		root.appendChild(self._build(data[0], data[1] || [], data[2]));
 
 		poll.add(function() {
 			return Promise.all([
-				L.resolveDefault(callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }), ''),
-				L.resolveDefault(callNetworkDump(), []),
+				L.resolveDefault(
+					callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }), ''),
+				callNetworkDump(),
 				masterFetch('/easymesh/nodes')
 			]).then(function(r) {
-				var old = document.getElementById('em-inner');
-				if (old) old.replaceWith(self._build(r[0], r[1], r[2]));
+				var old = document.getElementById('easymesh-nodes-inner');
+				if (old) old.replaceWith(self._build(r[0], r[1] || [], r[2]));
 			});
 		}, 5);
+
 		return root;
 	},
 
-	_build: function(raw, ifaces, pendingRaw) {
-		var self = this;
-		var el        = E('div', { id: 'em-inner' });
-		var bat0      = (ifaces || []).filter(function(i) { return i.interface === 'bat0'; })[0];
-		var neighbors = parseOriginators(raw);
-		var pending   = (Array.isArray(pendingRaw) ? pendingRaw : []).filter(function(n) {
-			return n && n.status === 'pending';
-		});
+	_build: function(originatorRaw, interfaces, pendingRaw) {
+		var el        = E('div', { id: 'easymesh-nodes-inner' });
+		var bat0      = interfaces.filter(function(i) { return i.interface === 'bat0'; })[0];
+		var meshNodes = parseOriginators(originatorRaw);
+		var pending   = Array.isArray(pendingRaw)
+			? pendingRaw.filter(function(n) { return n.status === 'pending'; }) : [];
 
-		/* ── 配对申请通知区 ── */
-		if (pending.length > 0) {
+		/* Pending pairing requests */
+		if (pending.length) {
 			el.appendChild(E('div', { class: 'cbi-section' }, [
-				E('h3', { style: 'color:#e3b341;margin-bottom:6px' },
-					'⚡ ' + _('发现') + ' ' + pending.length + ' ' + _('台设备申请加入')),
-				E('p', { class: 'cbi-section-descr', style: 'margin-bottom:12px' },
-					_('确认后配置将自动推送至从节点，无需任何手动操作。')),
+				E('h3', { style: 'color:#e3b341' },
+					'⚡ ' + pending.length + ' ' + _('device(s) requesting to join Mesh')),
+				E('p', { class: 'cbi-section-descr' },
+					_('Approve to push config automatically. No action needed on the slave.')),
 				E('div', {}, pending.map(function(node) {
-					return renderPendingCard(node,
+					return pendingCard(node,
 						function() {
-							masterFetch('/easymesh/approve', 'POST', { token: node.token }).then(function() {
-								ui.addNotification(null,
-									E('p', {}, _('已批准，正在推送配置到从节点...')), 'info');
-							});
+							masterFetch('/easymesh/approve', 'POST', { token: node.token })
+								.then(function() {
+									ui.addNotification(null,
+										E('p', {}, _('Approved. Pushing config to slave...')), 'info');
+								});
 						},
-						function() { masterFetch('/easymesh/reject', 'POST', { token: node.token }); }
+						function() {
+							masterFetch('/easymesh/reject', 'POST', { token: node.token });
+						}
 					);
 				}))
 			]));
-		} else {
-			/* 无待配对时显示等待提示 */
-			el.appendChild(E('div', { class: 'cbi-section' }, [
-				E('div', {
-					style: 'padding:16px;background:#f6f8fa;border-radius:8px;color:#888;font-size:13px;text-align:center'
-				}, [
-					E('div', { style: 'font-size:28px;margin-bottom:8px' }, '📶'),
-					_('等待从节点上电自动连接...'),
-					E('br'),
-					E('small', {}, _('从节点刷完 OpenWrt 上电后将自动发现本主节点'))
-				])
-			]));
 		}
 
-		/* ── 三种发现方式状态 ── */
+		/* Status card */
 		el.appendChild(E('div', { class: 'cbi-section' }, [
-			E('h3', {}, _('自动发现状态')),
+			E('h3', {}, _('Mesh Status')),
 			E('div', { class: 'table' }, [
-				[ '🔌', _('有线 UDP 广播'),  _('监听中'), '#2ea44f' ],
-				[ '📡', _('临时 AP 扫描'),   _('扫描中'), '#2ea44f' ],
-				[ '🕸',  _('配网 Mesh AP'),  _('广播中'), '#2ea44f' ]
-			].map(function(row) {
-				return E('div', { class: 'tr' }, [
-					E('div', { class: 'td left', style: 'width:200px' }, row[0] + ' ' + row[1]),
-					E('div', { class: 'td' }, E('span', {
-						style: 'font-size:12px;padding:2px 8px;border-radius:10px;background:' +
-						       row[3] + '22;color:' + row[3]
-					}, row[2]))
-				]);
-			})
+				E('div', { class: 'tr' }, [
+					E('div', { class: 'td left', style: 'width:160px' }, 'bat0'),
+					E('div', { class: 'td' }, bat0
+						? E('span', {
+							class: 'label',
+							style: 'background:#2ea44f;color:#fff;padding:2px 8px;border-radius:4px'
+						  }, _('Running'))
+						: E('span', {
+							class: 'label',
+							style: 'background:#f85149;color:#fff;padding:2px 8px;border-radius:4px'
+						  }, _('Not running'))
+					)
+				]),
+				E('div', { class: 'tr' }, [
+					E('div', { class: 'td left' }, _('Neighbor nodes')),
+					E('div', { class: 'td' }, meshNodes.length + ' ' + _('found'))
+				])
+			])
 		]));
 
-		/* ── batman-adv 邻居 ── */
+		/* Neighbor table */
 		el.appendChild(E('div', { class: 'cbi-section' }, [
-			E('h3', {}, _('已组网邻居节点')),
-			E('p', { class: 'cbi-section-descr' }, 'TQ 链路质量 · ' + _('5秒自动刷新')),
-			neighbors.length === 0
-				? E('p', { style: 'color:#888' }, bat0 ? _('暂无邻居，等待从节点完成配置后自动加入') : _('bat0 未启动，请先完成主节点配置'))
+			E('h3', {}, _('Mesh Neighbors')),
+			E('p', { class: 'cbi-section-descr' },
+				_('TQ link quality: 255 = best. Refreshes every 5 seconds.')),
+			meshNodes.length === 0
+				? E('div', { class: 'alert-message' },
+					_('No neighbors found. Verify all nodes share the same Mesh ID and password.'))
 				: E('table', { class: 'table' }, [
-					E('tr', { class: 'tr table-titles' }, ['MAC', 'TQ', _('下一跳'), _('接口'), _('上次seen')].map(function(h) {
-						return E('th', { class: 'th' }, h);
-					}))
-				].concat(neighbors.map(function(n) {
+					E('tr', { class: 'tr table-titles' }, [
+						E('th', { class: 'th' }, 'MAC'),
+						E('th', { class: 'th' }, _('Link Quality (TQ)')),
+						E('th', { class: 'th' }, _('Next Hop')),
+						E('th', { class: 'th' }, _('Interface')),
+						E('th', { class: 'th' }, _('Last Seen'))
+					])
+				].concat(meshNodes.map(function(n) {
 					return E('tr', { class: 'tr' }, [
 						E('td', { class: 'td', style: 'font-family:monospace' }, n.mac),
 						E('td', { class: 'td' }, tqBar(n.tq)),
-						E('td', { class: 'td', style: 'font-family:monospace;color:#888' }, n.nextHop),
+						E('td', { class: 'td', style: 'font-family:monospace;color:#7d8590' }, n.nextHop),
 						E('td', { class: 'td' }, n.iface),
 						E('td', { class: 'td' }, n.lastSeen + 's')
 					]);
@@ -204,5 +194,7 @@ return view.extend({
 		return el;
 	},
 
-	handleSaveApply: null, handleSave: null, handleReset: null
+	handleSaveApply: null,
+	handleSave:      null,
+	handleReset:     null
 });
