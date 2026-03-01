@@ -48,6 +48,7 @@ apply_mesh_config() {
     local role backhaul mesh_id mesh_key mesh_band ssid key
     local ieee80211r mobility_domain ft_over_ds reassociation_deadline
     local ieee80211k ieee80211v routing_algo mesh_fwding
+    local dedicated_backhaul backhaul_band dfs_enable
 
     config_load "$UCI_APP"
     config_get role                   global role                  'slave'
@@ -65,6 +66,9 @@ apply_mesh_config() {
     config_get ieee80211v             global ieee80211v            '1'
     config_get routing_algo           global routing_algo          'BATMAN_IV'
     config_get mesh_fwding            global mesh_fwding           '0'
+    config_get dedicated_backhaul     global dedicated_backhaul    '0'
+    config_get backhaul_band          global backhaul_band         '5g_2'
+    config_get dfs_enable             global dfs_enable            '1'
 
     cleanup_wireless
     cleanup_network
@@ -126,6 +130,8 @@ apply_mesh_config() {
     [ "$backhaul" = "wired" ] && uci set wireless.mesh0.disabled='1'
 
     # Wireless: client AP
+    # On tri-band routers, dedicated_backhaul=1 reserves second 5GHz radio.
+    # easymesh-master:setup_dedicated_backhaul() handles that at runtime.
     uci set wireless.easymesh_ap=wifi-iface
     uci set wireless.easymesh_ap.device="$radio_mesh"
     uci set wireless.easymesh_ap.mode='ap'

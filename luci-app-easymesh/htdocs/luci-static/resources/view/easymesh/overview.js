@@ -97,6 +97,40 @@ return view.extend({
 		o.placeholder = _('Auto (EasyMesh-Setup-XXXXXX)');
 		o.depends({ enabled: '1', role: 'master', wireless_onboard: '1' });
 
+		/* ── DFS / ACS ── */
+		s.tab('advanced', _('Advanced / Radio'));
+
+		o = s.option(form.Flag, 'dfs_enable',
+			_('Enable DFS Channels'),
+			_('Include radar-protected 5 GHz DFS channels (52–140) in ACS scan. ' +
+			  'Daemon monitors for radar events and mesh-wide channel jump automatically.'));
+		o.default = '1';
+		o.depends('enabled', '1');
+
+		/* ── Dedicated backhaul (tri-band) ── */
+		o = s.option(form.Flag, 'dedicated_backhaul',
+			_('Dedicated Backhaul Radio (Tri-band)'),
+			_('Reserve the second 5 GHz radio exclusively for node-to-node backhaul. ' +
+			  'Clients never connect to it, preserving full backhaul bandwidth. ' +
+			  'Only effective on tri-band hardware (2.4 GHz + 5 GHz + 5 GHz).'));
+		o.default = '0';
+		o.depends('enabled', '1');
+
+		o = s.option(form.ListValue, 'backhaul_band',
+			_('Backhaul Radio Band'),
+			_('Which 5 GHz radio to dedicate as backhaul (first or second).'));
+		o.value('5g_2', _('Second 5 GHz radio (recommended)'));
+		o.value('5g_1', _('First 5 GHz radio'));
+		o.default = '5g_2';
+		o.depends({ enabled: '1', dedicated_backhaul: '1' });
+
+		o = s.option(form.Value, 'backhaul_channel',
+			_('Backhaul Channel'),
+			_('Fixed channel for dedicated backhaul radio. 149/153/157/161 recommended (non-DFS, 80 MHz clean).'));
+		o.placeholder = '149';
+		o.datatype = 'range(1,177)';
+		o.depends({ enabled: '1', dedicated_backhaul: '1' });
+
 		/* Section 2: Mesh backhaul */
 		s = m.section(form.NamedSection, 'global', 'easymesh',
 			_('Mesh Backhaul'),

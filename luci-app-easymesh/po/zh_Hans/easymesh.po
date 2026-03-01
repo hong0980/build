@@ -289,3 +289,39 @@ msgstr "有线"
 
 msgid "via "
 msgstr "接入方式："
+
+msgid "Advanced / Radio"
+msgstr "高级 / 无线电"
+
+msgid "Enable DFS Channels"
+msgstr "启用 DFS 信道"
+
+msgid "Include radar-protected 5 GHz DFS channels (52–140) in ACS scan. Daemon monitors for radar events and mesh-wide channel jump automatically."
+msgstr "在 ACS 扫描中加入受雷达保护的 5 GHz DFS 信道（52–140）。守护进程自动监测雷达事件并全网同步跳信道。"
+
+msgid "Dedicated Backhaul Radio (Tri-band)"
+msgstr "专用回程频段（三频）"
+
+msgid "Reserve the second 5 GHz radio exclusively for node-to-node backhaul. Clients never connect to it, preserving full backhaul bandwidth. Only effective on tri-band hardware (2.4 GHz + 5 GHz + 5 GHz)."
+msgstr "将第二个 5 GHz 无线电专用于节点间回程，客户端不接入该频段，确保回程带宽不打折。仅对三频硬件有效（2.4G + 5G + 5G）。"
+
+msgid "Backhaul Radio Band"
+msgstr "回程无线频段"
+
+msgid "Which 5 GHz radio to dedicate as backhaul (first or second)."
+msgstr "指定哪个 5 GHz 无线电作为专用回程（第一或第二个）。"
+
+msgid "Second 5 GHz radio (recommended)"
+msgstr "第二个 5 GHz（推荐）"
+
+msgid "First 5 GHz radio"
+msgstr "第一个 5 GHz"
+
+msgid "Backhaul Channel"
+msgstr "回程信道"
+
+msgid "Fixed channel for dedicated backhaul radio. 149/153/157/161 recommended (non-DFS, 80 MHz clean)."
+msgstr "专用回程无线电的固定信道，推荐 149/153/157/161（非 DFS，80 MHz 无干扰）。"
+
+msgid "Live topology. Link color = signal quality: green ≥70%, yellow ≥40%, red <40%."
+msgstr "实时拓扑。连线颜色代表信号质量：绿色 ≥70%，黄色 ≥40%，红色 <40%。"

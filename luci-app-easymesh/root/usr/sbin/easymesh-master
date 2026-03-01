@@ -599,8 +599,78 @@ apply_profile() {
 }
 
 ########################################
-# 9. CHANNEL COORDINATION
+# 9. CHANNEL COORDINATION — DFS/ACS + DEDICATED BACKHAUL
 ########################################
+# DFS channels (5 GHz, requires CAC — radar detection):
+#   ETSI: 52,56,60,64,100,104,108,112,116,120,124,128,132,136,140
+#   FCC:  52,56,60,64,100,104,108,112,116,120,124,128,132,136
+# Non-DFS 5 GHz: 36,40,44,48,149,153,157,161,165
+# When kernel detects radar on a DFS channel, it emits a CSA (Channel Switch
+# Announcement) and hostapd moves the interface.  We monitor for this event
+# and propagate the new channel mesh-wide so all nodes land on the same one.
+
+# DFS radar event watcher — runs as background loop on all nodes
+# Listens to hostapd control interface for "DFS-NOP-FINISHED" or "AP-CSA-FINISHED"
+dfs_watchdog() {
+    local ap_iface; ap_iface=$(get_ap_iface)
+    log "DFS watchdog started on $ap_iface"
+
+    hostapd_cli -i "$ap_iface" -a /tmp/easymesh_dfs_action.sh 2>/dev/null &
+
+    # Write the action handler script
+    cat > /tmp/easymesh_dfs_action.sh << 'SH'
+#!/bin/sh
+# Called by hostapd_cli -a when an event fires
+# $1 = interface, $2 = event string
+iface="$1"; event="$2"
+case "$event" in
+    AP-CSA-FINISHED*|DFS-NOP-FINISHED*)
+        logger -t easymesh-dfs "Radar/CSA event on $iface: $event"
+        new_chan=$(echo "$event" | grep -o 'chan=[0-9]*' | cut -d= -f2)
+        # Write event file for main loop to pick up
+        printf '%s
+' "$new_chan" > /tmp/easymesh_dfs_chan_change
+        ;;
+esac
+SH
+    chmod +x /tmp/easymesh_dfs_action.sh
+
+    # Poll for the event file
+    while true; do
+        if [ -f /tmp/easymesh_dfs_chan_change ]; then
+            local new_chan
+            new_chan=$(cat /tmp/easymesh_dfs_chan_change)
+            rm -f /tmp/easymesh_dfs_chan_change
+            [ -n "$new_chan" ] && handle_dfs_channel_change "$new_chan"
+        fi
+        sleep 2
+    done
+}
+
+handle_dfs_channel_change() {
+    local new_chan="$1"
+    log "DFS: mesh-wide channel change → $new_chan"
+
+    # Update own config
+    local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
+    uci set "${rd}.channel=${new_chan}"
+    uci commit wireless
+
+    # If master: push to all slaves immediately (don't wait for next ACS scan)
+    if [ "$(get_role)" = "master" ]; then
+        local payload; payload="{"channel":"$new_chan","reason":"dfs"}"
+        for f in "$NODE_DB"/*.json; do
+            [ -f "$f" ] || continue
+            local peer_ip
+            peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
+            [ -z "$peer_ip" ] && continue
+            wget -q -T 3 -O/dev/null                 --post-data="$payload"                 --header='Content-Type: application/json'                 "http://${peer_ip}:${MASTER_PORT}/channel/apply" 2>/dev/null &
+            log "DFS: pushed channel $new_chan to $peer_ip"
+        done
+    fi
+}
+
+# ACS: pick least-congested channel from available (optionally including DFS)
 _last_ch=0
 
 optimize_channel() {
@@ -608,20 +678,129 @@ optimize_channel() {
     local now; now=$(date +%s)
     [ $(( now - _last_ch )) -lt "$CHANNEL_SCAN_INTERVAL" ] && return
     _last_ch=$now
-    local best rd cur
-    best=$(iw dev "$AP_IF" scan 2>/dev/null |
-        grep 'DS Parameter set' | awk '{print $5}' |
-        sort | uniq -c | sort -n | head -1 | awk '{print $2}')
-    [ -z "$best" ] && return
-    rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
-    cur=$(uci get "${rd}.channel" 2>/dev/null)
-    [ "$cur" = "$best" ] && return
-    log "Channel: $cur → $best"
-    uci set "${rd}.channel=$best"; uci commit wireless && wifi reload
+
+    local dfs_enable
+    dfs_enable=$(uci get easymesh.global.dfs_enable 2>/dev/null || echo 1)
+
+    # Candidate channel sets
+    local ch_24="1 6 11"
+    local ch_5_nodfs="36 40 44 48 149 153 157 161 165"
+    local ch_5_dfs="52 56 60 64 100 104 108 112 116 132 136 140"
+    local ch_5="${ch_5_nodfs}"
+    [ "$dfs_enable" = "1" ] && ch_5="${ch_5_nodfs} ${ch_5_dfs}"
+
+    # Get AP radio band
+    local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
+    local band; band=$(uci get "${rd}.band" 2>/dev/null || echo "5g")
+    local candidates
+    case "$band" in
+        2g*|2.4*) candidates="$ch_24" ;;
+        *)         candidates="$ch_5"  ;;
+    esac
+
+    # Scan and count AP occupancy per channel
+    local scan_out
+    scan_out=$(iw dev "$AP_IF" scan 2>/dev/null)
+
+    local best_ch="" best_count=9999
+    for ch in $candidates; do
+        local count
+        count=$(echo "$scan_out" | grep -c "DS Parameter set: channel $ch")
+        if [ "$count" -lt "$best_count" ]; then
+            best_count=$count; best_ch=$ch
+        fi
+    done
+    [ -z "$best_ch" ] && return
+
+    local cur; cur=$(uci get "${rd}.channel" 2>/dev/null)
+    [ "$cur" = "$best_ch" ] && return
+
+    log "ACS: channel $cur → $best_ch (occupancy: $best_count APs)"
+    uci set "${rd}.channel=$best_ch"
+    uci commit wireless && wifi reload
+
+    # Propagate new channel to all slaves
+    local payload; payload="{"channel":"$best_ch","reason":"acs"}"
+    for f in "$NODE_DB"/*.json; do
+        [ -f "$f" ] || continue
+        local peer_ip
+        peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
+        [ -z "$peer_ip" ] && continue
+        wget -q -T 3 -O/dev/null             --post-data="$payload"             --header='Content-Type: application/json'             "http://${peer_ip}:${MASTER_PORT}/channel/apply" 2>/dev/null &
+    done
 }
 
 ########################################
-# 10. LOAD BALANCING
+# 10. DEDICATED BACKHAUL (TRI-BAND)
+########################################
+# On tri-band routers (2.4 GHz + 5 GHz low + 5 GHz high):
+#   - radio0: 2.4 GHz  → client AP
+#   - radio1: 5 GHz    → client AP (primary)
+#   - radio2: 5 GHz    → dedicated backhaul (mesh only, no client AP)
+#
+# The dedicated radio runs a mesh interface only. No AP, no clients.
+# Clients connect via radio0/radio1; backhaul runs on radio2 at full bandwidth.
+
+setup_dedicated_backhaul() {
+    local enabled; enabled=$(uci get easymesh.global.dedicated_backhaul 2>/dev/null || echo 0)
+    [ "$enabled" != "1" ] && return
+
+    # Find the second 5 GHz radio
+    local backhaul_radio=""
+    local seen5g=0
+    for dev in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
+        local b; b=$(uci get "wireless.${dev}.band" 2>/dev/null || echo "")
+        case "$b" in
+            5g*|5GHz*)
+                seen5g=$(( seen5g + 1 ))
+                [ "$seen5g" -ge 2 ] && { backhaul_radio="$dev"; break; }
+                ;;
+        esac
+    done
+
+    if [ -z "$backhaul_radio" ]; then
+        log "Dedicated backhaul: no second 5GHz radio found — using shared radio"
+        return 1
+    fi
+
+    log "Dedicated backhaul: $backhaul_radio reserved for mesh only"
+
+    # Remove any existing AP on this radio
+    for iface in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-iface/{gsub(/wireless\./,""); print $1}'); do
+        local dev; dev=$(uci get "wireless.${iface}.device" 2>/dev/null)
+        local mode; mode=$(uci get "wireless.${iface}.mode" 2>/dev/null)
+        if [ "$dev" = "$backhaul_radio" ] && [ "$mode" = "ap" ]; then
+            uci del "wireless.${iface}"
+            log "Dedicated backhaul: removed AP $iface from $backhaul_radio"
+        fi
+    done
+
+    # Set dedicated mesh interface on this radio — no AP
+    # Use channel 149 (non-DFS, high-throughput) by default for backhaul
+    local bh_channel; bh_channel=$(uci get easymesh.global.backhaul_channel 2>/dev/null || echo 149)
+    uci set "wireless.${backhaul_radio}.channel=${bh_channel}"
+    uci set "wireless.${backhaul_radio}.htmode=VHT80"  # 80MHz for max backhaul throughput
+
+    # Ensure mesh interface exists on backhaul radio
+    uci set wireless.easymesh_bh=wifi-iface
+    uci set wireless.easymesh_bh.device="$backhaul_radio"
+    uci set wireless.easymesh_bh.mode=mesh
+    uci set wireless.easymesh_bh.mesh_id=$(uci get easymesh.global.mesh_id 2>/dev/null)
+    uci set wireless.easymesh_bh.network=mesh
+    uci set wireless.easymesh_bh.easymesh_managed=1
+    local mesh_key; mesh_key=$(uci get easymesh.global.mesh_key 2>/dev/null)
+    if [ -n "$mesh_key" ]; then
+        uci set wireless.easymesh_bh.encryption=sae
+        uci set wireless.easymesh_bh.key="$mesh_key"
+    else
+        uci set wireless.easymesh_bh.encryption=none
+    fi
+    uci commit wireless
+    log "Dedicated backhaul: $backhaul_radio configured (ch $bh_channel, VHT80)"
+}
+
+########################################
+# 11. LOAD BALANCING
 ########################################
 
 load_balance() {
@@ -639,7 +818,7 @@ load_balance() {
 }
 
 ########################################
-# 11. TOPOLOGY
+# 12. TOPOLOGY
 ########################################
 
 update_topology() {
@@ -718,6 +897,19 @@ handle_request() {
         ssid=$(get_onboard_ssid)
         http_ok "{\"enabled\":$en,\"ssid\":\"$ssid\"}" ;;
 
+    /channel/apply)
+        # Slave receives channel change from master (ACS or DFS event)
+        local new_chan reason
+        new_chan=$(echo "$body" | grep -o '"channel":"[^"]*"' | cut -d'"' -f4)
+        reason=$(echo "$body"  | grep -o '"reason":"[^"]*"'  | cut -d'"' -f4)
+        [ -z "$new_chan" ] && { http_ok '{"status":"ignored"}'; return; }
+        log "Channel sync from master: ch=$new_chan reason=${reason:-unknown}"
+        local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
+        uci set "${rd}.channel=${new_chan}"
+        uci commit wireless
+        wifi reload &
+        http_ok '{"status":"ok","channel":"'"$new_chan"'"}' ;;
+
     # Roaming endpoints (called by master to probe stations on peer APs)
     /roam/signal)
         local sta_mac; sta_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
@@ -768,6 +960,10 @@ main_loop() {
         gateway_watchdog &
     fi
     roam_watchdog &
+    dfs_watchdog &
+
+    # Setup dedicated backhaul radio if tri-band and enabled
+    setup_dedicated_backhaul
 
     local _registered=0 _iter=0
     while true; do
