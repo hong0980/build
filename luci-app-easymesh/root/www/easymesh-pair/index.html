@@ -2,189 +2,47 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>EasyMesh Pairing</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EasyMesh Node</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;background:#0d1117;color:#e6edf3;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
-.card{width:100%;max-width:380px;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:32px 24px 28px;text-align:center}
-.logo{font-size:52px;margin-bottom:14px;display:block}
-h1{font-size:21px;font-weight:700;margin-bottom:6px}
-.sub{font-size:13px;color:#7d8590;line-height:1.6;margin-bottom:28px}
-.view{display:none}.view.active{display:block;animation:fadein .25s ease}
-@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.btn-primary{width:100%;padding:15px;background:#2ea44f;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .15s,transform .1s}
-.btn-primary:active{background:#22863a;transform:scale(.97)}
-.btn-ghost{width:100%;padding:12px;background:transparent;color:#7d8590;border:1px solid #30363d;border-radius:12px;font-size:14px;cursor:pointer;margin-top:10px}
-#cam-wrap{position:relative;width:100%;aspect-ratio:1/1;border-radius:14px;overflow:hidden;background:#000;margin-bottom:14px}
-#video{width:100%;height:100%;object-fit:cover;display:block}
-.frame-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
-.frame{width:58%;aspect-ratio:1/1;border:2.5px solid #2ea44f;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.45);animation:glow 2s ease-in-out infinite}
-@keyframes glow{0%,100%{box-shadow:0 0 0 9999px rgba(0,0,0,.45),0 0 10px rgba(46,164,79,.35)}50%{box-shadow:0 0 0 9999px rgba(0,0,0,.45),0 0 22px rgba(46,164,79,.7)}}
-.cam-hint{position:absolute;bottom:12px;left:0;right:0;text-align:center;font-size:12px;color:rgba(255,255,255,.6)}
-canvas{display:none}
-.steps{text-align:left;margin:4px 0 20px}
-.step{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:14px;color:#7d8590;border-bottom:1px solid #21262d;transition:color .3s}
-.step:last-child{border:none}
-.step.done{color:#e6edf3}.step.active{color:#2ea44f;font-weight:500}.step.err{color:#f85149}
-.si{width:22px;text-align:center;flex-shrink:0;font-size:15px}
-.spin{display:inline-block;animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.ri{font-size:58px;margin:4px 0 16px;display:block}
-.rt{font-size:21px;font-weight:700;margin-bottom:8px}
-.rb{font-size:13px;color:#7d8590;line-height:1.7}
-.tip{margin-top:18px;padding:12px 14px;background:#0d1117;border-radius:10px;font-size:12px;color:#7d8590;text-align:left;line-height:1.6}
+body{font-family:-apple-system,sans-serif;background:#0d1117;color:#e6edf3;
+     display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.card{background:#161b22;border:1px solid #30363d;border-radius:16px;
+      padding:32px 28px;max-width:420px;width:100%;text-align:center}
+h1{font-size:20px;margin:12px 0 8px}
+p{font-size:13px;color:#7d8590;line-height:1.7;margin:0 0 20px}
+.status{padding:10px 16px;border-radius:8px;font-size:13px;margin-top:16px}
+.ok{background:rgba(46,164,79,.15);color:#2ea44f;border:1px solid #2ea44f}
+.wait{background:rgba(227,179,65,.1);color:#e3b341;border:1px solid #e3b341}
 </style>
 </head>
 <body>
 <div class="card">
-  <span class="logo">🕸</span>
-  <h1>EasyMesh Pairing</h1>
-  <p class="sub">Connected to <strong>EasyMesh-Setup</strong><br>Scan the QR code on your master node</p>
-
-  <div class="view active" id="v-ready">
-    <button class="btn-primary" onclick="startScan()">
-      <span>📷</span> Scan Master QR Code
-    </button>
-    <p style="margin-top:14px;font-size:12px;color:#7d8590;line-height:1.7">
-      On the master node: LuCI → EasyMesh → Generate Pairing Code
-    </p>
-  </div>
-
-  <div class="view" id="v-camera">
-    <div id="cam-wrap">
-      <video id="video" autoplay playsinline muted></video>
-      <div class="frame-overlay"><div class="frame"></div></div>
-      <div class="cam-hint">Align QR code within the frame</div>
-    </div>
-    <canvas id="qr-canvas"></canvas>
-    <button class="btn-ghost" onclick="stopScan()">Cancel</button>
-  </div>
-
-  <div class="view" id="v-pairing">
-    <div class="steps">
-      <div class="step done"   id="s-scan"><span class="si">✓</span><span>QR code read</span></div>
-      <div class="step active" id="s-conn"><span class="si"><span class="spin">⟳</span></span><span>Connecting to master…</span></div>
-      <div class="step"        id="s-cfg"> <span class="si">○</span><span>Fetching mesh config</span></div>
-      <div class="step"        id="s-apply"><span class="si">○</span><span>Applying config &amp; restarting</span></div>
-    </div>
-  </div>
-
-  <div class="view" id="v-ok">
-    <span class="ri">🎉</span>
-    <div class="rt">Pairing Complete!</div>
-    <div class="rb">This node has joined the mesh network.<br>Restarting now (~30 seconds).</div>
-    <div class="tip">After reboot, place this node wherever you need better coverage. No further setup needed.</div>
-  </div>
-
-  <div class="view" id="v-err">
-    <span class="ri">😵</span>
-    <div class="rt">Pairing Failed</div>
-    <div class="rb" id="err-msg">Unknown error</div>
-    <button class="btn-primary" style="margin-top:22px" onclick="show('v-ready')">Try Again</button>
-  </div>
+  <div style="font-size:48px">🔌</div>
+  <h1>EasyMesh Node</h1>
+  <p>This node joins the mesh automatically via wired backhaul.<br>
+     Connect a LAN cable to the master router and wait ~30 seconds.</p>
+  <div id="status" class="status wait">Searching for master...</div>
 </div>
-
-<!-- jsqr.min.js installed to /www/easymesh-pair/jsqr.min.js
-     LuCI uhttpd webroot = /www/, so path = /easymesh-pair/jsqr.min.js -->
-<script src="/easymesh-pair/jsqr.min.js" onerror="jsqrFailed=true"></script>
 <script>
-var _stream = null, _raf = null;
-var jsqrFailed = false;   /* set to true by onerror above if file missing */
-var video  = document.getElementById('video');
-var canvas = document.getElementById('qr-canvas');
-var ctx    = canvas.getContext('2d');
-
-function show(id) {
-  document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active'); });
-  document.getElementById(id).classList.add('active');
-}
-
-function setStep(id, icon, cls, spin) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el.className = 'step ' + cls;
-  el.querySelector('.si').innerHTML = spin ? '<span class="spin">' + icon + '</span>' : icon;
-}
-
-async function startScan() {
-  try {
-    _stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 720 } }
-    });
-    video.srcObject = _stream;
-    await video.play();
-    show('v-camera');
-    _raf = requestAnimationFrame(tick);
-  } catch(e) {
-    err('Cannot access camera: ' + e.message + '. Please grant camera permission.');
-  }
-}
-
-function stopScan() {
-  if (_stream) { _stream.getTracks().forEach(function(t) { t.stop(); }); _stream = null; }
-  if (_raf)    { cancelAnimationFrame(_raf); _raf = null; }
-  show('v-ready');
-}
-
-function tick() {
-  /* Check jsQR loaded — if not, show error immediately instead of silently failing */
-  if (jsqrFailed || typeof jsQR === 'undefined') {
-    stopScan();
-    err('QR scanner library failed to load. Check that jsqr.min.js is installed in /www/easymesh-pair/');
-    return;
-  }
-  if (video.readyState < 2) { _raf = requestAnimationFrame(tick); return; }
-  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-  ctx.drawImage(video, 0, 0);
-  var img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  var code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
-  if (code && code.data) { stopScan(); onQR(code.data); return; }
-  _raf = requestAnimationFrame(tick);
-}
-
-function onQR(raw) {
-  var data;
-  try { data = JSON.parse(raw); } catch(e) {
-    err('Invalid QR format. Please regenerate on master node.'); return;
-  }
-  if (!data.ip || !data.token) { err('Incomplete QR data. Please regenerate.'); return; }
-  if (data.expire && Math.floor(Date.now() / 1000) > data.expire) {
-    err('QR code expired (10 min limit). Please regenerate on master node.'); return;
-  }
-  setStep('s-scan',  '✓', 'done');
-  setStep('s-conn',  '⟳', 'active', true);
-  setStep('s-cfg',   '○', '');
-  setStep('s-apply', '○', '');
-  show('v-pairing');
-  pair(data.ip, data.token);
-}
-
-async function pair(masterIp, token) {
-  try {
-    var resp = await fetch('/cgi-bin/pair', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ master_ip: masterIp, token: token }),
-      signal: AbortSignal.timeout(90000)
-    });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var result = await resp.json();
-    if (result.status === 'ok') {
-      setStep('s-conn',  '✓', 'done');
-      setStep('s-cfg',   '✓', 'done');
-      setStep('s-apply', '✓', 'done');
-      setTimeout(function() { show('v-ok'); }, 400);
+function check() {
+  fetch('/ping').then(function(r){ return r.json(); })
+  .then(function(d){
+    var el = document.getElementById('status');
+    if(d.role === 'master') {
+      el.className = 'status ok';
+      el.textContent = '✓ This node is the master';
+    } else if(d.role === 'agent') {
+      el.className = 'status ok';
+      el.textContent = '✓ Joined mesh as agent';
     } else {
-      throw new Error(result.error || 'Master returned an error');
+      el.className = 'status wait';
+      el.textContent = 'Waiting for master...';
     }
-  } catch(e) {
-    setStep('s-conn', '✗', 'err');
-    err('Pairing failed: ' + e.message);
-  }
+  }).catch(function(){ });
 }
-
-function err(msg) { document.getElementById('err-msg').textContent = msg; show('v-err'); }
+check();
+setInterval(check, 5000);
 </script>
 </body>
 </html>

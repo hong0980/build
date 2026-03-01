@@ -8,50 +8,20 @@ msgstr ""
 msgid "Add New Node"
 msgstr "添加新节点"
 
-msgid "Generate pairing code → slave scans → mesh configured automatically"
-msgstr "生成配对码 → 从节点扫描 → 自动完成组网"
 
-msgid "Generate Pairing Code"
-msgstr "生成配对码"
 
-msgid "Power on the new node"
-msgstr "将新节点通电"
 
-msgid "Connect phone to \"EasyMesh-Setup\" WiFi (no password)"
-msgstr "手机连接「EasyMesh-Setup」WiFi（无密码）"
 
-msgid "Open "
-msgstr "浏览器打开 "
 
-msgid " in browser"
-msgstr ""
 
-msgid "Scan this QR code"
-msgstr "扫描此二维码"
 
-msgid "Wait ~10 seconds — done automatically ✓"
-msgstr "等待约 10 秒，自动完成 ✓"
 
-msgid "Generating..."
-msgstr "生成中…"
 
-msgid "Regenerate"
-msgstr "重新生成"
 
-msgid "Code valid for: "
-msgstr "配对码有效期："
 
-msgid "Code expired — click Regenerate"
-msgstr "配对码已过期，请点击重新生成"
 
-msgid "Expired"
-msgstr "已过期"
 
-msgid "Master node returned no token. Save and apply EasyMesh config first."
-msgstr "主节点未返回 token，请先保存并应用 EasyMesh 配置。"
 
-msgid "Failed to generate QR code: "
-msgstr "生成配对码失败："
 
 # ── overview.js: form ─────────────────────────
 
@@ -258,8 +228,6 @@ msgstr "接口"
 msgid "Last Seen"
 msgstr "最后在线"
 
-msgid "Failed to load qrcode.min.js"
-msgstr "加载 qrcode.min.js 失败"
 
 msgid "Mesh Topology"
 msgstr "Mesh 拓扑"
@@ -272,3 +240,52 @@ msgstr "正在加载拓扑..."
 
 msgid "Topology unavailable — master node not reachable."
 msgstr "拓扑不可用 — 主节点不可达。"
+
+
+msgid "Flash OpenWrt on the new node"
+msgstr "在新节点上刷入 OpenWrt 固件"
+
+msgid "Power it on and connect a LAN cable from this router to the new node"
+msgstr "通电后，用网线将本路由器的 LAN 口连接到新节点"
+
+msgid "Wait ~30 seconds — the new node auto-discovers this master, pulls config and joins the mesh"
+msgstr "等待约 30 秒，新节点自动发现主节点、拉取配置并加入 Mesh"
+
+msgid "Check the Nodes tab to confirm it appears"
+msgstr "在"节点"页面确认新节点已出现"
+
+msgid "No app, QR code or manual configuration needed. Wired backhaul provides the most stable mesh connection."
+msgstr "无需 App、二维码或手动配置。有线回程提供最稳定的 Mesh 连接。"
+
+msgid "Wireless Node Onboarding"
+msgstr "无线添加新节点"
+
+msgid "Broadcast a temporary open SSID so new nodes can join without a cable. Still requires approval in the Nodes tab."
+msgstr "广播临时开放 SSID，让新节点无需网线即可加入。仍需在"节点"页面手动确认。"
+
+msgid "Onboarding SSID"
+msgstr "配网 SSID"
+
+msgid "Leave empty to auto-generate from MAC address (e.g. EasyMesh-Setup-A1B2C3)"
+msgstr "留空则自动根据 MAC 地址生成（如 EasyMesh-Setup-A1B2C3）"
+
+msgid "Auto (EasyMesh-Setup-XXXXXX)"
+msgstr "自动（EasyMesh-Setup-XXXXXX）"
+
+msgid "Review and approve each device before it receives mesh configuration."
+msgstr "在设备获取 Mesh 配置前，请逐一审核并确认。"
+
+msgid "Approved. Node will receive config shortly."
+msgstr "已批准，节点即将收到配置。"
+
+msgid "Allow to join"
+msgstr "允许加入"
+
+msgid "Wireless"
+msgstr "无线"
+
+msgid "Wired"
+msgstr "有线"
+
+msgid "via "
+msgstr "接入方式："

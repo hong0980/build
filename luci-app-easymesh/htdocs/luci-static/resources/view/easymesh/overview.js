@@ -29,56 +29,25 @@ return view.extend({
 		var self = this;
 		var m, s, o;
 
-		/* ── QR pairing banner ── */
+		/* ── Wired onboarding banner ── */
 		var qrSection = E('div', {
 			style: 'background:#161b22;border:1px solid #30363d;border-radius:12px;' +
 			       'padding:20px 24px;margin-bottom:20px'
 		}, [
-			E('div', {
-				style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:16px'
+			E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:12px' },
+				'🔌 ' + _('Add New Node')),
+			E('ol', {
+				style: 'padding-left:20px;font-size:13px;line-height:2.4;color:#e6edf3;margin:0'
 			}, [
-				E('div', {}, [
-					E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:4px' },
-						'📱 ' + _('Add New Node')),
-					E('div', { style: 'font-size:12px;color:#7d8590' },
-						_('Generate pairing code → slave scans → mesh configured automatically'))
-				]),
-				E('button', {
-					id:    'btn-gen-qr',
-					class: 'cbi-button cbi-button-action',
-					style: 'white-space:nowrap;padding:8px 16px',
-					click: L.bind(self.handleGenerateQR, self)
-				}, _('Generate Pairing Code'))
+				E('li', {}, _('Flash OpenWrt on the new node')),
+				E('li', {}, _('Power it on and connect a LAN cable from this router to the new node')),
+				E('li', {}, _('Wait ~30 seconds — the new node auto-discovers this master, pulls config and joins the mesh')),
+				E('li', {}, _('Check the Nodes tab to confirm it appears'))
 			]),
-			E('div', { id: 'qr-area', style: 'display:none' }, [
-				E('div', { style: 'display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap' }, [
-					E('div', {
-						id:    'qr-canvas-wrap',
-						style: 'background:#fff;border-radius:8px;padding:10px;flex-shrink:0'
-					}),
-					E('div', { style: 'flex:1;min-width:200px' }, [
-						E('ol', {
-							style: 'padding-left:18px;font-size:13px;line-height:2.2;color:#e6edf3'
-						}, [
-							E('li', {}, _('Power on the new node')),
-							E('li', {}, _('Connect phone to "EasyMesh-Setup" WiFi (no password)')),
-							E('li', {}, [
-								_('Open '),
-								E('code', {
-									style: 'background:#0d1117;padding:1px 6px;border-radius:4px'
-								}, '192.168.2.1'),
-								_(' in browser')
-							]),
-							E('li', {}, _('Scan this QR code')),
-							E('li', {}, _('Wait ~10 seconds — done automatically ✓'))
-						]),
-						E('div', {
-							id:    'qr-expire',
-							style: 'margin-top:8px;font-size:12px;color:#e3b341'
-						})
-					])
-				])
-			])
+			E('div', {
+				style: 'margin-top:14px;padding:10px 14px;background:#0d1117;' +
+				       'border-radius:8px;font-size:12px;color:#7d8590'
+			}, _('No app, QR code or manual configuration needed. Wired backhaul provides the most stable mesh connection.'))
 		]);
 
 		/* ── Form ── */
@@ -112,8 +81,21 @@ return view.extend({
 		o.value('wired',    _('Wired (recommended)'));
 		o.value('wireless', _('Wireless (5 GHz)'));
 		o.value('auto',     _('Auto (wired preferred)'));
-		o.default = 'wireless';
+		o.default = 'wired';
 		o.depends('enabled', '1');
+
+		/* ── Wireless onboarding switch ── */
+		o = s.option(form.Flag, 'wireless_onboard',
+			_('Wireless Node Onboarding'),
+			_('Broadcast a temporary open SSID so new nodes can join without a cable. Still requires approval in the Nodes tab.'));
+		o.default = '0';
+		o.depends({ enabled: '1', role: 'master' });
+
+		o = s.option(form.Value, 'wireless_onboard_ssid',
+			_('Onboarding SSID'),
+			_('Leave empty to auto-generate from MAC address (e.g. EasyMesh-Setup-A1B2C3)'));
+		o.placeholder = _('Auto (EasyMesh-Setup-XXXXXX)');
+		o.depends({ enabled: '1', role: 'master', wireless_onboard: '1' });
 
 		/* Section 2: Mesh backhaul */
 		s = m.section(form.NamedSection, 'global', 'easymesh',
@@ -229,88 +211,7 @@ return view.extend({
 		return m.render();
 	},
 
-	/* Load qrcode.min.js once, returns a Promise.
-	   Installed by Makefile to /www/luci-static/resources/view/easymesh/qrcode.min.js
-	   Served by uhttpd at /luci-static/resources/view/easymesh/qrcode.min.js */
-	loadQRLib: function() {
-		if (window.QRCode) return Promise.resolve();
-		return new Promise(function(resolve, reject) {
-			var s = document.createElement('script');
-			s.src = '/easymesh-pair/qrcode.min.js';
-			s.onload  = function() {
-				if (window.QRCode) resolve();
-				else reject(new Error(_('Failed to load qrcode.min.js')));
-			};
-			s.onerror = function() { reject(new Error(_('Failed to load qrcode.min.js'))); };
-			document.head.appendChild(s);
-		});
-	},
 
-	/* Called by the Generate Pairing Code button via L.bind */
-	handleGenerateQR: function(ev) {
-		var self     = this;
-		var btn      = ev.currentTarget;
-		var wrap     = document.getElementById('qr-canvas-wrap');
-		var expireEl = document.getElementById('qr-expire');
-
-		btn.disabled    = true;
-		btn.textContent = _('Generating...');
-
-		/* Load library and fetch token in parallel */
-		Promise.all([
-			self.loadQRLib(),
-			fetch('http://' + window.location.hostname + ':' + MASTER_PORT + '/easymesh/generate-qr', {
-				signal: AbortSignal.timeout(5000)
-			}).then(function(r) { return r.json(); })
-		])
-		.then(function(results) {
-			var data = results[1];
-			if (!data.token)
-				throw new Error(_('Master node returned no token. Save and apply EasyMesh config first.'));
-
-			var qrPayload = JSON.stringify({
-				ip:     data.ip,
-				token:  data.token,
-				expire: data.expire
-			});
-
-			wrap.innerHTML = '';
-			new QRCode(wrap, {
-				text:         qrPayload,
-				width:        160,
-				height:       160,
-				correctLevel: QRCode.CorrectLevel.M
-			});
-
-			document.getElementById('qr-area').style.display = 'block';
-			btn.textContent = _('Regenerate');
-			btn.disabled    = false;
-
-			if (qrTimer) clearInterval(qrTimer);
-			var expire = data.expire;
-			qrTimer = setInterval(function() {
-				var left = Math.max(0, expire - Math.floor(Date.now() / 1000));
-				var mm   = Math.floor(left / 60);
-				var ss   = left % 60;
-				expireEl.textContent = left > 0
-					? _('Code valid for: ') + mm + ':' + (ss < 10 ? '0' : '') + ss
-					: _('Code expired — click Regenerate');
-				if (left === 0) {
-					clearInterval(qrTimer);
-					qrTimer = null;
-					wrap.innerHTML =
-						'<div style="color:#f85149;padding:20px;font-size:12px;text-align:center">' +
-						_('Expired') + '</div>';
-				}
-			}, 1000);
-		})
-		.catch(function(e) {
-			btn.disabled    = false;
-			btn.textContent = _('Generate Pairing Code');
-			ui.addNotification(null,
-				E('p', {}, _('Failed to generate QR code: ') + e.message), 'error');
-		});
-	},
 
 	handleSave: function(ev) {
 		return this.map.save(null, true);

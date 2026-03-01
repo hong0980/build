@@ -1,4 +1,2 @@
 #!/bin/sh
-# /usr/sbin/easymesh-agent — thin wrapper, actual logic in easymesh-master
-# On slave nodes, easymesh-master runs the same loop and elects itself agent.
 exec /usr/sbin/easymesh-master "$@"

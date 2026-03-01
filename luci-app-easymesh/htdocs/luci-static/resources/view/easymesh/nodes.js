@@ -28,6 +28,41 @@ function masterFetch(path, method, body) {
 	}).then(function(r) { return r.json(); }).catch(function() { return null; });
 }
 
+function sourceIcon(src) {
+	return src === 'wireless' ? '📶 ' + _('Wireless') : '🔌 ' + _('Wired');
+}
+
+function pendingCard(node, onApprove, onReject) {
+	return E('div', {
+		style: 'border:1px solid #e3b341;border-radius:10px;padding:16px;' +
+		       'background:rgba(210,153,34,.07);display:flex;align-items:center;' +
+		       'gap:14px;margin-bottom:10px;flex-wrap:wrap'
+	}, [
+		E('div', { style: 'font-size:28px;flex-shrink:0' },
+			node.source === 'wireless' ? '📶' : '🔌'),
+		E('div', { style: 'flex:1;min-width:160px' }, [
+			E('div', { style: 'font-weight:600;font-size:14px' },
+				node.hostname || _('Unknown device')),
+			E('div', { style: 'font-size:12px;color:#7d8590;font-family:monospace;margin-top:2px' },
+				(node.ip || '—') + ' · ' + (node.mac || '—')),
+			E('div', { style: 'font-size:11px;color:#7d8590;margin-top:2px' },
+				_('via ') + sourceIcon(node.source))
+		]),
+		E('button', {
+			class: 'cbi-button',
+			style: 'background:#2ea44f;color:#fff;border:none;padding:8px 18px;' +
+			       'border-radius:6px;cursor:pointer;font-size:13px',
+			click: onApprove
+		}, '✓ ' + _('Allow to join')),
+		E('button', {
+			class: 'cbi-button',
+			style: 'background:transparent;color:#f85149;border:1px solid #f85149;' +
+			       'padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;margin-left:6px',
+			click: onReject
+		}, '✕ ' + _('Reject'))
+	]);
+}
+
 function parseOriginators(raw) {
 	var nodes = [];
 	if (!raw) return nodes;
@@ -85,55 +120,57 @@ return view.extend({
 			L.resolveDefault(
 				callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }), ''),
 			callNetworkDump(),
-			masterFetch('/easymesh/nodes')
+			masterFetch('/nodes/pending'),
+			masterFetch('/nodes/approved')
 		]);
 	},
 
 	render: function(data) {
 		var self = this;
 		var root = E('div', { id: 'easymesh-nodes-root' });
-		root.appendChild(self._build(data[0], data[1] || [], data[2]));
+		root.appendChild(self._build(data[0], data[1] || [], data[2], data[3]));
 
 		poll.add(function() {
 			return Promise.all([
 				L.resolveDefault(
 					callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }), ''),
 				callNetworkDump(),
-				masterFetch('/easymesh/nodes')
+				masterFetch('/nodes/pending'),
+				masterFetch('/nodes/approved')
 			]).then(function(r) {
 				var old = document.getElementById('easymesh-nodes-inner');
-				if (old) old.replaceWith(self._build(r[0], r[1] || [], r[2]));
+				if (old) old.replaceWith(self._build(r[0], r[1] || [], r[2], r[3]));
 			});
 		}, 5);
 
 		return root;
 	},
 
-	_build: function(originatorRaw, interfaces, pendingRaw) {
+	_build: function(originatorRaw, interfaces, pendingRaw, approvedRaw) {
 		var el        = E('div', { id: 'easymesh-nodes-inner' });
 		var bat0      = interfaces.filter(function(i) { return i.interface === 'bat0'; })[0];
 		var meshNodes = parseOriginators(originatorRaw);
-		var pending   = Array.isArray(pendingRaw)
-			? pendingRaw.filter(function(n) { return n.status === 'pending'; }) : [];
+		var pending   = Array.isArray(pendingRaw)  ? pendingRaw  : [];
+		var approved  = Array.isArray(approvedRaw) ? approvedRaw : [];
 
-		/* Pending pairing requests */
+		/* ── Pending approval cards ── */
 		if (pending.length) {
 			el.appendChild(E('div', { class: 'cbi-section' }, [
-				E('h3', { style: 'color:#e3b341' },
+				E('h3', { style: 'color:#e3b341;margin-bottom:4px' },
 					'⚡ ' + pending.length + ' ' + _('device(s) requesting to join Mesh')),
-				E('p', { class: 'cbi-section-descr' },
-					_('Approve to push config automatically. No action needed on the slave.')),
+				E('p', { class: 'cbi-section-descr', style: 'margin-bottom:14px' },
+					_('Review and approve each device before it receives mesh configuration.')),
 				E('div', {}, pending.map(function(node) {
 					return pendingCard(node,
 						function() {
-							masterFetch('/easymesh/approve', 'POST', { token: node.token })
+							masterFetch('/nodes/approve', 'POST', { mac: node.mac })
 								.then(function() {
 									ui.addNotification(null,
-										E('p', {}, _('Approved. Pushing config to slave...')), 'info');
+										E('p', {}, _('Approved. Node will receive config shortly.')), 'info');
 								});
 						},
 						function() {
-							masterFetch('/easymesh/reject', 'POST', { token: node.token });
+							masterFetch('/nodes/reject', 'POST', { mac: node.mac });
 						}
 					);
 				}))

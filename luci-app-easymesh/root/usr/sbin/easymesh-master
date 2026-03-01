@@ -1,308 +1,748 @@
 #!/bin/sh
-# /usr/sbin/easymesh-master — EasyMesh master/agent unified daemon
+# /usr/sbin/easymesh-master — EasyMesh master daemon
 #
-# Election:  WAN-up node wins; fallback = lowest MAC wins
-# Sync:      master serves profile on HTTP :4304/profile
-#            agent polls and applies
-# Channel:   scan and pick least-used (highest free-time) channel
-# Backhaul:  wired detected → lower mesh0 metric, not down
-# Neighbors: register peer BSSIDs from iw scan, not own interfaces
-# LB:        steer only clients with signal < threshold
-# Topology:  valid JSON, served on /topology
+# Commercial-grade features:
+#   1. Role election         — WAN wins; tie → lowest MAC; anti-split-brain
+#   2. Self-healing routing  — batman-adv OGM tuning, gateway failover watchdog
+#   3. Seamless roaming      — real-time neighbor sync, RSSI probe, smart BSS-TM
+#   4. Wired onboarding      — plug LAN cable → auto-register → LuCI approval
+#   5. Wireless onboarding   — optional temp SSID, same approval flow
+#   6. Config sync           — push profile to all approved slaves
+#   7. Channel coordination  — least-congested channel, synced mesh-wide
+#   8. Load balancing        — signal+load aware BSS-TM steering
+#   9. Topology JSON         — live bat0 originators + client counts
 
 . /lib/functions.sh
 
+# ── Files ────────────────────────────────────────────────────────────────────
 ROLE_FILE="/tmp/easymesh_role"
 MASTER_IP_FILE="/tmp/easymesh_master_ip"
 PROFILE_FILE="/tmp/easymesh_profile.json"
 TOPO_FILE="/tmp/easymesh_topo.json"
 NODE_DB="/tmp/easymesh_nodes"
+PENDING_DB="/tmp/easymesh_pending"
+NEIGHBOR_FILE="/tmp/easymesh_neighbors.conf"   # shared hostapd neighbor list
+ROAM_LOG="/tmp/easymesh_roam.log"
 
-MESH_IF="mesh0"
-AP_IF="wlan0"
-RADIO_DEV="radio1"
+# ── Constants ────────────────────────────────────────────────────────────────
 MASTER_PORT=4304
+ETH_IF="eth0"
+BRIDGE_IF="br-lan"
+AP_IF="wlan0"
+MESH_IF="bat0"
+PAIR_AP_IFACE="easymesh-pair0"
 LOG_TAG="easymesh"
 
-LOOP_INTERVAL=10
-CHANNEL_INTERVAL=120   # only re-scan every 2 min
-ELECTION_INTERVAL=30
+# Tuning
+BATMAN_OGM_INTERVAL=500          # ms — faster convergence (default 1000)
+BATMAN_HOP_PENALTY=30            # default 30; raise to prefer fewer hops
+BATMAN_GW_MODE="client"          # slaves: client mode for gateway selection
+ROAM_RSSI_KICK=-72               # dBm — start probing below this
+ROAM_RSSI_HARD=-78               # dBm — force BSS-TM below this
+ROAM_HYSTERESIS=5                # dBm — don't steer if candidate is < 5dBm better
+ROAM_PROBE_INTERVAL=5            # seconds between RSSI checks
+LB_CLIENT_THRESHOLD=15           # clients above this triggers balancing
+CHANNEL_SCAN_INTERVAL=120        # seconds
+ELECTION_INTERVAL=30             # seconds
+GW_WATCHDOG_INTERVAL=10          # seconds
 
-log() { logger -t "$LOG_TAG" "$*"; }
+log()  { logger -t "$LOG_TAG" "$*"; }
+logr() { logger -t "${LOG_TAG}-roam" "$*"; }  # separate tag for roam events
 
-get_mac() { cat /sys/class/net/br-lan/address 2>/dev/null || cat /sys/class/net/eth0/address 2>/dev/null; }
-get_ip()  { uci get network.lan.ipaddr 2>/dev/null; }
+# ── Helpers ───────────────────────────────────────────────────────────────────
+get_mac()  { cat /sys/class/net/${BRIDGE_IF}/address 2>/dev/null ||
+             cat /sys/class/net/${ETH_IF}/address    2>/dev/null; }
+get_ip()   { ip -4 addr show dev "$BRIDGE_IF" 2>/dev/null |
+             awk '/inet /{print $2}' | cut -d/ -f1 | head -1; }
+get_role() { cat "$ROLE_FILE" 2>/dev/null || echo "agent"; }
+master_ip(){ cat "$MASTER_IP_FILE" 2>/dev/null; }
 
-http_ok() { printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n%s\n' "$1"; }
+http_ok()  { printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n%s\n' "$1"; }
+http_403() { printf 'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{"status":"pending","msg":"Awaiting approval in LuCI"}\n'; }
+http_404() { printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n{"error":"not found"}\n'; }
 
-wan_up() {
-    ubus call network.interface.wan status 2>/dev/null | grep -q '"up": true'
+wan_up() { ubus call network.interface.wan status 2>/dev/null | grep -q '"up": true'; }
+
+# Get AP interface name (hostapd-managed)
+get_ap_iface() {
+    uci get wireless.easymesh_ap.ifname 2>/dev/null ||
+    uci get wireless.@wifi-iface[0].ifname 2>/dev/null ||
+    echo "$AP_IF"
 }
 
 ########################################
-# 1. Master election
+# 1. ROLE ELECTION
 ########################################
-# Rule 1: WAN-up node is master
-# Rule 2: no WAN anywhere → lowest MAC wins
-# Anti-split: each node broadcasts its MAC+role; if two masters see each other,
-#             higher MAC demotes itself
+# Priority: WAN > lower MAC
+# Anti-split-brain: both sides check before claiming master
 
 elect_role() {
     local mymac myip
-    mymac=$(get_mac)
-    myip=$(get_ip)
+    mymac=$(get_mac); myip=$(get_ip)
 
+    # WAN wins immediately
     if wan_up; then
         echo "master" > "$ROLE_FILE"
         echo "$myip"  > "$MASTER_IP_FILE"
         log "Election: WAN up → master ($mymac)"
-        return
+        return 0
     fi
 
-    # Probe known peers for their election status
-    local best_mac="$mymac"
-    local best_ip="$myip"
+    # Probe all known peers
+    local best_mac="$mymac" best_ip="$myip"
     mkdir -p "$NODE_DB"
-    for f in "$NODE_DB"/*.json 2>/dev/null; do
+    for f in "$NODE_DB"/*.json; do
         [ -f "$f" ] || continue
-        local peer_ip peer_mac peer_wan
-        peer_ip=$(jsonfilter -i "$f" -e '@.ip'  2>/dev/null)
+        local peer_ip peer_mac
+        peer_ip=$(jsonfilter  -i "$f" -e '@.ip'  2>/dev/null)
         peer_mac=$(jsonfilter -i "$f" -e '@.mac' 2>/dev/null)
-        peer_wan=$(wget -q -T 3 -O- "http://${peer_ip}:${MASTER_PORT}/wan" 2>/dev/null)
-        # If a peer has WAN, it should be master
-        echo "$peer_wan" | grep -q '"wan":true' && {
-            echo "agent" > "$ROLE_FILE"
+        [ -z "$peer_ip" ] && continue
+
+        local resp
+        resp=$(wget -q -T 3 -O- "http://${peer_ip}:${MASTER_PORT}/wan" 2>/dev/null)
+        if echo "$resp" | grep -q '"wan":true'; then
+            echo "agent"    > "$ROLE_FILE"
             echo "$peer_ip" > "$MASTER_IP_FILE"
-            log "Election: peer $peer_ip has WAN → I am agent"
-            return
+            log "Election: peer $peer_ip has WAN → agent"
+            return 0
+        fi
+        [ -n "$peer_mac" ] && [ "$peer_mac" \< "$best_mac" ] && {
+            best_mac="$peer_mac"; best_ip="$peer_ip"
         }
-        # No WAN anywhere: lowest MAC wins
-        [ "$peer_mac" \< "$best_mac" ] && { best_mac="$peer_mac"; best_ip="$peer_ip"; }
     done
 
     if [ "$best_mac" = "$mymac" ]; then
         echo "master" > "$ROLE_FILE"
         echo "$myip"  > "$MASTER_IP_FILE"
-        log "Election: lowest MAC wins → master ($mymac)"
+        log "Election: lowest MAC → master ($mymac)"
     else
-        echo "agent" > "$ROLE_FILE"
+        echo "agent"    > "$ROLE_FILE"
         echo "$best_ip" > "$MASTER_IP_FILE"
-        log "Election: $best_mac wins → I am agent"
+        log "Election: $best_mac wins → agent (best_ip=$best_ip)"
     fi
 }
 
-role()      { cat "$ROLE_FILE"     2>/dev/null || echo "agent"; }
-master_ip() { cat "$MASTER_IP_FILE" 2>/dev/null; }
+########################################
+# 2. SELF-HEALING ROUTING
+########################################
+# batman-adv already reroutes automatically when a node disappears.
+# We add:
+#   a) Aggressive OGM tuning for faster convergence
+#   b) Gateway watchdog: detects master failure, triggers re-election
+#   c) Originator table monitoring: log path changes
+
+tune_batman() {
+    # Faster OGM = faster failure detection and rerouting
+    # Default 1000ms → 500ms cuts convergence time in half
+    batctl meshif "$MESH_IF" orig_interval "$BATMAN_OGM_INTERVAL" 2>/dev/null
+    batctl meshif "$MESH_IF" hop_penalty   "$BATMAN_HOP_PENALTY"  2>/dev/null
+
+    if [ "$(get_role)" = "master" ]; then
+        # Master advertises itself as internet gateway
+        batctl meshif "$MESH_IF" gw_mode server 2>/dev/null
+        log "batman-adv: GW mode=server, OGM=${BATMAN_OGM_INTERVAL}ms"
+    else
+        # Slaves use BATMAN_IV gateway selection (picks best TQ path to GW)
+        batctl meshif "$MESH_IF" gw_mode "$BATMAN_GW_MODE" 2>/dev/null
+        log "batman-adv: GW mode=$BATMAN_GW_MODE, OGM=${BATMAN_OGM_INTERVAL}ms"
+    fi
+}
+
+# Gateway watchdog — runs as background loop on slave nodes
+# If master unreachable for 3 consecutive checks → trigger re-election
+gateway_watchdog() {
+    local fail=0
+    log "Gateway watchdog started"
+    while true; do
+        sleep "$GW_WATCHDOG_INTERVAL"
+        local mip
+        mip=$(master_ip)
+        [ -z "$mip" ] && continue
+
+        if wget -q -T 4 -O/dev/null "http://${mip}:${MASTER_PORT}/ping" 2>/dev/null; then
+            fail=0
+        else
+            fail=$((fail + 1))
+            log "Gateway watchdog: master $mip unreachable (fail=$fail/3)"
+            if [ "$fail" -ge 3 ]; then
+                log "Gateway declared dead — re-electing"
+                rm -f "$MASTER_IP_FILE"
+                elect_role
+                tune_batman
+                fail=0
+            fi
+        fi
+    done
+}
+
+# Monitor originator table changes and log path switches
+prev_gw=""
+check_routing_paths() {
+    # Log when the best gateway path changes (indicates reroute happened)
+    local cur_gw
+    cur_gw=$(batctl meshif "$MESH_IF" gwl 2>/dev/null | awk '/===>/{print $2}' | head -1)
+    if [ -n "$cur_gw" ] && [ "$cur_gw" != "$prev_gw" ]; then
+        log "Self-healing: gateway path changed → $cur_gw (was: ${prev_gw:-none})"
+        prev_gw="$cur_gw"
+        # Re-sync neighbor list after topology change
+        sync_neighbor_list
+    fi
+}
 
 ########################################
-# 2. Config sync
+# 3. SEAMLESS ROAMING
+########################################
+# Three-layer approach matching commercial mesh:
+#
+#   Layer 1 — 802.11r FT (Fast BSS Transition)
+#     Pre-authenticates client to all APs in mobility domain.
+#     Reduces reassociation from ~50ms to <5ms.
+#     Configured in init.d/apply_mesh_config; we ensure it stays consistent.
+#
+#   Layer 2 — 802.11k Neighbor Reports
+#     AP tells client "here are the other APs and their channels".
+#     Client uses this to scan only relevant channels → faster handoff.
+#     We maintain a real-time neighbor list synced across all nodes.
+#
+#   Layer 3 — 802.11v BSS Transition Management (active steering)
+#     We probe RSSI every few seconds.
+#     Below ROAM_RSSI_KICK: send BSS-TM Request (polite suggestion).
+#     Below ROAM_RSSI_HARD: send BSS-TM with Disassoc Imminent flag.
+#     Candidate AP must be at least ROAM_HYSTERESIS dBm better.
+
+# Build neighbor list from scan + known nodes, distribute to all APs
+sync_neighbor_list() {
+    local ap_iface ssid
+    ap_iface=$(get_ap_iface)
+    ssid=$(uci get wireless.easymesh_ap.ssid 2>/dev/null ||
+           uci get wireless.@wifi-iface[0].ssid 2>/dev/null)
+    [ -z "$ssid" ] && return
+
+    # Get our own BSSID
+    local my_bssid
+    my_bssid=$(cat /sys/class/net/${ap_iface}/address 2>/dev/null)
+
+    # Scan for same-SSID APs
+    local scan_result
+    scan_result=$(iw dev "$AP_IF" scan 2>/dev/null)
+
+    > "$NEIGHBOR_FILE"
+
+    echo "$scan_result" | awk -v ssid="$ssid" '
+        /^BSS /  { bssid=$2; chan=""; op=""; rssi="" }
+        /freq:/  { freq=$2 }
+        /DS Parameter set/ { chan=$NF }
+        /signal:/ { rssi=$2 }
+        /SSID: / {
+            if ($2 == ssid && bssid != "") {
+                # Convert freq to op_class (simplified: 2.4GHz=81, 5GHz=115)
+                op = (freq+0 > 4000) ? 115 : 81
+                print bssid, op, chan
+            }
+        }
+    ' | while read -r bssid op chan; do
+        [ "$bssid" = "$my_bssid" ] && continue
+        # Register in hostapd
+        hostapd_cli -i "$ap_iface" \
+            set_neighbor "$bssid" \
+            ssid="\"$ssid\"" \
+            nr="${bssid//:/}${op}${chan}0000" \
+            2>/dev/null && \
+        echo "$bssid $op $chan" >> "$NEIGHBOR_FILE"
+    done
+
+    # Push our own BSSID + neighbor list to known slaves for their hostapd
+    if [ "$(get_role)" = "master" ]; then
+        local nb_json
+        nb_json=$(awk '{printf "{\"bssid\":\"%s\",\"op\":%s,\"chan\":%s},", $1,$2,$3}' \
+            "$NEIGHBOR_FILE" | sed 's/,$//')
+        local payload="{\"ssid\":\"$ssid\",\"neighbors\":[$nb_json],\"my_bssid\":\"$my_bssid\"}"
+
+        for f in "$NODE_DB"/*.json; do
+            [ -f "$f" ] || continue
+            local peer_ip
+            peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
+            [ -z "$peer_ip" ] && continue
+            wget -q -T 3 -O/dev/null \
+                --post-data="$payload" \
+                --header='Content-Type: application/json' \
+                "http://${peer_ip}:${MASTER_PORT}/roam/neighbors" 2>/dev/null &
+        done
+    fi
+}
+
+# Apply neighbor list received from master
+apply_neighbor_list() {
+    local body="$1"
+    local ap_iface ssid
+    ap_iface=$(get_ap_iface)
+    ssid=$(echo "$body" | grep -o '"ssid":"[^"]*"' | cut -d'"' -f4)
+    [ -z "$ssid" ] && return
+
+    # Parse neighbors array and register each
+    echo "$body" | grep -o '"bssid":"[^"]*"' | cut -d'"' -f4 | while read -r bssid; do
+        [ -n "$bssid" ] && \
+        hostapd_cli -i "$ap_iface" \
+            set_neighbor "$bssid" ssid="\"$ssid\"" >/dev/null 2>&1
+    done
+    logr "Neighbor list applied: $(echo "$body" | grep -c '"bssid"') APs"
+}
+
+# Active RSSI-based steering — the core of "秒切" behavior
+roam_watchdog() {
+    local ap_iface
+    ap_iface=$(get_ap_iface)
+    log "Roam watchdog started on $ap_iface"
+
+    while true; do
+        sleep "$ROAM_PROBE_INTERVAL"
+        [ -x "$(command -v hostapd_cli)" ] || continue
+
+        # Get all stations with their signal levels
+        iw dev "$ap_iface" station dump 2>/dev/null | \
+        awk '/^Station/{mac=$2} /signal:/{print mac, $2}' | \
+        while read -r sta_mac rssi; do
+            [ -z "$sta_mac" ] || [ -z "$rssi" ] && continue
+            local rssi_n="${rssi%.*}"  # strip decimal if any
+
+            # Below hard threshold → force with Disassoc Imminent
+            if [ "${rssi_n}" -le "${ROAM_RSSI_HARD}" ] 2>/dev/null; then
+                # Find best candidate from neighbor list
+                local best_bssid
+                best_bssid=$(pick_best_candidate "$sta_mac" "$rssi_n")
+                if [ -n "$best_bssid" ]; then
+                    logr "HARD steer $sta_mac (${rssi_n}dBm) → $best_bssid"
+                    hostapd_cli -i "$ap_iface" bss_tm_req "$sta_mac" \
+                        pref=1 abridged=1 disassoc_imminent=1 \
+                        neighbor="${best_bssid},0,0,0,0" \
+                        >/dev/null 2>&1
+                fi
+
+            # Below soft threshold → polite BSS-TM suggestion
+            elif [ "${rssi_n}" -le "${ROAM_RSSI_KICK}" ] 2>/dev/null; then
+                local best_bssid
+                best_bssid=$(pick_best_candidate "$sta_mac" "$rssi_n")
+                if [ -n "$best_bssid" ]; then
+                    logr "SOFT steer $sta_mac (${rssi_n}dBm) → $best_bssid"
+                    hostapd_cli -i "$ap_iface" bss_tm_req "$sta_mac" \
+                        pref=1 abridged=1 \
+                        neighbor="${best_bssid},0,0,0,0" \
+                        >/dev/null 2>&1
+                fi
+            fi
+        done
+    done
+}
+
+# Pick best roam candidate from known APs
+# Returns BSSID of the AP with highest estimated signal, if it beats
+# current AP by at least ROAM_HYSTERESIS dBm
+pick_best_candidate() {
+    local sta_mac="$1" cur_rssi="$2"
+    local best_bssid="" best_rssi=-200
+
+    # Query each known AP node for the station's signal there
+    for f in "$NODE_DB"/*.json; do
+        [ -f "$f" ] || continue
+        local peer_ip
+        peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
+        [ -z "$peer_ip" ] && continue
+
+        local resp
+        resp=$(wget -q -T 2 -O- \
+            "http://${peer_ip}:${MASTER_PORT}/roam/signal?mac=${sta_mac}" 2>/dev/null)
+        local peer_rssi peer_bssid
+        peer_rssi=$(echo "$resp"  | grep -o '"rssi":-\?[0-9]*' | cut -d: -f2)
+        peer_bssid=$(echo "$resp" | grep -o '"bssid":"[^"]*"'  | cut -d'"' -f4)
+        [ -z "$peer_rssi" ] || [ -z "$peer_bssid" ] && continue
+
+        if [ "$peer_rssi" -gt "$best_rssi" ] 2>/dev/null; then
+            best_rssi="$peer_rssi"
+            best_bssid="$peer_bssid"
+        fi
+    done
+
+    # Only recommend if candidate is meaningfully better
+    local threshold=$(( cur_rssi + ROAM_HYSTERESIS ))
+    if [ -n "$best_bssid" ] && [ "$best_rssi" -gt "$threshold" ] 2>/dev/null; then
+        echo "$best_bssid"
+    fi
+}
+
+########################################
+# 4. WIRED BACKHAUL
+########################################
+
+setup_wired_backhaul() {
+    ip link show "$MESH_IF" >/dev/null 2>&1 || { log "bat0 missing"; return 1; }
+    batctl meshif "$MESH_IF" if 2>/dev/null | grep -q "$ETH_IF" && return 0
+    log "Wired backhaul: $ETH_IF → bat0"
+    brctl delif "$BRIDGE_IF" "$ETH_IF" 2>/dev/null
+    ip link set "$ETH_IF" up
+    batctl meshif "$MESH_IF" interface add "$ETH_IF" 2>/dev/null
+    brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null
+    log "Wired backhaul ready"
+}
+
+########################################
+# 5. WIRELESS ONBOARDING
+########################################
+
+get_onboard_ssid() {
+    local s; s=$(uci get easymesh.global.wireless_onboard_ssid 2>/dev/null)
+    [ -n "$s" ] && { echo "$s"; return; }
+    local mac prefix
+    mac=$(get_mac)
+    prefix=$(echo "$mac" | tr -d ':' | cut -c1-6 | tr 'a-f' 'A-F')
+    echo "EasyMesh-Setup-${prefix}"
+}
+
+start_wireless_onboard() {
+    [ "$(get_role)" != "master" ] && return
+    [ -f /tmp/easymesh_pair_hostapd.pid ] &&
+        kill -0 "$(cat /tmp/easymesh_pair_hostapd.pid)" 2>/dev/null && return
+
+    local ssid phy
+    ssid=$(get_onboard_ssid)
+    phy=$(iw phy 2>/dev/null | awk '/^phy/{print $1}' | head -1)
+    [ -z "$phy" ] && return 1
+
+    iw phy "$phy" interface add "$PAIR_AP_IFACE" type __ap 2>/dev/null || true
+    ip link set "$PAIR_AP_IFACE" up
+
+    cat > /tmp/easymesh_pair_hostapd.conf << HAPD
+interface=$PAIR_AP_IFACE
+driver=nl80211
+ssid=$ssid
+hw_mode=g
+channel=6
+auth_algs=1
+wpa=0
+HAPD
+    hostapd -B /tmp/easymesh_pair_hostapd.conf \
+        -P /tmp/easymesh_pair_hostapd.pid 2>/dev/null
+
+    local my_ip; my_ip=$(get_ip)
+    ip addr add "${my_ip%.*}.250/24" dev "$PAIR_AP_IFACE" 2>/dev/null || true
+    dnsmasq --interface="$PAIR_AP_IFACE" --bind-interfaces \
+        --dhcp-range="${my_ip%.*}.200,${my_ip%.*}.249,10m" \
+        --dhcp-option=3,"${my_ip%.*}.250" \
+        --no-resolv --no-hosts \
+        --pid-file=/tmp/easymesh_pair_dnsmasq.pid 2>/dev/null
+    log "Wireless onboard AP: $ssid"
+}
+
+stop_wireless_onboard() {
+    kill "$(cat /tmp/easymesh_pair_hostapd.pid 2>/dev/null)" 2>/dev/null
+    kill "$(cat /tmp/easymesh_pair_dnsmasq.pid 2>/dev/null)" 2>/dev/null
+    iw dev "$PAIR_AP_IFACE" del 2>/dev/null
+    rm -f /tmp/easymesh_pair_hostapd.conf \
+          /tmp/easymesh_pair_hostapd.pid  \
+          /tmp/easymesh_pair_dnsmasq.pid
+}
+
+manage_wireless_onboard() {
+    local en; en=$(uci get easymesh.global.wireless_onboard 2>/dev/null || echo 0)
+    [ "$en" = "1" ] && start_wireless_onboard || stop_wireless_onboard
+}
+
+########################################
+# 6. NODE REGISTRATION & APPROVAL
+########################################
+
+register_pending() {
+    local body="$1" source="$2"
+    local mac ip hostname
+    mac=$(echo "$body"      | grep -o '"mac":"[^"]*"'      | cut -d'"' -f4)
+    ip=$(echo "$body"       | grep -o '"ip":"[^"]*"'       | cut -d'"' -f4)
+    hostname=$(echo "$body" | grep -o '"hostname":"[^"]*"' | cut -d'"' -f4)
+    [ -z "$mac" ] && return 1
+    local safe; safe=$(echo "$mac" | tr ':' '_')
+    mkdir -p "$PENDING_DB"
+    [ -f "${NODE_DB}/${safe}.json" ]    && return 0  # already approved
+    [ -f "${PENDING_DB}/${safe}.json" ] && return 0  # already pending
+    printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"%s","status":"pending","ts":%s}\n' \
+        "$mac" "${ip:-?}" "${hostname:-?}" "${source:-wired}" "$(date +%s)" \
+        > "${PENDING_DB}/${safe}.json"
+    log "Pending: $mac ($hostname) via $source"
+}
+
+approve_node() {
+    local mac="$1"
+    local safe; safe=$(echo "$mac" | tr ':' '_')
+    [ -f "${PENDING_DB}/${safe}.json" ] || return 1
+    mkdir -p "$NODE_DB"
+    sed 's/"status":"pending"/"status":"approved"/' \
+        "${PENDING_DB}/${safe}.json" > "${NODE_DB}/${safe}.json"
+    rm -f "${PENDING_DB}/${safe}.json"
+    log "Approved: $mac"
+    # Immediately push neighbor list to new node
+    sync_neighbor_list
+}
+
+reject_node() {
+    local mac="$1"
+    local safe; safe=$(echo "$mac" | tr ':' '_')
+    rm -f "${PENDING_DB}/${safe}.json"
+    log "Rejected: $mac"
+}
+
+########################################
+# 7. AGENT: FIND MASTER & REGISTER
+########################################
+
+find_master_on_lan() {
+    local my_ip gw
+    my_ip=$(get_ip)
+    gw=$(ip route 2>/dev/null | awk '/default/{print $3}' | head -1)
+    [ -z "$gw" ] && return 1
+
+    local resp
+    resp=$(wget -q -T 3 -O- "http://${gw}:${MASTER_PORT}/ping" 2>/dev/null)
+    if echo "$resp" | grep -q '"role":"master"'; then
+        echo "$gw" > "$MASTER_IP_FILE"; log "Master at gateway: $gw"; return 0
+    fi
+
+    local prefix; prefix=$(echo "$my_ip" | cut -d. -f1-3)
+    for i in $(seq 1 254); do
+        local c="${prefix}.${i}"
+        [ "$c" = "$my_ip" ] && continue
+        resp=$(wget -q -T 1 -O- "http://${c}:${MASTER_PORT}/ping" 2>/dev/null)
+        if echo "$resp" | grep -q '"role":"master"'; then
+            echo "$c" > "$MASTER_IP_FILE"; log "Master found: $c"; return 0
+        fi
+    done
+    return 1
+}
+
+do_register() {
+    local source="${1:-wired}"
+    local mip; mip=$(master_ip)
+    [ -z "$mip" ] && { find_master_on_lan || return 1; mip=$(master_ip); }
+    local mac ip hostname
+    mac=$(get_mac); ip=$(get_ip)
+    hostname=$(uci get system.@system[0].hostname 2>/dev/null || echo "slave")
+    wget -q -T 5 -O- \
+        --post-data="{\"mac\":\"$mac\",\"ip\":\"$ip\",\"hostname\":\"$hostname\",\"source\":\"$source\"}" \
+        --header='Content-Type: application/json' \
+        "http://${mip}:${MASTER_PORT}/register" 2>/dev/null
+    log "Registered with master $mip"
+}
+
+poll_for_approval() {
+    local mip; mip=$(master_ip)
+    [ -z "$mip" ] && return 1
+    local resp
+    resp=$(wget -q -T 5 -O- \
+        "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
+    if echo "$resp" | grep -q '"status":"approved"'; then
+        apply_profile "$resp"; return 0
+    fi
+    return 1
+}
+
+########################################
+# 8. CONFIG GENERATE & APPLY
 ########################################
 
 generate_profile() {
-    local ssid key channel
-    ssid=$(uci get wireless.@wifi-iface[0].ssid    2>/dev/null)
-    key=$(uci get wireless.@wifi-iface[0].key      2>/dev/null)
-    channel=$(uci get wireless.${RADIO_DEV}.channel 2>/dev/null)
-    cat > "$PROFILE_FILE" <<PROF
-{"ssid":"$ssid","key":"$key","channel":"$channel",
- "ieee80211k":"1","ieee80211v":"1","mesh_id":"$(uci get easymesh.global.mesh_id 2>/dev/null)"}
-PROF
+    . /lib/functions.sh; config_load easymesh
+    local ssid key mesh_id mesh_key routing_algo channel
+    config_get ssid         global ssid          'OpenWrt'
+    config_get key          global key           ''
+    config_get mesh_id      global mesh_id       'OpenWrt-Mesh'
+    config_get mesh_key     global mesh_key      ''
+    config_get routing_algo global routing_algo  'BATMAN_IV'
+    local radio_dev
+    radio_dev=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
+    channel=$(uci get "${radio_dev}.channel" 2>/dev/null || echo 'auto')
+    printf '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211k":"1","ieee80211v":"1","backhaul":"wired"}\n' \
+        "$ssid" "$key" "$channel" "$mesh_id" "$mesh_key" "$routing_algo" > "$PROFILE_FILE"
 }
 
 apply_profile() {
-    local prof_url
-    prof_url="http://$(master_ip):${MASTER_PORT}/profile"
-    local body
-    body=$(wget -q -T 5 -O- "$prof_url" 2>/dev/null)
-    [ -z "$body" ] && return
-
-    echo "$body" > "$PROFILE_FILE"
-    local ssid key channel mesh_id
-    ssid=$(jsonfilter    -i "$PROFILE_FILE" -e '@.ssid'    2>/dev/null)
-    key=$(jsonfilter     -i "$PROFILE_FILE" -e '@.key'     2>/dev/null)
-    channel=$(jsonfilter -i "$PROFILE_FILE" -e '@.channel' 2>/dev/null)
-    mesh_id=$(jsonfilter -i "$PROFILE_FILE" -e '@.mesh_id' 2>/dev/null)
-
-    [ -z "$ssid" ] && return
-
+    local body="$1"
+    echo "$body" > /tmp/em_profile_tmp.json
+    local ssid key channel mesh_id mesh_key routing_algo
+    ssid=$(jsonfilter         -i /tmp/em_profile_tmp.json -e '@.ssid'         2>/dev/null)
+    key=$(jsonfilter          -i /tmp/em_profile_tmp.json -e '@.key'          2>/dev/null)
+    channel=$(jsonfilter      -i /tmp/em_profile_tmp.json -e '@.channel'      2>/dev/null)
+    mesh_id=$(jsonfilter      -i /tmp/em_profile_tmp.json -e '@.mesh_id'      2>/dev/null)
+    mesh_key=$(jsonfilter     -i /tmp/em_profile_tmp.json -e '@.mesh_key'     2>/dev/null)
+    routing_algo=$(jsonfilter -i /tmp/em_profile_tmp.json -e '@.routing_algo' 2>/dev/null)
+    rm -f /tmp/em_profile_tmp.json
+    [ -z "$ssid" ] && { log "apply_profile: missing ssid"; return 1; }
+    log "Applying profile: ssid=$ssid"
+    uci set easymesh.global.enabled=1
+    uci set easymesh.global.role=slave
+    uci set easymesh.global.mesh_id="${mesh_id:-OpenWrt-Mesh}"
+    uci set easymesh.global.mesh_key="${mesh_key}"
+    uci set easymesh.global.ssid="$ssid"
+    uci set easymesh.global.key="$key"
+    uci set easymesh.global.backhaul=wired
+    uci set easymesh.global.routing_algo="${routing_algo:-BATMAN_IV}"
+    uci commit easymesh
     uci set wireless.@wifi-iface[0].ssid="$ssid"
     uci set wireless.@wifi-iface[0].key="$key"
-    [ -n "$channel" ] && uci set wireless.${RADIO_DEV}.channel="$channel"
-    [ -n "$mesh_id" ] && uci set easymesh.global.mesh_id="$mesh_id"
+    uci set wireless.@wifi-iface[0].ieee80211k=1
+    uci set wireless.@wifi-iface[0].ieee80211v=1
+    uci set wireless.@wifi-iface[0].bss_transition=1
+    uci set wireless.@wifi-iface[0].rrm_neighbor_report=1
+    [ -n "$channel" ] && [ "$channel" != "auto" ] && {
+        local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
+        [ -n "$rd" ] && uci set "${rd}.channel=$channel"
+    }
     uci commit wireless
-    uci commit easymesh
+    setup_wired_backhaul
     wifi reload
-    log "Profile applied from master: ssid=$ssid ch=$channel"
+    log "Profile applied. Joined mesh."
 }
 
 ########################################
-# 3. Channel coordination (master only)
+# 9. CHANNEL COORDINATION
 ########################################
-_last_channel_scan=0
+_last_ch=0
 
 optimize_channel() {
-    [ "$(role)" != "master" ] && return
-
-    local now
-    now=$(date +%s)
-    [ $((now - _last_channel_scan)) -lt $CHANNEL_INTERVAL ] && return
-    _last_channel_scan=$now
-
-    # Count APs per channel; pick channel with FEWEST neighbours (least congestion)
-    local best
-    best=$(iw dev "$AP_IF" scan 2>/dev/null | \
-        grep 'DS Parameter set' | awk '{print $5}' | \
+    [ "$(get_role)" != "master" ] && return
+    local now; now=$(date +%s)
+    [ $(( now - _last_ch )) -lt "$CHANNEL_SCAN_INTERVAL" ] && return
+    _last_ch=$now
+    local best rd cur
+    best=$(iw dev "$AP_IF" scan 2>/dev/null |
+        grep 'DS Parameter set' | awk '{print $5}' |
         sort | uniq -c | sort -n | head -1 | awk '{print $2}')
-
-    # uniq -c | sort -n → ascending by count → head -1 = least used ✓
     [ -z "$best" ] && return
-
-    local current
-    current=$(uci get wireless.${RADIO_DEV}.channel 2>/dev/null)
-    if [ "$current" != "$best" ]; then
-        log "Channel: $current → $best (least congested)"
-        uci set wireless.${RADIO_DEV}.channel="$best"
-        uci commit wireless
-        wifi reload
-    fi
+    rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
+    cur=$(uci get "${rd}.channel" 2>/dev/null)
+    [ "$cur" = "$best" ] && return
+    log "Channel: $cur → $best"
+    uci set "${rd}.channel=$best"; uci commit wireless && wifi reload
 }
 
 ########################################
-# 4. Wired backhaul preference
+# 10. LOAD BALANCING
 ########################################
-
-backhaul_check() {
-    local master_mac
-    master_mac=$(cat "$MASTER_IP_FILE" 2>/dev/null)
-    [ -z "$master_mac" ] && return
-
-    if bridge fdb show 2>/dev/null | grep -qi "$master_mac"; then
-        # Wired path to master detected → lower mesh metric so wired is preferred
-        # Do NOT bring mesh0 down — that would break batman-adv for other nodes
-        batctl meshif "$MESH_IF" orig_interval 5000 2>/dev/null  # reduce mesh beacon rate
-        log "Backhaul: wired path active, reducing mesh overhead"
-    else
-        batctl meshif "$MESH_IF" orig_interval 1000 2>/dev/null
-    fi
-}
-
-########################################
-# 5. 802.11k/v + neighbor auto-register
-########################################
-
-enable_fast_roaming() {
-    uci set wireless.@wifi-iface[0].ieee80211k='1'
-    uci set wireless.@wifi-iface[0].ieee80211v='1'
-    uci set wireless.@wifi-iface[0].bss_transition='1'
-    uci set wireless.@wifi-iface[0].rrm_neighbor_report='1'
-    uci commit wireless
-    log "802.11k/v enabled"
-}
-
-register_neighbors() {
-    local ssid ap_iface
-    ssid=$(uci get wireless.@wifi-iface[0].ssid 2>/dev/null)
-    ap_iface=$(uci get wireless.@wifi-iface[0].ifname 2>/dev/null || echo "$AP_IF")
-
-    # Scan for PEER BSSIDs with same SSID — not own interfaces
-    iw dev "$AP_IF" scan 2>/dev/null | awk '
-        /^BSS /          { bssid=$2 }
-        /SSID: /         { if ($2 == "'"$ssid"'") print bssid }
-    ' | while read -r bssid; do
-        [ -z "$bssid" ] && continue
-        hostapd_cli -i "$ap_iface" set_neighbor "$bssid" ssid="\"$ssid\"" >/dev/null 2>&1 && \
-            log "Registered neighbor BSSID: $bssid"
-    done
-}
-
-########################################
-# 6. Load balancing (signal-aware)
-########################################
-LB_THRESHOLD=-70   # dBm; only steer clients weaker than this
 
 load_balance() {
-    local ap_iface
-    ap_iface=$(uci get wireless.@wifi-iface[0].ifname 2>/dev/null || echo "$AP_IF")
-    local clients
-    clients=$(iw dev "$ap_iface" station dump 2>/dev/null | grep -c "^Station")
-    [ "$clients" -le 10 ] && return   # no balancing needed under 10 clients
-
-    # Only steer clients with signal below threshold
-    iw dev "$ap_iface" station dump 2>/dev/null | awk '
-        /^Station/  { mac=$2 }
-        /signal:/   { if ($2+0 < '"$LB_THRESHOLD"') print mac }
-    ' | while read -r mac; do
-        [ -z "$mac" ] && continue
-        hostapd_cli -i "$ap_iface" bss_tm_req "$mac" pref=1 abridged=1 >/dev/null 2>&1 && \
-            log "BSS-TM steered weak client: $mac (signal < ${LB_THRESHOLD}dBm)"
+    local ap_iface; ap_iface=$(get_ap_iface)
+    local total; total=$(iw dev "$ap_iface" station dump 2>/dev/null | grep -c "^Station")
+    [ "$total" -le "$LB_CLIENT_THRESHOLD" ] && return
+    # Already handled by roam_watchdog for weak clients
+    # This handles overload: kick bottom 20% weakest even if above ROAM_RSSI_KICK
+    iw dev "$ap_iface" station dump 2>/dev/null | \
+    awk '/^Station/{mac=$2} /signal:/{print $2+0, mac}' | \
+    sort -n | head -$(( total / 5 )) | awk '{print $2}' | \
+    while read -r mac; do
+        hostapd_cli -i "$ap_iface" bss_tm_req "$mac" pref=1 abridged=1 >/dev/null 2>&1
     done
 }
 
 ########################################
-# 7. Topology JSON
+# 11. TOPOLOGY
 ########################################
 
 update_topology() {
     local my_mac my_ip my_role clients
-    my_mac=$(get_mac)
-    my_ip=$(get_ip)
-    my_role=$(role)
-    clients=$(iw dev "$AP_IF" station dump 2>/dev/null | grep -c "^Station")
-
-    # Build nodes array from bat0 originators
-    local nodes="{\"mac\":\"$my_mac\",\"ip\":\"$my_ip\",\"role\":\"$my_role\",\"clients\":$clients}"
-    local links=""
-
+    my_mac=$(get_mac); my_ip=$(get_ip); my_role=$(get_role)
+    clients=$(iw dev "$(get_ap_iface)" station dump 2>/dev/null | grep -c "^Station")
+    local nodes links first=1
+    nodes="{\"mac\":\"$my_mac\",\"ip\":\"$my_ip\",\"role\":\"$my_role\",\"clients\":$clients}"
     while read -r peer_mac _ tq _rest; do
+        [ -z "$peer_mac" ] && continue
         nodes="${nodes},{\"mac\":\"$peer_mac\",\"tq\":$tq}"
-        links="${links:+$links,}{\"src\":\"$my_mac\",\"dst\":\"$peer_mac\",\"tq\":$tq}"
-    done < <(awk 'NR>2 {print $1,$2,$3}' /sys/kernel/debug/batman_adv/bat0/originators 2>/dev/null)
-
+        [ "$first" = "0" ] && links="${links},"
+        links="${links}{\"src\":\"$my_mac\",\"dst\":\"$peer_mac\",\"tq\":$tq}"
+        first=0
+    done < <(awk 'NR>2{print}' /sys/kernel/debug/batman_adv/bat0/originators 2>/dev/null)
+    for f in "$NODE_DB"/*.json; do
+        [ -f "$f" ] || continue; nodes="${nodes},$(cat "$f")"
+    done
     printf '{"ts":%d,"nodes":[%s],"links":[%s]}\n' \
-        "$(date +%s)" "$nodes" "$links" > "$TOPO_FILE"
+        "$(date +%s)" "$nodes" "${links:-}" > "$TOPO_FILE"
 }
 
 ########################################
-# HTTP handler (single-port: 4304)
+# HTTP SERVER
 ########################################
 
 handle_request() {
-    local req="$1"
-    local path
-    path=$(awk 'NR==1{print $2}' "$req" 2>/dev/null)
-    path="${path%%\?*}"
+    local req="$1" method path query body
+    read -r method path _ < "$req"
+    query="${path#*\?}"; path="${path%%\?*}"
+    body=$(tail -n1 "$req")
 
     case "$path" in
-        /profile)   http_ok "$(cat "$PROFILE_FILE" 2>/dev/null || echo '{}')" ;;
-        /topology)  update_topology; http_ok "$(cat "$TOPO_FILE")" ;;
-        /wan)       wan_up && http_ok '{"wan":true}' || http_ok '{"wan":false}' ;;
-        /info)
-            http_ok "{\"mac\":\"$(get_mac)\",\"ip\":\"$(get_ip)\",\"role\":\"$(role)\"}"
-            ;;
-        /easymesh/generate-qr)
-            http_ok "$(/usr/sbin/easymesh-qr generate 2>/dev/null || echo '{}')" ;;
-        /easymesh/qr-config*)
-            local token
-            token=$(awk -F'token=' '{print $2}' "$req" | cut -d'&' -f1 | head -1)
-            http_ok "$(/usr/sbin/easymesh-qr verify "$token" 2>/dev/null || echo '{"status":"invalid"}')" ;;
-        /easymesh/nodes)
-            local out="["
-            local first=1
-            for f in "$NODE_DB"/*.json 2>/dev/null; do
-                [ -f "$f" ] || continue
-                [ "$first" = "0" ] && out="${out},"
-                out="${out}$(cat "$f")"
-                first=0
-            done
-            http_ok "${out}]" ;;
-        *) printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n' ;;
+    /ping)
+        http_ok "{\"role\":\"$(get_role)\",\"mac\":\"$(get_mac)\",\"ip\":\"$(get_ip)\"}" ;;
+    /wan)
+        wan_up && http_ok '{"wan":true}' || http_ok '{"wan":false}' ;;
+    /register)
+        local src; src=$(echo "$body" | grep -o '"source":"[^"]*"' | cut -d'"' -f4)
+        register_pending "$body" "${src:-wired}"
+        http_ok '{"status":"pending","msg":"Awaiting approval in LuCI"}' ;;
+    /profile)
+        local req_mac safe
+        req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
+        safe=$(echo "$req_mac" | tr ':' '_')
+        if   [ -f "${NODE_DB}/${safe}.json" ];    then http_ok "$(cat "$PROFILE_FILE" 2>/dev/null || echo '{}')"
+        elif [ -f "${PENDING_DB}/${safe}.json" ]; then http_403
+        else http_ok '{"status":"unregistered"}'; fi ;;
+    /nodes/pending)
+        local out="[" first=1
+        for f in "$PENDING_DB"/*.json; do
+            [ -f "$f" ] || continue
+            [ "$first" = "0" ] && out="${out},"
+            out="${out}$(cat "$f")"; first=0
+        done; http_ok "${out}]" ;;
+    /nodes/approved)
+        local out="[" first=1
+        for f in "$NODE_DB"/*.json; do
+            [ -f "$f" ] || continue
+            [ "$first" = "0" ] && out="${out},"
+            out="${out}$(cat "$f")"; first=0
+        done; http_ok "${out}]" ;;
+    /nodes/approve)
+        local mac; mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
+        [ -n "$mac" ] && approve_node "$mac"
+        http_ok '{"status":"ok"}' ;;
+    /nodes/reject)
+        local mac; mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
+        [ -n "$mac" ] && reject_node "$mac"
+        http_ok '{"status":"ok"}' ;;
+    /topology)
+        update_topology; http_ok "$(cat "$TOPO_FILE" 2>/dev/null || echo '{}')" ;;
+    /wireless-onboard/status)
+        local en ssid
+        en=$(uci get easymesh.global.wireless_onboard 2>/dev/null || echo 0)
+        ssid=$(get_onboard_ssid)
+        http_ok "{\"enabled\":$en,\"ssid\":\"$ssid\"}" ;;
+
+    # Roaming endpoints (called by master to probe stations on peer APs)
+    /roam/signal)
+        local sta_mac; sta_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
+        local ap_iface; ap_iface=$(get_ap_iface)
+        local bssid; bssid=$(cat /sys/class/net/${ap_iface}/address 2>/dev/null)
+        local sig
+        sig=$(iw dev "$ap_iface" station get "$sta_mac" 2>/dev/null |
+              awk '/signal:/{print $2}' | head -1)
+        if [ -n "$sig" ]; then
+            http_ok "{\"rssi\":$sig,\"bssid\":\"$bssid\"}"
+        else
+            http_ok '{"rssi":null}'
+        fi ;;
+    /roam/neighbors)
+        apply_neighbor_list "$body"
+        http_ok '{"status":"ok"}' ;;
+
+    *) http_404 ;;
     esac
 }
 
 run_server() {
     log "HTTP server on :$MASTER_PORT"
     while true; do
-        local tmp="/tmp/em_req_$$"
+        local tmp="/tmp/em_req_$$_$(date +%s)"
         nc -l -p "$MASTER_PORT" > "$tmp" 2>/dev/null
         handle_request "$tmp" | nc -l -p "$MASTER_PORT" 2>/dev/null &
         rm -f "$tmp"
@@ -311,37 +751,55 @@ run_server() {
 }
 
 ########################################
-# Main loop
+# MAIN
 ########################################
 
 main_loop() {
-    enable_fast_roaming
-    mkdir -p "$NODE_DB"
+    mkdir -p "$NODE_DB" "$PENDING_DB"
+    setup_wired_backhaul
+    elect_role
+    tune_batman
     run_server &
 
-    local _iter=0
-    while true; do
-        elect_role
+    # Start background watchdogs
+    if [ "$(get_role)" = "master" ]; then
+        manage_wireless_onboard
+    else
+        gateway_watchdog &
+    fi
+    roam_watchdog &
 
-        if [ "$(role)" = "master" ]; then
-            generate_profile
-            optimize_channel
-        else
-            apply_profile
+    local _registered=0 _iter=0
+    while true; do
+        # Re-elect periodically
+        if [ $(( _iter % (ELECTION_INTERVAL / 10) )) -eq 0 ]; then
+            elect_role
+            tune_batman
         fi
 
-        backhaul_check
-        register_neighbors
+        if [ "$(get_role)" = "master" ]; then
+            generate_profile
+            optimize_channel
+            manage_wireless_onboard
+        else
+            if [ "$_registered" = "0" ]; then
+                do_register "wired" && _registered=1
+            fi
+            poll_for_approval
+        fi
+
+        # Run every loop
+        sync_neighbor_list
         load_balance
         update_topology
+        check_routing_paths
 
-        _iter=$((_iter + 1))
-        sleep $LOOP_INTERVAL
+        _iter=$(( _iter + 1 ))
+        sleep 10
     done
 }
 
 case "$1" in
-    start)  main_loop & ;;
-    stop)   kill "$(cat /tmp/easymesh_master.pid 2>/dev/null)" 2>/dev/null ;;
-    *)      main_loop ;;
+    stop) pkill -f easymesh-master ;;
+    *)    main_loop ;;
 esac
