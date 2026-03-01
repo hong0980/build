@@ -1,20 +1,31 @@
 #!/bin/sh
-# 通用回程切换脚本：不依赖型号，只看链路状态
+# hotplug: wired backhaul link state → accelerate batman-adv convergence
+# Writes to /tmp/easymesh.log (same file as easymesh-master) so log.js shows it
 
-# 只有 lan 接口（通常是有线回程所在接口）变动时触发
 [ "$INTERFACE" = "lan" ] || exit 0
+
+LOGFILE="/tmp/easymesh.log"
+MESH_IF="bat0"
+BATMAN_OGM_NORMAL=500   # matches BATMAN_OGM_INTERVAL in easymesh-master
+
+_emlog() {
+    local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
+    printf "%s [%-5s] [%-8s] %s\n" "$ts" "$1" "$2" "$3" >> "$LOGFILE"
+}
 
 case "$ACTION" in
     ifdown)
-        # 有线断了！立即让无线 Mesh 接口承载所有流量
-        # 调低 batman-adv 的跳数惩罚，让无线路径瞬间变优
-        batctl ra BATMAN_IV
-        batctl it 500  # 临时加快路由包频率，缩短收敛时间
-        logger -t EasyMesh "检测到有线断开，已触发秒级无线自愈"
+        # Wired link lost — shorten OGM interval for faster wireless failover
+        # NOTE: do NOT use "batctl ra BATMAN_IV" here — changing routing algorithm
+        # at runtime causes bat0 reset and a momentary network outage.
+        batctl meshif "$MESH_IF" orig_interval 300 2>/dev/null
+        _emlog "WARN" "heal" "LAN link down — OGM interval set to 300ms for fast wireless failover"
+        logger -t EasyMesh "LAN link down, accelerating wireless failover" 2>/dev/null
         ;;
     ifup)
-        # 有线回来了！恢复默认权重，流量自动切回有线
-        batctl it 1000
-        logger -t EasyMesh "有线回程恢复，系统已切回高带宽有线链路"
+        # Wired link restored — return to normal OGM interval
+        batctl meshif "$MESH_IF" orig_interval "$BATMAN_OGM_NORMAL" 2>/dev/null
+        _emlog "INFO" "heal" "LAN link up — OGM interval restored to ${BATMAN_OGM_NORMAL}ms"
+        logger -t EasyMesh "LAN link restored, OGM interval back to normal" 2>/dev/null
         ;;
 esac

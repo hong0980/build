@@ -33,6 +33,36 @@ MESH_IF="bat0"
 PAIR_AP_IFACE="easymesh-pair0"
 LOG_TAG="easymesh"
 
+# ── Log file (single source of truth, read by log.js via rpcd fs.read) ───────
+LOGFILE="/tmp/easymesh.log"
+LOG_MAX_LINES=500      # hard cap; rotate when exceeded
+_log_seq=0             # monotonic counter drives rotation check
+
+# Format: "YYYY-MM-DD HH:MM:SS [LEVEL] [TAG] message"
+# All components write this exact format so log.js can parse with one regex.
+_emlog() {
+    local level="$1" tag="$2"; shift 2
+    local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
+    _log_seq=$(( _log_seq + 1 ))
+    printf "%s [%-5s] [%-8s] %s\n" "$ts" "$level" "$tag" "$*" >> "$LOGFILE"
+    # Rotate every 50 writes — tail keeps newest LOG_MAX_LINES lines
+    if [ $(( _log_seq % 50 )) -eq 0 ]; then
+        local lc; lc=$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)
+        if [ "$lc" -gt "$LOG_MAX_LINES" ]; then
+            local keep=$(( LOG_MAX_LINES * 4 / 5 ))
+            tail -n "$keep" "$LOGFILE" > "${LOGFILE}.tmp" \
+                && mv "${LOGFILE}.tmp" "$LOGFILE"
+        fi
+    fi
+}
+
+log()  { _emlog "INFO"  "core"    "$*"; logger -t "$LOG_TAG"       "$*" 2>/dev/null; }
+logr() { _emlog "INFO"  "roam"    "$*"; logger -t "${LOG_TAG}-roam" "$*" 2>/dev/null; }
+logd() { _emlog "INFO"  "dfs"     "$*"; logger -t "${LOG_TAG}-dfs"  "$*" 2>/dev/null; }
+logh() { _emlog "INFO"  "heal"    "$*"; logger -t "EasyMesh"        "$*" 2>/dev/null; }
+logw() { _emlog "WARN"  "core"    "$*"; logger -t "$LOG_TAG"        "WARN: $*" 2>/dev/null; }
+loge() { _emlog "ERROR" "core"    "$*"; logger -t "$LOG_TAG"        "ERROR: $*" 2>/dev/null; }
+
 # Tuning
 BATMAN_OGM_INTERVAL=500          # ms — faster convergence (default 1000)
 BATMAN_HOP_PENALTY=30            # default 30; raise to prefer fewer hops
@@ -625,7 +655,7 @@ dfs_watchdog() {
 iface="$1"; event="$2"
 case "$event" in
     AP-CSA-FINISHED*|DFS-NOP-FINISHED*)
-        logger -t easymesh-dfs "Radar/CSA event on $iface: $event"
+        logd "Radar/CSA event on $iface: $event"
         new_chan=$(echo "$event" | grep -o 'chan=[0-9]*' | cut -d= -f2)
         # Write event file for main loop to pick up
         printf '%s
@@ -895,6 +925,49 @@ handle_request() {
         local mac; mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
         [ -n "$mac" ] && reject_node "$mac"
         http_ok '{"status":"ok"}' ;;
+    /log)
+        # Serve log file to log.js — optional line limit via ?lines=N
+        local limit
+        limit=$(echo "$query" | grep -o 'lines=[0-9]*' | cut -d= -f2)
+        limit=${limit:-300}
+        if [ -f "$LOGFILE" ]; then
+            local content
+            content=$(tail -n "$limit" "$LOGFILE" |                 sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/' | tr -d '\n')
+            http_ok "{\"lines\":[\"${content%\\n}\"]}"
+        else
+            http_ok '{"lines":[]}' 
+        fi ;;
+
+    /log)
+        # Serve last N lines of log file as JSON array of strings.
+        # log.js reads this endpoint; no parsing of syslog needed.
+        local n
+        n=$(echo "$query" | grep -o 'lines=[0-9]*' | cut -d= -f2)
+        n=${n:-300}
+        if [ -f "$LOGFILE" ]; then
+            # Build JSON array: escape backslash and double-quote, wrap each line
+            local json
+            json=$(tail -n "$n" "$LOGFILE" | awk '
+                BEGIN { printf "[" }
+                NR > 1 { printf "," }
+                {
+                    gsub(/\\/, "\\\\")
+                    gsub(/"/, "\\"")
+                    printf "\"%s\"", $0
+                }
+                END { printf "]" }
+            ')
+            http_ok "{\"lines\":${json},\"total\":$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)}"
+        else
+            http_ok '{"lines":[],"total":0}'
+        fi ;;
+
+    /log/clear)
+        # LuCI "Clear file" button calls this
+        > "$LOGFILE"
+        _emlog "INFO" "core" "Log file cleared by user"
+        http_ok '{"status":"ok"}' ;;
+
     /topology)
         update_topology; http_ok "$(cat "$TOPO_FILE" 2>/dev/null || echo '{}')" ;;
     /wireless-onboard/status)
@@ -1002,7 +1075,7 @@ trigger_self_healing() {
     else
         # Wired link down → faster OGM = faster wireless failover detection
         batctl meshif "$MESH_IF" orig_interval 300 2>/dev/null
-        log "Self-healing: wired link down → OGM 300ms (fast wireless failover)"
+        logh "Wired link down → OGM 300ms (fast wireless failover)"
     fi
 }
 
@@ -1012,6 +1085,11 @@ trigger_self_healing() {
 
 main_loop() {
     mkdir -p "$NODE_DB" "$PENDING_DB"
+    # Startup banner — marks session boundary in log file
+    { printf "\n" >> "$LOGFILE" 2>/dev/null
+      _emlog "INFO" "core" "================================================"
+      _emlog "INFO" "core" "EasyMesh daemon starting (pid=$$)"
+      _emlog "INFO" "core" "================================================"; }
     setup_wired_backhaul
 
     # Hardware detection — result used by setup_dedicated_backhaul

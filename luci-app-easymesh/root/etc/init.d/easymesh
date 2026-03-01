@@ -9,7 +9,18 @@ UCI_APP=easymesh
 . /lib/functions.sh
 . /lib/functions/network.sh
 
-log() { logger -t easymesh "$*"; }
+LOGFILE="/tmp/easymesh.log"
+
+# Write to shared log file (same file as easymesh-master uses)
+# Format must match master so log.js parses both with one regex
+_emlog() {
+    local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
+    printf "%s [%-5s] [%-8s] %s\n" "$ts" "$1" "$2" "$3" >> "$LOGFILE"
+}
+log() {
+    _emlog "INFO" "initd" "$*"
+    logger -t easymesh "$*" 2>/dev/null
+}
 
 # ── Find radio for given band ─────────────────────────────────────────────────
 _band_target=""; _found=""

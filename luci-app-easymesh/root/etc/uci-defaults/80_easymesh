@@ -1,90 +1,38 @@
 #!/bin/sh
-# UCI defaults — runs once after package install
+# /etc/uci-defaults/80_easymesh
+# Runs once after package install, then deleted by OpenWrt uci-defaults mechanism.
 
-. /lib/functions.sh
-
-# ── 生成配对 SSID：EasyMesh-Setup-XXYYZZ（无线网卡 MAC 前 6 位）──────
-get_pair_ssid() {
-    local mac prefix
-    # 优先取第一个无线接口的 MAC
-    for iface in wlan0 wlan1 phy0-ap0; do
-        mac=$(cat /sys/class/net/$iface/address 2>/dev/null)
-        [ -n "$mac" ] && break
-    done
-    # fallback: 取有线口 MAC
-    [ -z "$mac" ] && mac=$(cat /sys/class/net/eth0/address 2>/dev/null)
-    if [ -n "$mac" ]; then
-        # 取前 6 位（去掉冒号），转大写
-        prefix=$(echo "$mac" | tr -d ':' | cut -c1-6 | tr 'a-f' 'A-F')
-        echo "EasyMesh-Setup-${prefix}"
-    else
-        echo "EasyMesh-Setup"
-    fi
-}
-
-# ── 找一个不与现有 LAN IP 冲突的配对 IP ──────────────────────────────
-get_pair_ip() {
-    local current_ip
-    current_ip=$(uci get network.lan.ipaddr 2>/dev/null)
-
-    # 候选网段列表，依次尝试直到找到一个与 current_ip 不同的
-    for candidate in 192.168.100.1 192.168.200.1 172.16.100.1 10.0.100.1; do
-        [ "$candidate" != "$current_ip" ] && { echo "$candidate"; return; }
-    done
-    # 极端情况：在 192.168.x.1 里找空闲段
-    for x in $(seq 10 254); do
-        candidate="192.168.${x}.1"
-        [ "$candidate" != "$current_ip" ] && { echo "$candidate"; return; }
-    done
-    echo "192.168.100.1"
-}
-
-PAIR_SSID=$(get_pair_ssid)
-PAIR_IP=$(get_pair_ip)
-
-# ── 初始化 easymesh UCI ──────────────────────────────────────────────
-[ -f /etc/config/easymesh ] || {
-    uci set easymesh.global=easymesh
-    uci set easymesh.global.enabled=0
-    uci set easymesh.global.role=slave
-    uci set easymesh.global.backhaul=wireless
-    uci set easymesh.global.mesh_id=OpenWrt-Mesh
-    uci set easymesh.global.mesh_key=meshpassword
-    uci set easymesh.global.mesh_band=5g
-    uci set easymesh.global.ssid=OpenWrt
-    uci set easymesh.global.ieee80211r=1
-    uci set easymesh.global.mobility_domain=aabb
-    uci commit easymesh
-}
-
-# ── 判断是否需要进入配对模式 ─────────────────────────────────────────
-# 条件：enabled=0（未配置）
-enabled=$(uci get easymesh.global.enabled 2>/dev/null)
-
-if [ "$enabled" != "1" ]; then
-    current_ip=$(uci get network.lan.ipaddr 2>/dev/null)
-
-    logger -t easymesh "Entering pairing mode: pair_ip=$PAIR_IP pair_ssid=$PAIR_SSID"
-
-    # 保存原始 IP（配对完成后 init.d 会恢复）
-    uci set easymesh.global.original_ip="$current_ip"
-    uci set easymesh.global.original_netmask="$(uci get network.lan.netmask 2>/dev/null || echo 255.255.255.0)"
-    # 保存配对参数，供 init.d 读取
-    uci set easymesh.global.pair_ip="$PAIR_IP"
-    uci set easymesh.global.pair_ssid="$PAIR_SSID"
-    uci set easymesh.global.pairing_mode=1
-    uci commit easymesh
-
-    # 只有当前 IP 与配对 IP 冲突才需要改
-    if [ "$current_ip" != "$PAIR_IP" ]; then
-        uci set network.lan.ipaddr="$PAIR_IP"
-        uci commit network
-    fi
+# ── Initialise easymesh UCI config (only if not already configured) ──────────
+if ! uci -q get easymesh.global.enabled > /dev/null 2>&1; then
+    uci batch << 'UCI'
+set easymesh.global=easymesh
+set easymesh.global.enabled=0
+set easymesh.global.role=slave
+set easymesh.global.backhaul=wired
+set easymesh.global.mesh_id=OpenWrt-Mesh
+set easymesh.global.mesh_key=meshpassword
+set easymesh.global.mesh_band=5g
+set easymesh.global.ssid=OpenWrt
+set easymesh.global.key=
+set easymesh.global.ieee80211r=1
+set easymesh.global.mobility_domain=aabb
+set easymesh.global.ieee80211k=1
+set easymesh.global.ieee80211v=1
+set easymesh.global.wireless_onboard=0
+set easymesh.global.wireless_onboard_ssid=
+set easymesh.global.dedicated_backhaul=0
+set easymesh.global.backhaul_channel=149
+set easymesh.global.dfs_enable=1
+commit easymesh
+UCI
 fi
 
+# ── Ensure scripts are executable ───────────────────────────────────────────
 chmod +x /etc/init.d/easymesh
-chmod +x /usr/sbin/easymesh-agent
 chmod +x /usr/sbin/easymesh-master
+chmod +x /usr/sbin/easymesh-agent
+
+# ── Enable service (does not start it — user must configure and apply) ────────
 /etc/init.d/easymesh enable
 
 exit 0

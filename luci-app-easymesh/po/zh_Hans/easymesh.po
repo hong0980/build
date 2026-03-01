@@ -5,6 +5,15 @@ msgstr ""
 
 # ── overview.js: QR section ───────────────────
 
+msgid "Overview & Config"
+msgstr "概览与配置"
+
+msgid "Nodes"
+msgstr "节点状态"
+
+msgid "Log"
+msgstr "运行日志"
+
 msgid "Add New Node"
 msgstr "添加新节点"
 
@@ -325,3 +334,30 @@ msgstr "专用回程无线电的固定信道，推荐 149/153/157/161（非 DFS�
 
 msgid "Live topology. Link color = signal quality: green ≥70%, yellow ≥40%, red <40%."
 msgstr "实时拓扑。连线颜色代表信号质量：绿色 ≥70%，黄色 ≥40%，红色 <40%。"
+
+msgid "EasyMesh Log"
+msgstr "EasyMesh 运行日志"
+
+msgid "Search logs…"
+msgstr "搜索日志…"
+
+msgid "Pause"
+msgstr "暂停"
+
+msgid "Resume"
+msgstr "继续"
+
+msgid "Clear"
+msgstr "清空"
+
+msgid "Export"
+msgstr "导出"
+
+msgid "No log entries yet."
+msgstr "暂无日志条目。"
+
+msgid "No entries for this category."
+msgstr "该分类暂无日志。"
+
+msgid "Last update: "
+msgstr "最后更新："
