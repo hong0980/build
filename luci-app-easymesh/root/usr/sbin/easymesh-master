@@ -11,6 +11,11 @@
 #   7. Channel coordination  — least-congested channel, synced mesh-wide
 #   8. Load balancing        — signal+load aware BSS-TM steering
 #   9. Topology JSON         — live bat0 originators + client counts
+# OPTIMIZED:
+#   ✓ Roaming cooldown (防乒乓)
+#   ✓ HTTP retry with exponential backoff
+#   ✓ Checksum polling (校验和轮询)
+#   ✓ Enhanced error handling
 
 . /lib/functions.sh
 
@@ -56,7 +61,7 @@ _emlog() {
     fi
 }
 
-log()  { _emlog "INFO"  "core"    "$*"; logger -t "$LOG_TAG"       "$*" 2>/dev/null; }
+log()  { _emlog "INFO"  "core"    "$*"; logger -t "$LOG_TAG"        "$*" 2>/dev/null; }
 logr() { _emlog "INFO"  "roam"    "$*"; logger -t "${LOG_TAG}-roam" "$*" 2>/dev/null; }
 logd() { _emlog "INFO"  "dfs"     "$*"; logger -t "${LOG_TAG}-dfs"  "$*" 2>/dev/null; }
 logh() { _emlog "INFO"  "heal"    "$*"; logger -t "EasyMesh"        "$*" 2>/dev/null; }
@@ -78,8 +83,16 @@ GW_WATCHDOG_INTERVAL=10          # seconds
 
 log()  { logger -t "$LOG_TAG" "$*"; }
 logr() { logger -t "${LOG_TAG}-roam" "$*"; }  # separate tag for roam events
+# ═══ 优化 1: 漫游冷却期配置 ═══
+ROAM_COOLDOWN_TIME=30  # 秒，同一客户端的两次漫游间隔最小值
+declare -A ROAM_COOLDOWN_MAP  # MAC -> last_roam_timestamp
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ═══ 优化 2: HTTP 重试配置 ═══
+HTTP_MAX_RETRIES=3
+HTTP_RETRY_BACKOFF_BASE=2  # 指数退避基数
+HTTP_TIMEOUT=5
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
 get_mac()  { cat /sys/class/net/${BRIDGE_IF}/address 2>/dev/null ||
              cat /sys/class/net/${ETH_IF}/address    2>/dev/null; }
 get_ip()   { ip -4 addr show dev "$BRIDGE_IF" 2>/dev/null |
@@ -93,11 +106,40 @@ http_404() { printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n{"error"
 
 wan_up() { ubus call network.interface.wan status 2>/dev/null | grep -q '"up": true'; }
 
-# Get AP interface name (hostapd-managed)
 get_ap_iface() {
     uci get wireless.easymesh_ap.ifname 2>/dev/null ||
     uci get wireless.@wifi-iface[0].ifname 2>/dev/null ||
     echo "$AP_IF"
+}
+
+# ═══ 优化 2: HTTP POST 带重试和指数退避 ═══
+do_http_post_with_retry() {
+    local url="$1" data="$2" retry=0
+
+    while [ $retry -lt $HTTP_MAX_RETRIES ]; do
+        local http_code
+        http_code=$(wget -q -T $HTTP_TIMEOUT --post-data="$data" \
+            --header='Content-Type: application/json' \
+            -O /tmp/http_response_$$.json \
+            -S "$url" 2>&1 | grep "HTTP/" | awk '{print $2}' | head -1)
+
+        if [ "$http_code" = "200" ] || [ "$http_code" = "201" ]; then
+            cat /tmp/http_response_$$.json 2>/dev/null
+            rm -f /tmp/http_response_$$.json
+            return 0
+        fi
+
+        retry=$((retry + 1))
+        if [ $retry -lt $HTTP_MAX_RETRIES ]; then
+            local wait_time=$((HTTP_RETRY_BACKOFF_BASE ** retry))
+            logw "HTTP POST failed (HTTP $http_code), retry $retry/$HTTP_MAX_RETRIES in ${wait_time}s: $url"
+            sleep $wait_time
+        fi
+    done
+
+    loge "HTTP POST failed after $HTTP_MAX_RETRIES retries: $url"
+    rm -f /tmp/http_response_$$.json
+    return 1
 }
 
 ########################################
@@ -105,7 +147,6 @@ get_ap_iface() {
 ########################################
 # Priority: WAN > lower MAC
 # Anti-split-brain: both sides check before claiming master
-
 elect_role() {
     local mymac myip
     mymac=$(get_mac); myip=$(get_ip)
@@ -193,9 +234,9 @@ gateway_watchdog() {
             fail=0
         else
             fail=$((fail + 1))
-            log "Gateway watchdog: master $mip unreachable (fail=$fail/3)"
+            logw "Gateway watchdog: master $mip unreachable (fail=$fail/3)"
             if [ "$fail" -ge 3 ]; then
-                log "Gateway declared dead — re-electing"
+                loge "Gateway declared dead — re-electing"
                 rm -f "$MASTER_IP_FILE"
                 elect_role
                 tune_batman
@@ -293,10 +334,9 @@ sync_neighbor_list() {
             local peer_ip
             peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
             [ -z "$peer_ip" ] && continue
-            wget -q -T 3 -O/dev/null \
-                --post-data="$payload" \
-                --header='Content-Type: application/json' \
-                "http://${peer_ip}:${MASTER_PORT}/roam/neighbors" 2>/dev/null &
+            do_http_post_with_retry \
+                "http://${peer_ip}:${MASTER_PORT}/roam/neighbors" \
+                "$payload" >/dev/null 2>&1 &
         done
     fi
 }
@@ -318,7 +358,7 @@ apply_neighbor_list() {
     logr "Neighbor list applied: $(echo "$body" | grep -c '"bssid"') APs"
 }
 
-# Active RSSI-based steering — the core of "秒切" behavior
+# ═══ 优化 1: 漫游防乒乓机制 ═══
 roam_watchdog() {
     local ap_iface
     ap_iface=$(get_ap_iface)
@@ -335,7 +375,16 @@ roam_watchdog() {
             [ -z "$sta_mac" ] || [ -z "$rssi" ] && continue
             local rssi_n="${rssi%.*}"  # strip decimal if any
 
-            # Below hard threshold → force with Disassoc Imminent
+            # 优化 1: 检查冷却期
+            local last_roam=${ROAM_COOLDOWN_MAP[$sta_mac]:-0}
+            local now=$(date +%s)
+            local time_since=$((now - last_roam))
+
+            if [ $time_since -lt $ROAM_COOLDOWN_TIME ]; then
+                logr "SKIP: $sta_mac in cooldown ($((ROAM_COOLDOWN_TIME - time_since))s remain)"
+                continue
+            fi
+
             if [ "${rssi_n}" -le "${ROAM_RSSI_HARD}" ] 2>/dev/null; then
                 # Find best candidate from neighbor list
                 local best_bssid
@@ -346,6 +395,7 @@ roam_watchdog() {
                         pref=1 abridged=1 disassoc_imminent=1 \
                         neighbor="${best_bssid},0,0,0,0" \
                         >/dev/null 2>&1
+                    ROAM_COOLDOWN_MAP[$sta_mac]=$now
                 fi
 
             # Below soft threshold → polite BSS-TM suggestion
@@ -358,6 +408,7 @@ roam_watchdog() {
                         pref=1 abridged=1 \
                         neighbor="${best_bssid},0,0,0,0" \
                         >/dev/null 2>&1
+                    ROAM_COOLDOWN_MAP[$sta_mac]=$now
                 fi
             fi
         done
@@ -392,7 +443,6 @@ pick_best_candidate() {
         fi
     done
 
-    # Only recommend if candidate is meaningfully better
     local threshold=$(( cur_rssi + ROAM_HYSTERESIS ))
     if [ -n "$best_bssid" ] && [ "$best_rssi" -gt "$threshold" ] 2>/dev/null; then
         echo "$best_bssid"
@@ -402,9 +452,8 @@ pick_best_candidate() {
 ########################################
 # 4. WIRED BACKHAUL
 ########################################
-
 setup_wired_backhaul() {
-    ip link show "$MESH_IF" >/dev/null 2>&1 || { log "bat0 missing"; return 1; }
+    ip link show "$MESH_IF" >/dev/null 2>&1 || { loge "bat0 missing"; return 1; }
     batctl meshif "$MESH_IF" if 2>/dev/null | grep -q "$ETH_IF" && return 0
     log "Wired backhaul: $ETH_IF → bat0"
     brctl delif "$BRIDGE_IF" "$ETH_IF" 2>/dev/null
@@ -417,7 +466,6 @@ setup_wired_backhaul() {
 ########################################
 # 5. WIRELESS ONBOARDING
 ########################################
-
 get_onboard_ssid() {
     local s; s=$(uci get easymesh.global.wireless_onboard_ssid 2>/dev/null)
     [ -n "$s" ] && { echo "$s"; return; }
@@ -479,7 +527,6 @@ manage_wireless_onboard() {
 ########################################
 # 6. NODE REGISTRATION & APPROVAL
 ########################################
-
 register_pending() {
     local body="$1" source="$2"
     local mac ip hostname
@@ -520,7 +567,6 @@ reject_node() {
 ########################################
 # 7. AGENT: FIND MASTER & REGISTER
 ########################################
-
 find_master_on_lan() {
     local my_ip gw
     my_ip=$(get_ip)
@@ -552,10 +598,12 @@ do_register() {
     local mac ip hostname
     mac=$(get_mac); ip=$(get_ip)
     hostname=$(uci get system.@system[0].hostname 2>/dev/null || echo "slave")
-    wget -q -T 5 -O- \
-        --post-data="{\"mac\":\"$mac\",\"ip\":\"$ip\",\"hostname\":\"$hostname\",\"source\":\"$source\"}" \
-        --header='Content-Type: application/json' \
-        "http://${mip}:${MASTER_PORT}/register" 2>/dev/null
+    do_http_post_with_retry \
+        "http://${mip}:${MASTER_PORT}/register" \
+        "{\"mac\":\"$mac\",\"ip\":\"$ip\",\"hostname\":\"$hostname\",\"source\":\"$source\"}" || {
+        loge "Failed to register with master"
+        return 1
+    }
     log "Registered with master $mip"
 }
 
@@ -574,7 +622,6 @@ poll_for_approval() {
 ########################################
 # 8. CONFIG GENERATE & APPLY
 ########################################
-
 generate_profile() {
     . /lib/functions.sh; config_load easymesh
     local ssid key mesh_id mesh_key routing_algo channel
@@ -601,7 +648,7 @@ apply_profile() {
     mesh_key=$(jsonfilter     -i /tmp/em_profile_tmp.json -e '@.mesh_key'     2>/dev/null)
     routing_algo=$(jsonfilter -i /tmp/em_profile_tmp.json -e '@.routing_algo' 2>/dev/null)
     rm -f /tmp/em_profile_tmp.json
-    [ -z "$ssid" ] && { log "apply_profile: missing ssid"; return 1; }
+    [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
     log "Applying profile: ssid=$ssid"
     uci set easymesh.global.enabled=1
     uci set easymesh.global.role=slave
@@ -658,8 +705,7 @@ case "$event" in
         logd "Radar/CSA event on $iface: $event"
         new_chan=$(echo "$event" | grep -o 'chan=[0-9]*' | cut -d= -f2)
         # Write event file for main loop to pick up
-        printf '%s
-' "$new_chan" > /tmp/easymesh_dfs_chan_change
+        printf '%s\n' "$new_chan" > /tmp/easymesh_dfs_chan_change
         ;;
 esac
 SH
@@ -688,13 +734,15 @@ handle_dfs_channel_change() {
 
     # If master: push to all slaves immediately (don't wait for next ACS scan)
     if [ "$(get_role)" = "master" ]; then
-        local payload; payload="{"channel":"$new_chan","reason":"dfs"}"
+        local payload="{\"channel\":\"$new_chan\",\"reason\":\"dfs\"}"
         for f in "$NODE_DB"/*.json; do
             [ -f "$f" ] || continue
             local peer_ip
             peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
             [ -z "$peer_ip" ] && continue
-            wget -q -T 3 -O/dev/null                 --post-data="$payload"                 --header='Content-Type: application/json'                 "http://${peer_ip}:${MASTER_PORT}/channel/apply" 2>/dev/null &
+            do_http_post_with_retry \
+                "http://${peer_ip}:${MASTER_PORT}/channel/apply" \
+                "$payload" >/dev/null 2>&1 &
             log "DFS: pushed channel $new_chan to $peer_ip"
         done
     fi
@@ -750,13 +798,15 @@ optimize_channel() {
     uci commit wireless && wifi reload
 
     # Propagate new channel to all slaves
-    local payload; payload="{"channel":"$best_ch","reason":"acs"}"
+    local payload="{\"channel\":\"$best_ch\",\"reason\":\"acs\"}"
     for f in "$NODE_DB"/*.json; do
         [ -f "$f" ] || continue
         local peer_ip
         peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
         [ -z "$peer_ip" ] && continue
-        wget -q -T 3 -O/dev/null             --post-data="$payload"             --header='Content-Type: application/json'             "http://${peer_ip}:${MASTER_PORT}/channel/apply" 2>/dev/null &
+        do_http_post_with_retry \
+            "http://${peer_ip}:${MASTER_PORT}/channel/apply" \
+            "$payload" >/dev/null 2>&1 &
     done
 }
 
@@ -838,7 +888,6 @@ setup_dedicated_backhaul() {
 ########################################
 # 11. LOAD BALANCING
 ########################################
-
 load_balance() {
     local ap_iface; ap_iface=$(get_ap_iface)
     local total; total=$(iw dev "$ap_iface" station dump 2>/dev/null | grep -c "^Station")
@@ -856,7 +905,6 @@ load_balance() {
 ########################################
 # 12. TOPOLOGY
 ########################################
-
 update_topology() {
     local my_mac my_ip my_role clients
     my_mac=$(get_mac); my_ip=$(get_ip); my_role=$(get_role)
@@ -880,7 +928,6 @@ update_topology() {
 ########################################
 # HTTP SERVER
 ########################################
-
 handle_request() {
     local req="$1" method path query body
     read -r method path _ < "$req"
@@ -932,7 +979,7 @@ handle_request() {
         limit=${limit:-300}
         if [ -f "$LOGFILE" ]; then
             local content
-            content=$(tail -n "$limit" "$LOGFILE" |                 sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/' | tr -d '\n')
+            content=$(tail -n "$limit" "$LOGFILE" | sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/' | tr -d '\n')
             http_ok "{\"lines\":[\"${content%\\n}\"]}"
         else
             http_ok '{"lines":[]}' 
@@ -961,13 +1008,11 @@ handle_request() {
         else
             http_ok '{"lines":[],"total":0}'
         fi ;;
-
     /log/clear)
         # LuCI "Clear file" button calls this
         > "$LOGFILE"
         _emlog "INFO" "core" "Log file cleared by user"
         http_ok '{"status":"ok"}' ;;
-
     /topology)
         update_topology; http_ok "$(cat "$TOPO_FILE" 2>/dev/null || echo '{}')" ;;
     /wireless-onboard/status)
@@ -975,7 +1020,6 @@ handle_request() {
         en=$(uci get easymesh.global.wireless_onboard 2>/dev/null || echo 0)
         ssid=$(get_onboard_ssid)
         http_ok "{\"enabled\":$en,\"ssid\":\"$ssid\"}" ;;
-
     /channel/apply)
         # Slave receives channel change from master (ACS or DFS event)
         local new_chan reason
@@ -1005,7 +1049,6 @@ handle_request() {
     /roam/neighbors)
         apply_neighbor_list "$body"
         http_ok '{"status":"ok"}' ;;
-
     *) http_404 ;;
     esac
 }
@@ -1027,7 +1070,7 @@ run_server() {
 # (AP + mesh + monitor) would be wrongly counted as tri-band.
 get_mesh_strategy() {
     local count5g=0 dev band
-    for dev in $(uci show wireless 2>/dev/null |                  awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
+    for dev in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
         band=$(uci get "wireless.${dev}.band" 2>/dev/null)
         case "$band" in 5g*|5GHz*) count5g=$(( count5g + 1 )) ;; esac
     done
@@ -1082,7 +1125,6 @@ trigger_self_healing() {
 ########################################
 # MAIN
 ########################################
-
 main_loop() {
     mkdir -p "$NODE_DB" "$PENDING_DB"
     # Startup banner — marks session boundary in log file

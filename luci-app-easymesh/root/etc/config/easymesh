@@ -19,3 +19,9 @@ config easymesh 'global'
 	# DFS/ACS
 	option dfs_enable '1'
 	option acs_exclude_dfs '0'
+
+config easymesh 'advanced'
+	option roam_cooldown_time '30'
+	option push_max_retries '3'
+	option push_retry_backoff '2'
+	option http_timeout '5'
