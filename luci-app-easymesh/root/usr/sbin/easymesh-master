@@ -744,6 +744,12 @@ optimize_channel() {
 setup_dedicated_backhaul() {
     local enabled; enabled=$(uci get easymesh.global.dedicated_backhaul 2>/dev/null || echo 0)
     [ "$enabled" != "1" ] && return
+    # Only makes sense on tri-band hardware
+    local hw; hw=$(cat /tmp/easymesh_hw_type 2>/dev/null || echo "dual-band")
+    if [ "$hw" != "tri-band" ]; then
+        log "Dedicated backhaul: skipped (hardware is $hw, need tri-band)"
+        return 1
+    fi
 
     # Find the second 5 GHz radio
     local backhaul_radio=""
@@ -942,37 +948,61 @@ run_server() {
     done
 }
 
-# 硬件自探测：自动区分双频  与 三频设备
+# Hardware auto-detection: distinguish dual-band vs tri-band
+# Uses UCI wireless config (per physical radio) not iwinfo (per interface).
+# iwinfo counts interfaces, not radios — a dual-band router with 3 interfaces
+# (AP + mesh + monitor) would be wrongly counted as tri-band.
 get_mesh_strategy() {
-    local count5g=$(iwinfo | grep -c "802.11a/n/ac/ax")
+    local count5g=0 dev band
+    for dev in $(uci show wireless 2>/dev/null |                  awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
+        band=$(uci get "wireless.${dev}.band" 2>/dev/null)
+        case "$band" in 5g*|5GHz*) count5g=$(( count5g + 1 )) ;; esac
+    done
     if [ "$count5g" -ge 2 ]; then
         echo "tri-band" > /tmp/easymesh_hw_type
     else
         echo "dual-band" > /tmp/easymesh_hw_type
     fi
+    log "Hardware: $(cat /tmp/easymesh_hw_type) ($count5g × 5GHz radio)"
 }
 
-# 负载自调优：实时负载调整漫游阈值
+# Load-adaptive roaming threshold via dawn
+# Logic: busy system → relax threshold (less BSS-TM work for dawn)
+#        idle system → tighten threshold (more aggressive roaming = better UX)
+# Fix 1: use /proc/meminfo (MemAvailable) — busybox free -m column order varies
+# Fix 2: use dawn.@global[0] — dawn UCI section is not named "main"
+# Fix 3: direction was reversed in original; corrected here
 set_dawn_thresholds() {
-    local cpu_int=$(cat /proc/loadavg | cut -d. -f1)
-    local mem_free=$(free -m | grep "Mem" | awk '{print $4}')
-    if [ "$cpu_int" -ge 2 ] || [ "$mem_free" -lt 64 ]; then
-        uci set dawn.main.min_signal='-65'
+    local cpu_int mem_free
+    cpu_int=$(awk '{print int($1)}' /proc/loadavg)
+    mem_free=$(awk '/^MemAvailable:/{print int($2/1024)}' /proc/meminfo)
+
+    if [ "${cpu_int:-0}" -ge 2 ] || [ "${mem_free:-999}" -lt 64 ]; then
+        # System under load → relax roaming (protect CPU)
+        uci set dawn.@global[0].min_signal='-75' 2>/dev/null
+        log "Dawn threshold: -75 dBm (system busy: cpu=$cpu_int mem=${mem_free}MB)"
     else
-        uci set dawn.main.min_signal='-75'
+        # System idle → aggressive roaming (better client experience)
+        uci set dawn.@global[0].min_signal='-65' 2>/dev/null
+        log "Dawn threshold: -65 dBm (system idle)"
     fi
-    uci commit dawn
+    uci commit dawn 2>/dev/null
+    /etc/init.d/dawn reload 2>/dev/null &
 }
 
-# 链路自愈：实时监测网线拔插，强制底层 batman 快速切流
+# Link self-healing: detect wired link state and adjust batman-adv OGM rate
+# Fix 1: removed "batctl ra BATMAN_IV" — routing algorithm cannot be changed
+#         at runtime; attempting it causes bat0 reset and momentary disconnection
+# Fix 2: use "ip link show state UP" — ethtool may not be installed on OpenWrt
+# Fix 3: use "batctl meshif" form — "batctl it" is deprecated in newer batctl
 trigger_self_healing() {
-    if ! ethtool "$ETH_IF" 2>/dev/null | grep -q "Link detected: yes"; then
-        # 有线断开，瞬间降低惩罚值并缩短探测周期
-        batctl ra BATMAN_IV 2>/dev/null
-        batctl it 500 2>/dev/null
-        logger -t EasyMesh "Self-healing: Wired link down, accelerating wireless path."
+    if ip link show "$ETH_IF" 2>/dev/null | grep -q "state UP"; then
+        # Wired link healthy → normal OGM interval
+        batctl meshif "$MESH_IF" orig_interval "$BATMAN_OGM_INTERVAL" 2>/dev/null
     else
-        batctl it 1000 2>/dev/null
+        # Wired link down → faster OGM = faster wireless failover detection
+        batctl meshif "$MESH_IF" orig_interval 300 2>/dev/null
+        log "Self-healing: wired link down → OGM 300ms (fast wireless failover)"
     fi
 }
 
@@ -984,8 +1014,10 @@ main_loop() {
     mkdir -p "$NODE_DB" "$PENDING_DB"
     setup_wired_backhaul
 
-    # 启动前初检硬件
+    # Hardware detection — result used by setup_dedicated_backhaul
     get_mesh_strategy
+    local hw_type; hw_type=$(cat /tmp/easymesh_hw_type 2>/dev/null)
+    log "Starting EasyMesh daemon (hw=$hw_type)"
 
     elect_role
     tune_batman
