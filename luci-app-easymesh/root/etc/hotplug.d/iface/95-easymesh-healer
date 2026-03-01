@@ -1,0 +1,20 @@
+#!/bin/sh
+# 通用回程切换脚本：不依赖型号，只看链路状态
+
+# 只有 lan 接口（通常是有线回程所在接口）变动时触发
+[ "$INTERFACE" = "lan" ] || exit 0
+
+case "$ACTION" in
+    ifdown)
+        # 有线断了！立即让无线 Mesh 接口承载所有流量
+        # 调低 batman-adv 的跳数惩罚，让无线路径瞬间变优
+        batctl ra BATMAN_IV
+        batctl it 500  # 临时加快路由包频率，缩短收敛时间
+        logger -t EasyMesh "检测到有线断开，已触发秒级无线自愈"
+        ;;
+    ifup)
+        # 有线回来了！恢复默认权重，流量自动切回有线
+        batctl it 1000
+        logger -t EasyMesh "有线回程恢复，系统已切回高带宽有线链路"
+        ;;
+esac

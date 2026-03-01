@@ -83,6 +83,8 @@ if [ "$enabled" != "1" ]; then
 fi
 
 chmod +x /etc/init.d/easymesh
+chmod +x /usr/sbin/easymesh-agent
+chmod +x /usr/sbin/easymesh-master
 /etc/init.d/easymesh enable
 
 exit 0

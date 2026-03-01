@@ -942,6 +942,40 @@ run_server() {
     done
 }
 
+# 硬件自探测：自动区分双频  与 三频设备
+get_mesh_strategy() {
+    local count5g=$(iwinfo | grep -c "802.11a/n/ac/ax")
+    if [ "$count5g" -ge 2 ]; then
+        echo "tri-band" > /tmp/easymesh_hw_type
+    else
+        echo "dual-band" > /tmp/easymesh_hw_type
+    fi
+}
+
+# 负载自调优：实时负载调整漫游阈值
+set_dawn_thresholds() {
+    local cpu_int=$(cat /proc/loadavg | cut -d. -f1)
+    local mem_free=$(free -m | grep "Mem" | awk '{print $4}')
+    if [ "$cpu_int" -ge 2 ] || [ "$mem_free" -lt 64 ]; then
+        uci set dawn.main.min_signal='-65'
+    else
+        uci set dawn.main.min_signal='-75'
+    fi
+    uci commit dawn
+}
+
+# 链路自愈：实时监测网线拔插，强制底层 batman 快速切流
+trigger_self_healing() {
+    if ! ethtool "$ETH_IF" 2>/dev/null | grep -q "Link detected: yes"; then
+        # 有线断开，瞬间降低惩罚值并缩短探测周期
+        batctl ra BATMAN_IV 2>/dev/null
+        batctl it 500 2>/dev/null
+        logger -t EasyMesh "Self-healing: Wired link down, accelerating wireless path."
+    else
+        batctl it 1000 2>/dev/null
+    fi
+}
+
 ########################################
 # MAIN
 ########################################
@@ -949,6 +983,10 @@ run_server() {
 main_loop() {
     mkdir -p "$NODE_DB" "$PENDING_DB"
     setup_wired_backhaul
+
+    # 启动前初检硬件
+    get_mesh_strategy
+
     elect_role
     tune_batman
     run_server &
@@ -967,6 +1005,9 @@ main_loop() {
 
     local _registered=0 _iter=0
     while true; do
+        trigger_self_healing
+        set_dawn_thresholds
+
         # Re-elect periodically
         if [ $(( _iter % (ELECTION_INTERVAL / 10) )) -eq 0 ]; then
             elect_role
