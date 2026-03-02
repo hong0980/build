@@ -81,11 +81,14 @@ CHANNEL_SCAN_INTERVAL=120        # seconds
 ELECTION_INTERVAL=30             # seconds
 GW_WATCHDOG_INTERVAL=10          # seconds
 
-log()  { logger -t "$LOG_TAG" "$*"; }
-logr() { logger -t "${LOG_TAG}-roam" "$*"; }  # separate tag for roam events
-# ═══ 优化 1: 漫游冷却期配置 ═══
-ROAM_COOLDOWN_TIME=30  # 秒，同一客户端的两次漫游间隔最小值
-declare -A ROAM_COOLDOWN_MAP  # MAC -> last_roam_timestamp
+# ═══ 优化 1: 漫游防乒乓 ═══
+ROAM_COOLDOWN_TIME=30            # seconds — min interval between steers per client
+# busybox ash has no associative arrays; use /tmp files as K/V store
+ROAM_COOLDOWN_DIR="/tmp/em_cooldown"
+roam_cooldown_key() { echo "$1" | tr ':' '_'; }
+roam_cooldown_get() { cat "${ROAM_COOLDOWN_DIR}/${1}" 2>/dev/null || echo 0; }
+roam_cooldown_set() { mkdir -p "$ROAM_COOLDOWN_DIR"; printf '%s
+' "$2" > "${ROAM_COOLDOWN_DIR}/${1}"; }
 
 # ═══ 优化 2: HTTP 重试配置 ═══
 HTTP_MAX_RETRIES=3
@@ -112,33 +115,40 @@ get_ap_iface() {
     echo "$AP_IF"
 }
 
-# ═══ 优化 2: HTTP POST 带重试和指数退避 ═══
+
+# ═══ HTTP POST with exponential backoff retry ═══
+# Used for critical calls (register) where failure matters.
+# For fire-and-forget pushes (roam/neighbors, channel/apply) call wget directly.
+#
+# Backoff: 2s → 4s → 8s (case table — busybox ash has no ** operator)
+# Success detection: non-empty response body (busybox wget -S is unreliable)
 do_http_post_with_retry() {
-    local url="$1" data="$2" retry=0
+    local url="$1" data="$2"
+    local retry=0 wait_time resp tmp
+    tmp="/tmp/em_http_$$.json"
 
-    while [ $retry -lt $HTTP_MAX_RETRIES ]; do
-        local http_code
-        http_code=$(wget -q -T $HTTP_TIMEOUT --post-data="$data" \
-            --header='Content-Type: application/json' \
-            -O /tmp/http_response_$$.json \
-            -S "$url" 2>&1 | grep "HTTP/" | awk '{print $2}' | head -1)
+    while [ "$retry" -lt "$HTTP_MAX_RETRIES" ]; do
+        resp=$(wget -q -T "$HTTP_TIMEOUT"             --post-data="$data"             --header='Content-Type: application/json'             -O "$tmp" "$url" 2>/dev/null && cat "$tmp" 2>/dev/null)
+        rm -f "$tmp"
 
-        if [ "$http_code" = "200" ] || [ "$http_code" = "201" ]; then
-            cat /tmp/http_response_$$.json 2>/dev/null
-            rm -f /tmp/http_response_$$.json
+        if [ -n "$resp" ]; then
+            echo "$resp"
             return 0
         fi
 
-        retry=$((retry + 1))
-        if [ $retry -lt $HTTP_MAX_RETRIES ]; then
-            local wait_time=$((HTTP_RETRY_BACKOFF_BASE ** retry))
-            logw "HTTP POST failed (HTTP $http_code), retry $retry/$HTTP_MAX_RETRIES in ${wait_time}s: $url"
-            sleep $wait_time
-        fi
+        retry=$(( retry + 1 ))
+        [ "$retry" -ge "$HTTP_MAX_RETRIES" ] && break
+
+        case "$retry" in
+            1) wait_time=2 ;;
+            2) wait_time=4 ;;
+            *) wait_time=8 ;;
+        esac
+        logw "HTTP POST failed, retry $retry/$HTTP_MAX_RETRIES in ${wait_time}s → $url"
+        sleep "$wait_time"
     done
 
-    loge "HTTP POST failed after $HTTP_MAX_RETRIES retries: $url"
-    rm -f /tmp/http_response_$$.json
+    loge "HTTP POST failed after $HTTP_MAX_RETRIES retries → $url"
     return 1
 }
 
@@ -376,39 +386,30 @@ roam_watchdog() {
             local rssi_n="${rssi%.*}"  # strip decimal if any
 
             # 优化 1: 检查冷却期
-            local last_roam=${ROAM_COOLDOWN_MAP[$sta_mac]:-0}
-            local now=$(date +%s)
-            local time_since=$((now - last_roam))
-
-            if [ $time_since -lt $ROAM_COOLDOWN_TIME ]; then
-                logr "SKIP: $sta_mac in cooldown ($((ROAM_COOLDOWN_TIME - time_since))s remain)"
+            # 冷却期检查 — 防乒乓 (busybox ash 用文件模拟 K/V)
+            local ck; ck=$(roam_cooldown_key "$sta_mac")
+            local last_roam; last_roam=$(roam_cooldown_get "$ck")
+            local now; now=$(date +%s)
+            local time_since=$(( now - last_roam ))
+            if [ "$time_since" -lt "$ROAM_COOLDOWN_TIME" ]; then
+                logr "SKIP: $sta_mac in cooldown ($(( ROAM_COOLDOWN_TIME - time_since ))s remain)"
                 continue
             fi
 
+            local best_bssid
             if [ "${rssi_n}" -le "${ROAM_RSSI_HARD}" ] 2>/dev/null; then
-                # Find best candidate from neighbor list
-                local best_bssid
                 best_bssid=$(pick_best_candidate "$sta_mac" "$rssi_n")
                 if [ -n "$best_bssid" ]; then
                     logr "HARD steer $sta_mac (${rssi_n}dBm) → $best_bssid"
-                    hostapd_cli -i "$ap_iface" bss_tm_req "$sta_mac" \
-                        pref=1 abridged=1 disassoc_imminent=1 \
-                        neighbor="${best_bssid},0,0,0,0" \
-                        >/dev/null 2>&1
-                    ROAM_COOLDOWN_MAP[$sta_mac]=$now
+                    hostapd_cli -i "$ap_iface" bss_tm_req "$sta_mac"                         pref=1 abridged=1 disassoc_imminent=1                         neighbor="${best_bssid},0,0,0,0" >/dev/null 2>&1
+                    roam_cooldown_set "$ck" "$now"
                 fi
-
-            # Below soft threshold → polite BSS-TM suggestion
             elif [ "${rssi_n}" -le "${ROAM_RSSI_KICK}" ] 2>/dev/null; then
-                local best_bssid
                 best_bssid=$(pick_best_candidate "$sta_mac" "$rssi_n")
                 if [ -n "$best_bssid" ]; then
                     logr "SOFT steer $sta_mac (${rssi_n}dBm) → $best_bssid"
-                    hostapd_cli -i "$ap_iface" bss_tm_req "$sta_mac" \
-                        pref=1 abridged=1 \
-                        neighbor="${best_bssid},0,0,0,0" \
-                        >/dev/null 2>&1
-                    ROAM_COOLDOWN_MAP[$sta_mac]=$now
+                    hostapd_cli -i "$ap_iface" bss_tm_req "$sta_mac"                         pref=1 abridged=1                         neighbor="${best_bssid},0,0,0,0" >/dev/null 2>&1
+                    roam_cooldown_set "$ck" "$now"
                 fi
             fi
         done
@@ -607,14 +608,29 @@ do_register() {
     log "Registered with master $mip"
 }
 
+# Last profile checksum — avoids re-applying identical config on every loop
+_last_profile_sum=""
+
 poll_for_approval() {
     local mip; mip=$(master_ip)
     [ -z "$mip" ] && return 1
+
+    # Step 1: fetch lightweight checksum first (saves bandwidth on every poll)
+    local sum_resp remote_sum
+    sum_resp=$(wget -q -T 3 -O-         "http://${mip}:${MASTER_PORT}/profile/checksum?mac=$(get_mac)" 2>/dev/null)
+    remote_sum=$(echo "$sum_resp" | grep -o '"sum":"[^"]*"' | cut -d'"' -f4)
+
+    if [ -n "$remote_sum" ] && [ "$remote_sum" = "$_last_profile_sum" ]; then
+        return 0   # config unchanged — skip full fetch
+    fi
+
+    # Step 2: checksum changed or endpoint unavailable → fetch full profile
     local resp
-    resp=$(wget -q -T 5 -O- \
-        "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
+    resp=$(wget -q -T 5 -O-         "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
     if echo "$resp" | grep -q '"status":"approved"'; then
-        apply_profile "$resp"; return 0
+        apply_profile "$resp"
+        _last_profile_sum=$(echo "$resp" | md5sum | cut -d' ' -f1)
+        return 0
     fi
     return 1
 }
@@ -702,10 +718,10 @@ dfs_watchdog() {
 iface="$1"; event="$2"
 case "$event" in
     AP-CSA-FINISHED*|DFS-NOP-FINISHED*)
-        logd "Radar/CSA event on $iface: $event"
+        logger -t easymesh-dfs "Radar/CSA event on $iface: $event"
         new_chan=$(echo "$event" | grep -o 'chan=[0-9]*' | cut -d= -f2)
-        # Write event file for main loop to pick up
-        printf '%s\n' "$new_chan" > /tmp/easymesh_dfs_chan_change
+        printf '%s
+' "$new_chan" > /tmp/easymesh_dfs_chan_change
         ;;
 esac
 SH
@@ -943,6 +959,20 @@ handle_request() {
         local src; src=$(echo "$body" | grep -o '"source":"[^"]*"' | cut -d'"' -f4)
         register_pending "$body" "${src:-wired}"
         http_ok '{"status":"pending","msg":"Awaiting approval in LuCI"}' ;;
+    /profile/checksum)
+        # Lightweight endpoint: returns md5 of current profile.
+        # Slaves call this first; only fetch full profile when checksum changes.
+        local req_mac safe
+        req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
+        safe=$(echo "$req_mac" | tr ':' '_')
+        if [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
+            local sum; sum=$(md5sum "$PROFILE_FILE" | cut -d" " -f1)
+            http_ok "{\"sum\":\"$sum\"}"
+        elif [ -f "${PENDING_DB}/${safe}.json" ]; then
+            http_403
+        else
+            http_ok '{"status":"unregistered"}'
+        fi ;;
     /profile)
         local req_mac safe
         req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
@@ -973,19 +1003,6 @@ handle_request() {
         [ -n "$mac" ] && reject_node "$mac"
         http_ok '{"status":"ok"}' ;;
     /log)
-        # Serve log file to log.js — optional line limit via ?lines=N
-        local limit
-        limit=$(echo "$query" | grep -o 'lines=[0-9]*' | cut -d= -f2)
-        limit=${limit:-300}
-        if [ -f "$LOGFILE" ]; then
-            local content
-            content=$(tail -n "$limit" "$LOGFILE" | sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/' | tr -d '\n')
-            http_ok "{\"lines\":[\"${content%\\n}\"]}"
-        else
-            http_ok '{"lines":[]}' 
-        fi ;;
-
-    /log)
         # Serve last N lines of log file as JSON array of strings.
         # log.js reads this endpoint; no parsing of syslog needed.
         local n
@@ -1015,11 +1032,6 @@ handle_request() {
         http_ok '{"status":"ok"}' ;;
     /topology)
         update_topology; http_ok "$(cat "$TOPO_FILE" 2>/dev/null || echo '{}')" ;;
-    /wireless-onboard/status)
-        local en ssid
-        en=$(uci get easymesh.global.wireless_onboard 2>/dev/null || echo 0)
-        ssid=$(get_onboard_ssid)
-        http_ok "{\"enabled\":$en,\"ssid\":\"$ssid\"}" ;;
     /channel/apply)
         # Slave receives channel change from master (ACS or DFS event)
         local new_chan reason
@@ -1065,9 +1077,6 @@ run_server() {
 }
 
 # Hardware auto-detection: distinguish dual-band vs tri-band
-# Uses UCI wireless config (per physical radio) not iwinfo (per interface).
-# iwinfo counts interfaces, not radios — a dual-band router with 3 interfaces
-# (AP + mesh + monitor) would be wrongly counted as tri-band.
 get_mesh_strategy() {
     local count5g=0 dev band
     for dev in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
@@ -1084,10 +1093,7 @@ get_mesh_strategy() {
 
 # Load-adaptive roaming threshold via dawn
 # Logic: busy system → relax threshold (less BSS-TM work for dawn)
-#        idle system → tighten threshold (more aggressive roaming = better UX)
-# Fix 1: use /proc/meminfo (MemAvailable) — busybox free -m column order varies
-# Fix 2: use dawn.@global[0] — dawn UCI section is not named "main"
-# Fix 3: direction was reversed in original; corrected here
+# idle system → tighten threshold (more aggressive roaming = better UX)
 set_dawn_thresholds() {
     local cpu_int mem_free
     cpu_int=$(awk '{print int($1)}' /proc/loadavg)
@@ -1107,10 +1113,6 @@ set_dawn_thresholds() {
 }
 
 # Link self-healing: detect wired link state and adjust batman-adv OGM rate
-# Fix 1: removed "batctl ra BATMAN_IV" — routing algorithm cannot be changed
-#         at runtime; attempting it causes bat0 reset and momentary disconnection
-# Fix 2: use "ip link show state UP" — ethtool may not be installed on OpenWrt
-# Fix 3: use "batctl meshif" form — "batctl it" is deprecated in newer batctl
 trigger_self_healing() {
     if ip link show "$ETH_IF" 2>/dev/null | grep -q "state UP"; then
         # Wired link healthy → normal OGM interval
@@ -1126,7 +1128,7 @@ trigger_self_healing() {
 # MAIN
 ########################################
 main_loop() {
-    mkdir -p "$NODE_DB" "$PENDING_DB"
+    mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR"
     # Startup banner — marks session boundary in log file
     { printf "\n" >> "$LOGFILE" 2>/dev/null
       _emlog "INFO" "core" "================================================"

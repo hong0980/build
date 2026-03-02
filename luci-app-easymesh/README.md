@@ -54,8 +54,6 @@ luci-app-easymesh/
             └── rpcd/acl.d/luci-app-easymesh.json
 ```
 
-> `luci.mk` 自动将 `htdocs/` 安装到 `/www/`，`root/` 叠加到根文件系统，`po/` 安装翻译文件，无需手写安装规则。
-
 ---
 
 ## 依赖
@@ -103,8 +101,6 @@ luci-app-easymesh/
 
 ## 初始配置（主节点）
 
-安装后在 LuCI → Services → EasyMesh → Overview & Config：
-
 | 字段 | 建议值 |
 |------|--------|
 | 启用 | ✓ |
@@ -119,9 +115,7 @@ luci-app-easymesh/
 
 ---
 
-## UCI 配置参考
-
-配置文件：`/etc/config/easymesh`
+## UCI 配置
 
 | 选项 | 说明 | 默认值 |
 |------|------|--------|

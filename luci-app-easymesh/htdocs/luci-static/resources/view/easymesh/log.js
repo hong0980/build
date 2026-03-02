@@ -2,6 +2,7 @@
 'require view';
 'require rpc';
 'require poll';
+'require request';
 'require ui';
 
 /*
@@ -276,8 +277,9 @@ return view.extend({
 					ui.addNotification(null, E('p', {}, _('Log file cleared.')), 'info');
 				}).catch(function() {
 					/* Fallback: call master HTTP clear endpoint */
-					fetch('http://' + window.location.hostname + ':4304/log/clear',
-						{ method: 'POST' }).then(function() {
+					request.post('http://' + window.location.hostname + ':4304/log/clear', null, {
+						timeout: 5000
+					}).then(function() {
 						self._entries = []; self._doRender();
 					});
 				});
