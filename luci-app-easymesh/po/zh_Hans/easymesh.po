@@ -17,21 +17,6 @@ msgstr "运行日志"
 msgid "Add New Node"
 msgstr "添加新节点"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ── overview.js: form ─────────────────────────
 
 msgid "EasyMesh Configuration"
@@ -261,7 +246,7 @@ msgid "Wait ~30 seconds — the new node auto-discovers this master, pulls confi
 msgstr "等待约 30 秒，新节点自动发现主节点、拉取配置并加入 Mesh"
 
 msgid "Check the Nodes tab to confirm it appears"
-msgstr "在"节点"页面确认新节点已出现"
+msgstr "在\"节点\"页面确认新节点已出现"
 
 msgid "No app, QR code or manual configuration needed. Wired backhaul provides the most stable mesh connection."
 msgstr "无需 App、二维码或手动配置。有线回程提供最稳定的 Mesh 连接。"
@@ -270,7 +255,7 @@ msgid "Wireless Node Onboarding"
 msgstr "无线添加新节点"
 
 msgid "Broadcast a temporary open SSID so new nodes can join without a cable. Still requires approval in the Nodes tab."
-msgstr "广播临时开放 SSID，让新节点无需网线即可加入。仍需在"节点"页面手动确认。"
+msgstr "广播临时开放 SSID，让新节点无需网线即可加入。仍需在\"节点\"页面手动确认。"
 
 msgid "Onboarding SSID"
 msgstr "配网 SSID"
@@ -361,3 +346,24 @@ msgstr "该分类暂无日志。"
 
 msgid "Last update: "
 msgstr "最后更新："
+
+msgid "Search…"
+msgstr "搜索…"
+
+msgid "Updated: "
+msgstr "更新于："
+
+msgid "Clear the log file on disk?"
+msgstr "确定清空日志文件？"
+
+msgid "Log file cleared."
+msgstr "日志文件已清空。"
+
+msgid "No entries match the current filter."
+msgstr "当前过滤条件无匹配条目。"
+
+msgid "No log entries yet. Start the EasyMesh service to see logs here."
+msgstr "暂无日志。请先启动 EasyMesh 服务。"
+
+msgid "Basic"
+msgstr "基本设置"

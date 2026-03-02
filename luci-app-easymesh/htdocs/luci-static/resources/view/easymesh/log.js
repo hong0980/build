@@ -5,22 +5,6 @@
 'require request';
 'require ui';
 
-/*
- * log.js — pure renderer for /tmp/easymesh.log
- *
- * Responsibilities:
- *   - Read /tmp/easymesh.log via rpcd fs.read()
- *   - Parse fixed log format written by easymesh-master / init.d / hotplug
- *   - Render rows with category badges + keyword highlighting
- *   - Poll every 3s, only re-render when line count changes
- *   - Provide filter / search / pause / export / clear controls
- *
- * NOT responsible for:
- *   - Writing logs (done by shell daemons)
- *   - Log rotation (done by _emlog() in easymesh-master)
- *   - Parsing syslog format (we use our own structured format)
- */
-
 var LOGFILE = '/tmp/easymesh.log';
 var POLL_INTERVAL = 3; /* seconds */
 
@@ -397,9 +381,7 @@ return view.extend({
 		}, POLL_INTERVAL);
 
 		return E('div', {}, [
-			E('h2', {
-				style: 'margin-bottom:14px;font-size:17px;font-weight:700;color:#e6edf3'
-			}, '🪵 ' + _('EasyMesh Log')),
+			E('h3', _('EasyMesh Log')),
 			E('div', {
 				style: 'background:#0d1117;border:1px solid #30363d;' +
 				       'border-radius:12px;overflow:hidden'
