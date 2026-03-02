@@ -309,16 +309,42 @@ return view.extend({
 			L.resolveDefault(
 				callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }), ''),
 			callNetworkDump(),
-			daemonGet('/nodes/pending'),
-			daemonGet('/nodes/approved')
-		]);
+			L.resolveDefault(callReadFile({ path: '/etc/config/easymesh' }), '')
+		]).then(function(results) {
+			var originators = results[0];
+			var interfaces  = results[1];
+			var easymeshCfg = results[2] || '';
+			/* Check if enabled before hitting the daemon */
+			var enabled = /option enabled '1'/.test(easymeshCfg);
+			if (!enabled) {
+				return [originators, interfaces, null, null, false];
+			}
+			return Promise.all([
+				daemonGet('/nodes/pending'),
+				daemonGet('/nodes/approved')
+			]).then(function(r) {
+				return [originators, interfaces, r[0], r[1], true];
+			});
+		});
 	},
 
 	render: function(data) {
 		var self = this;
-		/* Topology state — shared between poll and tooltip */
 		var _positions = {};
 		var root = E('div', { id: 'easymesh-nodes-root' });
+
+		/* data[4] = enabled flag set in load() */
+		var enabled = data[4] !== false;
+		if (!enabled) {
+			root.appendChild(E('div', { class: 'cbi-section' }, [
+				E('div', { class: 'alert-message warning' }, [
+					E('h4', {}, _('EasyMesh is disabled')),
+					E('p', {}, _('Enable EasyMesh in the Overview tab and save to start the service.'))
+				])
+			]));
+			return root;
+		}
+
 		root.appendChild(self._build(data[0], data[1] || [], data[2], data[3]));
 
 		/* ── Node list poll (rpcd + daemon, every 5s) ── */
@@ -332,7 +358,7 @@ return view.extend({
 			]).then(function(r) {
 				var old = document.getElementById('easymesh-nodes-inner');
 				if (old) old.replaceWith(self._build(r[0], r[1] || [], r[2], r[3]));
-			});
+			}).catch(function() { /* daemon may be restarting */ });
 		}, 5);
 
 		/* ── Topology poll (daemon only, every 5s via request.poll.add) ──

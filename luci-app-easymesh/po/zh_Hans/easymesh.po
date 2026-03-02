@@ -367,3 +367,9 @@ msgstr "暂无日志。请先启动 EasyMesh 服务。"
 
 msgid "Basic"
 msgstr "基本设置"
+
+msgid "EasyMesh is disabled"
+msgstr "EasyMesh 未启用"
+
+msgid "Enable EasyMesh in the Overview tab and save to start the service."
+msgstr "请在「概览与配置」标签中启用 EasyMesh 并保存，以启动服务。"

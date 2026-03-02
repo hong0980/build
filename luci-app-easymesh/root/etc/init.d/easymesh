@@ -11,16 +11,12 @@ UCI_APP=easymesh
 
 LOGFILE="/tmp/easymesh.log"
 
-# Write to shared log file (same file as easymesh-master uses)
-# Format must match master so log.js parses both with one regex
 _emlog() {
     local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
     printf "%s [%-5s] [%-8s] %s\n" "$ts" "$1" "$2" "$3" >> "$LOGFILE"
 }
-log() {
-    _emlog "INFO" "initd" "$*"
-    logger -t easymesh "$*" 2>/dev/null
-}
+log() { _emlog "INFO" "initd" "$*"; logger -t easymesh "$*" 2>/dev/null; }
+loge() { _emlog "ERROR" "initd" "$*"; logger -t easymesh "ERROR: $*" 2>/dev/null; }
 
 # ── Find radio for given band ─────────────────────────────────────────────────
 _band_target=""; _found=""
@@ -38,23 +34,36 @@ get_radio() {
     eval "$_v='$_found'"
 }
 
-# ── Clean up plugin-managed wireless interfaces ───────────────────────────────
+# ── Remove only easymesh-managed wireless interfaces ─────────────────────────
 _del_managed() {
     local _n="$1"; local _m
     config_get _m "$_n" easymesh_managed
-    [ "$_m" = "1" ] && uci -q del wireless."$_n" && log "Removed old interface: $_n"
+    [ "$_m" = "1" ] && { uci -q del wireless."$_n"; log "Removed managed iface: $_n"; }
 }
-cleanup_wireless() { config_load wireless; config_foreach _del_managed wifi-iface; }
+cleanup_wireless() {
+    config_load wireless
+    config_foreach _del_managed wifi-iface
+    uci commit wireless
+}
+
+# ── Remove mesh network interfaces (safe: only those we created) ──────────────
 cleanup_network() {
-    uci -q del network.mesh; uci -q del network.bat0
-    local ifn; ifn=$(uci get network.lan.ifname 2>/dev/null)
-    echo "$ifn" | grep -qw bat0 && {
-        ifn=$(echo "$ifn" | tr ' ' '\n' | grep -v '^bat0$' | tr '\n' ' ' | sed 's/ $//')
-        uci set network.lan.ifname="$ifn"
-    }
+    uci -q del network.mesh
+    uci -q del network.bat0
+    # Remove bat0 from lan bridge member list if present
+    local ifn; ifn=$(uci get network.lan.ifname 2>/dev/null || echo "")
+    if echo "$ifn" | grep -qw bat0; then
+        local new_ifn; new_ifn=$(echo "$ifn" | tr ' ' '\n' | grep -v '^bat0$' | tr '\n' ' ' | sed 's/ $//')
+        uci set network.lan.ifname="$new_ifn"
+        log "Removed bat0 from lan bridge"
+    fi
+    uci commit network
 }
 
 # ── Apply full Mesh configuration ─────────────────────────────────────────────
+# IMPORTANT: This only writes UCI config. The actual interface bringup
+# happens when procd starts the daemon after network restarts.
+# Do NOT call wifi reload or network restart here — let start_service handle it.
 apply_mesh_config() {
     local role backhaul mesh_id mesh_key mesh_band ssid key
     local ieee80211r mobility_domain ft_over_ds reassociation_deadline
@@ -81,49 +90,62 @@ apply_mesh_config() {
     config_get backhaul_band          global backhaul_band         '5g_2'
     config_get dfs_enable             global dfs_enable            '1'
 
+    # Clean up old managed interfaces first
     cleanup_wireless
-    cleanup_network
 
     local radio_mesh
     get_radio radio_mesh "$mesh_band"
     [ -z "$radio_mesh" ] && radio_mesh="radio0"
+    log "Mesh radio: $radio_mesh (band=$mesh_band)"
 
-    # batman-adv — tuned for fast convergence and self-healing
+    # ── batman-adv ────────────────────────────────────────────────────────────
     uci set batman-adv.bat0=mesh
     uci set batman-adv.bat0.interfaces='mesh0'
     uci set batman-adv.bat0.routing_algo="$routing_algo"
     uci set batman-adv.bat0.aggregated_ogms='true'
-    uci set batman-adv.bat0.orig_interval='500'    # 500ms: faster failure detection
+    uci set batman-adv.bat0.orig_interval='500'
     uci set batman-adv.bat0.hop_penalty='30'
     if [ "$role" = "master" ]; then
-        uci set batman-adv.bat0.gw_mode='server'  # advertise as internet gateway
+        uci set batman-adv.bat0.gw_mode='server'
     else
-        uci set batman-adv.bat0.gw_mode='client'  # select best-TQ path to gateway
+        uci set batman-adv.bat0.gw_mode='client'
     fi
     uci commit batman-adv
 
-    # network
+    # ── Network interfaces ────────────────────────────────────────────────────
+    # mesh0: the 802.11s or wired physical interface that feeds batman-adv
     uci set network.mesh=interface
     uci set network.mesh.proto='batadv_hardif'
     uci set network.mesh.master='bat0'
     uci set network.mesh.mtu='1536'
+
+    # bat0: the batman-adv virtual interface
     uci set network.bat0=interface
+    uci set network.bat0.ifname='bat0'
     uci set network.bat0.proto='batadv'
     uci set network.bat0.routing_algo="$routing_algo"
 
     if [ "$role" = "master" ]; then
-        log "Role: master"
-        local cur; cur=$(uci get network.lan.ifname 2>/dev/null || echo "eth0")
-        echo "$cur" | grep -qw bat0 || uci set network.lan.ifname="$cur bat0"
+        log "Role: master — bat0 joins br-lan bridge"
+        # Master: bat0 is a bridge member of LAN so slaves get DHCP from this router
+        # Read current ifname, add bat0 only if not already present
+        local cur_ifn; cur_ifn=$(uci get network.lan.ifname 2>/dev/null || echo "eth0")
+        if ! echo "$cur_ifn" | grep -qw bat0; then
+            uci set network.lan.ifname="$cur_ifn bat0"
+        fi
         uci set network.lan.type='bridge'
     else
-        log "Role: slave"
+        log "Role: slave — bat0 gets IP via DHCP from master"
+        # Slave: bat0 gets an IP from master via DHCP
+        # Override proto to dhcp so this node gets an address from the master's DHCP
         uci set network.bat0.proto='dhcp'
+        # Slave does NOT join its own br-lan — it connects via bat0 as a client
+        # Also disable dnsmasq DHCP server on slave so only master serves DHCP
         uci set dhcp.lan.ignore='1'
     fi
     uci commit network
 
-    # Wireless: mesh backhaul (disabled if wired)
+    # ── Wireless mesh backhaul interface (mesh0) ──────────────────────────────
     uci set wireless.mesh0=wifi-iface
     uci set wireless.mesh0.device="$radio_mesh"
     uci set wireless.mesh0.mode='mesh'
@@ -138,17 +160,21 @@ apply_mesh_config() {
     else
         uci set wireless.mesh0.encryption='none'
     fi
-    [ "$backhaul" = "wired" ] && uci set wireless.mesh0.disabled='1'
+    # Disable mesh0 wireless if using wired backhaul
+    if [ "$backhaul" = "wired" ]; then
+        uci set wireless.mesh0.disabled='1'
+    else
+        uci set wireless.mesh0.disabled='0'
+    fi
 
-    # Wireless: client AP
-    # On tri-band routers, dedicated_backhaul=1 reserves second 5GHz radio.
-    # easymesh-master:setup_dedicated_backhaul() handles that at runtime.
+    # ── Wireless client AP ────────────────────────────────────────────────────
     uci set wireless.easymesh_ap=wifi-iface
     uci set wireless.easymesh_ap.device="$radio_mesh"
     uci set wireless.easymesh_ap.mode='ap'
     uci set wireless.easymesh_ap.ssid="$ssid"
     uci set wireless.easymesh_ap.network='lan'
     uci set wireless.easymesh_ap.easymesh_managed='1'
+    uci set wireless.easymesh_ap.disabled='0'
     if [ -n "$key" ]; then
         uci set wireless.easymesh_ap.encryption='psk2+ccmp'
         uci set wireless.easymesh_ap.key="$key"
@@ -165,15 +191,15 @@ apply_mesh_config() {
     [ "$ieee80211k" = "1" ] && {
         uci set wireless.easymesh_ap.ieee80211k='1'
         uci set wireless.easymesh_ap.rrm_neighbor_report='1'
-        uci set wireless.easymesh_ap.rrm_beacon_report='1'  # allows RSSI probe responses
+        uci set wireless.easymesh_ap.rrm_beacon_report='1'
     }
     [ "$ieee80211v" = "1" ] && {
         uci set wireless.easymesh_ap.ieee80211v='1'
         uci set wireless.easymesh_ap.bss_transition='1'
     }
     uci commit wireless
-    wifi reload
-    log "Config applied"
+
+    log "UCI config applied (role=$role backhaul=$backhaul)"
 }
 
 # ── procd service ─────────────────────────────────────────────────────────────
@@ -181,17 +207,27 @@ start_service() {
     local enabled role
     config_load "$UCI_APP"
     config_get enabled global enabled '0'
-    config_get role    global role    'slave'
+    config_get role    global role    'master'
 
-    [ "$enabled" != "1" ] && { log "EasyMesh disabled, skipping"; return; }
+    if [ "$enabled" != "1" ]; then
+        log "EasyMesh disabled — skipping"
+        return 0
+    fi
 
+    log "EasyMesh starting (role=$role)"
     apply_mesh_config
-    /etc/init.d/network restart &
 
-    # Both master and slave run the same daemon.
-    # The daemon elects its own role at runtime via WAN detection.
-    # master: serves /profile, manages approvals, runs channel/LB tasks
-    # slave:  discovers master on LAN, registers, polls for approval & config
+    # Restart network SYNCHRONOUSLY so interfaces exist before daemon starts
+    # Use /etc/init.d/network restart (not &) so we wait for it to complete
+    log "Restarting network to apply interface changes..."
+    /etc/init.d/network restart
+    sleep 2
+
+    # Reload wifi after network is up
+    wifi reload
+    sleep 2
+
+    log "Starting EasyMesh daemon..."
     if [ "$role" = "master" ]; then
         procd_open_instance "easymesh-master"
         procd_set_param command /usr/sbin/easymesh-master
@@ -210,13 +246,22 @@ start_service() {
 }
 
 stop_service() {
+    log "EasyMesh stopping..."
     cleanup_wireless
     cleanup_network
-    uci commit wireless
-    uci commit network
-    /etc/init.d/network restart &
+    # Restore DHCP on LAN (in case slave mode disabled it)
+    uci -q del dhcp.lan.ignore
+    uci commit dhcp
+    /etc/init.d/network restart
+    wifi reload
+    log "EasyMesh stopped"
 }
 
-reload_service() { stop_service; start_service; }
+reload_service() {
+    stop_service
+    start_service
+}
 
-service_triggers() { procd_add_reload_trigger "$UCI_APP"; }
+service_triggers() {
+    procd_add_reload_trigger "$UCI_APP"
+}

@@ -1065,14 +1065,51 @@ handle_request() {
     esac
 }
 
+# HTTP request handler script — written once, called per connection via nc -e
+# busybox nc with -e flag: nc -l -p PORT -e /path/to/handler
+# If nc doesn't support -e, fall back to the FIFO loop.
+_write_nc_handler() {
+    cat > /tmp/em_nc_handler.sh << 'HANDLER'
+#!/bin/sh
+# Called by nc -e for each connection: stdin=request, stdout=response
+tmp="/tmp/em_nc_req_$$"
+cat > "$tmp"
+. /usr/sbin/easymesh-master __handle "$tmp"
+rm -f "$tmp"
+HANDLER
+    chmod +x /tmp/em_nc_handler.sh
+}
+
 run_server() {
     log "HTTP server on :$MASTER_PORT"
+
+    # Try nc -e (most reliable: nc forks handler per connection)
+    if nc --help 2>&1 | grep -q '\-e'; then
+        _write_nc_handler
+        log "HTTP server mode: nc -e"
+        while true; do
+            nc -l -p "$MASTER_PORT" -e /tmp/em_nc_handler.sh 2>/dev/null
+        done
+        return
+    fi
+
+    # Fallback: FIFO loop (works with all busybox nc)
+    log "HTTP server mode: FIFO loop"
+    local fifo="/tmp/em_fifo_$$"
+    mkfifo "$fifo" 2>/dev/null
+
     while true; do
-        local tmp="/tmp/em_req_$$_$(date +%s)"
-        nc -l -p "$MASTER_PORT" > "$tmp" 2>/dev/null
-        handle_request "$tmp" | nc -l -p "$MASTER_PORT" 2>/dev/null &
-        rm -f "$tmp"
-        sleep 0.05
+        local req="/tmp/em_req_$$"
+        # nc reads from fifo (response) and writes to req (request)
+        # We open fifo for writing in background before nc starts listening
+        # so nc can read from it once we write the response
+        nc -l -p "$MASTER_PORT" > "$req" < "$fifo" 2>/dev/null &
+        local nc_pid=$!
+        # Give nc time to read the full request (HTTP request ends with blank line)
+        sleep 0.3
+        handle_request "$req" > "$fifo"
+        wait $nc_pid 2>/dev/null
+        rm -f "$req"
     done
 }
 

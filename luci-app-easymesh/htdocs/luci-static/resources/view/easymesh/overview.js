@@ -223,23 +223,27 @@ return view.extend({
 		o.placeholder = '1000';
 		o.depends({ enabled: '1', ieee80211r: '1' });
 
+		/* Store map reference so handleSave/handleSaveApply can call m.save()
+		 * The default view.handleSave calls this.map.save() — we must set
+		 * this.map here since m is a local variable in render(). */
+		this.map = m;
 		return m.render().then(function (node) {
 			node.insertBefore(qrSection, node.firstChild);
 			return node;
 		});
 	},
 
-	// handleSave: function (ev) {
+	// handleSave: function(ev) {
 	// 	return this.map.save(null, true);
 	// },
 
-	// handleSaveApply: function (ev) {
-	// 	return this.handleSave(ev).then(function () {
+	// handleSaveApply: function(ev) {
+	// 	return this.handleSave(ev).then(function() {
 	// 		return ui.changes.apply(true);
 	// 	});
 	// },
 
-	// handleReset: function (ev) {
-	// 	return uci.revertAll().then(L.bind(this.render, this));
+	// handleReset: function(ev) {
+	// 	return this.map.reset();
 	// }
 });
