@@ -233,17 +233,17 @@ return view.extend({
 		});
 	},
 
-	// handleSave: function(ev) {
-	// 	return this.map.save(null, true);
-	// },
+	handleSave: function(ev) {
+		return this.map.save(null, true);
+	},
 
-	// handleSaveApply: function(ev) {
-	// 	return this.handleSave(ev).then(function() {
-	// 		return ui.changes.apply(true);
-	// 	});
-	// },
+	handleSaveApply: function(ev) {
+		return this.handleSave(ev).then(function() {
+			return ui.changes.apply(true);
+		});
+	},
 
-	// handleReset: function(ev) {
-	// 	return this.map.reset();
-	// }
+	handleReset: function(ev) {
+		return this.map.reset();
+	}
 });

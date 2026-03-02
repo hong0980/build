@@ -18,7 +18,6 @@ config easymesh 'global'
 	option backhaul_band '5g_2'
 	# DFS/ACS
 	option dfs_enable '1'
-	option acs_exclude_dfs '0'
 
 config easymesh 'advanced'
 	option roam_cooldown_time '30'

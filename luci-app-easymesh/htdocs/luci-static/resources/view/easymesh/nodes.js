@@ -1,6 +1,7 @@
 'use strict';
 'require view';
 'require rpc';
+'require uci';
 'require poll';
 'require request';
 'require ui';
@@ -21,10 +22,6 @@ var callNetworkDump = rpc.declare({
 	expect: { interface: [] }
 });
 
-/* ── Daemon HTTP helpers ───────────────────────────────────────────────────── */
-/* Use L.request (LuCI's built-in XHR wrapper) instead of raw fetch().
- * Benefits: consistent timeout handling, LuCI interceptor chain,
- * no AbortSignal polyfill concerns, integrates with LuCI request queue. */
 var DAEMON_BASE = 'http://' + window.location.hostname + ':' + MASTER_PORT;
 
 function daemonGet(path) {
@@ -309,13 +306,11 @@ return view.extend({
 			L.resolveDefault(
 				callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }), ''),
 			callNetworkDump(),
-			L.resolveDefault(callReadFile({ path: '/etc/config/easymesh' }), '')
+			uci.load('easymesh')
 		]).then(function(results) {
 			var originators = results[0];
 			var interfaces  = results[1];
-			var easymeshCfg = results[2] || '';
-			/* Check if enabled before hitting the daemon */
-			var enabled = /option enabled '1'/.test(easymeshCfg);
+			var enabled = uci.get_bool('easymesh', 'global', 'enabled');
 			if (!enabled) {
 				return [originators, interfaces, null, null, false];
 			}
@@ -332,8 +327,6 @@ return view.extend({
 		var self = this;
 		var _positions = {};
 		var root = E('div', { id: 'easymesh-nodes-root' });
-
-		/* data[4] = enabled flag set in load() */
 		var enabled = data[4] !== false;
 		if (!enabled) {
 			root.appendChild(E('div', { class: 'cbi-section' }, [

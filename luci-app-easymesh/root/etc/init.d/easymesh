@@ -4,24 +4,22 @@ USE_PROCD=1
 START=95
 STOP=10
 
-UCI_APP=easymesh
-
-. /lib/functions.sh
 . /lib/functions/network.sh
 
+UCI_APP=easymesh
 LOGFILE="/tmp/easymesh.log"
 
 _emlog() {
     local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
     printf "%s [%-5s] [%-8s] %s\n" "$ts" "$1" "$2" "$3" >> "$LOGFILE"
 }
-log() { _emlog "INFO" "initd" "$*"; logger -t easymesh "$*" 2>/dev/null; }
+log()  { _emlog "INFO"  "initd" "$*"; logger -t easymesh "$*" 2>/dev/null; }
 loge() { _emlog "ERROR" "initd" "$*"; logger -t easymesh "ERROR: $*" 2>/dev/null; }
 
 # ── Find radio for given band ─────────────────────────────────────────────────
 _band_target=""; _found=""
 _find_radio() {
-    local _n="$1"; local _b
+    local _n="$1" _b
     config_get _b "$_n" band
     case "$_b" in
         2g|2.4GHz|bgn|bg|b) [ "$_band_target" = "2g" ] && _found="$_n" ;;
@@ -29,16 +27,18 @@ _find_radio() {
     esac
 }
 get_radio() {
-    local _v="$1" _b="$2"; _found=""; _band_target="$_b"
-    config_load wireless; config_foreach _find_radio wifi-device
+    local _v="$1" _b="$2"
+    _found=""; _band_target="$_b"
+    config_load wireless
+    config_foreach _find_radio wifi-device
     eval "$_v='$_found'"
 }
 
 # ── Remove only easymesh-managed wireless interfaces ─────────────────────────
 _del_managed() {
-    local _n="$1"; local _m
+    local _n="$1" _m
     config_get _m "$_n" easymesh_managed
-    [ "$_m" = "1" ] && { uci -q del wireless."$_n"; log "Removed managed iface: $_n"; }
+    [ "$_m" = "1" ] && uci -q del wireless."$_n" && log "Removed managed iface: $_n"
 }
 cleanup_wireless() {
     config_load wireless
@@ -46,32 +46,27 @@ cleanup_wireless() {
     uci commit wireless
 }
 
-# ── Remove mesh network interfaces (safe: only those we created) ──────────────
+# ── Undo only the network changes easymesh made ──────────────────────────────
 cleanup_network() {
+    # Remove mesh network entries we created
     uci -q del network.mesh
     uci -q del network.bat0
-    # Remove bat0 from lan bridge member list if present
-    local ifn; ifn=$(uci get network.lan.ifname 2>/dev/null || echo "")
-    if echo "$ifn" | grep -qw bat0; then
-        local new_ifn; new_ifn=$(echo "$ifn" | tr ' ' '\n' | grep -v '^bat0$' | tr '\n' ' ' | sed 's/ $//')
-        uci set network.lan.ifname="$new_ifn"
-        log "Removed bat0 from lan bridge"
-    fi
     uci commit network
+
+    # Restore DHCP server on LAN (was disabled on slave nodes)
+    uci -q del dhcp.lan.ignore
+    uci commit dhcp
+
+    log "Network config cleaned up"
 }
 
-# ── Apply full Mesh configuration ─────────────────────────────────────────────
-# IMPORTANT: This only writes UCI config. The actual interface bringup
-# happens when procd starts the daemon after network restarts.
-# Do NOT call wifi reload or network restart here — let start_service handle it.
 apply_mesh_config() {
     local role backhaul mesh_id mesh_key mesh_band ssid key
     local ieee80211r mobility_domain ft_over_ds reassociation_deadline
     local ieee80211k ieee80211v routing_algo mesh_fwding
-    local dedicated_backhaul backhaul_band dfs_enable
 
     config_load "$UCI_APP"
-    config_get role                   global role                  'slave'
+    config_get role                   global role                  'master'
     config_get backhaul               global backhaul              'wired'
     config_get mesh_id                global mesh_id               'OpenWrt-Mesh'
     config_get mesh_key               global mesh_key              ''
@@ -86,66 +81,57 @@ apply_mesh_config() {
     config_get ieee80211v             global ieee80211v            '1'
     config_get routing_algo           global routing_algo          'BATMAN_IV'
     config_get mesh_fwding            global mesh_fwding           '0'
-    config_get dedicated_backhaul     global dedicated_backhaul    '0'
-    config_get backhaul_band          global backhaul_band         '5g_2'
-    config_get dfs_enable             global dfs_enable            '1'
 
-    # Clean up old managed interfaces first
+    # Remove previously created wireless interfaces
     cleanup_wireless
 
     local radio_mesh
     get_radio radio_mesh "$mesh_band"
     [ -z "$radio_mesh" ] && radio_mesh="radio0"
-    log "Mesh radio: $radio_mesh (band=$mesh_band)"
+    log "apply_mesh_config: role=$role backhaul=$backhaul radio=$radio_mesh"
 
-    # ── batman-adv ────────────────────────────────────────────────────────────
-    uci set batman-adv.bat0=mesh
-    uci set batman-adv.bat0.interfaces='mesh0'
-    uci set batman-adv.bat0.routing_algo="$routing_algo"
-    uci set batman-adv.bat0.aggregated_ogms='true'
-    uci set batman-adv.bat0.orig_interval='500'
-    uci set batman-adv.bat0.hop_penalty='30'
-    if [ "$role" = "master" ]; then
-        uci set batman-adv.bat0.gw_mode='server'
-    else
-        uci set batman-adv.bat0.gw_mode='client'
-    fi
-    uci commit batman-adv
+    # ── batman-adv config ─────────────────────────────────────────────────────
+    # 不存在整个配置
+    # uci set batman-adv.bat0=mesh
+    # uci set batman-adv.bat0.interfaces='mesh0'
+    # uci set batman-adv.bat0.routing_algo="$routing_algo"
+    # uci set batman-adv.bat0.aggregated_ogms='true'
+    # uci set batman-adv.bat0.orig_interval='500'
+    # uci set batman-adv.bat0.hop_penalty='30'
+    # uci set batman-adv.bat0.gw_mode=$([ "$role" = "master" ] && echo 'server' || echo 'client')
+    # uci commit batman-adv
 
-    # ── Network interfaces ────────────────────────────────────────────────────
-    # mesh0: the 802.11s or wired physical interface that feeds batman-adv
+    # ── network: mesh hardif (physical → batman-adv) ──────────────────────────
+    # mesh0 is the 802.11s wifi-iface or eth interface feeding batman-adv
     uci set network.mesh=interface
     uci set network.mesh.proto='batadv_hardif'
     uci set network.mesh.master='bat0'
     uci set network.mesh.mtu='1536'
 
-    # bat0: the batman-adv virtual interface
+    # ── network: bat0 virtual interface ──────────────────────────────────────
+    # Master: bat0 is a plain batadv interface. The daemon will do
+    #         `brctl addif br-lan bat0` at runtime once bat0 is up.
+    #         DO NOT touch network.lan here.
+    # Slave:  bat0 gets its IP via DHCP from the master.
     uci set network.bat0=interface
     uci set network.bat0.ifname='bat0'
-    uci set network.bat0.proto='batadv'
-    uci set network.bat0.routing_algo="$routing_algo"
-
     if [ "$role" = "master" ]; then
-        log "Role: master — bat0 joins br-lan bridge"
-        # Master: bat0 is a bridge member of LAN so slaves get DHCP from this router
-        # Read current ifname, add bat0 only if not already present
-        local cur_ifn; cur_ifn=$(uci get network.lan.ifname 2>/dev/null || echo "eth0")
-        if ! echo "$cur_ifn" | grep -qw bat0; then
-            uci set network.lan.ifname="$cur_ifn bat0"
-        fi
-        uci set network.lan.type='bridge'
+        uci set network.bat0.proto='batadv'
+        uci set network.bat0.routing_algo="$routing_algo"
+        # Ensure DHCP server is ON for master
+        uci -q del dhcp.lan.ignore
+        uci commit dhcp
+        log "Role: master — LAN DHCP enabled, bat0=batadv"
     else
-        log "Role: slave — bat0 gets IP via DHCP from master"
-        # Slave: bat0 gets an IP from master via DHCP
-        # Override proto to dhcp so this node gets an address from the master's DHCP
         uci set network.bat0.proto='dhcp'
-        # Slave does NOT join its own br-lan — it connects via bat0 as a client
-        # Also disable dnsmasq DHCP server on slave so only master serves DHCP
+        # Slave must not serve DHCP (master is the DHCP server for the mesh)
         uci set dhcp.lan.ignore='1'
+        uci commit dhcp
+        log "Role: slave — LAN DHCP disabled, bat0=dhcp"
     fi
     uci commit network
 
-    # ── Wireless mesh backhaul interface (mesh0) ──────────────────────────────
+    # ── wireless: mesh backhaul interface ────────────────────────────────────
     uci set wireless.mesh0=wifi-iface
     uci set wireless.mesh0.device="$radio_mesh"
     uci set wireless.mesh0.mode='mesh'
@@ -160,14 +146,10 @@ apply_mesh_config() {
     else
         uci set wireless.mesh0.encryption='none'
     fi
-    # Disable mesh0 wireless if using wired backhaul
-    if [ "$backhaul" = "wired" ]; then
-        uci set wireless.mesh0.disabled='1'
-    else
-        uci set wireless.mesh0.disabled='0'
-    fi
+    # Wired backhaul = disable wireless mesh; wireless/auto = enable it
+    uci set wireless.mesh0.disabled=$([ "$backhaul" = "wired" ] && echo '1' || echo '0')
 
-    # ── Wireless client AP ────────────────────────────────────────────────────
+    # ── wireless: client AP ───────────────────────────────────────────────────
     uci set wireless.easymesh_ap=wifi-iface
     uci set wireless.easymesh_ap.device="$radio_mesh"
     uci set wireless.easymesh_ap.mode='ap'
@@ -199,35 +181,38 @@ apply_mesh_config() {
     }
     uci commit wireless
 
-    log "UCI config applied (role=$role backhaul=$backhaul)"
+    log "apply_mesh_config done"
 }
 
 # ── procd service ─────────────────────────────────────────────────────────────
 start_service() {
     local enabled role
     config_load "$UCI_APP"
-    config_get enabled global enabled '0'
+    config_get_bool enabled global enabled 0
     config_get role    global role    'master'
 
-    if [ "$enabled" != "1" ]; then
+    if [ "$enabled" -eq 0 ]; then
         log "EasyMesh disabled — skipping"
         return 0
     fi
 
     log "EasyMesh starting (role=$role)"
+
+    # Write UCI config only — do NOT call network restart here.
+    # network restart inside procd start_service() breaks LAN and races with procd.
+    # The daemon handles runtime bringup of bat0 and bridge joining.
     apply_mesh_config
 
-    # Restart network SYNCHRONOUSLY so interfaces exist before daemon starts
-    # Use /etc/init.d/network restart (not &) so we wait for it to complete
-    log "Restarting network to apply interface changes..."
-    /etc/init.d/network restart
-    sleep 2
+    # Ask netifd to reload changed interfaces without a full restart.
+    # This brings up network.mesh and network.bat0 without touching br-lan.
+    ubus call uci commit '{"config":"network"}' 2>/dev/null
+    /etc/init.d/network reload 2>/dev/null &
 
-    # Reload wifi after network is up
-    wifi reload
-    sleep 2
+    # Give netifd a moment, then reload wifi
+    ( sleep 3; wifi reload ) &
 
-    log "Starting EasyMesh daemon..."
+    log "Starting EasyMesh daemon (role=$role)..."
+
     if [ "$role" = "master" ]; then
         procd_open_instance "easymesh-master"
         procd_set_param command /usr/sbin/easymesh-master
@@ -247,18 +232,18 @@ start_service() {
 
 stop_service() {
     log "EasyMesh stopping..."
+    # Remove managed wireless interfaces and mesh network config
     cleanup_wireless
     cleanup_network
-    # Restore DHCP on LAN (in case slave mode disabled it)
-    uci -q del dhcp.lan.ignore
-    uci commit dhcp
-    /etc/init.d/network restart
-    wifi reload
+    # Reload wifi and network to apply the cleanup
+    ( sleep 1; wifi reload ) &
+    ( sleep 1; /etc/init.d/network reload ) &
     log "EasyMesh stopped"
 }
 
 reload_service() {
     stop_service
+    sleep 2
     start_service
 }
 

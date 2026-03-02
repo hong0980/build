@@ -453,15 +453,43 @@ pick_best_candidate() {
 ########################################
 # 4. WIRED BACKHAUL
 ########################################
+# Architecture:
+#   br-lan contains: eth0 (wired), wlan0 (client AP), bat0 (mesh)
+#   bat0 is batman-adv virtual interface
+#   mesh traffic between nodes goes: eth0 → bat0 (via batman-adv hardif)
+#   Client traffic stays inside br-lan normally
+#
+# We DO NOT remove eth0 from br-lan.
+# We only add bat0 to br-lan so mesh nodes can reach br-lan clients.
 setup_wired_backhaul() {
-    ip link show "$MESH_IF" >/dev/null 2>&1 || { loge "bat0 missing"; return 1; }
-    batctl meshif "$MESH_IF" if 2>/dev/null | grep -q "$ETH_IF" && return 0
-    log "Wired backhaul: $ETH_IF → bat0"
-    brctl delif "$BRIDGE_IF" "$ETH_IF" 2>/dev/null
-    ip link set "$ETH_IF" up
-    batctl meshif "$MESH_IF" interface add "$ETH_IF" 2>/dev/null
-    brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null
-    log "Wired backhaul ready"
+    # Ensure bat0 exists (batman-adv module must be loaded)
+    if ! ip link show "$MESH_IF" >/dev/null 2>&1; then
+        loge "bat0 missing — is batman-adv module loaded?"
+        return 1
+    fi
+
+    ip link set "$MESH_IF" up 2>/dev/null
+
+    # Add bat0 to br-lan bridge so mesh nodes share the LAN segment
+    # Only do this on master (slave gets IP via bat0 DHCP, no bridge needed)
+    if [ "$(get_role)" = "master" ]; then
+        if ! brctl show "$BRIDGE_IF" 2>/dev/null | grep -q "$MESH_IF"; then
+            brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null &&                 log "Wired backhaul: bat0 joined $BRIDGE_IF"
+        fi
+    fi
+
+    # Add eth0 as batman-adv hardif for wired mesh backhaul
+    # eth0 stays in br-lan for normal client traffic;
+    # batman-adv uses it as an additional transport layer
+    local backhaul
+    backhaul=$(uci get easymesh.global.backhaul 2>/dev/null || echo 'wired')
+    if [ "$backhaul" = "wired" ] || [ "$backhaul" = "auto" ]; then
+        if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -q "$ETH_IF"; then
+            batctl meshif "$MESH_IF" interface add "$ETH_IF" 2>/dev/null &&                 log "Wired backhaul: $ETH_IF added as batman-adv hardif"
+        fi
+    fi
+
+    log "Wired backhaul ready (role=$(get_role))"
 }
 
 ########################################
@@ -1065,51 +1093,100 @@ handle_request() {
     esac
 }
 
-# HTTP request handler script — written once, called per connection via nc -e
-# busybox nc with -e flag: nc -l -p PORT -e /path/to/handler
-# If nc doesn't support -e, fall back to the FIFO loop.
-_write_nc_handler() {
-    cat > /tmp/em_nc_handler.sh << 'HANDLER'
+# ═══ HTTP SERVER ═══
+# The handler script is written to /tmp at startup.
+# It sources the master daemon (with __source_only guard) to get all
+# function definitions, reads the HTTP request from stdin, calls
+# handle_request(), and writes the HTTP response to stdout.
+#
+# nc accepts one TCP connection at a time, pipes it through the handler.
+# This is serial but sufficient for LuCI polling (low concurrency).
+
+_write_handler_script() {
+    cat > /tmp/em_handler.sh << 'HANDLER_EOF'
 #!/bin/sh
-# Called by nc -e for each connection: stdin=request, stdout=response
-tmp="/tmp/em_nc_req_$$"
-cat > "$tmp"
-. /usr/sbin/easymesh-master __handle "$tmp"
-rm -f "$tmp"
-HANDLER
-    chmod +x /tmp/em_nc_handler.sh
+# Per-connection HTTP handler: stdin=TCP request, stdout=TCP response
+DAEMON=/usr/sbin/easymesh-master
+REQ=/tmp/em_req_$$
+
+# Parse request line (strip 
+ from HTTP line endings)
+IFS= read -r req_line
+req_line="${req_line%$(printf '
+')}"
+method="${req_line%% *}"
+rawpath="${req_line#* }"; rawpath="${rawpath%% *}"
+
+# Parse headers for Content-Length
+content_len=0
+while IFS= read -r hdr; do
+    hdr="${hdr%$(printf '
+')}"
+    [ -z "$hdr" ] && break
+    case "$hdr" in
+        [Cc]ontent-[Ll]ength:*) content_len="${hdr##*:}"; content_len="${content_len# }" ;;
+    esac
+done
+
+# Read POST body
+body=""
+[ "$method" = "POST" ] && [ "${content_len:-0}" -gt 0 ] &&     body=$(dd bs=1 count="$content_len" 2>/dev/null)
+
+# Build request file: first line = "METHOD /path HTTP/1.1", last line = body
+printf '%s %s HTTP/1.1
+
+%s
+' "$method" "$rawpath" "$body" > "$REQ"
+
+# Source daemon functions (the __source_only argument skips main_loop)
+. "$DAEMON" __source_only
+
+# Handle and respond
+handle_request "$REQ"
+rm -f "$REQ"
+HANDLER_EOF
+    chmod +x /tmp/em_handler.sh
 }
 
 run_server() {
     log "HTTP server on :$MASTER_PORT"
+    _write_handler_script
 
-    # Try nc -e (most reliable: nc forks handler per connection)
-    if nc --help 2>&1 | grep -q '\-e'; then
-        _write_nc_handler
-        log "HTTP server mode: nc -e"
+    if command -v socat >/dev/null 2>&1; then
+        log "HTTP server mode: socat"
         while true; do
-            nc -l -p "$MASTER_PORT" -e /tmp/em_nc_handler.sh 2>/dev/null
+            socat "TCP-LISTEN:${MASTER_PORT},reuseaddr,fork"                 "EXEC:/tmp/em_handler.sh" 2>/dev/null
+            sleep 1
         done
         return
     fi
 
-    # Fallback: FIFO loop (works with all busybox nc)
-    log "HTTP server mode: FIFO loop"
-    local fifo="/tmp/em_fifo_$$"
-    mkfifo "$fifo" 2>/dev/null
+    # nc fallback: use -e flag if supported, else use FIFO for bidirectional pipe
+    if nc -h 2>&1 | grep -q '\-e'; then
+        log "HTTP server mode: nc -e"
+        while true; do
+            nc -l -p "$MASTER_PORT" -e /tmp/em_handler.sh 2>/dev/null
+        done
+        return
+    fi
 
+    # Last resort: bidirectional FIFO
+    # Open fifo for writing first (unblocks nc's read side),
+    # then run handler which writes response into fifo → nc sends to client.
+    log "HTTP server mode: nc+fifo"
+    local fifo="/tmp/em_srv_fifo"
+    rm -f "$fifo"; mkfifo "$fifo"
     while true; do
-        local req="/tmp/em_req_$$"
-        # nc reads from fifo (response) and writes to req (request)
-        # We open fifo for writing in background before nc starts listening
-        # so nc can read from it once we write the response
-        nc -l -p "$MASTER_PORT" > "$req" < "$fifo" 2>/dev/null &
-        local nc_pid=$!
-        # Give nc time to read the full request (HTTP request ends with blank line)
-        sleep 0.3
-        handle_request "$req" > "$fifo"
-        wait $nc_pid 2>/dev/null
-        rm -f "$req"
+        # Open fifo for writing in background to unblock nc
+        # nc: reads from fifo (→ sends to client), writes to pipe (→ handler stdin)
+        {
+            local req="/tmp/em_req_$$_$(date +%s%N 2>/dev/null || date +%s)"
+            nc -l -p "$MASTER_PORT" > "$req" < "$fifo" 2>/dev/null
+            /tmp/em_handler.sh < "$req" > "$fifo"
+            rm -f "$req"
+        } &
+        wait $!
+        sleep 0.05
     done
 }
 
@@ -1228,6 +1305,7 @@ main_loop() {
 }
 
 case "$1" in
-    stop) pkill -f easymesh-master ;;
-    *)    main_loop ;;
+    stop)           pkill -f easymesh-master ;;
+    __source_only)  : ;;   # sourced by handler script — do not run main_loop
+    *)              main_loop ;;
 esac
