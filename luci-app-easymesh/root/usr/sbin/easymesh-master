@@ -141,11 +141,11 @@ do_http_post_with_retry() {
             2) wait_time=4 ;;
             *) wait_time=8 ;;
         esac
-        logw "HTTP POST failed, retry $retry/$HTTP_MAX_RETRIES in ${wait_time}s → $url"
+        logw "HTTP POST failed, retry %s/%s in %ss: %s" "$retry" "$HTTP_MAX_RETRIES" "$wait_time" "$url"
         sleep "$wait_time"
     done
 
-    loge "HTTP POST failed after $HTTP_MAX_RETRIES retries → $url"
+    loge "HTTP POST failed after %s retries: %s" "$HTTP_MAX_RETRIES" "$url"
     return 1
 }
 
@@ -162,7 +162,7 @@ elect_role() {
     if wan_up; then
         echo "master" > "$ROLE_FILE"
         echo "$myip"  > "$MASTER_IP_FILE"
-        log "Election: WAN up → master ($mymac)"
+        log "Election: WAN up -> master (%s)" "$mymac"
         #log "选举: WAN 在线 → 本机为主节点 ($mymac)"
         return 0
     fi
@@ -182,7 +182,7 @@ elect_role() {
         if echo "$resp" | grep -q '"wan":true'; then
             echo "agent"    > "$ROLE_FILE"
             echo "$peer_ip" > "$MASTER_IP_FILE"
-            log "Election: peer $peer_ip has WAN → agent"
+            log "Election: peer %s has WAN -> agent" "$peer_ip"
             #log "选举: 对端 $peer_ip 有 WAN → 本机为从节点"
             return 0
         fi
@@ -194,12 +194,12 @@ elect_role() {
     if [ "$best_mac" = "$mymac" ]; then
         echo "master" > "$ROLE_FILE"
         echo "$myip"  > "$MASTER_IP_FILE"
-        log "Election: lowest MAC → master ($mymac)"
+        log "Election: lowest MAC -> master (%s)" "$mymac"
         #log "选举: MAC 最小 → 本机为主节点 ($mymac)"
     else
         echo "agent"    > "$ROLE_FILE"
         echo "$best_ip" > "$MASTER_IP_FILE"
-        log "Election: $best_mac wins → agent (best_ip=$best_ip)"
+        log "Election: %s wins -> agent (master=%s)" "$best_mac" "$best_ip"
         #log "选举: $best_mac 获胜 → 本机为从节点 (master=$best_ip)"
     fi
 }
@@ -222,11 +222,11 @@ tune_batman() {
     if [ "$(get_role)" = "master" ]; then
         # Master advertises itself as internet gateway
         batctl meshif "$MESH_IF" gw_mode server 2>/dev/null
-        log "batman-adv: GW mode=server, OGM=${BATMAN_OGM_INTERVAL}ms"
+        log "batman-adv: GW mode=server, OGM=%sms" "$BATMAN_OGM_INTERVAL"
     else
         # Slaves use BATMAN_IV gateway selection (picks best TQ path to GW)
         batctl meshif "$MESH_IF" gw_mode "$BATMAN_GW_MODE" 2>/dev/null
-        log "batman-adv: GW mode=$BATMAN_GW_MODE, OGM=${BATMAN_OGM_INTERVAL}ms"
+        log "batman-adv: GW mode=%s, OGM=%sms" "$BATMAN_GW_MODE" "$BATMAN_OGM_INTERVAL"
     fi
 }
 
@@ -246,10 +246,10 @@ gateway_watchdog() {
             fail=0
         else
             fail=$((fail + 1))
-            logw "Gateway watchdog: master $mip unreachable (fail=$fail/3)"
+            logw "Gateway watchdog: master %s unreachable (fail=%s/3)" "$mip" "$fail"
             # logw "网关监控: 主节点 $mip 不可达 (失败=$fail/3)"
             if [ "$fail" -ge 3 ]; then
-                loge "Gateway declared dead — re-electing"
+                loge "Gateway declared dead - re-electing"
                 # loge "网关已失联，重新选举主节点"
                 rm -f "$MASTER_IP_FILE"
                 elect_role
@@ -267,7 +267,7 @@ check_routing_paths() {
     local cur_gw
     cur_gw=$(batctl meshif "$MESH_IF" gwl 2>/dev/null | awk '/===>/{print $2}' | head -1)
     if [ -n "$cur_gw" ] && [ "$cur_gw" != "$prev_gw" ]; then
-        log "Self-healing: gateway path changed → $cur_gw (was: ${prev_gw:-none})"
+        log "Self-healing: gateway path changed -> %s (was: %s)" "$cur_gw" "${prev_gw:-none}"
         # log "自愈: 网关路径切换 → $cur_gw (原: ${prev_gw:-none})"
         prev_gw="$cur_gw"
         # Re-sync neighbor list after topology change
@@ -370,14 +370,14 @@ apply_neighbor_list() {
         hostapd_cli -i "$ap_iface" \
             set_neighbor "$bssid" ssid="\"$ssid\"" >/dev/null 2>&1
     done
-    logr "Neighbor list applied: $(echo "$body" | grep -c '"bssid"') APs"
+    logr "Neighbor list applied: %s APs" "$(echo "$body" | grep -c '"bssid"')"
 }
 
 # ═══ 优化 1: 漫游防乒乓机制 ═══
 roam_watchdog() {
     local ap_iface
     ap_iface=$(get_ap_iface)
-    log "Roam watchdog started on $ap_iface"
+    log "Roam watchdog started on %s" "$ap_iface"
 
     while true; do
         sleep "$ROAM_PROBE_INTERVAL"
@@ -397,7 +397,7 @@ roam_watchdog() {
             local now; now=$(date +%s)
             local time_since=$(( now - last_roam ))
             if [ "$time_since" -lt "$ROAM_COOLDOWN_TIME" ]; then
-                logr "SKIP: $sta_mac in cooldown ($(( ROAM_COOLDOWN_TIME - time_since ))s remain)"
+                logr "SKIP: %s in cooldown (%ss remain)" "$sta_mac" "$(( ROAM_COOLDOWN_TIME - time_since ))"
                 continue
             fi
 
@@ -405,14 +405,14 @@ roam_watchdog() {
             if [ "${rssi_n}" -le "${ROAM_RSSI_HARD}" ] 2>/dev/null; then
                 best_bssid=$(pick_best_candidate "$sta_mac" "$rssi_n")
                 if [ -n "$best_bssid" ]; then
-                    logr "HARD steer $sta_mac (${rssi_n}dBm) → $best_bssid"
+                    logr "HARD steer %s (%sdBm) -> %s" "$sta_mac" "$rssi_n" "$best_bssid"
                     hostapd_cli -i "$ap_iface" bss_tm_req "$sta_mac"                         pref=1 abridged=1 disassoc_imminent=1                         neighbor="${best_bssid},0,0,0,0" >/dev/null 2>&1
                     roam_cooldown_set "$ck" "$now"
                 fi
             elif [ "${rssi_n}" -le "${ROAM_RSSI_KICK}" ] 2>/dev/null; then
                 best_bssid=$(pick_best_candidate "$sta_mac" "$rssi_n")
                 if [ -n "$best_bssid" ]; then
-                    logr "SOFT steer $sta_mac (${rssi_n}dBm) → $best_bssid"
+                    logr "SOFT steer %s (%sdBm) -> %s" "$sta_mac" "$rssi_n" "$best_bssid"
                     hostapd_cli -i "$ap_iface" bss_tm_req "$sta_mac"                         pref=1 abridged=1                         neighbor="${best_bssid},0,0,0,0" >/dev/null 2>&1
                     roam_cooldown_set "$ck" "$now"
                 fi
@@ -469,7 +469,7 @@ pick_best_candidate() {
 setup_wired_backhaul() {
     # Ensure bat0 exists (batman-adv module must be loaded)
     if ! ip link show "$MESH_IF" >/dev/null 2>&1; then
-        loge "bat0 missing — is batman-adv module loaded?"
+        loge "bat0 missing - is batman-adv module loaded?"
         return 1
     fi
 
@@ -479,8 +479,8 @@ setup_wired_backhaul() {
     # 主节点：br-lan = eth0 + bat0，DHCP server 在 br-lan，mesh 流量通过 bat0 转发
     # 从节点：br-lan = eth0 + bat0，有线客户端通过 eth0→br-lan→bat0→mesh→主节点 DHCP
     if ! brctl show "$BRIDGE_IF" 2>/dev/null | grep -q "$MESH_IF"; then
-        brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null &&             log "有线回程: bat0 已加入 $BRIDGE_IF"
-	# log "Wired backhaul: bat0 joined $BRIDGE_IF"
+        brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null && \
+            log "Wired backhaul: bat0 joined %s" "$BRIDGE_IF"
     fi
 
     # Add eth0 as batman-adv hardif for wired mesh backhaul
@@ -490,12 +490,12 @@ setup_wired_backhaul() {
     backhaul=$(uci get easymesh.global.backhaul 2>/dev/null || echo 'wired')
     if [ "$backhaul" = "wired" ] || [ "$backhaul" = "auto" ]; then
         if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -q "$ETH_IF"; then
-            batctl meshif "$MESH_IF" interface add "$ETH_IF" 2>/dev/null &&                 log "Wired backhaul: $ETH_IF added as batman-adv hardif"
+            batctl meshif "$MESH_IF" interface add "$ETH_IF" 2>/dev/null && \
+                log "Wired backhaul: %s added as batman-adv hardif" "$ETH_IF"
         fi
     fi
 
-    log "Wired backhaul ready (role=$(get_role))"
-    # log "有线回程就绪 (角色=$(get_role))"
+    log "Wired backhaul ready (role=%s)" "$(get_role)"
 }
 
 ########################################
@@ -542,7 +542,7 @@ HAPD
         --dhcp-option=3,"${my_ip%.*}.250" \
         --no-resolv --no-hosts \
         --pid-file=/tmp/easymesh_pair_dnsmasq.pid 2>/dev/null
-    log "Wireless onboard AP: $ssid"
+    log "Wireless onboard AP: %s" "$ssid"
 }
 
 stop_wireless_onboard() {
@@ -576,8 +576,7 @@ register_pending() {
     printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"%s","status":"pending","ts":%s}\n' \
         "$mac" "${ip:-?}" "${hostname:-?}" "${source:-wired}" "$(date +%s)" \
         > "${PENDING_DB}/${safe}.json"
-    log "Pending: $mac ($hostname) via $source"
-    # log "待审批: $mac ($hostname) 来源=$source"
+    log "Pending node: %s (%s) via %s" "$mac" "$hostname" "$source"
 }
 
 approve_node() {
@@ -588,8 +587,7 @@ approve_node() {
     sed 's/"status":"pending"/"status":"approved"/' \
         "${PENDING_DB}/${safe}.json" > "${NODE_DB}/${safe}.json"
     rm -f "${PENDING_DB}/${safe}.json"
-    log "Approved: $mac"
-    # log "已审批: $mac"
+    log "Node approved: %s" "$mac"
     # Immediately push neighbor list to new node
     sync_neighbor_list
 }
@@ -598,8 +596,7 @@ reject_node() {
     local mac="$1"
     local safe; safe=$(echo "$mac" | tr ':' '_')
     rm -f "${PENDING_DB}/${safe}.json"
-    log "Rejected: $mac"
-    # log "已拒绝: $mac"
+    log "Node rejected: %s" "$mac"
 }
 
 ########################################
@@ -614,7 +611,7 @@ find_master_on_lan() {
     local resp
     resp=$(wget -q -T 3 -O- "http://${gw}:${MASTER_PORT}/ping" 2>/dev/null)
     if echo "$resp" | grep -q '"role":"master"'; then
-        echo "$gw" > "$MASTER_IP_FILE"; log "Master at gateway: $gw"; return 0
+        echo "$gw" > "$MASTER_IP_FILE"; log "Master at gateway: %s" "$gw"; return 0
     fi
 
     local prefix; prefix=$(echo "$my_ip" | cut -d. -f1-3)
@@ -623,7 +620,7 @@ find_master_on_lan() {
         [ "$c" = "$my_ip" ] && continue
         resp=$(wget -q -T 1 -O- "http://${c}:${MASTER_PORT}/ping" 2>/dev/null)
         if echo "$resp" | grep -q '"role":"master"'; then
-            echo "$c" > "$MASTER_IP_FILE"; log "Master found: $c"; return 0
+            echo "$c" > "$MASTER_IP_FILE"; log "Master found: %s" "$c"; return 0
         fi
     done
     return 1
@@ -640,11 +637,9 @@ do_register() {
         "http://${mip}:${MASTER_PORT}/register" \
         "{\"mac\":\"$mac\",\"ip\":\"$ip\",\"hostname\":\"$hostname\",\"source\":\"$source\"}" || {
         loge "Failed to register with master"
-	# loge "向主节点注册失败"
         return 1
     }
-    log "Registered with master $mip"
-    # log "已向主节点 $mip 注册成功"
+    log "Registered with master: %s" "$mip"
 }
 
 # Last profile checksum — avoids re-applying identical config on every loop
@@ -670,11 +665,11 @@ poll_for_approval() {
 
     # 403 = 仍在等待审批
     if echo "$resp" | grep -q '"status":"pending"'; then
-        log "等待主节点审批..."; return 1
+        log "Waiting for master approval..."; return 1
     fi
     # unregistered = 需要重新注册（master 重启导致数据丢失）
     if echo "$resp" | grep -q '"status":"unregistered"'; then
-        logw "主节点未找到本节点注册记录，重新注册"
+        logw "Master has no record of this node, re-registering"
         rm -f "$MASTER_IP_FILE"
         do_register "wired"
         return 1
@@ -717,10 +712,8 @@ apply_profile() {
     mesh_key=$(jsonfilter     -i /tmp/em_profile_tmp.json -e '@.mesh_key'     2>/dev/null)
     routing_algo=$(jsonfilter -i /tmp/em_profile_tmp.json -e '@.routing_algo' 2>/dev/null)
     rm -f /tmp/em_profile_tmp.json
-    [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
-    log "Applying profile: ssid=$ssid"
-    #[ -z "$ssid" ] && { loge "apply_profile: 缺少 ssid 字段"; return 1; }
-    #log "应用配置: ssid=$ssid"
+    [ -z "$ssid" ] && { loge "apply_profile: missing ssid field"; return 1; }
+    log "Applying profile: ssid=%s" "$ssid"
     uci set easymesh.global.enabled=1
     uci set easymesh.global.role=slave
     uci set easymesh.global.mesh_id="${mesh_id:-OpenWrt-Mesh}"
@@ -749,7 +742,6 @@ apply_profile() {
     setup_wired_backhaul
     wifi reload
     log "Profile applied. Joined mesh."
-    log "配置已应用，已加入 Mesh 网络"
 }
 
 ########################################
@@ -767,7 +759,7 @@ apply_profile() {
 # Listens to hostapd control interface for "DFS-NOP-FINISHED" or "AP-CSA-FINISHED"
 dfs_watchdog() {
     local ap_iface; ap_iface=$(get_ap_iface)
-    log "DFS watchdog started on $ap_iface"
+    log "DFS watchdog started on %s" "$ap_iface"
 
     hostapd_cli -i "$ap_iface" -a /tmp/easymesh_dfs_action.sh 2>/dev/null &
 
@@ -801,7 +793,7 @@ SH
 
 handle_dfs_channel_change() {
     local new_chan="$1"
-    log "DFS: mesh-wide channel change → $new_chan"
+    log "DFS: mesh-wide channel change -> %s" "$new_chan"
 
     # Update own config
     local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
@@ -819,7 +811,7 @@ handle_dfs_channel_change() {
             do_http_post_with_retry \
                 "http://${peer_ip}:${MASTER_PORT}/channel/apply" \
                 "$payload" >/dev/null 2>&1 &
-            log "DFS: pushed channel $new_chan to $peer_ip"
+            log "DFS: pushed channel %s to %s" "$new_chan" "$peer_ip"
         done
     fi
 }
@@ -869,7 +861,7 @@ optimize_channel() {
     local cur; cur=$(uci get "${rd}.channel" 2>/dev/null)
     [ "$cur" = "$best_ch" ] && return
 
-    log "ACS: channel $cur → $best_ch (occupancy: $best_count APs)"
+    log "ACS: channel %s -> %s (occupancy: %s APs)" "$cur" "$best_ch" "$best_count"
     uci set "${rd}.channel=$best_ch"
     uci commit wireless && wifi reload
 
@@ -903,7 +895,7 @@ setup_dedicated_backhaul() {
     # Only makes sense on tri-band hardware
     local hw; hw=$(cat /tmp/easymesh_hw_type 2>/dev/null || echo "dual-band")
     if [ "$hw" != "tri-band" ]; then
-        log "Dedicated backhaul: skipped (hardware is $hw, need tri-band)"
+        log "Dedicated backhaul: skipped (hw=%s, need tri-band)" "$hw"
         return 1
     fi
 
@@ -921,11 +913,11 @@ setup_dedicated_backhaul() {
     done
 
     if [ -z "$backhaul_radio" ]; then
-        log "Dedicated backhaul: no second 5GHz radio found — using shared radio"
+        log "Dedicated backhaul: no second 5GHz radio found - using shared radio"
         return 1
     fi
 
-    log "Dedicated backhaul: $backhaul_radio reserved for mesh only"
+    log "Dedicated backhaul: %s reserved for mesh only" "$backhaul_radio"
 
     # Remove any existing AP on this radio
     for iface in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-iface/{gsub(/wireless\./,""); print $1}'); do
@@ -933,7 +925,7 @@ setup_dedicated_backhaul() {
         local mode; mode=$(uci get "wireless.${iface}.mode" 2>/dev/null)
         if [ "$dev" = "$backhaul_radio" ] && [ "$mode" = "ap" ]; then
             uci del "wireless.${iface}"
-            log "Dedicated backhaul: removed AP $iface from $backhaul_radio"
+            log "Dedicated backhaul: removed AP %s from %s" "$iface" "$backhaul_radio"
         fi
     done
 
@@ -958,7 +950,7 @@ setup_dedicated_backhaul() {
         uci set wireless.easymesh_bh.encryption=none
     fi
     uci commit wireless
-    log "Dedicated backhaul: $backhaul_radio configured (ch $bh_channel, VHT80)"
+    log "Dedicated backhaul: %s configured (ch %s, VHT80)" "$backhaul_radio" "$bh_channel"
 }
 
 ########################################
@@ -1102,7 +1094,7 @@ _handle_one_request() {
         new_chan=$(echo "$body" | grep -o '"channel":"[^"]*"' | cut -d'"' -f4)
         reason=$(echo "$body"  | grep -o '"reason":"[^"]*"'  | cut -d'"' -f4)
         [ -z "$new_chan" ] && { _http_ok '{"status":"ignored"}'; return; }
-        log "信道同步来自主节点: ch=$new_chan reason=${reason:-unknown}"
+        log "Channel sync from master: ch=%s reason=%s" "$new_chan" "${reason:-unknown}"
         local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
         uci set "${rd}.channel=${new_chan}"
         uci commit wireless
@@ -1130,24 +1122,24 @@ _handle_one_request() {
 
 # 启动节点间 HTTP server（后台循环，每连接一次处理）
 run_node_server() {
-    log "节点间 HTTP server 启动 (port=$MASTER_PORT)"
+    log "Inter-node HTTP server starting (port=%s)" "$MASTER_PORT"
 
     # 优先用 socat（最可靠，支持并发）
     if command -v socat >/dev/null 2>&1; then
         socat TCP-LISTEN:${MASTER_PORT},reuseaddr,fork             EXEC:"$0 __http_handler" 2>/dev/null &
-        log "HTTP server: socat 模式"
+        log "HTTP server: socat mode"
         return 0
     fi
 
     # fallback：busybox nc + 双 fifo（每次连接串行处理）
     local req_f="/tmp/em_req_${$}" resp_f="/tmp/em_resp_${$}"
     mkfifo "$req_f" "$resp_f" 2>/dev/null || {
-        loge "mkfifo 失败，节点间 HTTP server 无法启动"
+        loge "mkfifo failed, inter-node HTTP server cannot start"
         return 1
     }
     # 检查 busybox nc 是否支持 -e 选项
     if nc --help 2>&1 | grep -q '\-e'; then
-        log "HTTP server: nc -e 模式"
+        log "HTTP server: nc -e mode"
         (
             while true; do
                 nc -l -p "$MASTER_PORT" -e "$0 __http_handler" 2>/dev/null
@@ -1158,7 +1150,7 @@ run_node_server() {
     fi
     # 最后 fallback：单进程 fifo 模式（串行，响应在断开前写回）
     # 关键：先在后台 open fifo 的 write 端防止 open 阻塞
-    log "HTTP server: nc fifo 模式 (serial)"
+    log "HTTP server: nc fifo mode (serial)"
     local req_f="/tmp/em_req_${$}" resp_f="/tmp/em_resp_${$}"
     mkfifo "$req_f" "$resp_f" 2>/dev/null
     (
@@ -1174,10 +1166,45 @@ run_node_server() {
 }
 
 ########################################
+# PROCESS MANAGEMENT
+########################################
+# procd 的 respawn 机制会重新执行 main_loop，但上一次启动的
+# gateway_watchdog / roam_watchdog / dfs_watchdog / run_node_server
+# 子进程依然存活。每次 respawn 就多 3~4 个进程，这是 "4+ 守护进程" 的根因。
+# 解决：用 PID 目录跟踪所有后台子进程，main_loop 启动前先全部清理。
+
+EM_PID_DIR="/tmp/easymesh_pids"
+
+# 停止上次所有后台子进程
+_stop_jobs() {
+    [ -d "$EM_PID_DIR" ] || return 0
+    local _f _pid
+    for _f in "$EM_PID_DIR"/*.pid; do
+        [ -f "$_f" ] || continue
+        _pid=$(cat "$_f" 2>/dev/null)
+        [ -n "$_pid" ] && kill "$_pid" 2>/dev/null || true
+        rm -f "$_f"
+    done
+}
+
+# 以名字在后台启动函数，记录 PID — 供 _stop_jobs 使用
+# 用法: _bg <name> <function> [args...]
+_bg() {
+    local _name="$1"; shift
+    mkdir -p "$EM_PID_DIR"
+    "$@" &
+    echo $! > "${EM_PID_DIR}/${_name}.pid"
+}
+
+########################################
 # MAIN
 ########################################
 main_loop() {
-    mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR"
+    # 每次 main_loop 启动时先清理上次遗留的子进程（解决 4+ 守护进程堆积问题）
+    _stop_jobs
+    mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR"
+    # 写自身 PID，供 rpcd _approve() 发 USR1 信号
+    echo $$ > /tmp/easymesh_master.pid
     # Startup banner — marks session boundary in log file
     { printf "\n" >> "$LOGFILE" 2>/dev/null
       log "================================================"
@@ -1193,21 +1220,20 @@ main_loop() {
     done
     [ "$count5g" -ge 2 ] && hw_type="tri-band"
     echo "$hw_type" > /tmp/easymesh_hw_type
-    # log "EasyMesh daemon 启动 (硬件=$hw_type)"
-    log "Starting EasyMesh daemon (hw=$hw_type)"
+    log "Starting EasyMesh daemon (hw=%s)" "$hw_type"
 
     elect_role
     tune_batman
 
-    # Start background watchdogs
+    # Start background watchdogs (用 _bg 追踪 PID，防止 respawn 时进程堆积)
     if [ "$(get_role)" = "master" ]; then
         manage_wireless_onboard
     else
-        gateway_watchdog &
+        _bg gw_watchdog  gateway_watchdog
     fi
-    roam_watchdog &
-    dfs_watchdog &
-    run_node_server &   # 节点间 HTTP server
+    _bg roam_watchdog roam_watchdog
+    _bg dfs_watchdog  dfs_watchdog
+    _bg node_server   run_node_server
 
     # Setup dedicated backhaul radio if tri-band and enabled
     setup_dedicated_backhaul
@@ -1222,7 +1248,7 @@ main_loop() {
             # 角色切换后重置注册状态
             if [ "$(get_role)" != "$_prev_role" ]; then
                 _registered=0
-                log "角色切换: ${_prev_role} → $(get_role)，重置注册状态"
+                log "Role switch: %s -> %s, resetting" "$_prev_role" "$(get_role)"
             fi
         fi
 
@@ -1251,8 +1277,9 @@ main_loop() {
 
 case "$1" in
     stop)
-        pkill -f easymesh-master
-        rm -f /tmp/easymesh_httpd.pid /tmp/em_req_* /tmp/em_resp_*
+        _stop_jobs
+        pkill -f easymesh-master 2>/dev/null || true
+        rm -rf "$EM_PID_DIR" /tmp/easymesh_master.pid /tmp/em_req_* /tmp/em_resp_*
         ;;
     __http_handler)
         _handle_one_request

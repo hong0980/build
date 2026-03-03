@@ -27,8 +27,9 @@ LUA
     fi
 }
 _emlog() {
+    local level="$1" tag="$2"; shift 2
     local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
-    printf "%s [%-5s] [%-8s] %s\n" "$ts" "$1" "$2" "$*" >> "$LOGFILE"
+    printf "%s [%-5s] [%-8s] %s\n" "$ts" "$level" "$tag" "$*" >> "$LOGFILE"
 }
 log()  { _emlog "INFO"  "initd" $(translate "$*"); }
 loge() { _emlog "ERROR" "initd" $(translate "$*"); }
@@ -55,7 +56,7 @@ get_radio() {
 _del_managed() {
     local _n="$1" _m
     config_get _m "$_n" easymesh_managed
-    [ "$_m" = "1" ] && uci -q del wireless."$_n" && log "Removed managed iface: $_n"
+    [ "$_m" = "1" ] && uci -q del wireless."$_n" && log "Removed managed iface: %s" "$_n"
 }
 cleanup_wireless() {
     config_load wireless
@@ -105,7 +106,7 @@ apply_mesh_config() {
     local radio_mesh
     get_radio radio_mesh "$mesh_band"
     [ -z "$radio_mesh" ] && radio_mesh="radio0"
-    log "apply_mesh_config: role=$role backhaul=$backhaul radio=$radio_mesh"
+    log "apply_mesh_config: role=%s backhaul=%s radio=%s" "$role" "$backhaul" "$radio_mesh"
 
     # ── network: mesh hardif (physical → batman-adv) ──────────────────────────
     # mesh0 is the 802.11s wifi-iface or eth interface feeding batman-adv
@@ -127,13 +128,13 @@ apply_mesh_config() {
         # 主节点：br-lan 包含 eth0+bat0，由主节点做 DHCP server
         uci -q del dhcp.lan.ignore
         uci commit dhcp
-        log "角色: 主节点 — LAN DHCP 已启用，bat0=batadv"
+        log "Role: master - LAN DHCP enabled, bat0=batadv"
     else
         # 从节点：br-lan 只含 eth0，从节点不做 DHCP，由主节点分配 IP
         # bat0 up 后与主节点 bat0 形成 L2 mesh，br-lan 走 DHCP client
         uci set dhcp.lan.ignore='1'
         uci commit dhcp
-        log "角色: 从节点 — LAN DHCP 已禁用，bat0=batadv，IP 由主节点分配"
+        log "Role: agent - LAN DHCP disabled, bat0=batadv, IP from master"
     fi
     uci commit network
 
@@ -200,7 +201,7 @@ start_service() {
     fi
 
     config_get role global role 'master'
-    log "EasyMesh starting (role=$role)"
+    log "EasyMesh starting (role=%s)" "$role"
 
     apply_mesh_config
     ubus call uci commit '{"config":"network"}' 2>/dev/null
@@ -208,7 +209,7 @@ start_service() {
 
     ( sleep 3; wifi reload ) &
 
-    log "Starting EasyMesh daemon (role=$role)..."
+    log "Starting EasyMesh daemon (role=%s)..." "$role"
 
     procd_open_instance "easymesh-${role}"
     procd_set_param command /usr/sbin/easymesh-${role}

@@ -13,7 +13,7 @@ list() {
     printf '  "approved":  {},\n'
     printf '  "topology":  {},\n'
     printf '  "approve":   { "mac": "s" },\n'
-    printf '  "reject":    { "mac": "s" },\n'
+    printf '  "reject":    { "mac": "s" }\n'
     printf '}\n'
 }
 
