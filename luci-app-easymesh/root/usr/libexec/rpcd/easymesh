@@ -1,0 +1,75 @@
+#!/bin/sh
+
+. /usr/share/libubox/jshn.sh
+
+UBUS_OBJECT="easymesh"
+
+get_pending() {
+    # 这里写你原来生成 pending JSON 的逻辑
+    # 必须输出标准 JSON
+
+    echo '[]'
+}
+
+get_approved() {
+    echo '[]'
+}
+
+get_topology() {
+    echo '{"nodes":[],"links":[]}'
+}
+
+approve_node() {
+    local mac="$1"
+    # 这里写原 approve 逻辑
+    echo '{"result":"ok"}'
+}
+
+reject_node() {
+    local mac="$1"
+    # 这里写原 reject 逻辑
+    echo '{"result":"ok"}'
+}
+
+handle_call() {
+    local method="$1"
+
+    case "$method" in
+        pending)
+            get_pending
+        ;;
+        approved)
+            get_approved
+        ;;
+        topology)
+            get_topology
+        ;;
+        approve)
+            read input
+            json_load "$input"
+            json_get_var mac mac
+            approve_node "$mac"
+        ;;
+        reject)
+            read input
+            json_load "$input"
+            json_get_var mac mac
+            reject_node "$mac"
+        ;;
+    esac
+}
+
+case "$1" in
+    list)
+        echo "{ \"$UBUS_OBJECT\": {
+            \"pending\": {},
+            \"approved\": {},
+            \"topology\": {},
+            \"approve\": { \"mac\": \"String\" },
+            \"reject\": { \"mac\": \"String\" }
+        } }"
+    ;;
+    call)
+        handle_call "$2"
+    ;;
+esac

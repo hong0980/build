@@ -103,7 +103,16 @@ get_ip()   { ip -4 addr show dev "$BRIDGE_IF" 2>/dev/null |
 get_role() { cat "$ROLE_FILE" 2>/dev/null || echo "agent"; }
 master_ip(){ cat "$MASTER_IP_FILE" 2>/dev/null; }
 
-http_ok()  { printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n%s\n' "$1"; }
+http_ok() {
+    echo -ne "HTTP/1.1 200 OK\r\n"
+    echo -ne "Content-Type: application/json\r\n"
+    echo -ne "Access-Control-Allow-Origin: *\r\n"
+    echo -ne "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+    echo -ne "Access-Control-Allow-Headers: Content-Type\r\n"
+    echo -ne "Connection: close\r\n"
+    echo -ne "\r\n"
+    [ -n "$1" ] && echo -ne "$1"
+}
 http_403() { printf 'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{"status":"pending","msg":"Awaiting approval in LuCI"}\n'; }
 http_404() { printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n{"error":"not found"}\n'; }
 
@@ -974,9 +983,14 @@ update_topology() {
 ########################################
 handle_request() {
     local req="$1" method path query body
+    [ -s "$req" ] || return
     read -r method path _ < "$req"
+    if [ "$method" = "OPTIONS" ]; then
+        http_ok ""
+        return
+    fi
     query="${path#*\?}"; path="${path%%\?*}"
-    body=$(tail -n1 "$req")
+    body=$(sed -n '1,/^\r\{0,1\}$/d;p' "$req")
 
     case "$path" in
     /ping)
@@ -1022,14 +1036,6 @@ handle_request() {
             [ "$first" = "0" ] && out="${out},"
             out="${out}$(cat "$f")"; first=0
         done; http_ok "${out}]" ;;
-    /nodes/approve)
-        local mac; mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
-        [ -n "$mac" ] && approve_node "$mac"
-        http_ok '{"status":"ok"}' ;;
-    /nodes/reject)
-        local mac; mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
-        [ -n "$mac" ] && reject_node "$mac"
-        http_ok '{"status":"ok"}' ;;
     /log)
         # Serve last N lines of log file as JSON array of strings.
         # log.js reads this endpoint; no parsing of syslog needed.
@@ -1306,6 +1312,18 @@ main_loop() {
 
 case "$1" in
     stop)           pkill -f easymesh-master ;;
+    approve)
+        mac="$2"
+        local mac; mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
+        [ -n "$mac" ] && approve_node "$mac"
+        exit 0
+    ;;
+    reject)
+        mac="$2"
+        local mac; mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
+        [ -n "$mac" ] && reject_node "$mac"
+        exit 0
+    ;;
     __source_only)  : ;;   # sourced by handler script — do not run main_loop
-    *)              main_loop ;;
+    *) main_loop ;;
 esac

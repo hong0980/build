@@ -1,38 +1,10 @@
 #!/bin/sh
-# /etc/uci-defaults/80_easymesh
-# Runs once after package install, then deleted by OpenWrt uci-defaults mechanism.
 
-# ── Initialise easymesh UCI config (only if not already configured) ──────────
-if ! uci -q get easymesh.global.enabled > /dev/null 2>&1; then
-    uci batch << 'UCI'
-set easymesh.global=easymesh
-set easymesh.global.enabled=0
-set easymesh.global.role=slave
-set easymesh.global.backhaul=wired
-set easymesh.global.mesh_id=OpenWrt-Mesh
-set easymesh.global.mesh_key=meshpassword
-set easymesh.global.mesh_band=5g
-set easymesh.global.ssid=OpenWrt
-set easymesh.global.key=
-set easymesh.global.ieee80211r=1
-set easymesh.global.mobility_domain=aabb
-set easymesh.global.ieee80211k=1
-set easymesh.global.ieee80211v=1
-set easymesh.global.wireless_onboard=0
-set easymesh.global.wireless_onboard_ssid=
-set easymesh.global.dedicated_backhaul=0
-set easymesh.global.backhaul_channel=149
-set easymesh.global.dfs_enable=1
-commit easymesh
-UCI
-fi
-
-# ── Ensure scripts are executable ───────────────────────────────────────────
 chmod +x /etc/init.d/easymesh
 chmod +x /usr/sbin/easymesh-master
 chmod +x /usr/sbin/easymesh-agent
+chmod +x /usr/libexec/rpcd/easymesh
 
-# ── Enable service (does not start it — user must configure and apply) ────────
 /etc/init.d/easymesh enable
 
 exit 0

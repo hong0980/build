@@ -3,7 +3,6 @@
 'require rpc';
 'require uci';
 'require poll';
-'require request';
 'require ui';
 
 var MASTER_PORT = 4304;
@@ -22,22 +21,32 @@ var callNetworkDump = rpc.declare({
 	expect: { interface: [] }
 });
 
-var DAEMON_BASE = 'http://' + window.location.hostname + ':' + MASTER_PORT;
+var callMeshPending = rpc.declare({
+	object: 'easymesh',
+	method: 'pending'
+});
 
-function daemonGet(path) {
-	return request.get(DAEMON_BASE + path, { timeout: 5000 })
-		.then(function(res) { return res.ok ? res.json() : null; })
-		.catch(function() { return null; });
-}
+var callMeshApproved = rpc.declare({
+	object: 'easymesh',
+	method: 'approved'
+});
 
-function daemonPost(path, body) {
-	return request.post(DAEMON_BASE + path, body, {
-		timeout: 5000,
-		headers: { 'Content-Type': 'application/json' }
-	}).then(function(res) { return res.ok ? res.json() : null; })
-	  .catch(function() { return null; });
-}
+var callMeshTopology = rpc.declare({
+	object: 'easymesh',
+	method: 'topology'
+});
 
+var callMeshApprove = rpc.declare({
+	object: 'easymesh',
+	method: 'approve',
+	params: ['mac']
+});
+
+var callMeshReject = rpc.declare({
+	object: 'easymesh',
+	method: 'reject',
+	params: ['mac']
+});
 /* ── UI helpers ───────────────────────────────────────────────────────────── */
 function sourceIcon(src) {
 	return src === 'wireless' ? '📶 ' + _('Wireless') : '🔌 ' + _('Wired');
@@ -46,8 +55,8 @@ function sourceIcon(src) {
 function pendingCard(node, onApprove, onReject) {
 	return E('div', {
 		style: 'border:1px solid #e3b341;border-radius:10px;padding:16px;' +
-		       'background:rgba(210,153,34,.07);display:flex;align-items:center;' +
-		       'gap:14px;margin-bottom:10px;flex-wrap:wrap'
+			'background:rgba(210,153,34,.07);display:flex;align-items:center;' +
+			'gap:14px;margin-bottom:10px;flex-wrap:wrap'
 	}, [
 		E('div', { style: 'font-size:28px;flex-shrink:0' },
 			node.source === 'wireless' ? '📶' : '🔌'),
@@ -62,13 +71,13 @@ function pendingCard(node, onApprove, onReject) {
 		E('button', {
 			class: 'cbi-button',
 			style: 'background:#2ea44f;color:#fff;border:none;padding:8px 18px;' +
-			       'border-radius:6px;cursor:pointer;font-size:13px',
+				'border-radius:6px;cursor:pointer;font-size:13px',
 			click: onApprove
 		}, '✓ ' + _('Allow to join')),
 		E('button', {
 			class: 'cbi-button',
 			style: 'background:transparent;color:#f85149;border:1px solid #f85149;' +
-			       'padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;margin-left:6px',
+				'padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;margin-left:6px',
 			click: onReject
 		}, '✕ ' + _('Reject'))
 	]);
@@ -77,7 +86,7 @@ function pendingCard(node, onApprove, onReject) {
 function parseOriginators(raw) {
 	var nodes = [];
 	if (!raw) return nodes;
-	raw.trim().split('\n').slice(2).forEach(function(line) {
+	raw.trim().split('\n').slice(2).forEach(function (line) {
 		var p = line.trim().split(/\s+/);
 		if (p.length >= 5)
 			nodes.push({ mac: p[0], lastSeen: p[1], tq: parseInt(p[2]) || 0, nextHop: p[3], iface: p[4] });
@@ -86,7 +95,7 @@ function parseOriginators(raw) {
 }
 
 function tqBar(tq) {
-	var pct   = Math.round(tq / 255 * 100);
+	var pct = Math.round(tq / 255 * 100);
 	var color = pct >= 70 ? '#2ea44f' : pct >= 40 ? '#e3b341' : '#f85149';
 	return E('div', { style: 'display:flex;align-items:center;gap:6px' }, [
 		E('div', { style: 'width:60px;height:5px;background:#30363d;border-radius:3px;overflow:hidden' }, [
@@ -107,21 +116,21 @@ function tqAlpha(tq) { return 0.35 + 0.65 * (tq / 255); }
 function tqWidth(tq) { return 1.5 + 4 * (tq / 255); }
 
 function hexToRgb(hex) {
-	return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+	return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
 }
 
 function layoutNodes(nodes, W, H) {
 	var master = null, others = [];
-	nodes.forEach(function(n) {
+	nodes.forEach(function (n) {
 		if (n.role === 'master') master = n; else others.push(n);
 	});
 	var positions = {}, cx = W / 2, cy = H / 2, r = Math.min(W, H) * 0.33;
 	if (master) positions[master.mac] = { x: cx, y: cy, node: master };
-	others.forEach(function(n, i) {
+	others.forEach(function (n, i) {
 		var angle = (2 * Math.PI * i / Math.max(others.length, 1)) - Math.PI / 2;
 		positions[n.mac] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), node: n };
 	});
-	nodes.forEach(function(n, i) {
+	nodes.forEach(function (n, i) {
 		if (!positions[n.mac]) {
 			var angle = (2 * Math.PI * i / nodes.length) - Math.PI / 2;
 			positions[n.mac] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), node: n };
@@ -137,7 +146,7 @@ function drawTopo(topo, canvas) {
 	var cssW = canvas.offsetWidth || 900;
 	var cssH = Math.round(cssW * (400 / 900));
 	if (canvas.width !== cssW * DPR || canvas.height !== cssH * DPR) {
-		canvas.width  = cssW * DPR;
+		canvas.width = cssW * DPR;
 		canvas.height = cssH * DPR;
 		ctx.scale(DPR, DPR);
 	}
@@ -152,26 +161,25 @@ function drawTopo(topo, canvas) {
 	/* Grid dots */
 	ctx.fillStyle = 'rgba(48,54,61,0.4)';
 	for (var gx = 20; gx < W; gx += 30)
-		for (var gy = 20; gy < H; gy += 30)
-			{ ctx.beginPath(); ctx.arc(gx, gy, 1, 0, Math.PI*2); ctx.fill(); }
+		for (var gy = 20; gy < H; gy += 30) { ctx.beginPath(); ctx.arc(gx, gy, 1, 0, Math.PI * 2); ctx.fill(); }
 
 	/* Links */
-	links.forEach(function(link) {
+	links.forEach(function (link) {
 		var a = positions[link.src], b = positions[link.dst];
 		if (!a || !b) return;
-		var tq  = link.tq || 0;
+		var tq = link.tq || 0;
 		var col = tqColor(tq);
 		var pct = Math.round(tq / 255 * 100);
 		var rgb = hexToRgb(col);
-		var mx  = (a.x + b.x) / 2 + (b.y - a.y) * 0.08;
-		var my  = (a.y + b.y) / 2 - (b.x - a.x) * 0.08;
+		var mx = (a.x + b.x) / 2 + (b.y - a.y) * 0.08;
+		var my = (a.y + b.y) / 2 - (b.x - a.x) * 0.08;
 
 		ctx.save();
-		ctx.shadowBlur   = 8;
-		ctx.shadowColor  = col;
-		ctx.strokeStyle  = 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + tqAlpha(tq) + ')';
-		ctx.lineWidth    = tqWidth(tq);
-		ctx.lineCap      = 'round';
+		ctx.shadowBlur = 8;
+		ctx.shadowColor = col;
+		ctx.strokeStyle = 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + tqAlpha(tq) + ')';
+		ctx.lineWidth = tqWidth(tq);
+		ctx.lineCap = 'round';
 		ctx.beginPath();
 		ctx.moveTo(a.x, a.y);
 		ctx.quadraticCurveTo(mx, my, b.x, b.y);
@@ -179,76 +187,76 @@ function drawTopo(topo, canvas) {
 		ctx.restore();
 
 		ctx.save();
-		ctx.font         = 'bold 10px monospace';
-		ctx.fillStyle    = col;
-		ctx.textAlign    = 'center';
+		ctx.font = 'bold 10px monospace';
+		ctx.fillStyle = col;
+		ctx.textAlign = 'center';
 		ctx.textBaseline = 'middle';
-		ctx.shadowBlur   = 4;
-		ctx.shadowColor  = '#0d1117';
+		ctx.shadowBlur = 4;
+		ctx.shadowColor = '#0d1117';
 		ctx.fillText(pct + '%', mx, my);
 		ctx.restore();
 	});
 
 	/* Nodes */
-	nodes.forEach(function(node) {
+	nodes.forEach(function (node) {
 		var pos = positions[node.mac];
 		if (!pos) return;
 		var isMaster = node.role === 'master';
-		var radius   = isMaster ? 32 : 24;
-		var accent   = isMaster ? '#58a6ff' : '#2ea44f';
-		var argb     = hexToRgb(accent);
+		var radius = isMaster ? 32 : 24;
+		var accent = isMaster ? '#58a6ff' : '#2ea44f';
+		var argb = hexToRgb(accent);
 
 		ctx.save();
-		ctx.shadowBlur  = isMaster ? 24 : 16;
+		ctx.shadowBlur = isMaster ? 24 : 16;
 		ctx.shadowColor = accent;
 		ctx.strokeStyle = 'rgba(' + argb[0] + ',' + argb[1] + ',' + argb[2] + ',0.3)';
-		ctx.lineWidth   = 6;
+		ctx.lineWidth = 6;
 		ctx.beginPath();
-		ctx.arc(pos.x, pos.y, radius + 4, 0, Math.PI*2);
+		ctx.arc(pos.x, pos.y, radius + 4, 0, Math.PI * 2);
 		ctx.stroke();
 		ctx.restore();
 
-		var grad = ctx.createRadialGradient(pos.x-4, pos.y-4, 2, pos.x, pos.y, radius);
+		var grad = ctx.createRadialGradient(pos.x - 4, pos.y - 4, 2, pos.x, pos.y, radius);
 		grad.addColorStop(0, isMaster ? '#2d4a7a' : '#1a3a2a');
 		grad.addColorStop(1, '#161b22');
 		ctx.beginPath();
-		ctx.arc(pos.x, pos.y, radius, 0, Math.PI*2);
-		ctx.fillStyle   = grad;
+		ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+		ctx.fillStyle = grad;
 		ctx.fill();
 		ctx.strokeStyle = accent;
-		ctx.lineWidth   = isMaster ? 2.5 : 1.5;
+		ctx.lineWidth = isMaster ? 2.5 : 1.5;
 		ctx.stroke();
 
-		ctx.font         = (isMaster ? 18 : 14) + 'px serif';
-		ctx.textAlign    = 'center';
+		ctx.font = (isMaster ? 18 : 14) + 'px serif';
+		ctx.textAlign = 'center';
 		ctx.textBaseline = 'middle';
 		ctx.fillText(isMaster ? '🌐' : '📡', pos.x, pos.y - 3);
 
 		if (node.clients > 0) {
 			ctx.save();
 			ctx.beginPath();
-			ctx.arc(pos.x + radius*0.7, pos.y - radius*0.7, 9, 0, Math.PI*2);
-			ctx.fillStyle    = '#e3b341';
+			ctx.arc(pos.x + radius * 0.7, pos.y - radius * 0.7, 9, 0, Math.PI * 2);
+			ctx.fillStyle = '#e3b341';
 			ctx.fill();
-			ctx.font         = 'bold 9px monospace';
-			ctx.fillStyle    = '#0d1117';
-			ctx.textAlign    = 'center';
+			ctx.font = 'bold 9px monospace';
+			ctx.fillStyle = '#0d1117';
+			ctx.textAlign = 'center';
 			ctx.textBaseline = 'middle';
-			ctx.fillText(node.clients, pos.x + radius*0.7, pos.y - radius*0.7);
+			ctx.fillText(node.clients, pos.x + radius * 0.7, pos.y - radius * 0.7);
 			ctx.restore();
 		}
 
 		var label = node.hostname || (node.mac ? node.mac.slice(-8) : '?');
 		ctx.save();
-		ctx.font         = 'bold 11px monospace';
-		ctx.fillStyle    = '#e6edf3';
-		ctx.textAlign    = 'center';
+		ctx.font = 'bold 11px monospace';
+		ctx.fillStyle = '#e6edf3';
+		ctx.textAlign = 'center';
 		ctx.textBaseline = 'top';
-		ctx.shadowBlur   = 6;
-		ctx.shadowColor  = '#0d1117';
+		ctx.shadowBlur = 6;
+		ctx.shadowColor = '#0d1117';
 		ctx.fillText(label, pos.x, pos.y + radius + 6);
 		if (node.ip) {
-			ctx.font      = '9px monospace';
+			ctx.font = '9px monospace';
 			ctx.fillStyle = '#7d8590';
 			ctx.fillText(node.ip, pos.x, pos.y + radius + 19);
 		}
@@ -262,38 +270,38 @@ function drawTopo(topo, canvas) {
 
 function initTooltip(canvas, tooltip, getPositions) {
 	if (!canvas || !tooltip) return;
-	canvas.addEventListener('mousemove', function(e) {
-		var rect   = canvas.getBoundingClientRect();
-		var scaleX = canvas.offsetWidth  ? canvas.width  / window.devicePixelRatio / canvas.offsetWidth  : 1;
+	canvas.addEventListener('mousemove', function (e) {
+		var rect = canvas.getBoundingClientRect();
+		var scaleX = canvas.offsetWidth ? canvas.width / window.devicePixelRatio / canvas.offsetWidth : 1;
 		var scaleY = canvas.offsetHeight ? canvas.height / window.devicePixelRatio / canvas.offsetHeight : 1;
 		var mx = e.clientX - rect.left;
 		var my = e.clientY - rect.top;
 		var hit = null;
 		var positions = getPositions();
-		Object.keys(positions).forEach(function(mac) {
-			var p  = positions[mac];
+		Object.keys(positions).forEach(function (mac) {
+			var p = positions[mac];
 			var dx = mx - p.x / scaleX;
 			var dy = my - p.y / scaleY;
-			if (Math.sqrt(dx*dx + dy*dy) < (p.radius || 24) * 1.4) hit = p.node;
+			if (Math.sqrt(dx * dx + dy * dy) < (p.radius || 24) * 1.4) hit = p.node;
 		});
 		if (hit) {
 			var lines = [
 				(hit.role === 'master' ? '🌐 Master' : '📡 Agent'),
-				'MAC: '      + (hit.mac      || '—'),
-				'IP: '       + (hit.ip       || '—'),
-				'Clients: '  + (hit.clients  || 0),
+				'MAC: ' + (hit.mac || '—'),
+				'IP: ' + (hit.ip || '—'),
+				'Clients: ' + (hit.clients || 0),
 				'Backhaul: ' + (hit.backhaul || 'wired')
 			];
 			if (hit.tq) lines.push('TQ: ' + Math.round(hit.tq / 255 * 100) + '%');
-			tooltip.innerHTML = lines.map(function(l) { return '<div>' + l + '</div>'; }).join('');
+			tooltip.innerHTML = lines.map(function (l) { return '<div>' + l + '</div>'; }).join('');
 			tooltip.style.display = 'block';
-			tooltip.style.left    = (mx + 16) + 'px';
-			tooltip.style.top     = (my - 10) + 'px';
+			tooltip.style.left = (mx + 16) + 'px';
+			tooltip.style.top = (my - 10) + 'px';
 		} else {
 			tooltip.style.display = 'none';
 		}
 	});
-	canvas.addEventListener('mouseleave', function() { tooltip.style.display = 'none'; });
+	canvas.addEventListener('mouseleave', function () { tooltip.style.display = 'none'; });
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -301,33 +309,26 @@ function initTooltip(canvas, tooltip, getPositions) {
  * ════════════════════════════════════════════════════════════════════════════ */
 return view.extend({
 
-	load: function() {
+	load: function () {
 		return Promise.all([
 			L.resolveDefault(
-				callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }), ''),
+				callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }),
+				''
+			),
 			callNetworkDump(),
-			uci.load('easymesh')
-		]).then(function(results) {
-			var originators = results[0];
-			var interfaces  = results[1];
-			var enabled = uci.get_bool('easymesh', 'global', 'enabled');
-			if (!enabled) {
-				return [originators, interfaces, null, null, false];
-			}
-			return Promise.all([
-				daemonGet('/nodes/pending'),
-				daemonGet('/nodes/approved')
-			]).then(function(r) {
-				return [originators, interfaces, r[0], r[1], true];
-			});
-		});
+			uci.load('easymesh'),
+			callMeshPending(),
+			callMeshApproved()
+		]);
 	},
 
-	render: function(data) {
+	render: function (data) {
 		var self = this;
 		var _positions = {};
+		var pending = Array.isArray(data[3]) ? data[3] : [];
+		var approved = Array.isArray(data[4]) ? data[4] : [];
 		var root = E('div', { id: 'easymesh-nodes-root' });
-		var enabled = data[4] !== false;
+		var enabled = uci.get_bool('easymesh', 'global', 'enabled');
 		if (!enabled) {
 			root.appendChild(E('div', { class: 'cbi-section' }, [
 				E('div', { class: 'alert-message warning' }, [
@@ -340,44 +341,37 @@ return view.extend({
 
 		root.appendChild(self._build(data[0], data[1] || [], data[2], data[3]));
 
-		/* ── Node list poll (rpcd + daemon, every 5s) ── */
-		poll.add(function() {
+		poll.add(function () {
 			return Promise.all([
 				L.resolveDefault(
 					callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }), ''),
 				callNetworkDump(),
-				daemonGet('/nodes/pending'),
-				daemonGet('/nodes/approved')
-			]).then(function(r) {
+				callMeshPending(),
+				callMeshApproved()
+			]).then(function (r) {
 				var old = document.getElementById('easymesh-nodes-inner');
 				if (old) old.replaceWith(self._build(r[0], r[1] || [], r[2], r[3]));
-			}).catch(function() { /* daemon may be restarting */ });
+			}).catch(function () {});
 		}, 5);
 
-		/* ── Topology poll (daemon only, every 5s via request.poll.add) ──
-		 * request.poll.add(interval, url, options, callback)
-		 * Callback receives (response, jsonData, duration) */
-		request.poll.add(5, DAEMON_BASE + '/topology', {}, function(res, topo) {
-			if (!topo || !topo.nodes) return;
-			var canvas  = document.getElementById('easymesh-topo-canvas');
-			var tooltip = document.getElementById('easymesh-topo-tooltip');
-			_positions = drawTopo(topo, canvas) || {};
-			/* Init tooltip listeners once (idempotent guard via dataset flag) */
-			if (canvas && !canvas.dataset.tooltipBound) {
-				canvas.dataset.tooltipBound = '1';
-				initTooltip(canvas, tooltip, function() { return _positions; });
-			}
-		});
+		poll.add(function () {
+			return callMeshTopology().then(function (topo) {
+				if (!topo || !topo.nodes) return;
+				var canvas = document.getElementById('easymesh-topo-canvas');
+				var tooltip = document.getElementById('easymesh-topo-tooltip');
+				_positions = drawTopo(topo, canvas) || {};
+			});
+		}, 5);
 
 		return root;
 	},
 
-	_build: function(originatorRaw, interfaces, pendingRaw, approvedRaw) {
-		var self    = this;
-		var el      = E('div', { id: 'easymesh-nodes-inner' });
-		var bat0    = interfaces.filter(function(i) { return i.interface === 'bat0'; })[0];
-		var mesh    = parseOriginators(originatorRaw);
-		var pending  = Array.isArray(pendingRaw)  ? pendingRaw  : [];
+	_build: function (originatorRaw, interfaces, pendingRaw, approvedRaw) {
+		var self = this;
+		var el = E('div', { id: 'easymesh-nodes-inner' });
+		var bat0 = interfaces.filter(function (i) { return i.interface === 'bat0'; })[0];
+		var mesh = parseOriginators(originatorRaw);
+		var pending = Array.isArray(pendingRaw) ? pendingRaw : [];
 		var approved = Array.isArray(approvedRaw) ? approvedRaw : [];
 
 		/* Pending approval cards */
@@ -387,16 +381,16 @@ return view.extend({
 					'⚡ ' + pending.length + ' ' + _('device(s) requesting to join Mesh')),
 				E('p', { class: 'cbi-section-descr', style: 'margin-bottom:14px' },
 					_('Review and approve each device before it receives mesh configuration.')),
-				E('div', {}, pending.map(function(node) {
+				E('div', {}, pending.map(function (node) {
 					return pendingCard(node,
-						function() {
-							daemonPost('/nodes/approve', { mac: node.mac })
-								.then(function() {
+						function () {
+							callMeshApprove(node.mac)
+								.then(function () {
 									ui.addNotification(null,
 										E('p', {}, _('Approved. Node will receive config shortly.')), 'info');
 								});
 						},
-						function() { daemonPost('/nodes/reject', { mac: node.mac }); }
+						function () { callMeshReject(node.mac); }
 					);
 				}))
 			]));
@@ -409,11 +403,15 @@ return view.extend({
 				E('div', { class: 'tr' }, [
 					E('div', { class: 'td left', style: 'width:160px' }, 'bat0'),
 					E('div', { class: 'td' }, bat0
-						? E('span', { class: 'label',
-							style: 'background:#2ea44f;color:#fff;padding:2px 8px;border-radius:4px' },
+						? E('span', {
+							class: 'label',
+							style: 'background:#2ea44f;color:#fff;padding:2px 8px;border-radius:4px'
+						},
 							_('Running'))
-						: E('span', { class: 'label',
-							style: 'background:#f85149;color:#fff;padding:2px 8px;border-radius:4px' },
+						: E('span', {
+							class: 'label',
+							style: 'background:#f85149;color:#fff;padding:2px 8px;border-radius:4px'
+						},
 							_('Not running'))
 					)
 				]),
@@ -440,7 +438,7 @@ return view.extend({
 						E('th', { class: 'th' }, _('Interface')),
 						E('th', { class: 'th' }, _('Last Seen'))
 					])
-				].concat(mesh.map(function(n) {
+				].concat(mesh.map(function (n) {
 					return E('tr', { class: 'tr' }, [
 						E('td', { class: 'td', style: 'font-family:monospace' }, n.mac),
 						E('td', { class: 'td' }, tqBar(n.tq)),
@@ -458,7 +456,7 @@ return view.extend({
 				_('Live topology. Link color = signal quality: green ≥70%, yellow ≥40%, red <40%.')),
 			E('div', {
 				style: 'background:#0d1117;border:1px solid #30363d;border-radius:12px;' +
-				       'padding:8px;overflow:hidden;position:relative'
+					'padding:8px;overflow:hidden;position:relative'
 			}, [
 				E('canvas', {
 					id: 'easymesh-topo-canvas',
@@ -468,14 +466,14 @@ return view.extend({
 				E('div', {
 					id: 'easymesh-topo-tooltip',
 					style: 'display:none;position:absolute;background:rgba(22,27,34,.95);' +
-					       'border:1px solid #30363d;border-radius:8px;padding:10px 14px;' +
-					       'font-size:12px;color:#e6edf3;pointer-events:none;' +
-					       'font-family:monospace;line-height:1.7;max-width:220px'
+						'border:1px solid #30363d;border-radius:8px;padding:10px 14px;' +
+						'font-size:12px;color:#e6edf3;pointer-events:none;' +
+						'font-family:monospace;line-height:1.7;max-width:220px'
 				})
 			]),
 			E('div', { style: 'display:flex;gap:20px;padding:10px 12px 4px;flex-wrap:wrap' },
 				[['#2ea44f', '≥ 70% (Good)'], ['#e3b341', '40–69% (Fair)'], ['#f85149', '< 40% (Weak)']].map(
-					function(item) {
+					function (item) {
 						return E('div', { style: 'display:flex;align-items:center;gap:6px;font-size:11px;color:#7d8590' }, [
 							E('div', { style: 'width:24px;height:3px;background:' + item[0] + ';border-radius:2px' }),
 							item[1]
@@ -489,6 +487,6 @@ return view.extend({
 	},
 
 	handleSaveApply: null,
-	handleSave:      null,
-	handleReset:     null
+	handleSave: null,
+	handleReset: null
 });
