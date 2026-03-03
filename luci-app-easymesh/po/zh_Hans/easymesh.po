@@ -373,3 +373,80 @@ msgstr "EasyMesh 未启用"
 
 msgid "Enable EasyMesh in the Overview tab and save to start the service."
 msgstr "请在「概览与配置」标签中启用 EasyMesh 并保存，以启动服务。"
+
+# ── log.js categories & filters ─────────────────────
+
+msgid "Agent"
+msgstr "从节点"
+
+msgid "All"
+msgstr "全部"
+
+msgid "All levels"
+msgstr "所有级别"
+
+msgid "Backhaul"
+msgstr "回程"
+
+msgid "Category"
+msgstr "分类"
+
+msgid "Clients"
+msgstr "客户端数"
+
+msgid "Core"
+msgstr "核心"
+
+msgid "DFS/ACS"
+msgstr "DFS/自动信道"
+
+msgid "ERROR only"
+msgstr "仅 ERROR"
+
+msgid "Errors"
+msgstr "错误"
+
+msgid "Healing"
+msgstr "自愈"
+
+msgid "INFO only"
+msgstr "仅 INFO"
+
+msgid "IP"
+msgstr "IP 地址"
+
+msgid "Init"
+msgstr "启动"
+
+msgid "Lvl"
+msgstr "级别"
+
+msgid "MAC"
+msgstr "MAC 地址"
+
+msgid "Master"
+msgstr "主节点"
+
+msgid "Message"
+msgstr "消息"
+
+msgid "Roaming"
+msgstr "漫游"
+
+msgid "TQ"
+msgstr "链路质量"
+
+msgid "Timestamp"
+msgstr "时间戳"
+
+msgid "WARN+"
+msgstr "WARN 及以上"
+
+msgid "Warnings"
+msgstr "警告"
+
+msgid "lines"
+msgstr "行"
+
+msgid "wired"
+msgstr "有线"

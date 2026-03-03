@@ -1,43 +1,20 @@
 'use strict';
-'require view';
-'require rpc';
-'require poll';
-'require request';
+'require fs';
 'require ui';
+'require view';
+'require poll';
 
 var LOGFILE = '/tmp/easymesh.log';
-var POLL_INTERVAL = 3; /* seconds */
-
-/* ── rpcd: read log file directly ─────────────────────────────────────────── */
-var fsRead = rpc.declare({
-	object: 'file',
-	method: 'read',
-	params: ['path'],
-	expect: { data: '' }
-});
-
-/* rpcd: truncate log file (clear button) */
-var fsWrite = rpc.declare({
-	object: 'file',
-	method: 'write',
-	params: ['path', 'data'],
-	expect: {}
-});
-
-/* ── Log format ────────────────────────────────────────────────────────────────
- * "2025-01-15 12:34:56 [INFO ] [core    ] message text"
- *  ^─────────────────^ ^─────^ ^────────^ ^───────────^
- *  ts                  level   tag         msg
- * ──────────────────────────────────────────────────────────────────────────── */
+var POLL_INTERVAL = 3;
 var LOG_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\s*\] \[(\w+)\s*\] (.*)$/;
 
 /* ── Category definitions ──────────────────────────────────────────────────── */
 var CATEGORIES = {
-	'core':  { label: 'Core',    icon: '⚙️',  color: '#58a6ff' },
-	'roam':  { label: 'Roaming', icon: '📶',  color: '#2ea44f' },
-	'dfs':   { label: 'DFS/ACS', icon: '📡',  color: '#e3b341' },
-	'heal':  { label: 'Healing', icon: '🔁',  color: '#f0883e' },
-	'initd': { label: 'Init',    icon: '🚀',  color: '#a371f7' }
+	'core':  { label: _('Core'),    icon: '⚙️',  color: '#58a6ff' },
+	'roam':  { label: _('Roaming'), icon: '📶',  color: '#2ea44f' },
+	'dfs':   { label: _('DFS/ACS'), icon: '📡',  color: '#e3b341' },
+	'heal':  { label: _('Healing'), icon: '🔁',  color: '#f0883e' },
+	'initd': { label: _('Init'),    icon: '🚀',  color: '#a371f7' }
 };
 
 /* ── Log level styles ──────────────────────────────────────────────────────── */
@@ -49,15 +26,15 @@ var LEVEL_STYLE = {
 
 /* ── Keyword highlight rules ───────────────────────────────────────────────── */
 var HIGHLIGHTS = [
-	{ re: /\b(error|failed|fail|dead|crash)\b/gi,       style: 'color:#f85149;font-weight:600' },
+	{ re: /\b(error|failed|fail|dead|crash)\b/gi,        style: 'color:#f85149;font-weight:600' },
 	{ re: /\b(warn|warning)\b/gi,                        style: 'color:#e3b341' },
 	{ re: /\b(master|approved|joined|ready|success)\b/gi,style: 'color:#2ea44f' },
 	{ re: /\b(DFS|CSA|radar)\b/g,                        style: 'color:#e3b341;font-weight:600' },
 	{ re: /\b(BSS-TM|steered|roam)\b/gi,                 style: 'color:#f0883e' },
 	{ re: /([0-9a-f]{2}:){5}[0-9a-f]{2}/gi,              style: 'color:#d2a8ff;font-family:monospace' },
-	{ re: /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g,    style: 'color:#79c0ff;font-family:monospace' },
+	{ re: /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g,     style: 'color:#79c0ff;font-family:monospace' },
 	{ re: /-\d{2,3}\s*dBm/gi,                            style: 'color:#ffa657' },
-	{ re: /\bch(?:annel)?\s*[→:]\s*\d+/gi,              style: 'color:#56d364' },
+	{ re: /\bch(?:annel)?\s*[→:]\s*\d+/gi,               style: 'color:#56d364' },
 	{ re: /OGM\s*\d+ms/gi,                               style: 'color:#56d364' }
 ];
 
@@ -88,15 +65,6 @@ function badge(tag) {
 		       'background:' + c.color + '1a;color:' + c.color + ';' +
 		       'border:1px solid ' + c.color + '44'
 	}, c.icon + ' ' + c.label.toUpperCase());
-}
-
-/* ── Level indicator ───────────────────────────────────────────────────────── */
-function levelEl(level) {
-	return E('span', {
-		style: (LEVEL_STYLE[level] || LEVEL_STYLE['INFO']) +
-		       ';font-size:10px;font-weight:700;font-family:monospace;' +
-		       'flex-shrink:0;width:36px;text-align:center'
-	}, level);
 }
 
 /* ── Apply keyword highlighting to a message string ───────────────────────── */
@@ -142,28 +110,23 @@ function logRow(entry) {
 		}
 	}, [
 		E('span', { style: 'color:#484f58;font-family:monospace;font-size:11px' }, entry.ts),
-		levelEl(entry.level),
+        E('span', {
+		style: (LEVEL_STYLE[entry.level] || LEVEL_STYLE['INFO']) +
+		       ';font-size:10px;font-weight:700;font-family:monospace;' +
+                'flex-shrink:0;width:36px;text-align:center'
+        }, entry.level),
 		badge(entry.tag),
 		E('span', { style: 'color:#c9d1d9;font-family:monospace;word-break:break-word' },
 			highlight(entry.msg))
 	]);
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
- * Main view
- * ════════════════════════════════════════════════════════════════════════════ */
 return view.extend({
-
-	/* View state */
-	_entries:   [],
-	_filter:    'all',    /* 'all' | tag name */
-	_levelFilter: 'all', /* 'all' | 'ERROR' | 'WARN' | 'INFO' */
-	_search:    '',
-	_paused:    false,
-	_lastCount: 0,
+	_search: '', _paused: false, _lastCount: 0,
+	_entries: [], _filter: 'all', _levelFilter: 'all',
 
 	load: function() {
-		return fsRead(LOGFILE).catch(function() { return ''; });
+		return fs.read(LOGFILE).catch(function() { return ''; });
 	},
 
 	render: function(rawData) {
@@ -172,7 +135,7 @@ return view.extend({
 		self._lastCount = self._entries.length;
 
 		/* ── Filter buttons ── */
-		var catButtons = [{ key: 'all', label: 'All', icon: '📋', color: '#7d8590' }]
+		var catButtons = [{ key: 'all', label: _('All'), icon: '📋', color: '#7d8590' }]
 			.concat(Object.keys(CATEGORIES).map(function(k) {
 				return { key: k, label: CATEGORIES[k].label,
 				         icon: CATEGORIES[k].icon, color: CATEGORIES[k].color };
@@ -184,7 +147,7 @@ return view.extend({
 					       'border:1px solid ' + def.color + '55;' +
 					       'background:' + (def.key === 'all' ? def.color + '22' : def.color + '0d') + ';' +
 					       'color:' + def.color + ';transition:opacity .1s',
-					click: function() {
+					click: ui.createHandlerFn(this, function() {
 						self._filter = def.key;
 						filterBar.querySelectorAll('[data-filter]').forEach(function(b) {
 							b.style.fontWeight = b.dataset.filter === def.key ? '700' : '400';
@@ -192,7 +155,7 @@ return view.extend({
 						});
 						self._filter = def.key;
 						self._doRender();
-					}
+					})
 				}, def.icon + ' ' + def.label);
 			});
 
@@ -205,10 +168,10 @@ return view.extend({
 				self._doRender();
 			}
 		}, [
-			E('option', { value: 'all'   }, 'All levels'),
-			E('option', { value: 'ERROR' }, '🔴 ERROR only'),
-			E('option', { value: 'WARN'  }, '🟡 WARN+'),
-			E('option', { value: 'INFO'  }, '🔵 INFO only')
+			E('option', { value: 'all'   }, _('All levels')),
+			E('option', { value: 'ERROR' }, '🔴 ' + _('ERROR only')),
+			E('option', { value: 'WARN'  }, '🟡 ' + _('WARN+')),
+			E('option', { value: 'INFO'  }, '🔵 ' + _('INFO only'))
 		]);
 
 		/* ── Search ── */
@@ -225,50 +188,41 @@ return view.extend({
 		var pauseBtn = E('button', {
 			style: 'padding:4px 11px;border-radius:5px;font-size:12px;cursor:pointer;' +
 			       'border:1px solid #30363d;background:#161b22;color:#e6edf3',
-			click: function() {
+			click: ui.createHandlerFn(this, function() {
 				self._paused = !self._paused;
-				this.textContent = self._paused ? '▶ Resume' : '⏸ Pause';
+				this.textContent = self._paused ? '▶ ' + _('Resume') : '⏸ ' + _('Pause');
 				this.style.borderColor = self._paused ? '#e3b341' : '#30363d';
 				this.style.color       = self._paused ? '#e3b341' : '#e6edf3';
-			}
-		}, '⏸ Pause');
+			})
+		}, '⏸ ' + _('Pause'));
 
 		/* ── Export ── */
 		var exportBtn = E('button', {
 			style: 'padding:4px 11px;border-radius:5px;font-size:12px;cursor:pointer;' +
 			       'border:1px solid #30363d;background:#161b22;color:#7d8590',
-			click: function() {
+			click: ui.createHandlerFn(this, function() {
 				var txt = self._entries.map(function(e) { return e.raw; }).join('\n');
 				var a   = document.createElement('a');
 				a.href  = 'data:text/plain;charset=utf-8,' + encodeURIComponent(txt);
 				a.download = 'easymesh-' +
 					new Date().toISOString().slice(0, 19).replace(/:/g, '-') + '.log';
 				a.click();
-			}
-		}, '⬇ Export');
+			})
+		}, '⬇ ' + _('Export'));
 
-		/* ── Clear file (calls /log/clear on master HTTP server) ── */
 		var clearBtn = E('button', {
 			style: 'padding:4px 11px;border-radius:5px;font-size:12px;cursor:pointer;' +
 			       'border:1px solid #f8514933;background:#f8514908;color:#f85149',
-			click: function() {
+			click: ui.createHandlerFn(this, function() {
 				if (!window.confirm(_('Clear the log file on disk?'))) return;
-				/* Truncate file via rpcd */
-				fsWrite(LOGFILE, '').then(function() {
-					self._entries   = [];
-					self._lastCount = 0;
-					self._doRender();
-					ui.addNotification(null, E('p', {}, _('Log file cleared.')), 'info');
-				}).catch(function() {
-					/* Fallback: call master HTTP clear endpoint */
-					request.post('http://' + window.location.hostname + ':4304/log/clear', null, {
-						timeout: 5000
-					}).then(function() {
-						self._entries = []; self._doRender();
-					});
-				});
-			}
-		}, '🗑 Clear');
+                fs.write(LOGFILE, '').then(function () {
+                    self._entries = [];
+                    self._lastCount = 0;
+                    self._doRender();
+					ui.addTimeLimitedNotification(null, E('p', {}, _('Log file cleared.')), 3000, 'info');
+				}).catch(function() {});
+			})
+		}, '🗑 ' + _('Clear'));
 
 		/* ── Entry counter ── */
 		var countEl = E('span', {
@@ -287,7 +241,7 @@ return view.extend({
 			       'gap:0 10px;padding:4px 12px;border-bottom:1px solid #30363d;' +
 			       'font-size:10px;font-weight:700;color:#484f58;letter-spacing:.5px;' +
 			       'text-transform:uppercase;background:#0d1117'
-		}, ['Timestamp', 'Lvl', 'Category', 'Message'].map(function(h) {
+		}, [_('Timestamp'), _('Lvl'), _('Category'), _('Message')].map(function(h) {
 			return E('span', {}, h);
 		}));
 
@@ -336,7 +290,7 @@ return view.extend({
 
 			/* Count */
 			var cel = document.getElementById('em-log-count');
-			if (cel) cel.textContent = visible.length + ' / ' + self._entries.length + ' lines';
+			if (cel) cel.textContent = visible.length + ' / ' + self._entries.length + ' ' + _('lines');
 
 			/* Status bar: per-category counts + last update */
 			while (statusBar.firstChild) statusBar.removeChild(statusBar.firstChild);
@@ -357,31 +311,30 @@ return view.extend({
 			});
 			if (counts['_error'])
 				statusBar.appendChild(E('span', { style: 'color:#f85149' },
-					'🔴 Errors: ' + counts['_error']));
+					'🔴 ' + _('Errors') + ': ' + counts['_error']));
 			if (counts['_warn'])
 				statusBar.appendChild(E('span', { style: 'color:#e3b341' },
-					'⚠️ Warnings: ' + counts['_warn']));
+					'⚠️ ' + _('Warnings') + ': ' + counts['_warn']));
 			statusBar.appendChild(E('span', { style: 'margin-left:auto' },
 				_('Updated: ') + new Date().toLocaleTimeString()));
 		};
 
 		self._doRender();
 
-		/* ── Poll: re-read log file every POLL_INTERVAL seconds ── */
 		poll.add(function() {
 			if (self._paused) return;
-			return fsRead(LOGFILE).then(function(raw) {
+            return fs.read(LOGFILE).then(function (raw) {
 				var fresh = parseLog(raw || '');
 				if (fresh.length !== self._lastCount) {
 					self._entries   = fresh;
 					self._lastCount = fresh.length;
 					self._doRender();
 				}
-			}).catch(function() {});
+            }).catch(function () {});
 		}, POLL_INTERVAL);
 
 		return E('div', {}, [
-			E('h3', _('EasyMesh Log')),
+			E('h3', {}, _('EasyMesh Log')),
 			E('div', {
 				style: 'background:#0d1117;border:1px solid #30363d;' +
 				       'border-radius:12px;overflow:hidden'

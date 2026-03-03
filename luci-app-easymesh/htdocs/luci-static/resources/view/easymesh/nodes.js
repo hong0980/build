@@ -4,16 +4,7 @@
 'require uci';
 'require poll';
 'require ui';
-
-var MASTER_PORT = 4304;
-
-/* ── rpcd helpers ─────────────────────────────────────────────────────────── */
-var callReadFile = rpc.declare({
-	object: 'file',
-	method: 'read',
-	params: ['path'],
-	expect: { data: '' }
-});
+'require fs';
 
 var callNetworkDump = rpc.declare({
 	object: 'network.interface',
@@ -286,13 +277,13 @@ function initTooltip(canvas, tooltip, getPositions) {
 		});
 		if (hit) {
 			var lines = [
-				(hit.role === 'master' ? '🌐 Master' : '📡 Agent'),
-				'MAC: ' + (hit.mac || '—'),
-				'IP: ' + (hit.ip || '—'),
-				'Clients: ' + (hit.clients || 0),
-				'Backhaul: ' + (hit.backhaul || 'wired')
+				(hit.role === 'master' ? '🌐 ' + _('Master') : '📡 ' + _('Agent')),
+				_('MAC') + ': ' + (hit.mac || '—'),
+				_('IP') + ': ' + (hit.ip || '—'),
+				_('Clients') + ': ' + (hit.clients || 0),
+				_('Backhaul') + ': ' + (hit.backhaul || _('wired'))
 			];
-			if (hit.tq) lines.push('TQ: ' + Math.round(hit.tq / 255 * 100) + '%');
+			if (hit.tq) lines.push(_('TQ') + ': ' + Math.round(hit.tq / 255 * 100) + '%');
 			tooltip.innerHTML = lines.map(function (l) { return '<div>' + l + '</div>'; }).join('');
 			tooltip.style.display = 'block';
 			tooltip.style.left = (mx + 16) + 'px';
@@ -304,19 +295,12 @@ function initTooltip(canvas, tooltip, getPositions) {
 	canvas.addEventListener('mouseleave', function () { tooltip.style.display = 'none'; });
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
- * Main view
- * ════════════════════════════════════════════════════════════════════════════ */
 return view.extend({
-
 	load: function () {
 		return Promise.all([
-			L.resolveDefault(
-				callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }),
-				''
-			),
-			callNetworkDump(),
 			uci.load('easymesh'),
+			L.resolveDefault(fs.read('/sys/kernel/debug/batman_adv/bat0/originators'), ''),
+			callNetworkDump(),
 			callMeshPending(),
 			callMeshApproved()
 		]);
@@ -325,8 +309,8 @@ return view.extend({
 	render: function (data) {
 		var self = this;
 		var _positions = {};
-		var pending = Array.isArray(data[3]) ? data[3] : [];
-		var approved = Array.isArray(data[4]) ? data[4] : [];
+		var pending  = (data[3]  && Array.isArray(data[3].nodes))  ? data[3].nodes  : [];
+		var approved = (data[4]  && Array.isArray(data[4].nodes))  ? data[4].nodes  : [];
 		var root = E('div', { id: 'easymesh-nodes-root' });
 		var enabled = uci.get_bool('easymesh', 'global', 'enabled');
 		if (!enabled) {
@@ -339,18 +323,19 @@ return view.extend({
 			return root;
 		}
 
-		root.appendChild(self._build(data[0], data[1] || [], data[2], data[3]));
+		root.appendChild(self._build(data[1], data[2] || [], pending, approved));
 
 		poll.add(function () {
 			return Promise.all([
-				L.resolveDefault(
-					callReadFile({ path: '/sys/kernel/debug/batman_adv/bat0/originators' }), ''),
+				L.resolveDefault(fs.read('/sys/kernel/debug/batman_adv/bat0/originators'), ''),
 				callNetworkDump(),
 				callMeshPending(),
 				callMeshApproved()
 			]).then(function (r) {
+				var p = (r[2] && Array.isArray(r[2].nodes)) ? r[2].nodes : [];
+				var a = (r[3] && Array.isArray(r[3].nodes)) ? r[3].nodes : [];
 				var old = document.getElementById('easymesh-nodes-inner');
-				if (old) old.replaceWith(self._build(r[0], r[1] || [], r[2], r[3]));
+				if (old) old.replaceWith(self._build(r[0], r[1] || [], p, a));
 			}).catch(function () {});
 		}, 5);
 
@@ -360,6 +345,10 @@ return view.extend({
 				var canvas = document.getElementById('easymesh-topo-canvas');
 				var tooltip = document.getElementById('easymesh-topo-tooltip');
 				_positions = drawTopo(topo, canvas) || {};
+				if (canvas && !canvas._tooltipBound) {
+					canvas._tooltipBound = true;
+					initTooltip(canvas, tooltip, function () { return _positions; });
+				}
 			});
 		}, 5);
 
@@ -371,10 +360,11 @@ return view.extend({
 		var el = E('div', { id: 'easymesh-nodes-inner' });
 		var bat0 = interfaces.filter(function (i) { return i.interface === 'bat0'; })[0];
 		var mesh = parseOriginators(originatorRaw);
-		var pending = Array.isArray(pendingRaw) ? pendingRaw : [];
-		var approved = Array.isArray(approvedRaw) ? approvedRaw : [];
+		var pending  = Array.isArray(pendingRaw)  ? pendingRaw
+		               : (pendingRaw  && Array.isArray(pendingRaw.nodes))  ? pendingRaw.nodes  : [];
+		var approved = Array.isArray(approvedRaw) ? approvedRaw
+		               : (approvedRaw && Array.isArray(approvedRaw.nodes)) ? approvedRaw.nodes : [];
 
-		/* Pending approval cards */
 		if (pending.length) {
 			el.appendChild(E('div', { class: 'cbi-section' }, [
 				E('h3', { style: 'color:#e3b341;margin-bottom:4px' },
@@ -396,7 +386,6 @@ return view.extend({
 			]));
 		}
 
-		/* bat0 status card */
 		el.appendChild(E('div', { class: 'cbi-section' }, [
 			E('h3', {}, _('Mesh Status')),
 			E('div', { class: 'table' }, [
@@ -406,13 +395,11 @@ return view.extend({
 						? E('span', {
 							class: 'label',
 							style: 'background:#2ea44f;color:#fff;padding:2px 8px;border-radius:4px'
-						},
-							_('Running'))
+						}, _('Running'))
 						: E('span', {
 							class: 'label',
 							style: 'background:#f85149;color:#fff;padding:2px 8px;border-radius:4px'
-						},
-							_('Not running'))
+						}, _('Not running'))
 					)
 				]),
 				E('div', { class: 'tr' }, [
@@ -422,7 +409,6 @@ return view.extend({
 			])
 		]));
 
-		/* Neighbor table */
 		el.appendChild(E('div', { class: 'cbi-section' }, [
 			E('h3', {}, _('Mesh Neighbors')),
 			E('p', { class: 'cbi-section-descr' },
@@ -432,7 +418,7 @@ return view.extend({
 					_('No neighbors found. Verify all nodes share the same Mesh ID and password.'))
 				: E('table', { class: 'table' }, [
 					E('tr', { class: 'tr table-titles' }, [
-						E('th', { class: 'th' }, 'MAC'),
+						E('th', { class: 'th' }, _('MAC')),
 						E('th', { class: 'th' }, _('Link Quality (TQ)')),
 						E('th', { class: 'th' }, _('Next Hop')),
 						E('th', { class: 'th' }, _('Interface')),
@@ -449,7 +435,6 @@ return view.extend({
 				})))
 		]));
 
-		/* Topology canvas section */
 		el.appendChild(E('div', { class: 'cbi-section' }, [
 			E('h3', {}, '🌐 ' + _('Mesh Topology')),
 			E('p', { class: 'cbi-section-descr' },
@@ -460,8 +445,8 @@ return view.extend({
 			}, [
 				E('canvas', {
 					id: 'easymesh-topo-canvas',
-					style: 'width:100%;display:block;border-radius:8px',
-					width: '900', height: '400'
+					width: '900', height: '400',
+					style: 'width:100%;display:block;border-radius:8px'
 				}),
 				E('div', {
 					id: 'easymesh-topo-tooltip',

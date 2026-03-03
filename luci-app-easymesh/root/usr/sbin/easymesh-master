@@ -1,21 +1,4 @@
 #!/bin/sh
-# /usr/sbin/easymesh-master — EasyMesh master daemon
-#
-# Commercial-grade features:
-#   1. Role election         — WAN wins; tie → lowest MAC; anti-split-brain
-#   2. Self-healing routing  — batman-adv OGM tuning, gateway failover watchdog
-#   3. Seamless roaming      — real-time neighbor sync, RSSI probe, smart BSS-TM
-#   4. Wired onboarding      — plug LAN cable → auto-register → LuCI approval
-#   5. Wireless onboarding   — optional temp SSID, same approval flow
-#   6. Config sync           — push profile to all approved slaves
-#   7. Channel coordination  — least-congested channel, synced mesh-wide
-#   8. Load balancing        — signal+load aware BSS-TM steering
-#   9. Topology JSON         — live bat0 originators + client counts
-# OPTIMIZED:
-#   ✓ Roaming cooldown (防乒乓)
-#   ✓ HTTP retry with exponential backoff
-#   ✓ Checksum polling (校验和轮询)
-#   ✓ Enhanced error handling
 
 . /lib/functions.sh
 
@@ -43,6 +26,24 @@ LOGFILE="/tmp/easymesh.log"
 LOG_MAX_LINES=500      # hard cap; rotate when exceeded
 _log_seq=0             # monotonic counter drives rotation check
 
+lang=$(uci get luci.main.lang 2>/dev/null)
+translate() {
+	local template="$1"
+	shift
+
+	local lua_script=$(cat <<LUA
+	require "luci.i18n".setlanguage("$lang")
+	print(require "luci.i18n".translate([==[$template]==]))
+LUA
+	)
+	local translated=$(lua -e "$lua_script")
+
+	if [ $# -gt 0 ]; then
+		printf "$translated" "$@"
+	else
+		echo "$translated"
+	fi
+}
 # Format: "YYYY-MM-DD HH:MM:SS [LEVEL] [TAG] message"
 # All components write this exact format so log.js can parse with one regex.
 _emlog() {
@@ -61,12 +62,12 @@ _emlog() {
     fi
 }
 
-log()  { _emlog "INFO"  "core"    "$*"; logger -t "$LOG_TAG"        "$*" 2>/dev/null; }
-logr() { _emlog "INFO"  "roam"    "$*"; logger -t "${LOG_TAG}-roam" "$*" 2>/dev/null; }
-logd() { _emlog "INFO"  "dfs"     "$*"; logger -t "${LOG_TAG}-dfs"  "$*" 2>/dev/null; }
-logh() { _emlog "INFO"  "heal"    "$*"; logger -t "EasyMesh"        "$*" 2>/dev/null; }
-logw() { _emlog "WARN"  "core"    "$*"; logger -t "$LOG_TAG"        "WARN: $*" 2>/dev/null; }
-loge() { _emlog "ERROR" "core"    "$*"; logger -t "$LOG_TAG"        "ERROR: $*" 2>/dev/null; }
+log()  { _emlog "INFO"  "core"   $(translate "$*"); }
+logr() { _emlog "INFO"  "roam"   $(translate "$*"); }
+logd() { _emlog "INFO"  "dfs"    $(translate "$*"); }
+logh() { _emlog "INFO"  "heal"   $(translate "$*"); }
+logw() { _emlog "WARN"  "core"   $(translate "$*"); }
+loge() { _emlog "ERROR" "core"   $(translate "$*"); }
 
 # Tuning
 BATMAN_OGM_INTERVAL=500          # ms — faster convergence (default 1000)
@@ -102,19 +103,6 @@ get_ip()   { ip -4 addr show dev "$BRIDGE_IF" 2>/dev/null |
              awk '/inet /{print $2}' | cut -d/ -f1 | head -1; }
 get_role() { cat "$ROLE_FILE" 2>/dev/null || echo "agent"; }
 master_ip(){ cat "$MASTER_IP_FILE" 2>/dev/null; }
-
-http_ok() {
-    echo -ne "HTTP/1.1 200 OK\r\n"
-    echo -ne "Content-Type: application/json\r\n"
-    echo -ne "Access-Control-Allow-Origin: *\r\n"
-    echo -ne "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
-    echo -ne "Access-Control-Allow-Headers: Content-Type\r\n"
-    echo -ne "Connection: close\r\n"
-    echo -ne "\r\n"
-    [ -n "$1" ] && echo -ne "$1"
-}
-http_403() { printf 'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{"status":"pending","msg":"Awaiting approval in LuCI"}\n'; }
-http_404() { printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n{"error":"not found"}\n'; }
 
 wan_up() { ubus call network.interface.wan status 2>/dev/null | grep -q '"up": true'; }
 
@@ -175,6 +163,7 @@ elect_role() {
         echo "master" > "$ROLE_FILE"
         echo "$myip"  > "$MASTER_IP_FILE"
         log "Election: WAN up → master ($mymac)"
+        #log "选举: WAN 在线 → 本机为主节点 ($mymac)"
         return 0
     fi
 
@@ -194,6 +183,7 @@ elect_role() {
             echo "agent"    > "$ROLE_FILE"
             echo "$peer_ip" > "$MASTER_IP_FILE"
             log "Election: peer $peer_ip has WAN → agent"
+            #log "选举: 对端 $peer_ip 有 WAN → 本机为从节点"
             return 0
         fi
         [ -n "$peer_mac" ] && [ "$peer_mac" \< "$best_mac" ] && {
@@ -205,10 +195,12 @@ elect_role() {
         echo "master" > "$ROLE_FILE"
         echo "$myip"  > "$MASTER_IP_FILE"
         log "Election: lowest MAC → master ($mymac)"
+        #log "选举: MAC 最小 → 本机为主节点 ($mymac)"
     else
         echo "agent"    > "$ROLE_FILE"
         echo "$best_ip" > "$MASTER_IP_FILE"
         log "Election: $best_mac wins → agent (best_ip=$best_ip)"
+        #log "选举: $best_mac 获胜 → 本机为从节点 (master=$best_ip)"
     fi
 }
 
@@ -243,6 +235,7 @@ tune_batman() {
 gateway_watchdog() {
     local fail=0
     log "Gateway watchdog started"
+    # log "网关监控已启动"
     while true; do
         sleep "$GW_WATCHDOG_INTERVAL"
         local mip
@@ -254,8 +247,10 @@ gateway_watchdog() {
         else
             fail=$((fail + 1))
             logw "Gateway watchdog: master $mip unreachable (fail=$fail/3)"
+            # logw "网关监控: 主节点 $mip 不可达 (失败=$fail/3)"
             if [ "$fail" -ge 3 ]; then
                 loge "Gateway declared dead — re-electing"
+                # loge "网关已失联，重新选举主节点"
                 rm -f "$MASTER_IP_FILE"
                 elect_role
                 tune_batman
@@ -273,6 +268,7 @@ check_routing_paths() {
     cur_gw=$(batctl meshif "$MESH_IF" gwl 2>/dev/null | awk '/===>/{print $2}' | head -1)
     if [ -n "$cur_gw" ] && [ "$cur_gw" != "$prev_gw" ]; then
         log "Self-healing: gateway path changed → $cur_gw (was: ${prev_gw:-none})"
+        # log "自愈: 网关路径切换 → $cur_gw (原: ${prev_gw:-none})"
         prev_gw="$cur_gw"
         # Re-sync neighbor list after topology change
         sync_neighbor_list
@@ -479,12 +475,12 @@ setup_wired_backhaul() {
 
     ip link set "$MESH_IF" up 2>/dev/null
 
-    # Add bat0 to br-lan bridge so mesh nodes share the LAN segment
-    # Only do this on master (slave gets IP via bat0 DHCP, no bridge needed)
-    if [ "$(get_role)" = "master" ]; then
-        if ! brctl show "$BRIDGE_IF" 2>/dev/null | grep -q "$MESH_IF"; then
-            brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null &&                 log "Wired backhaul: bat0 joined $BRIDGE_IF"
-        fi
+    # bat0 加入 br-lan — 主从节点都需要
+    # 主节点：br-lan = eth0 + bat0，DHCP server 在 br-lan，mesh 流量通过 bat0 转发
+    # 从节点：br-lan = eth0 + bat0，有线客户端通过 eth0→br-lan→bat0→mesh→主节点 DHCP
+    if ! brctl show "$BRIDGE_IF" 2>/dev/null | grep -q "$MESH_IF"; then
+        brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null &&             log "有线回程: bat0 已加入 $BRIDGE_IF"
+	# log "Wired backhaul: bat0 joined $BRIDGE_IF"
     fi
 
     # Add eth0 as batman-adv hardif for wired mesh backhaul
@@ -499,6 +495,7 @@ setup_wired_backhaul() {
     fi
 
     log "Wired backhaul ready (role=$(get_role))"
+    # log "有线回程就绪 (角色=$(get_role))"
 }
 
 ########################################
@@ -580,6 +577,7 @@ register_pending() {
         "$mac" "${ip:-?}" "${hostname:-?}" "${source:-wired}" "$(date +%s)" \
         > "${PENDING_DB}/${safe}.json"
     log "Pending: $mac ($hostname) via $source"
+    # log "待审批: $mac ($hostname) 来源=$source"
 }
 
 approve_node() {
@@ -591,6 +589,7 @@ approve_node() {
         "${PENDING_DB}/${safe}.json" > "${NODE_DB}/${safe}.json"
     rm -f "${PENDING_DB}/${safe}.json"
     log "Approved: $mac"
+    # log "已审批: $mac"
     # Immediately push neighbor list to new node
     sync_neighbor_list
 }
@@ -600,6 +599,7 @@ reject_node() {
     local safe; safe=$(echo "$mac" | tr ':' '_')
     rm -f "${PENDING_DB}/${safe}.json"
     log "Rejected: $mac"
+    # log "已拒绝: $mac"
 }
 
 ########################################
@@ -640,9 +640,11 @@ do_register() {
         "http://${mip}:${MASTER_PORT}/register" \
         "{\"mac\":\"$mac\",\"ip\":\"$ip\",\"hostname\":\"$hostname\",\"source\":\"$source\"}" || {
         loge "Failed to register with master"
+	# loge "向主节点注册失败"
         return 1
     }
     log "Registered with master $mip"
+    # log "已向主节点 $mip 注册成功"
 }
 
 # Last profile checksum — avoids re-applying identical config on every loop
@@ -661,9 +663,23 @@ poll_for_approval() {
         return 0   # config unchanged — skip full fetch
     fi
 
-    # Step 2: checksum changed or endpoint unavailable → fetch full profile
+    # Step 2: fetch full profile
     local resp
-    resp=$(wget -q -T 5 -O-         "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
+    resp=$(wget -q -T 5 -O- \
+        "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
+
+    # 403 = 仍在等待审批
+    if echo "$resp" | grep -q '"status":"pending"'; then
+        log "等待主节点审批..."; return 1
+    fi
+    # unregistered = 需要重新注册（master 重启导致数据丢失）
+    if echo "$resp" | grep -q '"status":"unregistered"'; then
+        logw "主节点未找到本节点注册记录，重新注册"
+        rm -f "$MASTER_IP_FILE"
+        do_register "wired"
+        return 1
+    fi
+    # profile 含 status:approved → 应用
     if echo "$resp" | grep -q '"status":"approved"'; then
         apply_profile "$resp"
         _last_profile_sum=$(echo "$resp" | md5sum | cut -d' ' -f1)
@@ -703,6 +719,8 @@ apply_profile() {
     rm -f /tmp/em_profile_tmp.json
     [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
     log "Applying profile: ssid=$ssid"
+    #[ -z "$ssid" ] && { loge "apply_profile: 缺少 ssid 字段"; return 1; }
+    #log "应用配置: ssid=$ssid"
     uci set easymesh.global.enabled=1
     uci set easymesh.global.role=slave
     uci set easymesh.global.mesh_id="${mesh_id:-OpenWrt-Mesh}"
@@ -712,12 +730,17 @@ apply_profile() {
     uci set easymesh.global.backhaul=wired
     uci set easymesh.global.routing_algo="${routing_algo:-BATMAN_IV}"
     uci commit easymesh
-    uci set wireless.@wifi-iface[0].ssid="$ssid"
-    uci set wireless.@wifi-iface[0].key="$key"
-    uci set wireless.@wifi-iface[0].ieee80211k=1
-    uci set wireless.@wifi-iface[0].ieee80211v=1
-    uci set wireless.@wifi-iface[0].bss_transition=1
-    uci set wireless.@wifi-iface[0].rrm_neighbor_report=1
+    # 更新 easymesh managed AP 接口（如存在），否则更新第一个 AP
+    local _ap_sect
+    _ap_sect=$(uci show wireless 2>/dev/null |         awk -F= '/=wifi-iface/{gsub(/wireless\./,""); s=$1}
+                 /\.mode=.ap/{print s; exit}')
+    [ -z "$_ap_sect" ] && _ap_sect="@wifi-iface[0]"
+    uci set "wireless.${_ap_sect}.ssid=$ssid"
+    uci set "wireless.${_ap_sect}.key=$key"
+    uci set "wireless.${_ap_sect}.ieee80211k=1"
+    uci set "wireless.${_ap_sect}.ieee80211v=1"
+    uci set "wireless.${_ap_sect}.bss_transition=1"
+    uci set "wireless.${_ap_sect}.rrm_neighbor_report=1"
     [ -n "$channel" ] && [ "$channel" != "auto" ] && {
         local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
         [ -n "$rd" ] && uci set "${rd}.channel=$channel"
@@ -726,6 +749,7 @@ apply_profile() {
     setup_wired_backhaul
     wifi reload
     log "Profile applied. Joined mesh."
+    log "配置已应用，已加入 Mesh 网络"
 }
 
 ########################################
@@ -755,7 +779,6 @@ dfs_watchdog() {
 iface="$1"; event="$2"
 case "$event" in
     AP-CSA-FINISHED*|DFS-NOP-FINISHED*)
-        logger -t easymesh-dfs "Radar/CSA event on $iface: $event"
         new_chan=$(echo "$event" | grep -o 'chan=[0-9]*' | cut -d= -f2)
         printf '%s
 ' "$new_chan" > /tmp/easymesh_dfs_chan_change
@@ -979,269 +1002,175 @@ update_topology() {
 }
 
 ########################################
-# HTTP SERVER
+# 13. INTER-NODE HTTP SERVER
 ########################################
-handle_request() {
-    local req="$1" method path query body
-    [ -s "$req" ] || return
-    read -r method path _ < "$req"
-    if [ "$method" = "OPTIONS" ]; then
-        http_ok ""
-        return
+# 仅供节点间通信用（slave→master register/profile，master→slave channel/roam）
+# LuCI 通过 ubus/rpcd 访问，不走这里。
+#
+# 使用 while+nc 循环（busybox 兼容），每次连接 fork 一个子 shell 处理请求。
+# 支持的端点：
+#   GET  /ping                  → 心跳（返回 role/mac/ip）
+#   GET  /wan                   → WAN 状态
+#   POST /register              → slave 注册（写入 PENDING_DB）
+#   GET  /profile/checksum      → 返回当前 profile 的 md5
+#   GET  /profile               → 返回完整 profile JSON（已审批才返回）
+#   POST /channel/apply         → 接收 master 推送的信道变更
+#   GET  /roam/signal           → 查询某 STA 在本 AP 的 RSSI
+#   POST /roam/neighbors        → 接收邻居列表更新
+
+_http_ok() {
+    local body="$1"
+    printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n%s' "$body"
+}
+_http_403() {
+    printf 'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{"status":"pending"}\n'
+}
+_http_404() {
+    printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n{"error":"not found"}\n'
+}
+
+# 处理单个 HTTP 请求（stdin=请求，stdout=响应）
+_handle_one_request() {
+    # 读请求行，去掉 CR
+    local req_line
+    IFS= read -r req_line
+    req_line="${req_line%$(printf '\r')}"
+    local method rawpath
+    method="${req_line%% *}"
+    rawpath="${req_line#* }"; rawpath="${rawpath%% *}"
+
+    # 跳过 OPTIONS（CORS 预检，节点间不需要但防御性处理）
+    [ "$method" = "OPTIONS" ] && { _http_ok "{}"; return; }
+
+    # 读取所有请求头（找 Content-Length）
+    local content_length=0 hline
+    while IFS= read -r hline; do
+        hline="${hline%$(printf '\r')}"
+        [ -z "$hline" ] && break
+        case "$hline" in
+            Content-Length:*|content-length:*)
+                content_length="${hline##*: }" ;;
+        esac
+    done
+
+    # 读请求体（如果有）
+    local body=""
+    if [ "$content_length" -gt 0 ] 2>/dev/null; then
+        body=$(dd bs=1 count="$content_length" 2>/dev/null)
     fi
-    query="${path#*\?}"; path="${path%%\?*}"
-    body=$(sed -n '1,/^\r\{0,1\}$/d;p' "$req")
+
+    # 解析 path 和 query
+    local path query
+    query="${rawpath#*\?}"; path="${rawpath%%\?*}"
+    [ "$path" = "$rawpath" ] && query=""
 
     case "$path" in
     /ping)
-        http_ok "{\"role\":\"$(get_role)\",\"mac\":\"$(get_mac)\",\"ip\":\"$(get_ip)\"}" ;;
+        _http_ok "{\"role\":\"$(get_role)\",\"mac\":\"$(get_mac)\",\"ip\":\"$(get_ip)\"}"
+        ;;
     /wan)
-        wan_up && http_ok '{"wan":true}' || http_ok '{"wan":false}' ;;
+        wan_up && _http_ok '{"wan":true}' || _http_ok '{"wan":false}'
+        ;;
     /register)
         local src; src=$(echo "$body" | grep -o '"source":"[^"]*"' | cut -d'"' -f4)
         register_pending "$body" "${src:-wired}"
-        http_ok '{"status":"pending","msg":"Awaiting approval in LuCI"}' ;;
+        _http_ok '{"status":"pending","msg":"Awaiting approval in LuCI"}'
+        ;;
     /profile/checksum)
-        # Lightweight endpoint: returns md5 of current profile.
-        # Slaves call this first; only fetch full profile when checksum changes.
         local req_mac safe
         req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
         safe=$(echo "$req_mac" | tr ':' '_')
         if [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
-            local sum; sum=$(md5sum "$PROFILE_FILE" | cut -d" " -f1)
-            http_ok "{\"sum\":\"$sum\"}"
+            local sum; sum=$(md5sum "$PROFILE_FILE" | cut -d' ' -f1)
+            _http_ok "{\"sum\":\"$sum\"}"
         elif [ -f "${PENDING_DB}/${safe}.json" ]; then
-            http_403
+            _http_403
         else
-            http_ok '{"status":"unregistered"}'
-        fi ;;
+            _http_ok '{"status":"unregistered"}'
+        fi
+        ;;
     /profile)
         local req_mac safe
         req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
         safe=$(echo "$req_mac" | tr ':' '_')
-        if   [ -f "${NODE_DB}/${safe}.json" ];    then http_ok "$(cat "$PROFILE_FILE" 2>/dev/null || echo '{}')"
-        elif [ -f "${PENDING_DB}/${safe}.json" ]; then http_403
-        else http_ok '{"status":"unregistered"}'; fi ;;
-    /nodes/pending)
-        local out="[" first=1
-        for f in "$PENDING_DB"/*.json; do
-            [ -f "$f" ] || continue
-            [ "$first" = "0" ] && out="${out},"
-            out="${out}$(cat "$f")"; first=0
-        done; http_ok "${out}]" ;;
-    /nodes/approved)
-        local out="[" first=1
-        for f in "$NODE_DB"/*.json; do
-            [ -f "$f" ] || continue
-            [ "$first" = "0" ] && out="${out},"
-            out="${out}$(cat "$f")"; first=0
-        done; http_ok "${out}]" ;;
-    /log)
-        # Serve last N lines of log file as JSON array of strings.
-        # log.js reads this endpoint; no parsing of syslog needed.
-        local n
-        n=$(echo "$query" | grep -o 'lines=[0-9]*' | cut -d= -f2)
-        n=${n:-300}
-        if [ -f "$LOGFILE" ]; then
-            # Build JSON array: escape backslash and double-quote, wrap each line
-            local json
-            json=$(tail -n "$n" "$LOGFILE" | awk '
-                BEGIN { printf "[" }
-                NR > 1 { printf "," }
-                {
-                    gsub(/\\/, "\\\\")
-                    gsub(/"/, "\\"")
-                    printf "\"%s\"", $0
-                }
-                END { printf "]" }
-            ')
-            http_ok "{\"lines\":${json},\"total\":$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)}"
-        else
-            http_ok '{"lines":[],"total":0}'
-        fi ;;
-    /log/clear)
-        # LuCI "Clear file" button calls this
-        > "$LOGFILE"
-        _emlog "INFO" "core" "Log file cleared by user"
-        http_ok '{"status":"ok"}' ;;
-    /topology)
-        update_topology; http_ok "$(cat "$TOPO_FILE" 2>/dev/null || echo '{}')" ;;
+        if   [ -f "${NODE_DB}/${safe}.json" ];    then _http_ok "$(cat "$PROFILE_FILE" 2>/dev/null || echo '{}')"
+        elif [ -f "${PENDING_DB}/${safe}.json" ]; then _http_403
+        else _http_ok '{"status":"unregistered"}'; fi
+        ;;
     /channel/apply)
-        # Slave receives channel change from master (ACS or DFS event)
         local new_chan reason
         new_chan=$(echo "$body" | grep -o '"channel":"[^"]*"' | cut -d'"' -f4)
         reason=$(echo "$body"  | grep -o '"reason":"[^"]*"'  | cut -d'"' -f4)
-        [ -z "$new_chan" ] && { http_ok '{"status":"ignored"}'; return; }
-        log "Channel sync from master: ch=$new_chan reason=${reason:-unknown}"
+        [ -z "$new_chan" ] && { _http_ok '{"status":"ignored"}'; return; }
+        log "信道同步来自主节点: ch=$new_chan reason=${reason:-unknown}"
         local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
         uci set "${rd}.channel=${new_chan}"
         uci commit wireless
         wifi reload &
-        http_ok '{"status":"ok","channel":"'"$new_chan"'"}' ;;
-
-    # Roaming endpoints (called by master to probe stations on peer APs)
+        _http_ok "{\"status\":\"ok\",\"channel\":\"$new_chan\"}"
+        ;;
     /roam/signal)
         local sta_mac; sta_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
         local ap_iface; ap_iface=$(get_ap_iface)
         local bssid; bssid=$(cat /sys/class/net/${ap_iface}/address 2>/dev/null)
         local sig
-        sig=$(iw dev "$ap_iface" station get "$sta_mac" 2>/dev/null |
-              awk '/signal:/{print $2}' | head -1)
-        if [ -n "$sig" ]; then
-            http_ok "{\"rssi\":$sig,\"bssid\":\"$bssid\"}"
-        else
-            http_ok '{"rssi":null}'
-        fi ;;
+        sig=$(iw dev "$ap_iface" station get "$sta_mac" 2>/dev/null | awk '/signal:/{print $2}' | head -1)
+        if [ -n "$sig" ]; then _http_ok "{\"rssi\":$sig,\"bssid\":\"$bssid\"}"
+        else _http_ok '{"rssi":null}'; fi
+        ;;
     /roam/neighbors)
         apply_neighbor_list "$body"
-        http_ok '{"status":"ok"}' ;;
-    *) http_404 ;;
+        _http_ok '{"status":"ok"}'
+        ;;
+    *)
+        _http_404
+        ;;
     esac
 }
 
-# ═══ HTTP SERVER ═══
-# The handler script is written to /tmp at startup.
-# It sources the master daemon (with __source_only guard) to get all
-# function definitions, reads the HTTP request from stdin, calls
-# handle_request(), and writes the HTTP response to stdout.
-#
-# nc accepts one TCP connection at a time, pipes it through the handler.
-# This is serial but sufficient for LuCI polling (low concurrency).
+# 启动节点间 HTTP server（后台循环，每连接一次处理）
+run_node_server() {
+    log "节点间 HTTP server 启动 (port=$MASTER_PORT)"
 
-_write_handler_script() {
-    cat > /tmp/em_handler.sh << 'HANDLER_EOF'
-#!/bin/sh
-# Per-connection HTTP handler: stdin=TCP request, stdout=TCP response
-DAEMON=/usr/sbin/easymesh-master
-REQ=/tmp/em_req_$$
-
-# Parse request line (strip 
- from HTTP line endings)
-IFS= read -r req_line
-req_line="${req_line%$(printf '
-')}"
-method="${req_line%% *}"
-rawpath="${req_line#* }"; rawpath="${rawpath%% *}"
-
-# Parse headers for Content-Length
-content_len=0
-while IFS= read -r hdr; do
-    hdr="${hdr%$(printf '
-')}"
-    [ -z "$hdr" ] && break
-    case "$hdr" in
-        [Cc]ontent-[Ll]ength:*) content_len="${hdr##*:}"; content_len="${content_len# }" ;;
-    esac
-done
-
-# Read POST body
-body=""
-[ "$method" = "POST" ] && [ "${content_len:-0}" -gt 0 ] &&     body=$(dd bs=1 count="$content_len" 2>/dev/null)
-
-# Build request file: first line = "METHOD /path HTTP/1.1", last line = body
-printf '%s %s HTTP/1.1
-
-%s
-' "$method" "$rawpath" "$body" > "$REQ"
-
-# Source daemon functions (the __source_only argument skips main_loop)
-. "$DAEMON" __source_only
-
-# Handle and respond
-handle_request "$REQ"
-rm -f "$REQ"
-HANDLER_EOF
-    chmod +x /tmp/em_handler.sh
-}
-
-run_server() {
-    log "HTTP server on :$MASTER_PORT"
-    _write_handler_script
-
+    # 优先用 socat（最可靠，支持并发）
     if command -v socat >/dev/null 2>&1; then
-        log "HTTP server mode: socat"
+        socat TCP-LISTEN:${MASTER_PORT},reuseaddr,fork             EXEC:"$0 __http_handler" 2>/dev/null &
+        log "HTTP server: socat 模式"
+        return 0
+    fi
+
+    # fallback：busybox nc + 双 fifo（每次连接串行处理）
+    local req_f="/tmp/em_req_${$}" resp_f="/tmp/em_resp_${$}"
+    mkfifo "$req_f" "$resp_f" 2>/dev/null || {
+        loge "mkfifo 失败，节点间 HTTP server 无法启动"
+        return 1
+    }
+    # 检查 busybox nc 是否支持 -e 选项
+    if nc --help 2>&1 | grep -q '\-e'; then
+        log "HTTP server: nc -e 模式"
+        (
+            while true; do
+                nc -l -p "$MASTER_PORT" -e "$0 __http_handler" 2>/dev/null
+            done
+        ) &
+        echo $! > /tmp/easymesh_httpd.pid
+        return 0
+    fi
+    # 最后 fallback：单进程 fifo 模式（串行，响应在断开前写回）
+    # 关键：先在后台 open fifo 的 write 端防止 open 阻塞
+    log "HTTP server: nc fifo 模式 (serial)"
+    local req_f="/tmp/em_req_${$}" resp_f="/tmp/em_resp_${$}"
+    mkfifo "$req_f" "$resp_f" 2>/dev/null
+    (
         while true; do
-            socat "TCP-LISTEN:${MASTER_PORT},reuseaddr,fork"                 "EXEC:/tmp/em_handler.sh" 2>/dev/null
-            sleep 1
+            # resp_f 需要有 writer 才能让 nc 打开 read 端不阻塞
+            # 用子 shell 在 nc 退出时重新建立 writer
+            ( _handle_one_request < "$req_f" > "$resp_f" 2>/dev/null ) &
+            nc -l -p "$MASTER_PORT" < "$resp_f" > "$req_f" 2>/dev/null
+            wait
         done
-        return
-    fi
-
-    # nc fallback: use -e flag if supported, else use FIFO for bidirectional pipe
-    if nc -h 2>&1 | grep -q '\-e'; then
-        log "HTTP server mode: nc -e"
-        while true; do
-            nc -l -p "$MASTER_PORT" -e /tmp/em_handler.sh 2>/dev/null
-        done
-        return
-    fi
-
-    # Last resort: bidirectional FIFO
-    # Open fifo for writing first (unblocks nc's read side),
-    # then run handler which writes response into fifo → nc sends to client.
-    log "HTTP server mode: nc+fifo"
-    local fifo="/tmp/em_srv_fifo"
-    rm -f "$fifo"; mkfifo "$fifo"
-    while true; do
-        # Open fifo for writing in background to unblock nc
-        # nc: reads from fifo (→ sends to client), writes to pipe (→ handler stdin)
-        {
-            local req="/tmp/em_req_$$_$(date +%s%N 2>/dev/null || date +%s)"
-            nc -l -p "$MASTER_PORT" > "$req" < "$fifo" 2>/dev/null
-            /tmp/em_handler.sh < "$req" > "$fifo"
-            rm -f "$req"
-        } &
-        wait $!
-        sleep 0.05
-    done
-}
-
-# Hardware auto-detection: distinguish dual-band vs tri-band
-get_mesh_strategy() {
-    local count5g=0 dev band
-    for dev in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
-        band=$(uci get "wireless.${dev}.band" 2>/dev/null)
-        case "$band" in 5g*|5GHz*) count5g=$(( count5g + 1 )) ;; esac
-    done
-    if [ "$count5g" -ge 2 ]; then
-        echo "tri-band" > /tmp/easymesh_hw_type
-    else
-        echo "dual-band" > /tmp/easymesh_hw_type
-    fi
-    log "Hardware: $(cat /tmp/easymesh_hw_type) ($count5g × 5GHz radio)"
-}
-
-# Load-adaptive roaming threshold via dawn
-# Logic: busy system → relax threshold (less BSS-TM work for dawn)
-# idle system → tighten threshold (more aggressive roaming = better UX)
-set_dawn_thresholds() {
-    local cpu_int mem_free
-    cpu_int=$(awk '{print int($1)}' /proc/loadavg)
-    mem_free=$(awk '/^MemAvailable:/{print int($2/1024)}' /proc/meminfo)
-
-    if [ "${cpu_int:-0}" -ge 2 ] || [ "${mem_free:-999}" -lt 64 ]; then
-        # System under load → relax roaming (protect CPU)
-        uci set dawn.@global[0].min_signal='-75' 2>/dev/null
-        log "Dawn threshold: -75 dBm (system busy: cpu=$cpu_int mem=${mem_free}MB)"
-    else
-        # System idle → aggressive roaming (better client experience)
-        uci set dawn.@global[0].min_signal='-65' 2>/dev/null
-        log "Dawn threshold: -65 dBm (system idle)"
-    fi
-    uci commit dawn 2>/dev/null
-    /etc/init.d/dawn reload 2>/dev/null &
-}
-
-# Link self-healing: detect wired link state and adjust batman-adv OGM rate
-trigger_self_healing() {
-    if ip link show "$ETH_IF" 2>/dev/null | grep -q "state UP"; then
-        # Wired link healthy → normal OGM interval
-        batctl meshif "$MESH_IF" orig_interval "$BATMAN_OGM_INTERVAL" 2>/dev/null
-    else
-        # Wired link down → faster OGM = faster wireless failover detection
-        batctl meshif "$MESH_IF" orig_interval 300 2>/dev/null
-        logh "Wired link down → OGM 300ms (fast wireless failover)"
-    fi
+    ) &
+    echo $! > /tmp/easymesh_httpd.pid
 }
 
 ########################################
@@ -1251,19 +1180,24 @@ main_loop() {
     mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR"
     # Startup banner — marks session boundary in log file
     { printf "\n" >> "$LOGFILE" 2>/dev/null
-      _emlog "INFO" "core" "================================================"
-      _emlog "INFO" "core" "EasyMesh daemon starting (pid=$$)"
-      _emlog "INFO" "core" "================================================"; }
+      log "================================================"
+      log "EasyMesh daemon starting (pid=$$)"
+      log "================================================"; }
     setup_wired_backhaul
 
-    # Hardware detection — result used by setup_dedicated_backhaul
-    get_mesh_strategy
-    local hw_type; hw_type=$(cat /tmp/easymesh_hw_type 2>/dev/null)
+    # Hardware type detection
+    local hw_type="dual-band" count5g=0 _dev _b
+    for _dev in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{gsub(/wireless[.]/,""); print $1}'); do
+        _b=$(uci get "wireless.${_dev}.band" 2>/dev/null || echo "")
+        case "$_b" in 5g*|5GHz*) count5g=$(( count5g + 1 ));; esac
+    done
+    [ "$count5g" -ge 2 ] && hw_type="tri-band"
+    echo "$hw_type" > /tmp/easymesh_hw_type
+    # log "EasyMesh daemon 启动 (硬件=$hw_type)"
     log "Starting EasyMesh daemon (hw=$hw_type)"
 
     elect_role
     tune_batman
-    run_server &
 
     # Start background watchdogs
     if [ "$(get_role)" = "master" ]; then
@@ -1273,19 +1207,23 @@ main_loop() {
     fi
     roam_watchdog &
     dfs_watchdog &
+    run_node_server &   # 节点间 HTTP server
 
     # Setup dedicated backhaul radio if tri-band and enabled
     setup_dedicated_backhaul
 
     local _registered=0 _iter=0
     while true; do
-        trigger_self_healing
-        set_dawn_thresholds
-
         # Re-elect periodically
         if [ $(( _iter % (ELECTION_INTERVAL / 10) )) -eq 0 ]; then
+            local _prev_role; _prev_role=$(get_role)
             elect_role
             tune_batman
+            # 角色切换后重置注册状态
+            if [ "$(get_role)" != "$_prev_role" ]; then
+                _registered=0
+                log "角色切换: ${_prev_role} → $(get_role)，重置注册状态"
+            fi
         fi
 
         if [ "$(get_role)" = "master" ]; then
@@ -1294,6 +1232,7 @@ main_loop() {
             manage_wireless_onboard
         else
             if [ "$_registered" = "0" ]; then
+                rm -f "$MASTER_IP_FILE"
                 do_register "wired" && _registered=1
             fi
             poll_for_approval
@@ -1311,19 +1250,12 @@ main_loop() {
 }
 
 case "$1" in
-    stop)           pkill -f easymesh-master ;;
-    approve)
-        mac="$2"
-        local mac; mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
-        [ -n "$mac" ] && approve_node "$mac"
-        exit 0
-    ;;
-    reject)
-        mac="$2"
-        local mac; mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
-        [ -n "$mac" ] && reject_node "$mac"
-        exit 0
-    ;;
-    __source_only)  : ;;   # sourced by handler script — do not run main_loop
+    stop)
+        pkill -f easymesh-master
+        rm -f /tmp/easymesh_httpd.pid /tmp/em_req_* /tmp/em_resp_*
+        ;;
+    __http_handler)
+        _handle_one_request
+        ;;
     *) main_loop ;;
 esac

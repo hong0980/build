@@ -1,75 +1,110 @@
 #!/bin/sh
-
 . /usr/share/libubox/jshn.sh
 
-UBUS_OBJECT="easymesh"
+NODE_DB="/tmp/easymesh_nodes"
+PENDING_DB="/tmp/easymesh_pending"
+TOPO_FILE="/tmp/easymesh_topo.json"
+LOGFILE="/tmp/easymesh.log"
 
-get_pending() {
-    # 这里写你原来生成 pending JSON 的逻辑
-    # 必须输出标准 JSON
-
-    echo '[]'
+# --------------------------------------------------------------------------- #
+list() {
+    printf '{\n'
+    printf '  "pending":   {},\n'
+    printf '  "approved":  {},\n'
+    printf '  "topology":  {},\n'
+    printf '  "approve":   { "mac": "s" },\n'
+    printf '  "reject":    { "mac": "s" },\n'
+    printf '}\n'
 }
 
-get_approved() {
-    echo '[]'
-}
-
-get_topology() {
-    echo '{"nodes":[],"links":[]}'
-}
-
-approve_node() {
-    local mac="$1"
-    # 这里写原 approve 逻辑
-    echo '{"result":"ok"}'
-}
-
-reject_node() {
-    local mac="$1"
-    # 这里写原 reject 逻辑
-    echo '{"result":"ok"}'
-}
-
-handle_call() {
+# --------------------------------------------------------------------------- #
+call() {
     local method="$1"
-
+    local args="${2:-{}}"
     case "$method" in
-        pending)
-            get_pending
-        ;;
-        approved)
-            get_approved
-        ;;
-        topology)
-            get_topology
-        ;;
-        approve)
-            read input
-            json_load "$input"
-            json_get_var mac mac
-            approve_node "$mac"
-        ;;
-        reject)
-            read input
-            json_load "$input"
-            json_get_var mac mac
-            reject_node "$mac"
-        ;;
+        pending)   _pending  ;;
+        approved)  _approved ;;
+        topology)  _topology ;;
+        approve)   json_load "$args"; json_get_var mac mac; _approve "$mac" ;;
+        reject)    json_load "$args"; json_get_var mac mac; _reject  "$mac" ;;
+        log_read)  _log_read  ;;
+        log_clear) _log_clear ;;
+        *) printf '{"error":"unknown method"}\n'; return 1 ;;
     esac
 }
 
+# --------------------------------------------------------------------------- #
+_nodes_from_dir() {
+    local dir="$1" status="$2"
+    json_init
+    json_add_array "nodes"
+    for f in "$dir"/*.json; do
+        [ -f "$f" ] || continue
+        local mac ip hostname source ts
+        mac=$(jsonfilter      -i "$f" -e '@.mac'      2>/dev/null || true)
+        ip=$(jsonfilter       -i "$f" -e '@.ip'       2>/dev/null || true)
+        hostname=$(jsonfilter -i "$f" -e '@.hostname' 2>/dev/null || true)
+        source=$(jsonfilter   -i "$f" -e '@.source'   2>/dev/null || true)
+        ts=$(jsonfilter       -i "$f" -e '@.ts'       2>/dev/null || echo 0)
+        json_add_object
+        json_add_string "mac"      "${mac:-}"
+        json_add_string "ip"       "${ip:-}"
+        json_add_string "hostname" "${hostname:-}"
+        json_add_string "source"   "${source:-wired}"
+        json_add_string "status"   "$status"
+        json_add_int    "ts"       "${ts:-0}"
+        json_close_object
+    done
+    json_close_array
+    json_dump
+}
+
+_pending()  { _nodes_from_dir "$PENDING_DB" "pending";  }
+_approved() { _nodes_from_dir "$NODE_DB"    "approved"; }
+
+# --------------------------------------------------------------------------- #
+_topology() {
+    if [ -f "$TOPO_FILE" ]; then
+        # Return cached file if fresh (< 15 s)
+        local now age
+        now=$(date +%s)
+        age=$(( now - $(date -r "$TOPO_FILE" +%s 2>/dev/null || echo 0) ))
+        [ "$age" -lt 15 ] && { cat "$TOPO_FILE"; return; }
+    fi
+    printf '{"ts":%d,"nodes":[],"links":[]}\n' "$(date +%s)"
+}
+
+# --------------------------------------------------------------------------- #
+_approve() {
+    local mac="$1"
+    [ -z "$mac" ] && { printf '{"error":"mac required"}\n'; return 1; }
+    local safe; safe=$(echo "$mac" | tr ':' '_')
+    local src="${PENDING_DB}/${safe}.json"
+    local dst="${NODE_DB}/${safe}.json"
+    mkdir -p "$NODE_DB"
+    if [ -f "$src" ]; then
+        # Move from pending → approved, flip status field
+        sed 's/"status"\s*:\s*"pending"/"status":"approved"/' "$src" > "$dst"
+        rm -f "$src"
+        # Signal daemon to push profile to newly approved node
+        local pid; pid=$(cat /tmp/easymesh_master.pid 2>/dev/null)
+        [ -n "$pid" ] && kill -USR1 "$pid" 2>/dev/null || true
+        printf '{"status":"ok"}\n'
+    else
+        printf '{"error":"not found"}\n'; return 1
+    fi
+}
+
+_reject() {
+    local mac="$1"
+    [ -z "$mac" ] && { printf '{"error":"mac required"}\n'; return 1; }
+    local safe; safe=$(echo "$mac" | tr ':' '_')
+    rm -f "${PENDING_DB}/${safe}.json"
+    printf '{"status":"ok"}\n'
+}
+
+# --------------------------------------------------------------------------- #
 case "$1" in
-    list)
-        echo "{ \"$UBUS_OBJECT\": {
-            \"pending\": {},
-            \"approved\": {},
-            \"topology\": {},
-            \"approve\": { \"mac\": \"String\" },
-            \"reject\": { \"mac\": \"String\" }
-        } }"
-    ;;
-    call)
-        handle_call "$2"
-    ;;
+    list) list ;;
+    call) call "$2" "$3" ;;
 esac
