@@ -8,34 +8,30 @@ STOP=10
 
 UCI_APP=easymesh
 LOGFILE="/tmp/easymesh.log"
-lang=$(uci get luci.main.lang 2>/dev/null)
+lang=$(uci get luci.main.lang 2>/dev/null || echo "en")
+
 translate() {
-    local template="$1"
-    shift
-
-    local lua_script=$(cat <<LUA
-    require "luci.i18n".setlanguage("$lang")
-    print(require "luci.i18n".translate([==[$template]==]))
-LUA
-    )
-    local translated=$(lua -e "$lua_script")
-
+    local tpl="$1"; shift
+    local translated
+    translated=$(lua -e "require \"luci.i18n\".setlanguage(\"${lang}\"); print(require \"luci.i18n\".translate([==[${tpl}]==]))" 2>/dev/null)
+    [ -z "$translated" ] && translated="$tpl"
     if [ $# -gt 0 ]; then
+        # shellcheck disable=SC2059
         printf "$translated" "$@"
     else
-        echo "$translated"
+        printf '%s' "$translated"
     fi
 }
+
 _emlog() {
     local level="$1" tag="$2"; shift 2
     local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
     printf "%s [%-5s] [%-8s] %s\n" "$ts" "$level" "$tag" "$*" >> "$LOGFILE"
 }
-# log <template> [args...]  — translate 翻译模板，printf 插入参数
 log()  { _emlog "INFO"  "initd" "$(translate "$@")"; }
 loge() { _emlog "ERROR" "initd" "$(translate "$@")"; }
 
-# ── Find radio for given band ─────────────────────────────────────────────────
+# ── 获取指定频段的 radio 设备名 ──────────────────────────────────────────────
 _band_target=""; _found=""
 _find_radio() {
     local _n="$1" _b
@@ -53,7 +49,24 @@ get_radio() {
     eval "$_v='$_found'"
 }
 
-# ── Remove only easymesh-managed wireless interfaces ─────────────────────────
+# ── 获取 LAN 的实际以太网接口名 ──────────────────────────────────────────────
+# OpenWrt 有两种模型：
+#   旧版 (19.07-): network.lan.ifname = "eth0.1 eth1"
+#   新版 (21.02+): network.lan.device = "br-lan"，桥成员在 network.@device[0]
+# 我们只需要一个能加入 batman-adv 的物理 eth 接口名
+get_lan_eth() {
+    local _ifname _dev
+    # 新版：读 br-lan 设备的 ports
+    _ifname=$(uci -q get network.@device[0].ports | awk '{print $1}')
+    [ -n "$_ifname" ] && { echo "$_ifname"; return; }
+    # 旧版：读 network.lan.ifname 第一个
+    _ifname=$(uci -q get network.lan.ifname | awk '{print $1}')
+    [ -n "$_ifname" ] && { echo "$_ifname"; return; }
+    # Fallback
+    echo "eth0"
+}
+
+# ── 只删除 easymesh 创建的无线接口 ───────────────────────────────────────────
 _del_managed() {
     local _n="$1" _m
     config_get _m "$_n" easymesh_managed
@@ -65,20 +78,38 @@ cleanup_wireless() {
     uci commit wireless
 }
 
-# ── Undo only the network changes easymesh made ──────────────────────────────
+# ── 撤销 easymesh 对 network/dhcp 的修改 ─────────────────────────────────────
 cleanup_network() {
-    # Remove mesh network entries we created
-    uci -q del network.mesh
     uci -q del network.bat0
+    uci -q del network.mesh_eth
+    uci -q del network.mesh_wlan
+    # 从 br-lan 移除 bat0（master 模式下加入过）
+    # 兼容旧版 ifname list 和新版 bridge ports
+    uci -q del_list network.lan.ifname='bat0'    2>/dev/null || true
+    uci -q del_list network.@device[0].ports='bat0' 2>/dev/null || true
     uci commit network
 
-    # Restore DHCP server on LAN (was disabled on slave nodes)
+    # 还原 br-lan 为 static（agent 模式下改为 dhcp）
+    local cur_proto; cur_proto=$(uci -q get network.lan.proto)
+    if [ "$cur_proto" = "dhcp" ]; then
+        uci set network.lan.proto='static'
+        # 恢复静态 IP（读 easymesh 保存的备份，或 fallback 192.168.1.1）
+        local bak; bak=$(uci -q get easymesh.global._orig_lan_ip)
+        uci set network.lan.ipaddr="${bak:-192.168.1.1}"
+        uci set network.lan.netmask='255.255.255.0'
+        uci -q del easymesh.global._orig_lan_ip
+        uci commit easymesh
+        uci commit network
+    fi
+
+    # 恢复 DHCP server
     uci -q del dhcp.lan.ignore
     uci commit dhcp
 
     log "Network config cleaned up"
 }
 
+# ── 核心网络配置 ──────────────────────────────────────────────────────────────
 apply_mesh_config() {
     local role backhaul mesh_id mesh_key mesh_band ssid key
     local ieee80211r mobility_domain ft_over_ds reassociation_deadline
@@ -101,52 +132,53 @@ apply_mesh_config() {
     config_get routing_algo           global routing_algo          'BATMAN_IV'
     config_get mesh_fwding            global mesh_fwding           '0'
 
-    # Remove previously created wireless interfaces
     cleanup_wireless
 
-    local radio_mesh
+    local radio_mesh lan_eth
     get_radio radio_mesh "$mesh_band"
     [ -z "$radio_mesh" ] && radio_mesh="radio0"
-    log "apply_mesh_config: role=%s backhaul=%s radio=%s" "$role" "$backhaul" "$radio_mesh"
+    lan_eth=$(get_lan_eth)
+    log "apply_mesh_config: role=%s backhaul=%s radio=%s eth=%s" \
+        "$role" "$backhaul" "$radio_mesh" "$lan_eth"
 
-    # ── network: mesh hardif (physical → batman-adv) ──────────────────────────
-    # mesh0 is the 802.11s wifi-iface or eth interface feeding batman-adv
-    uci set network.mesh=interface
-    uci set network.mesh.proto='batadv_hardif'
-    uci set network.mesh.master='bat0'
-    uci set network.mesh.mtu='1536'
+    # ════════════════════════════════════════════════════════════════════════
+    # batman-adv 网络配置
+    #
+    # 正确的 OpenWrt UCI 架构：
+    #
+    #   network.bat0      proto=batadv          ← 虚拟接口，不写 ifname
+    #   network.mesh_eth  proto=batadv_hardif   ← 有线 hardif，必须有 ifname
+    #                     ifname=eth0（或实际接口名）
+    #                     master=bat0
+    #   network.mesh_wlan proto=batadv_hardif   ← 无线 hardif（wireless/auto 时）
+    #                     ifname=mesh0
+    #                     master=bat0
+    #
+    # master 角色：bat0 加入 br-lan，DHCP server 在 br-lan 上运行
+    # agent  角色：br-lan 改为 DHCP client 从 master 获取 IP，bat0 不加入 br-lan
+    # ════════════════════════════════════════════════════════════════════════
 
-    # ── network: bat0 virtual interface ──────────────────────────────────────
-    # Master: bat0 is a plain batadv interface. The daemon will do
-    #         `brctl addif br-lan bat0` at runtime once bat0 is up.
-    #         DO NOT touch network.lan here.
-    # Slave:  bat0 gets its IP via DHCP from the master.
+    # ── 1. bat0：batman-adv 虚拟接口 ─────────────────────────────────────────
     uci set network.bat0=interface
-    uci set network.bat0.ifname='bat0'
-    uci set network.bat0.proto='batadv'          # 主从节点 bat0 都是 batadv 接口
+    uci set network.bat0.proto='batadv'
     uci set network.bat0.routing_algo="$routing_algo"
-    if [ "$role" = "master" ]; then
-        # 主节点：br-lan 包含 eth0+bat0，由主节点做 DHCP server
-        uci -q del dhcp.lan.ignore
-        uci commit dhcp
-        log "Role: master - LAN DHCP enabled, bat0=batadv"
-    else
-        # 从节点：br-lan 只含 eth0，从节点不做 DHCP，由主节点分配 IP
-        # bat0 up 后与主节点 bat0 形成 L2 mesh，br-lan 走 DHCP client
-        uci set dhcp.lan.ignore='1'
-        uci commit dhcp
-        log "Role: agent - LAN DHCP disabled, bat0=batadv, IP from master"
-    fi
-    uci commit network
+    # proto=batadv 不写 ifname，netifd-proto-batadv 自动创建/管理 bat0 设备
 
-    # ── wireless: mesh backhaul interface ────────────────────────────────────
+    # ── 2. 有线 hardif ────────────────────────────────────────────────────────
+    uci set network.mesh_eth=interface
+    uci set network.mesh_eth.proto='batadv_hardif'
+    uci set network.mesh_eth.ifname="$lan_eth"
+    uci set network.mesh_eth.master='bat0'
+    uci set network.mesh_eth.mtu='1536'
+
+    # ── 3. 先创建 wireless.mesh0，再设置 network 字段 ────────────────────────
+    # 注意：wireless.mesh0.network 必须指向一个已存在的 batadv_hardif interface
     uci set wireless.mesh0=wifi-iface
     uci set wireless.mesh0.device="$radio_mesh"
     uci set wireless.mesh0.mode='mesh'
     uci set wireless.mesh0.mesh_id="$mesh_id"
     uci set wireless.mesh0.mesh_fwding="$mesh_fwding"
     uci set wireless.mesh0.mesh_rssi_threshold='-80'
-    uci set wireless.mesh0.network='mesh'
     uci set wireless.mesh0.easymesh_managed='1'
     if [ -n "$mesh_key" ]; then
         uci set wireless.mesh0.encryption='sae'
@@ -154,10 +186,76 @@ apply_mesh_config() {
     else
         uci set wireless.mesh0.encryption='none'
     fi
-    # Wired backhaul = disable wireless mesh; wireless/auto = enable it
-    uci set wireless.mesh0.disabled=$([ "$backhaul" = "wired" ] && echo '1' || echo '0')
 
-    # ── wireless: client AP ───────────────────────────────────────────────────
+    # ── 4. 无线 hardif（backhaul=wireless/auto 时启用）────────────────────────
+    if [ "$backhaul" != "wired" ]; then
+        uci set network.mesh_wlan=interface
+        uci set network.mesh_wlan.proto='batadv_hardif'
+        uci set network.mesh_wlan.ifname='mesh0'  # 由 wireless.mesh0 产生的接口名
+        uci set network.mesh_wlan.master='bat0'
+        uci set network.mesh_wlan.mtu='1560'
+        uci set wireless.mesh0.network='mesh_wlan'
+        uci set wireless.mesh0.disabled='0'
+    else
+        uci -q del network.mesh_wlan
+        # 有线回程：无线 mesh 接口禁用，但仍绑定到 mesh_eth（netifd 不会为 disabled 接口分配 hardif）
+        uci set wireless.mesh0.network='mesh_eth'
+        uci set wireless.mesh0.disabled='1'
+    fi
+
+    # ── 5. master/agent 角色网络差异 ─────────────────────────────────────────
+    if [ "$role" = "master" ]; then
+        # master：bat0 加入 br-lan bridge
+        # 兼容新旧两种 OpenWrt bridge 模型
+        local use_device_model=0
+        uci -q get network.@device[0].name | grep -q 'br-lan' && use_device_model=1
+
+        if [ "$use_device_model" = "1" ]; then
+            # OpenWrt 21.02+：bridge 成员在 network.@device[0].ports
+            uci -q del_list network.@device[0].ports='bat0' 2>/dev/null
+            uci add_list network.@device[0].ports='bat0'
+        else
+            # OpenWrt 19.07-：bridge 成员在 network.lan.ifname
+            local lan_ifname
+            lan_ifname=$(uci -q get network.lan.ifname || echo '')
+            if ! echo "$lan_ifname" | grep -qw 'bat0'; then
+                uci add_list network.lan.ifname='bat0' 2>/dev/null || \
+                    uci set network.lan.ifname="${lan_ifname:+$lan_ifname }bat0"
+            fi
+        fi
+
+        # 保持 br-lan 为 static（master 自身有固定 IP）
+        uci -q del dhcp.lan.ignore
+        uci commit dhcp
+        log "Role: master — bat0 in br-lan, DHCP server enabled"
+
+    else
+        # agent：br-lan 改为 DHCP client，从 master 获取 IP
+        # 先把 bat0 从 br-lan 移除（防止角色切换遗留）
+        uci -q del_list network.lan.ifname='bat0'         2>/dev/null || true
+        uci -q del_list network.@device[0].ports='bat0'   2>/dev/null || true
+
+        # 备份当前静态 IP（用于 cleanup 时恢复）
+        local orig_ip; orig_ip=$(uci -q get network.lan.ipaddr)
+        [ -n "$orig_ip" ] && uci set easymesh.global._orig_lan_ip="$orig_ip"
+        uci commit easymesh
+
+        # br-lan 改为 DHCP client（通过 batman-adv mesh 从 master DHCP 获取 IP）
+        uci set network.lan.proto='dhcp'
+        # 清掉静态 IP 配置（dhcp 模式下不需要）
+        uci -q del network.lan.ipaddr
+        uci -q del network.lan.netmask
+        uci -q del network.lan.gateway
+
+        # agent 不运行 DHCP server
+        uci set dhcp.lan.ignore='1'
+        uci commit dhcp
+        log "Role: agent — br-lan=DHCP client, DHCP server disabled"
+    fi
+
+    uci commit network
+
+    # ── 6. 客户端 AP ──────────────────────────────────────────────────────────
     uci set wireless.easymesh_ap=wifi-iface
     uci set wireless.easymesh_ap.device="$radio_mesh"
     uci set wireless.easymesh_ap.mode='ap'
@@ -191,29 +289,27 @@ apply_mesh_config() {
     log "apply_mesh_config done"
 }
 
-# ── procd service ─────────────────────────────────────────────────────────────
+# ── procd 服务管理 ────────────────────────────────────────────────────────────
 start_service() {
     local enabled role
     config_load "$UCI_APP"
     config_get_bool enabled global enabled 0
-
-    if [ "$enabled" -eq 0 ]; then
-        return 0
-    fi
+    [ "$enabled" -eq 0 ] && return 0
 
     config_get role global role 'master'
     log "EasyMesh starting (role=%s)" "$role"
 
     apply_mesh_config
-    ubus call uci commit '{"config":"network"}' 2>/dev/null
-    /etc/init.d/network reload 2>/dev/null &
 
-    ( sleep 3; wifi reload ) &
+    # network reload（后台，不阻塞 procd）
+    /etc/init.d/network reload 2>/dev/null &
+    # wifi reload 等网络稳定后再执行
+    ( sleep 5; wifi reload ) &
 
     log "Starting EasyMesh daemon (role=%s)..." "$role"
 
-    procd_open_instance "easymesh-${role}"
-    procd_set_param command /usr/sbin/easymesh-${role}
+    procd_open_instance "easymesh-daemon"
+    procd_set_param command /usr/sbin/easymesh-master
     procd_set_param respawn 10 3 0
     procd_set_param stdout 1
     procd_set_param stderr 1
@@ -222,23 +318,23 @@ start_service() {
 
 stop_service() {
     log "EasyMesh stopping..."
-    # 清理其他 easymesh 进程
-    for pid in $(pgrep -f "easymesh-(master|agent)" 2>/dev/null); do
-        [ "$pid" != "$$" ] && kill "$pid" 2>/dev/null || true
-    done
-    # Remove managed wireless interfaces and mesh network config
+    # 停止 daemon（procd 会处理主进程，这里清理子进程）
+    /usr/sbin/easymesh-master stop 2>/dev/null || true
+    # 清理 easymesh 进程（busybox pgrep 兼容写法）
+    pkill -f 'easymesh-master' 2>/dev/null || true
+    pkill -f 'easymesh-agent'  2>/dev/null || true
+    # 清理网络和无线配置
     cleanup_wireless
     cleanup_network
-    # Reload wifi and network to apply the cleanup
     ( sleep 1; wifi reload ) &
-    ( sleep 1; /etc/init.d/network reload ) &
+    ( sleep 2; /etc/init.d/network reload ) &
     rm -rf /tmp/easymesh* /tmp/em_* 2>/dev/null
 }
 
 reload_service() {
-    stop
+    stop_service
     sleep 2
-    start
+    start_service
 }
 
 service_triggers() {
