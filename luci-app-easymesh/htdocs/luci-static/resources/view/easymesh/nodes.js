@@ -6,12 +6,6 @@
 'require ui';
 'require fs';
 
-var callNetworkDump = rpc.declare({
-	object: 'network.interface',
-	method: 'dump',
-	expect: { interface: [] }
-});
-
 var callMeshPending = rpc.declare({
 	object: 'easymesh',
 	method: 'pending'
@@ -300,7 +294,6 @@ return view.extend({
 		return Promise.all([
 			uci.load('easymesh'),
 			callMeshTopology(),
-			callNetworkDump(),
 			callMeshPending(),
 			callMeshApproved()
 		]);
@@ -309,8 +302,8 @@ return view.extend({
 	render: function (data) {
 		var self = this;
 		var _positions = {};
-		var pending  = (data[3]  && Array.isArray(data[3].nodes))  ? data[3].nodes  : [];
-		var approved = (data[4]  && Array.isArray(data[4].nodes))  ? data[4].nodes  : [];
+		var pending  = (data[2]  && Array.isArray(data[2].nodes))  ? data[2].nodes  : [];
+		var approved = (data[3]  && Array.isArray(data[3].nodes))  ? data[3].nodes  : [];
 		var root = E('div', { id: 'easymesh-nodes-root' });
 		var enabled = uci.get_bool('easymesh', 'global', 'enabled');
 		if (!enabled) {
@@ -323,19 +316,18 @@ return view.extend({
 			return root;
 		}
 
-		root.appendChild(self._build(data[1], data[2] || [], pending, approved));
+		root.appendChild(self._build(data[1], pending, approved));
 
 		poll.add(function () {
 			return Promise.all([
 				callMeshTopology(),
-				callNetworkDump(),
 				callMeshPending(),
 				callMeshApproved()
 			]).then(function (r) {
-				var p = (r[2] && Array.isArray(r[2].nodes)) ? r[2].nodes : [];
-				var a = (r[3] && Array.isArray(r[3].nodes)) ? r[3].nodes : [];
+				var p = (r[1] && Array.isArray(r[1].nodes)) ? r[1].nodes : [];
+				var a = (r[2] && Array.isArray(r[2].nodes)) ? r[2].nodes : [];
 				var old = document.getElementById('easymesh-nodes-inner');
-				if (old) old.replaceWith(self._build(r[0], r[1] || [], p, a));
+				if (old) old.replaceWith(self._build(r[0], p, a));
 			}).catch(function () {});
 		}, 5);
 
@@ -355,10 +347,11 @@ return view.extend({
 		return root;
 	},
 
-	_build: function (topology, interfaces, pendingRaw, approvedRaw) {
+	_build: function (topology, pendingRaw, approvedRaw) {
 		var self = this;
 		var el = E('div', { id: 'easymesh-nodes-inner' });
-		var bat0 = interfaces.filter(function (i) { return i.interface === 'bat0'; })[0];
+		/* bat0 状态从 topology.bat0_up 读取（由 rpcd 调用 ip link 检测）*/
+		var bat0Up = topology && topology.bat0_up;
 		var mesh = (topology && Array.isArray(topology.links))
 				? topology.links.map(function(l) {
 					return { mac: l.dst, tq: l.tq || 0, nextHop: l.dst, iface: 'bat0', lastSeen: 0 };
@@ -395,7 +388,7 @@ return view.extend({
 			E('div', { class: 'table' }, [
 				E('div', { class: 'tr' }, [
 					E('div', { class: 'td left', style: 'width:160px' }, 'bat0'),
-					E('div', { class: 'td' }, bat0
+					E('div', { class: 'td' }, bat0Up
 						? E('span', {
 							class: 'label',
 							style: 'background:#2ea44f;color:#fff;padding:2px 8px;border-radius:4px'

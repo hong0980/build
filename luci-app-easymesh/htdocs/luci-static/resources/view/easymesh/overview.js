@@ -24,19 +24,34 @@ return view.extend({
 
 	render: function (data) {
 		var m, s, o;
+		var role = uci.get('easymesh', 'global', 'role') || 'master';
+		var isMaster = (role === 'master');
 		var qrSection = E('div', {
-			style: 'border-radius:12px;' +
-				'padding:20px 24px;margin-bottom:20px'
-		}, [
+			style: 'border:1px solid #30363d;border-radius:12px;' +
+				'background:#161b22;padding:20px 24px;margin-bottom:20px'
+		}, isMaster ? [
 			E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:12px' },
-				'🔌 ' + _('Add New Node')),
+				'➕ ' + _('Add New Node (Master Mode)')),
 			E('ol', {
 				style: 'padding-left:20px;font-size:13px;line-height:2.4;color:#e6edf3;margin:0'
 			}, [
-				E('li', {}, _('Flash OpenWrt on the new node')),
-				E('li', {}, _('Power it on and connect a LAN cable from this router to the new node')),
-				E('li', {}, _('Wait ~30 seconds — the new node auto-discovers this master, pulls config and joins the mesh')),
-				E('li', {}, _('Check the Nodes tab to confirm it appears'))
+				E('li', {}, _('Flash OpenWrt + install luci-app-easymesh on the new node')),
+				E('li', {}, _('Set role to Agent in its EasyMesh config, then enable EasyMesh')),
+				E('li', {}, _('Connect a LAN cable: this master LAN port ↔ new node LAN port')),
+				E('li', {}, _('Wait ~30 seconds — agent auto-discovers this master via UDP broadcast')),
+				E('li', {}, _('Go to the Nodes tab on this master and click Allow to join'))
+			])
+		] : [
+			E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:12px' },
+				'📡 ' + _('Agent Mode — Joining Mesh')),
+			E('ol', {
+				style: 'padding-left:20px;font-size:13px;line-height:2.4;color:#e6edf3;margin:0'
+			}, [
+				E('li', {}, _('Connect a LAN cable from this node to the master router')),
+				E('li', {}, _('Make sure Enable EasyMesh is on and role is Agent, then Save & Apply')),
+				E('li', {}, _('This node will broadcast discovery packets to find the master')),
+				E('li', {}, _('Master will show this node in its Nodes tab — approve it there')),
+				E('li', {}, _('Once approved, master pushes WiFi config automatically'))
 			])
 		]);
 

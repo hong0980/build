@@ -62,14 +62,27 @@ _approved() { _nodes_from_dir "$NODE_DB"    "approved"; }
 
 # --------------------------------------------------------------------------- #
 _topology() {
+    # bat0 状态：检查内核网络接口是否存在且 UP
+    local bat0_up=false
+    if [ -d /sys/class/net/bat0 ]; then
+        local flags; flags=$(cat /sys/class/net/bat0/flags 2>/dev/null || echo 0)
+        # flags & IFF_UP (0x1)
+        [ $(( flags & 1 )) -eq 1 ] && bat0_up=true
+    fi
+
     if [ -f "$TOPO_FILE" ]; then
-        # Return cached file if fresh (< 15 s)
         local now age
         now=$(date +%s)
-        age=$(( now - $(date -r "$TOPO_FILE" +%s 2>/dev/null || echo 0) ))
-        [ "$age" -lt 15 ] && { cat "$TOPO_FILE"; return; }
+        age=$(( now - $(cat /tmp/easymesh_topo_ts 2>/dev/null || echo 0) ))
+        if [ "$age" -lt 15 ]; then
+            # 注入 bat0_up 到缓存结果
+            local cached; cached=$(cat "$TOPO_FILE")
+            # 在 JSON 结尾 } 前插入 bat0_up 字段
+            printf '%s' "$cached" | sed 's/}$//'; printf ',"bat0_up":%s}\n' "$bat0_up"
+            return
+        fi
     fi
-    printf '{"ts":%d,"nodes":[],"links":[]}\n' "$(date +%s)"
+    printf '{"ts":%d,"nodes":[],"links":[],"bat0_up":%s}\n' "$(date +%s)" "$bat0_up"
 }
 
 # --------------------------------------------------------------------------- #
