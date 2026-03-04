@@ -235,15 +235,6 @@ msgstr "正在加载拓扑..."
 msgid "Topology unavailable — master node not reachable."
 msgstr "拓扑不可用 — 主节点不可达。"
 
-
-
-
-
-
-
-
-
-
 msgid "No app, QR code or manual configuration needed. Wired backhaul provides the most stable mesh connection."
 msgstr "无需 App、二维码或手动配置。有线回程提供最稳定的 Mesh 连接。"
 
@@ -706,3 +697,9 @@ msgstr "主节点的「节点状态」页面会显示本节点，在那里点击
 
 msgid "Once approved, master pushes WiFi config automatically"
 msgstr "批准后主节点将自动推送 WiFi 配置"
+
+msgid "Quick join shortcut: on the new node, press and hold the WPS button for 2–10 seconds. It auto-sets Agent mode and starts discovery. Then approve in the Nodes tab here."
+msgstr "快速加入：在新节点上按住 WPS 按钮 2～10 秒松开，自动切换为 Agent 模式并开始发现主节点。然后在本页「节点状态」中批准即可。"
+
+msgid "Node re-registered (approved): %s (%s)"
+msgstr "节点重新上线（已审批）: %s (%s)"

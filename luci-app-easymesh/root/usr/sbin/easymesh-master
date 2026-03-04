@@ -10,10 +10,28 @@ ROAM_COOLDOWN_DIR="/tmp/em_cooldown"
 export ROLE_FILE="/tmp/easymesh_role"
 export MASTER_IP_FILE="/tmp/easymesh_master_ip"
 export NODE_DB="/tmp/easymesh_nodes"
+export PENDING_DB="/tmp/easymesh_pending"
 export EM_PID_DIR="/tmp/easymesh_pids"
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-ETH_IF="eth0"
+# ETH_IF: 动态获取 br-lan 的第一个成员物理接口
+# 优先从 UCI network 读（兼容 19.07 和 21.02+），fallback 到 brctl
+_get_eth_if() {
+    local _raw _i=0 _name
+    while true; do
+        _name=$(uci -q get "network.@device[${_i}].name" 2>/dev/null) || break
+        if [ "$_name" = "br-lan" ]; then
+            _raw=$(uci -q get "network.@device[${_i}].ports" 2>/dev/null | awk '{print $1}')
+            break
+        fi
+        _i=$((_i + 1))
+    done
+    [ -z "$_raw" ] && _raw=$(uci -q get network.lan.ifname 2>/dev/null | awk '{print $1}')
+    [ -z "$_raw" ] && _raw=$(brctl show br-lan 2>/dev/null | awk 'NR==2{print $NF}')
+    echo "${_raw%%.*}"   # 剥掉 VLAN 后缀 eth0.1→eth0
+}
+ETH_IF=$(_get_eth_if)
+[ -z "$ETH_IF" ] && ETH_IF="eth0"
 BRIDGE_IF="br-lan"
 AP_IF="wlan0"
 MESH_IF="bat0"
@@ -309,8 +327,9 @@ discovery_server() {
 # 环境变量通过 export 传递（ROLE_FILE/NODE_DB/LOGFILE/MASTER_PORT/DISC_PORT）
 __handle_hello() {
     # socat fork 子进程：export 变量已继承，但防御性补全
-    [ -z "$NODE_DB"   ] && NODE_DB="/tmp/easymesh_nodes"
-    [ -z "$LOGFILE"   ] && LOGFILE="/tmp/easymesh.log"
+    [ -z "$NODE_DB"     ] && NODE_DB="/tmp/easymesh_nodes"
+    [ -z "$PENDING_DB"  ] && PENDING_DB="/tmp/easymesh_pending"
+    [ -z "$LOGFILE"     ] && LOGFILE="/tmp/easymesh.log"
     [ -z "$MASTER_PORT" ] && MASTER_PORT=4304
 
     local msg
@@ -328,19 +347,20 @@ __handle_hello() {
     # 校验 mac 格式（xx:xx:xx:xx:xx:xx）
     echo "$mac" | grep -qE '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' || return 0
 
-    # 写入 NODE_DB（.json 格式，rpcd 可读）
-    mkdir -p "$NODE_DB"
+    # 写入 PENDING_DB（等待 master 管理员手动批准）
+    # 若已在 NODE_DB（已审批），只更新 IP/时间戳，不重新放入 pending
     local safe; safe=$(echo "$mac" | tr ':' '_')
-    local node_file="${NODE_DB}/${safe}.json"
-    # 已存在则仅更新 IP 和时间戳（不覆盖 hostname 等）
-    if [ ! -f "$node_file" ]; then
-        printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"wired","status":"approved","ts":%s}' "$mac" "$ip" "${host:-unknown}" "$(date +%s)" > "$node_file"
-        # 记录日志（直接写文件，不调 log()，子进程无法 translate）
-        printf "%s [INFO ] [ core ] Discovery: auto-approved node %s (%s) at %s" "$(date '+%Y-%m-%d %H:%M:%S')" "$mac" "${host:-unknown}" "$ip" >> "$LOGFILE"
+    local approved_file="${NODE_DB}/${safe}.json"
+    local pending_file="${PENDING_DB}/${safe}.json"
+    mkdir -p "$NODE_DB" "$PENDING_DB"
+    if [ -f "$approved_file" ]; then
+        # 已审批节点：只更新 IP 和时间戳
+        sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"$ip\"/" "$approved_file"
+        sed -i "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" "$approved_file"
     else
-        # 更新 IP（节点重启后 IP 可能变化）
-        sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"$ip\"/" "$node_file"
-        sed -i "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" "$node_file"
+        # 新节点：写入 pending 队列（source 标记为 discovery）
+        printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"wired","status":"pending","ts":%s}\n'             "$mac" "$ip" "${host:-unknown}" "$(date +%s)" > "$pending_file"
+        printf "%s [INFO ] [core    ] Pending node: %s (%s) via wired discovery\n"             "$(date '+%Y-%m-%d %H:%M:%S')" "$mac" "${host:-unknown}" >> "$LOGFILE"
     fi
 
     # 获取本机 IP（master 的 br-lan IP）
@@ -467,7 +487,10 @@ __http_handler() {
             local req_mac safe
             req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
             safe=$(echo "$req_mac" | tr ':' '_')
-            if [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
+            if [ -f "${PENDING_DB}/${safe}.json" ]; then
+                # 节点在 pending 队列：告知 agent 继续等待
+                _http_ok '{"status":"pending"}'
+            elif [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
                 local sum; sum=$(md5sum "$PROFILE_FILE" | cut -d' ' -f1)
                 _http_ok "{\"sum\":\"$sum\"}"
             else
@@ -478,7 +501,10 @@ __http_handler() {
             local req_mac safe
             req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
             safe=$(echo "$req_mac" | tr ':' '_')
-            if [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
+            if [ -f "${PENDING_DB}/${safe}.json" ]; then
+                # 仍在 pending：返回 pending 状态，agent 继续轮询
+                _http_ok '{"status":"pending"}'
+            elif [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
                 _http_ok "$(cat "$PROFILE_FILE")"
             else
                 _http_ok '{"status":"unregistered"}'
@@ -533,11 +559,21 @@ register_node() {
     hostname=$(echo "$body" | grep -o '"hostname":"[^"]*"' | cut -d'"' -f4)
     [ -z "$mac" ] && return 1
     local safe; safe=$(echo "$mac" | tr ':' '_')
-    mkdir -p "$NODE_DB"
-    printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"%s","status":"approved","ts":%s}\n' \
-        "$mac" "${ip:-?}" "${hostname:-?}" "${source:-wired}" "$(date +%s)" \
-        > "${NODE_DB}/${safe}.json"
-    log "Node registered: %s (%s) via %s" "$mac" "${hostname:-?}" "$source"
+    mkdir -p "$NODE_DB" "$PENDING_DB"
+    local approved_file="${NODE_DB}/${safe}.json"
+    local pending_file="${PENDING_DB}/${safe}.json"
+    if [ -f "$approved_file" ]; then
+        # 已审批节点重新上线：更新 IP/时间戳
+        sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"${ip:-?}\"/" "$approved_file"
+        sed -i "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" "$approved_file"
+        log "Node re-registered (approved): %s (%s)" "$mac" "${hostname:-?}"
+    else
+        # 新节点：放入 pending 队列等待管理员批准
+        printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"%s","status":"pending","ts":%s}\n' \
+            "$mac" "${ip:-?}" "${hostname:-?}" "${source:-wired}" "$(date +%s)" \
+            > "$pending_file"
+        log "Pending node: %s (%s) via %s" "$mac" "${hostname:-?}" "$source"
+    fi
 }
 
 ########################################
@@ -612,8 +648,12 @@ poll_for_approval() {
     local resp
     resp=$(wget -q -T 5 -O- "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
 
+    if echo "$resp" | grep -q '"status":"pending"'; then
+        log "Waiting for master approval..."
+        return 1
+    fi
     if echo "$resp" | grep -q '"status":"unregistered"'; then
-        logw "Master lost our record, re-registering"
+        logw "Master has no record of this node, re-registering"
         rm -f "$MASTER_IP_FILE"
         do_register
         return 1

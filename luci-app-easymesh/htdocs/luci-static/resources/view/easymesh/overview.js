@@ -12,7 +12,6 @@ var callGetWirelessDevices = rpc.declare({
 });
 
 return view.extend({
-
 	load: function () {
 		return Promise.all([
 			uci.load('easymesh'),
@@ -27,8 +26,7 @@ return view.extend({
 		var role = uci.get('easymesh', 'global', 'role') || 'master';
 		var isMaster = (role === 'master');
 		var qrSection = E('div', {
-			style: 'border:1px solid #30363d;border-radius:12px;' +
-				'background:#161b22;padding:20px 24px;margin-bottom:20px'
+			style: 'border-radius:12px;padding:15px 20px;'
 		}, isMaster ? [
 			E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:12px' },
 				'➕ ' + _('Add New Node (Master Mode)')),
@@ -238,9 +236,6 @@ return view.extend({
 		o.placeholder = '1000';
 		o.depends({ enabled: '1', ieee80211r: '1' });
 
-		/* Store map reference so handleSave/handleSaveApply can call m.save()
-		 * The default view.handleSave calls this.map.save() — we must set
-		 * this.map here since m is a local variable in render(). */
 		this.map = m;
 		return m.render().then(function (node) {
 			node.insertBefore(qrSection, node.firstChild);
