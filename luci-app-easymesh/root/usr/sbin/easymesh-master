@@ -3,25 +3,25 @@
 . /lib/functions.sh
 
 # ── Files ─────────────────────────────────────────────────────────────────────
-ROLE_FILE="/tmp/easymesh_role"
-MASTER_IP_FILE="/tmp/easymesh_master_ip"
 PROFILE_FILE="/tmp/easymesh_profile.json"
 TOPO_FILE="/tmp/easymesh_topo.json"
-NODE_DB="/tmp/easymesh_nodes"
 NEIGHBOR_FILE="/tmp/easymesh_neighbors.conf"
 ROAM_COOLDOWN_DIR="/tmp/em_cooldown"
-EM_PID_DIR="/tmp/easymesh_pids"
+export ROLE_FILE="/tmp/easymesh_role"
+export MASTER_IP_FILE="/tmp/easymesh_master_ip"
+export NODE_DB="/tmp/easymesh_nodes"
+export EM_PID_DIR="/tmp/easymesh_pids"
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-MASTER_PORT=4304
-DISC_PORT=4305          # UDP 广播发现端口
 ETH_IF="eth0"
 BRIDGE_IF="br-lan"
 AP_IF="wlan0"
 MESH_IF="bat0"
-LOGFILE="/tmp/easymesh.log"
 LOG_MAX_LINES=500
 _log_seq=0
+export MASTER_PORT=4304
+export DISC_PORT=4305
+export LOGFILE="/tmp/easymesh.log"
 
 # ── Tuning ────────────────────────────────────────────────────────────────────
 BATMAN_OGM_INTERVAL=500
@@ -118,23 +118,14 @@ do_http_post() {
 # 1. PROCESS MANAGEMENT
 ########################################
 _stop_jobs() {
-    [ -d "$EM_PID_DIR" ] || return 0
-    local _f _pid
-    for _f in "$EM_PID_DIR"/*.pid; do
-        [ -f "$_f" ] || continue
-        _pid=$(cat "$_f" 2>/dev/null)
-        [ -n "$_pid" ] && kill "$_pid" 2>/dev/null || true
-        rm -f "$_f"
-    done
-
-    # 使用 pgrep + kill 替代 pkill
-    for pid in $(pgrep -f "socat.*:$MASTER_PORT" 2>/dev/null); do
-        kill "$pid" 2>/dev/null || true
-    done
-
-    for pid in $(pgrep -f "socat.*UDP.*:$DISC_PORT" 2>/dev/null); do
-        kill "$pid" 2>/dev/null || true
-    done
+    log "Stopping all background jobs..."
+    [ -d "$EM_PID_DIR" ] && {
+        for _f in "$EM_PID_DIR"/*.pid; do
+            [ -f "$_f" ] && kill $(cat "$_f") 2>/dev/null && rm -f "$_f"
+        done
+    }
+    # 强制清理 socat 占用的端口进程
+    ps | grep -E "socat.*$DISC_PORT|socat.*$MASTER_PORT" | grep -v grep | awk '{print $1}' | xargs kill -9 2>/dev/null
 }
 
 _bg() {
@@ -148,6 +139,11 @@ _bg() {
 # 2. ROLE ELECTION
 ########################################
 elect_role() {
+    local cfg_role=$(uci -q get easymesh.global.role)
+    if [ -n "$cfg_role" ]; then
+        echo "$cfg_role" > "$ROLE_FILE"
+        return 0
+    fi
     local mymac myip
     mymac=$(get_mac); myip=$(get_ip)
 
@@ -238,90 +234,131 @@ DISC_TIMEOUT=60
 # Master 侧：用 socat 监听 UDP 广播
 discovery_server() {
     log "Discovery server listening on UDP %s (via socat)" "$DISC_PORT"
-
-    # 使用 socat 创建 UDP 服务器，每收到一个包就执行处理函数
-    socat UDP-LISTEN:$DISC_PORT,fork,reuseaddr \
-        EXEC:"$0 __handle_hello" 2>/dev/null &
-
+    socat UDP4-RECVFROM:$DISC_PORT,fork,reuseaddr EXEC:"$0 __handle_hello" &
     echo $! > "${EM_PID_DIR}/disc_server.pid"
 }
 
 # 处理 HELLO 包的函数
+# __handle_hello() {
+#     local msg type mac ip hostname
+#     IFS= read -r msg
+
+#     type=$(echo "$msg" | awk '{print $1}')
+#     mac=$(echo "$msg"  | awk '{print $2}')
+#     ip=$(echo "$msg"   | awk '{print $3}')
+#     hostname=$(echo "$msg" | awk '{print $4}')
+
+#     [ "$type" != "EASYMESH_HELLO" ] && return
+#     [ -z "$mac" ] || [ -z "$ip" ] && return
+
+#     log "Discovery: new node %s (%s) at %s" "$mac" "$hostname" "$ip"
+
+#     local safe; safe=$(echo "$mac" | tr ':' '_')
+#     mkdir -p "$NODE_DB"
+#     if [ ! -f "${NODE_DB}/${safe}.json" ]; then
+#         printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"wired","status":"approved","ts":%s}\n' \
+#             "$mac" "$ip" "${hostname:-unknown}" "$(date +%s)" \
+#             > "${NODE_DB}/${safe}.json"
+#         log "Node auto-approved: %s (%s)" "$mac" "${hostname:-unknown}"
+#         generate_profile
+#         local mkey; mkey=$(uci get easymesh.global.mesh_key 2>/dev/null || echo "")
+#         # 回复 WELCOME（单播）
+#         printf 'EASYMESH_WELCOME %s %s\n' "$(get_ip)" "$mkey" | \
+#             socat - UDP:"$ip:$DISC_PORT" 2>/dev/null
+#     fi
+# }
 __handle_hello() {
-    local msg type mac ip hostname
-    IFS= read -r msg
-
-    type=$(echo "$msg" | awk '{print $1}')
-    mac=$(echo "$msg"  | awk '{print $2}')
-    ip=$(echo "$msg"   | awk '{print $3}')
-    hostname=$(echo "$msg" | awk '{print $4}')
-
-    [ "$type" != "EASYMESH_HELLO" ] && return
-    [ -z "$mac" ] || [ -z "$ip" ] && return
-
-    log "Discovery: new node %s (%s) at %s" "$mac" "$hostname" "$ip"
-
-    local safe; safe=$(echo "$mac" | tr ':' '_')
+    # 核心修复：如果环境变量丢失，重新定义路径
+    [ -z "$NODE_DB" ] && NODE_DB="/tmp/easymesh_nodes"
+    [ -z "$LOGFILE" ] && LOGFILE="/tmp/easymesh.log"
     mkdir -p "$NODE_DB"
-    if [ ! -f "${NODE_DB}/${safe}.json" ]; then
-        printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"wired","status":"approved","ts":%s}\n' \
-            "$mac" "$ip" "${hostname:-unknown}" "$(date +%s)" \
-            > "${NODE_DB}/${safe}.json"
-        log "Node auto-approved: %s (%s)" "$mac" "${hostname:-unknown}"
-        generate_profile
-        local mkey; mkey=$(uci get easymesh.global.mesh_key 2>/dev/null || echo "")
-        # 回复 WELCOME（单播）
-        printf 'EASYMESH_WELCOME %s %s\n' "$(get_ip)" "$mkey" | \
-            socat - UDP:"$ip:$DISC_PORT" 2>/dev/null
+
+    local msg
+    # 从标准输入读取 socat 传来的 UDP 数据
+    if IFS= read -r msg; then
+        local cmd=$(echo "$msg" | awk '{print $1}')
+
+        # 只处理 HELLO 类型的包
+        [ "$cmd" != "EASYMESH_HELLO" ] && return
+
+        local mac=$(echo "$msg" | awk '{print $2}')
+        local ip=$(echo "$msg" | awk '{print $3}')
+        local host=$(echo "$msg" | awk '{print $4}')
+
+        if [ -n "$mac" ] && [ -n "$ip" ]; then
+            # 将子节点 IP 写入本地数据库，以 MAC 命名的文件
+            echo "$ip" > "$NODE_DB/$mac"
+
+            # 记录日志 (由于是子进程，直接写文件)
+            echo "$(date) [Discovery] Registered node $mac at $ip ($host)" >> "$LOGFILE"
+
+            # 主节点回应：告诉子节点 Master 的 IP，让子节点立即发起 HTTP 注册
+            local myip=$(ip -4 addr show dev br-lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
+            printf 'EASYMESH_MASTER %s\n' "$myip" | socat - UDP-DATAGRAM:255.255.255.255:$DISC_PORT,broadcast 2>/dev/null
+        fi
     fi
 }
-
 # Agent 侧：广播并等待回复
+# discovery_client() {
+#     local mac ip hostname mymac myip
+#     mymac=$(get_mac); myip=$(get_ip)
+#     hostname=$(uci get system.@system[0].hostname 2>/dev/null || echo "node")
+#     local elapsed=0
+
+#     log "Discovery: broadcasting HELLO every %ss (via socat)" "$DISC_HELLO_INTERVAL"
+
+#     # 创建临时 FIFO 用于接收回复
+#     local resp_fifo="/tmp/em_disc_resp_$$"
+#     mkfifo "$resp_fifo" 2>/dev/null
+
+#     # 后台启动 socat 监听回复
+#     socat UDP-LISTEN:$DISC_PORT,reuseaddr,fork \
+#         OPEN:"$resp_fifo",append 2>/dev/null &
+#     local listen_pid=$!
+
+#     while [ "$elapsed" -lt "$DISC_TIMEOUT" ]; do
+#         # 广播 HELLO
+#         printf 'EASYMESH_HELLO %s %s %s\n' "$mymac" "$myip" "$hostname" | \
+#             socat - UDP-DATAGRAM:255.255.255.255:$DISC_PORT,broadcast 2>/dev/null
+
+#         # 非阻塞读取回复（等待3秒）
+#         local reply
+#         read -t 3 reply < "$resp_fifo" 2>/dev/null
+#         if echo "$reply" | grep -q "^EASYMESH_WELCOME"; then
+#             local master_ip_got
+#             master_ip_got=$(echo "$reply" | awk '{print $2}')
+#             echo "$master_ip_got" > "$MASTER_IP_FILE"
+#             log "Discovery: master found at %s" "$master_ip_got"
+#             kill "$listen_pid" 2>/dev/null
+#             rm -f "$resp_fifo"
+#             return 0
+#         fi
+
+#         sleep "$DISC_HELLO_INTERVAL"
+#         elapsed=$(( elapsed + DISC_HELLO_INTERVAL + 3 ))
+#     done
+
+#     kill "$listen_pid" 2>/dev/null
+#     rm -f "$resp_fifo"
+#     log "Discovery timeout, falling back to LAN scan"
+#     return 1
+# }
 discovery_client() {
-    local mac ip hostname mymac myip
-    mymac=$(get_mac); myip=$(get_ip)
-    hostname=$(uci get system.@system[0].hostname 2>/dev/null || echo "node")
-    local elapsed=0
+    # 确保在函数内重新获取变量，防止主进程变量未导出
+    local mymac=$(cat /sys/class/net/$BRIDGE_IF/address 2>/dev/null)
+    local myip=$(get_ip)
+    local hostname=$(uci -q get system.@system[0].hostname || echo "node")
 
-    log "Discovery: broadcasting HELLO every %ss (via socat)" "$DISC_HELLO_INTERVAL"
+    log "Discovery: Broadcasting HELLO (MAC: $mymac, IP: $myip)..."
 
-    # 创建临时 FIFO 用于接收回复
-    local resp_fifo="/tmp/em_disc_resp_$$"
-    mkfifo "$resp_fifo" 2>/dev/null
-
-    # 后台启动 socat 监听回复
-    socat UDP-LISTEN:$DISC_PORT,reuseaddr,fork \
-        OPEN:"$resp_fifo",append 2>/dev/null &
-    local listen_pid=$!
-
-    while [ "$elapsed" -lt "$DISC_TIMEOUT" ]; do
-        # 广播 HELLO
+    # 连续广播 3 次，每次间隔 1 秒，防止无线网络波动丢包
+    for i in 1 2 3; do
+        # 显式使用 broadcast 选项
         printf 'EASYMESH_HELLO %s %s %s\n' "$mymac" "$myip" "$hostname" | \
             socat - UDP-DATAGRAM:255.255.255.255:$DISC_PORT,broadcast 2>/dev/null
-
-        # 非阻塞读取回复（等待3秒）
-        local reply
-        read -t 3 reply < "$resp_fifo" 2>/dev/null
-        if echo "$reply" | grep -q "^EASYMESH_WELCOME"; then
-            local master_ip_got
-            master_ip_got=$(echo "$reply" | awk '{print $2}')
-            echo "$master_ip_got" > "$MASTER_IP_FILE"
-            log "Discovery: master found at %s" "$master_ip_got"
-            kill "$listen_pid" 2>/dev/null
-            rm -f "$resp_fifo"
-            return 0
-        fi
-
-        sleep "$DISC_HELLO_INTERVAL"
-        elapsed=$(( elapsed + DISC_HELLO_INTERVAL + 3 ))
+        sleep 1
     done
-
-    kill "$listen_pid" 2>/dev/null
-    rm -f "$resp_fifo"
-    log "Discovery timeout, falling back to LAN scan"
-    return 1
 }
-
 ########################################
 # 6. INTER-NODE HTTP SERVER (纯 socat)
 ########################################
@@ -946,12 +983,6 @@ main_loop() {
     [ "$count5g" -ge 2 ] && hw_type="tri-band"
     echo "$hw_type" > /tmp/easymesh_hw_type
     log "Hardware: %s" "$hw_type"
-
-    # 检查 socat 是否可用
-    if ! command -v socat >/dev/null 2>&1; then
-        loge "socat not found! Please install: opkg update && opkg install socat"
-        return 1
-    fi
 
     elect_role
     tune_batman
