@@ -21,6 +21,7 @@ LOG_MAX_LINES=500
 _log_seq=0
 export MASTER_PORT=4304
 export DISC_PORT=4305
+export DISC_REPLY_PORT=4306
 export LOGFILE="/tmp/easymesh.log"
 
 # ── Tuning ────────────────────────────────────────────────────────────────────
@@ -127,8 +128,8 @@ _stop_jobs() {
             kill "$_pid" 2>/dev/null || true
             # 等待子进程退出，最多 2 秒
             local _i=0
-            while kill -0 "$_pid" 2>/dev/null && [ $_i -lt 4 ]; do
-                sleep 0.5; _i=$((_i+1))
+            while kill -0 "$_pid" 2>/dev/null && [ $_i -lt 3 ]; do
+                sleep 1; _i=$((_i+1))
             done
             kill -9 "$_pid" 2>/dev/null || true
         fi
@@ -136,7 +137,8 @@ _stop_jobs() {
     done
     # 清理残留 socat（端口占用导致重启失败）
     pkill -f "socat.*:${MASTER_PORT}" 2>/dev/null || true
-    pkill -f "socat.*:${DISC_PORT}"   2>/dev/null || true
+    pkill -f "socat.*:${DISC_PORT}"       2>/dev/null || true
+    pkill -f "socat.*:${DISC_REPLY_PORT}" 2>/dev/null || true
 }
 
 _bg() {
@@ -219,35 +221,74 @@ tune_batman() {
 }
 
 ########################################
-# 4. BACKHAUL READINESS CHECK
+# 4. BATMAN-ADV RUNTIME SETUP
 ########################################
-# UCI 已由 init.d/apply_mesh_config 配置好 batman-adv：
-#   network.bat0     → proto=batadv（创建 bat0 虚拟接口）
-#   network.mesh_eth → proto=batadv_hardif, ifname=eth0, master=bat0
-#   network.mesh_wlan→ proto=batadv_hardif, ifname=mesh0, master=bat0（无线回程时）
-# netifd 启动后会自动建立这些接口。
-# daemon 只需要：
-#   1. 等 bat0 出现（netifd 异步启动可能比 daemon 慢）
-#   2. master 确认 bat0 已在 br-lan 中（应由 UCI 保证，这里做校验）
+# init.d 不写 UCI network（OpenWrt netifd 不支持 proto=batadv/batadv_hardif）
+# batman-adv 由本 daemon 用 batctl/brctl 在运行时完整配置：
+#   modprobe → bat0 up → eth0 hardif → mesh0 hardif（无线时）→ brctl（master）
 setup_wired_backhaul() {
-    # 等 bat0 出现，最多 15 秒
-    local _wait=0
-    while ! ip link show "$MESH_IF" >/dev/null 2>&1; do
-        _wait=$((_wait + 1))
-        [ $_wait -ge 15 ] && { loge "bat0 not found after 15s - batman-adv not loaded?"; return 1; }
-        sleep 1
-    done
+    # ── 1. 加载模块，等 bat0 出现 ────────────────────────────────────────────
+    if ! ip link show "$MESH_IF" >/dev/null 2>&1; then
+        modprobe batman-adv 2>/dev/null || true
+        local _wait=0
+        while ! ip link show "$MESH_IF" >/dev/null 2>&1; do
+            _wait=$((_wait + 1))
+            [ $_wait -ge 15 ] && {
+                loge "bat0 not found after 15s — kmod-batman-adv missing?"
+                return 1
+            }
+            sleep 1
+        done
+    fi
     ip link set "$MESH_IF" up 2>/dev/null
 
-    # master：确认 bat0 在 br-lan（UCI 已配置，这里只做运行时校验）
-    if [ "$(get_role)" = "master" ]; then
-        if ! brctl show "$BRIDGE_IF" 2>/dev/null | grep -q "$MESH_IF"; then
-            # UCI 已配置但 netifd 还未执行，手动补充（fallback）
-            brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null &&                 log "Backhaul: bat0 added to %s (fallback)" "$BRIDGE_IF"
+    # ── 2. 有线 hardif：eth0 从 br-lan 摘出，独占加入 bat0 ──────────────────
+    local backhaul; backhaul=$(uci -q get easymesh.global.backhaul || echo 'wired')
+    if [ "$backhaul" = "wired" ] || [ "$backhaul" = "auto" ]; then
+        if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -qw "$ETH_IF"; then
+            brctl delif "$BRIDGE_IF" "$ETH_IF" 2>/dev/null || true
+            ip link set "$ETH_IF" up 2>/dev/null
+            batctl meshif "$MESH_IF" interface add "$ETH_IF" 2>/dev/null && log "Wired backhaul: %s → bat0 (removed from %s)" "$ETH_IF" "$BRIDGE_IF"
         fi
     fi
 
-    log "Backhaul ready (role=%s, bat0=%s)"         "$(get_role)" "$(ip link show $MESH_IF 2>/dev/null | awk '/state/{print $9}' | head -1)"
+    # ── 3. 无线 hardif：mesh0 加入 bat0（wireless/auto 时）───────────────────
+    if [ "$backhaul" != "wired" ]; then
+        local _mw=0
+        while ! ip link show mesh0 >/dev/null 2>&1 && [ $_mw -lt 10 ]; do
+            sleep 1; _mw=$((_mw+1))
+        done
+        if ip link show mesh0 >/dev/null 2>&1; then
+            if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -qw mesh0; then
+                ip link set mesh0 up 2>/dev/null
+                batctl meshif "$MESH_IF" interface add mesh0 2>/dev/null && log "Wireless backhaul: mesh0 → bat0"
+            fi
+        else
+            logw "mesh0 not found after 10s, wireless backhaul skipped"
+        fi
+    fi
+
+    # ── 4. master：bat0 桥接进 br-lan ────────────────────────────────────────
+    if [ "$(get_role)" = "master" ]; then
+        if ! brctl show "$BRIDGE_IF" 2>/dev/null | grep -q "$MESH_IF"; then
+            brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null && log "Backhaul: bat0 → %s" "$BRIDGE_IF"
+        fi
+    fi
+
+    log "Backhaul ready (role=%s)" "$(get_role)"
+}
+
+# ── 停止时清理 batman-adv（还原 eth0 到 br-lan）─────────────────────────────
+teardown_batman() {
+    local backhaul; backhaul=$(uci -q get easymesh.global.backhaul || echo 'wired')
+    brctl delif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null || true
+    batctl meshif "$MESH_IF" interface del "$ETH_IF" 2>/dev/null || true
+    [ "$backhaul" != "wired" ] && batctl meshif "$MESH_IF" interface del mesh0 2>/dev/null || true
+    # 把 eth0 还给 br-lan
+    ip link set "$ETH_IF" up 2>/dev/null
+    brctl addif "$BRIDGE_IF" "$ETH_IF" 2>/dev/null || true
+    ip link set "$MESH_IF" down 2>/dev/null || true
+    log "batman-adv torn down, %s restored to %s" "$ETH_IF" "$BRIDGE_IF"
 }
 
 ########################################
@@ -260,7 +301,7 @@ DISC_TIMEOUT=60
 # socat UDP4-RECVFROM fork 模式：子进程 stdout → 自动 sendto 来源地址（单播回复）
 discovery_server() {
     log "Discovery server listening on UDP %s" "$DISC_PORT"
-    socat UDP4-RECVFROM:${DISC_PORT},fork,reuseaddr         EXEC:"$0 __handle_hello" 2>/dev/null &
+    socat UDP4-RECVFROM:${DISC_PORT},fork,reuseaddr EXEC:"$0 __handle_hello" 2>/dev/null &
     echo $! > "${EM_PID_DIR}/disc_server.pid"
 }
 
@@ -293,15 +334,13 @@ __handle_hello() {
     local node_file="${NODE_DB}/${safe}.json"
     # 已存在则仅更新 IP 和时间戳（不覆盖 hostname 等）
     if [ ! -f "$node_file" ]; then
-        printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"wired","status":"approved","ts":%s}
-'             "$mac" "$ip" "${host:-unknown}" "$(date +%s)" > "$node_file"
+        printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"wired","status":"approved","ts":%s}' "$mac" "$ip" "${host:-unknown}" "$(date +%s)" > "$node_file"
         # 记录日志（直接写文件，不调 log()，子进程无法 translate）
-        printf "%s [INFO ] [core    ] Discovery: auto-approved node %s (%s) at %s
-"             "$(date '+%Y-%m-%d %H:%M:%S')" "$mac" "${host:-unknown}" "$ip" >> "$LOGFILE"
+        printf "%s [INFO ] [ core ] Discovery: auto-approved node %s (%s) at %s" "$(date '+%Y-%m-%d %H:%M:%S')" "$mac" "${host:-unknown}" "$ip" >> "$LOGFILE"
     else
         # 更新 IP（节点重启后 IP 可能变化）
-        sed -i "s/"ip":"[^"]*"/"ip":"$ip"/" "$node_file"
-        sed -i "s/"ts":[0-9]*/"ts":$(date +%s)/" "$node_file"
+        sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"$ip\"/" "$node_file"
+        sed -i "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" "$node_file"
     fi
 
     # 获取本机 IP（master 的 br-lan IP）
@@ -309,10 +348,11 @@ __handle_hello() {
     myip=$(ip -4 addr show dev br-lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
     [ -z "$myip" ] && return 0
 
-    # 回复 EASYMESH_WELCOME（stdout → socat 单播到来源地址）
-    # 格式：EASYMESH_WELCOME <master_ip>
-    printf 'EASYMESH_WELCOME %s
-' "$myip"
+    # 单播回复到 agent 的固定监听端口（DISC_REPLY_PORT）
+    # 注意：不能用 socat stdout 回写（那是临时端口），
+    #       必须主动 sendto agent_ip:DISC_REPLY_PORT
+    [ -z "$DISC_REPLY_PORT" ] && DISC_REPLY_PORT=4306
+    printf 'EASYMESH_WELCOME %s\n' "$myip" |         socat - "UDP-DATAGRAM:${ip}:${DISC_REPLY_PORT}" 2>/dev/null
 }
 # discovery_client: 广播 HELLO，等待 master 回复 WELCOME
 # 返回 0 = 找到 master（MASTER_IP_FILE 已写），1 = 超时未找到
@@ -326,20 +366,20 @@ discovery_client() {
 
     log "Discovery: broadcasting HELLO (MAC=%s IP=%s)" "$mymac" "$myip"
 
-    # 用 socat 监听 WELCOME 回复（后台，超时 30s）
+    # 用 socat 监听 WELCOME 回复（master 会单播到 DISC_REPLY_PORT）
     local resp_file="/tmp/em_disc_resp_$$"
-    # socat: 监听 UDP DISC_PORT，收到一包后写到文件退出
-    socat -T 30 UDP4-LISTEN:${DISC_PORT},reuseaddr         OPEN:"${resp_file}",creat,trunc 2>/dev/null &
+    # 杀掉上次可能残留的同端口监听
+    pkill -f "socat.*UDP4-LISTEN:${DISC_REPLY_PORT}" 2>/dev/null || true
+    sleep 1
+    socat -T 35 UDP4-LISTEN:${DISC_REPLY_PORT},reuseaddr OPEN:"${resp_file}",creat,trunc 2>/dev/null &
     local listen_pid=$!
-
-    # 短暂等待 socat 绑定端口
-    sleep 0.3
+    # 等待 socat 绑定端口
+    sleep 1
 
     # 广播 HELLO（重试 6 次，每 5 秒一次，共 30 秒）
     local found=0 i=0
     while [ $i -lt 6 ]; do
-        printf 'EASYMESH_HELLO %s %s %s
-' "$mymac" "$myip" "$hostname" |             socat - UDP-DATAGRAM:255.255.255.255:${DISC_PORT},broadcast 2>/dev/null
+        printf 'EASYMESH_HELLO %s %s %s\n' "$mymac" "$myip" "$hostname" | socat - UDP-DATAGRAM:255.255.255.255:${DISC_PORT},broadcast 2>/dev/null
         sleep 5
         # 检查是否收到回复
         if [ -f "$resp_file" ] && grep -q "^EASYMESH_WELCOME" "$resp_file" 2>/dev/null; then
@@ -362,9 +402,11 @@ discovery_client() {
 ########################################
 # 6. INTER-NODE HTTP SERVER (纯 socat)
 ########################################
-_http_ok()  { printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n%s' "$1"; }
-_http_403() { printf 'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{"status":"pending"}\n'; }
-_http_404() { printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n{"error":"not found"}\n'; }
+_http_cors="Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+_http_ok()  { printf "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n${_http_cors}Connection: close\r\n\r\n%s" "$1"; }
+_http_html(){ printf "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n${_http_cors}Connection: close\r\n\r\n"; cat "$1"; }
+_http_403() { printf "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n${_http_cors}Connection: close\r\n\r\n{"status":"pending"}\n"; }
+_http_404() { printf "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n{"error":"not found"}\n"; }
 
 # HTTP 请求处理器（每个连接独立进程）
 __http_handler() {
@@ -402,6 +444,14 @@ __http_handler() {
     fi
 
     case "$path" in
+        /|/index.html)
+            local _html="/www/easymesh-pair/index.html"
+            if [ -f "$_html" ]; then _http_html "$_html"
+            else _http_ok "{"error":"index.html not found"}"; fi
+            ;;
+        /favicon.ico)
+            _http_404
+            ;;
         /ping)
             _http_ok "{\"role\":\"$(get_role)\",\"mac\":\"$(get_mac)\",\"ip\":\"$(get_ip)\"}"
             ;;
@@ -469,7 +519,7 @@ run_node_server() {
     # fork: 每连接 fork 子进程，并发处理
     # crnl: 自动 CR+LF 转换（HTTP协议要求）
     # -T 30: 每连接最多 30 秒，防止僵尸连接
-    exec socat -T 30 TCP-LISTEN:${MASTER_PORT},reuseaddr,fork,crnl         EXEC:"$0 __http_handler"
+    exec socat -T 30 TCP-LISTEN:${MASTER_PORT},reuseaddr,fork,crnl EXEC:"$0 __http_handler"
 }
 
 ########################################
@@ -922,7 +972,7 @@ update_topology() {
         [ -z "$peer_mac" ] && continue
         nodes="${nodes},{\"mac\":\"$peer_mac\",\"tq\":$tq}"
         links="${links:+$links,}{\"src\":\"$my_mac\",\"dst\":\"$peer_mac\",\"tq\":$tq}"
-    done < <(awk 'NR>2{print}' /sys/kernel/debug/batman_adv/bat0/originators 2>/dev/null)
+    done < <(batctl meshif "$MESH_IF" orig 2>/dev/null | awk 'NR>2{print}')
     for f in "$NODE_DB"/*.json; do
         [ -f "$f" ] || continue; nodes="${nodes},$(cat "$f")"
     done
@@ -1049,8 +1099,8 @@ main_loop() {
 
 case "$1" in
     stop)
+        teardown_batman
         _stop_jobs
-        rm -f /tmp/easymesh_master.pid /tmp/em_disc_resp_* /tmp/easymesh_dfs_*.sh
         ;;
     __http_handler)
         # socat fork 子进程：加载脚本所有函数后处理请求

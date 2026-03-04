@@ -8,41 +8,99 @@
 body{font-family:-apple-system,sans-serif;background:#0d1117;color:#e6edf3;
      display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
 .card{background:#161b22;border:1px solid #30363d;border-radius:16px;
-      padding:32px 28px;max-width:420px;width:100%;text-align:center}
+      padding:32px 28px;max-width:440px;width:100%;text-align:center}
 h1{font-size:20px;margin:12px 0 8px}
 p{font-size:13px;color:#7d8590;line-height:1.7;margin:0 0 20px}
 .status{padding:10px 16px;border-radius:8px;font-size:13px;margin-top:16px}
-.ok{background:rgba(46,164,79,.15);color:#2ea44f;border:1px solid #2ea44f}
+.ok  {background:rgba(46,164,79,.15);color:#2ea44f;border:1px solid #2ea44f}
 .wait{background:rgba(227,179,65,.1);color:#e3b341;border:1px solid #e3b341}
+.err {background:rgba(248,81,73,.1);color:#f85149;border:1px solid #f85149}
+.steps{text-align:left;font-size:12px;color:#7d8590;margin-top:18px;
+       border-top:1px solid #30363d;padding-top:14px}
+.steps ol{margin:6px 0 0;padding-left:18px;line-height:2}
 </style>
 </head>
 <body>
 <div class="card">
-  <div style="font-size:48px">🔌</div>
+  <div style="font-size:48px">📡</div>
   <h1>EasyMesh Node</h1>
-  <p>This node joins the mesh automatically via wired backhaul.<br>
+  <p>This node will join the mesh automatically.<br>
      Connect a LAN cable to the master router and wait ~30 seconds.</p>
-  <div id="status" class="status wait">Searching for master...</div>
+
+  <div id="status" class="status wait">⏳ Searching for master...</div>
+  <div id="info" style="font-size:11px;color:#7d8590;font-family:monospace;margin-top:8px"></div>
+
+  <div class="steps">
+    <strong style="color:#e6edf3">How to join:</strong>
+    <ol>
+      <li>Flash OpenWrt on this device</li>
+      <li>Connect a LAN cable: master ↔ this node</li>
+      <li>Wait ~30 s — auto-discovery finds the master</li>
+      <li>On master: <em>Nodes tab → Allow to join</em></li>
+    </ol>
+  </div>
 </div>
+
 <script>
-function check() {
-  fetch('/ping').then(function(r){ return r.json(); })
-  .then(function(d){
-    var el = document.getElementById('status');
-    if(d.role === 'master') {
+/* 
+ * This page is served by the easymesh-pair0 AP (onboarding hotspot).
+ * It polls the daemon HTTP API (port 4304) on the node's own IP
+ * to report join status.
+ *
+ * The daemon runs an HTTP server on port 4304 (not LuCI port 80).
+ * The browser connects to the AP, gets IP in 192.168.x.200-249 range,
+ * gateway is 192.168.x.250 (easymesh-pair0 IP), so we poll that gateway.
+ */
+function getGateway(cb) {
+  // Try to detect gateway via a dummy XHR timeout pattern
+  // Simpler: just try the known easymesh-pair0 subnet .250 address
+  // The dnsmasq on easymesh-pair0 sets option 3 (router) = x.x.x.250
+  var gw = null;
+  // Parse our own IP from location (if running on router) or use fetch trick
+  fetch('/cgi-bin/luci/rpc/noop', {method:'HEAD'}).then(function() {
+    // We're on the LuCI interface (port 80) - node's own IP
+    gw = window.location.hostname;
+    cb(gw);
+  }).catch(function() {
+    // We're on the onboarding AP - gateway is x.x.x.250
+    gw = window.location.hostname.replace(/\.\d+$/, '.250');
+    cb(gw);
+  });
+}
+
+function check(gw) {
+  var el = document.getElementById('status');
+  var info = document.getElementById('info');
+  fetch('http://' + gw + ':4304/ping', {
+    method: 'GET',
+    mode: 'cors',
+    signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.role === 'master') {
       el.className = 'status ok';
       el.textContent = '✓ This node is the master';
-    } else if(d.role === 'agent') {
+    } else if (d.role === 'agent') {
       el.className = 'status ok';
       el.textContent = '✓ Joined mesh as agent';
     } else {
       el.className = 'status wait';
-      el.textContent = 'Waiting for master...';
+      el.textContent = '⏳ Waiting for master...';
     }
-  }).catch(function(){ });
+    info.textContent = 'IP: ' + (d.ip || '?') + '  MAC: ' + (d.mac || '?');
+  })
+  .catch(function() {
+    el.className = 'status err';
+    el.textContent = '✗ Node unreachable (port 4304)';
+    info.textContent = 'Ensure EasyMesh daemon is running';
+  });
 }
-check();
-setInterval(check, 5000);
+
+getGateway(function(gw) {
+  check(gw);
+  setInterval(function() { check(gw); }, 5000);
+});
 </script>
 </body>
 </html>

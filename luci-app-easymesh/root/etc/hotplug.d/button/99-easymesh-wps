@@ -1,48 +1,59 @@
 #!/bin/sh
-# /etc/hotplug.d/button/99-easymesh-wps
-#
-# 按下 WPS/Reset 键 2~10 秒松开 → 以 agent 身份加入 Mesh
-# 适用于：新子节点首次接入，无需打开 LuCI 界面
-# 条件：当前 easymesh 未启用（enabled=0）才触发，防止误操作
 
-# 只响应 WPS / Reset / BTN_0 / BTN_1 按钮
 case "$BUTTON" in
-    wps|reset|BTN_0|BTN_1) ;;
+    wps|reset|BTN_0|BTN_1|rfkill|wlan) ;;
     *) exit 0 ;;
 esac
 
-# 松开事件 + 按住时间 2~10 秒
 [ "$ACTION" = "released" ] || exit 0
-[ -n "$SEEN" ] || exit 0
-[ "$SEEN" -ge 2 ] && [ "$SEEN" -le 10 ] || exit 0
+SEEN_TIME=${SEEN:-0}
+[ "$SEEN_TIME" -ge 2 ] && [ "$SEEN_TIME" -le 10 ] || exit 0
 
-# 仅在未启用时触发（防止已配置节点被重置）
 enabled=$(uci -q get easymesh.global.enabled)
 [ "$enabled" = "1" ] && exit 0
 
-# 配置为子节点并启用
 uci set easymesh.global.role='agent'
 uci set easymesh.global.enabled='1'
 uci commit easymesh
-
-logger -t EasyMesh "WPS button: enabling as agent, restarting service"
-
-# 重启服务（后台执行，不阻塞 hotplug）
 ( sleep 1; /etc/init.d/easymesh restart ) &
 
-# LED 反馈：快速闪烁 3 次（兼容各厂商 LED 命名）
-LED_PATH=""
-for led_pattern in wps mesh system status power wan; do
-    LED_PATH=$(ls /sys/class/leds/*${led_pattern}*/brightness 2>/dev/null | head -1)
-    [ -n "$LED_PATH" ] && [ -w "$LED_PATH" ] && break
-    LED_PATH=""
-done
+(
+    RED_LED=""
+    GRN_LED=""
 
-if [ -n "$LED_PATH" ]; then
-    for i in 1 2 3; do
-        echo 1 > "$LED_PATH" 2>/dev/null; sleep 0.2
-        echo 0 > "$LED_PATH" 2>/dev/null; sleep 0.2
+    for led in $(ls /sys/class/leds 2>/dev/null); do
+        if [ -z "$RED_LED" ] && echo "$led" | grep -Ei "red|fault|err"; then
+            [ -w "/sys/class/leds/$led/brightness" ] && RED_LED="/sys/class/leds/$led/brightness"
+        fi
+        if [ -z "$GRN_LED" ] && echo "$led" | grep -Ei "green|blue|white|status|system"; then
+            [ -w "/sys/class/leds/$led/brightness" ] && GRN_LED="/sys/class/leds/$led/brightness"
+        fi
     done
-    # 最终点亮，表示服务正在启动中
-    echo 1 > "$LED_PATH" 2>/dev/null
-fi
+
+    if [ -n "$RED_LED" ] && [ -n "$GRN_LED" ]; then
+        RED_MAX=$(cat "${RED_LED%/*}/max_brightness" 2>/dev/null || echo 1)
+        GRN_MAX=$(cat "${GRN_LED%/*}/max_brightness" 2>/dev/null || echo 1)
+
+        for i in 1 2 3 4 5 6; do
+            echo "$RED_MAX" > "$RED_LED" 2>/dev/null
+            echo 0 > "$GRN_LED" 2>/dev/null
+            sleep 1
+            echo 0 > "$RED_LED" 2>/dev/null
+            echo "$GRN_MAX" > "$GRN_LED" 2>/dev/null
+            sleep 1
+        done
+        echo 0 > "$RED_LED" 2>/dev/null
+        echo "$GRN_MAX" > "$GRN_LED" 2>/dev/null
+
+    elif [ -n "$RED_LED" ] || [ -n "$GRN_LED" ]; then
+        TARGET_LED=${RED_LED:-$GRN_LED}
+        MAX=$(cat "${TARGET_LED%/*}/max_brightness" 2>/dev/null || echo 1)
+        for i in 1 2 3 4 5 6; do
+            echo "$MAX" > "$TARGET_LED" 2>/dev/null; sleep 1
+            echo 0 > "$TARGET_LED" 2>/dev/null; sleep 1
+        done
+        echo "$MAX" > "$TARGET_LED" 2>/dev/null
+    fi
+) &
+
+exit 0

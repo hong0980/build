@@ -34,14 +34,14 @@ msgstr "启用 EasyMesh"
 msgid "Node Role"
 msgstr "节点角色"
 
-msgid "Master handles DHCP and uplink. Slave extends coverage only."
-msgstr "主节点负责 DHCP 和上行；从节点仅做覆盖延伸。"
+msgid "Master handles DHCP and uplink. Agent extends coverage as a slave node."
+msgstr "主节点负责 DHCP 和上行；Agent 从节点负责覆盖延伸。"
 
 msgid "Master (connected to modem/ISP)"
 msgstr "主节点（连接光猫/ISP）"
 
-msgid "Slave (extends coverage)"
-msgstr "从节点（扩展覆盖范围）"
+msgid "Agent (Slave, extends coverage)"
+msgstr "从节点 Agent（扩展覆盖范围）"
 
 msgid "Backhaul Type"
 msgstr "回程方式"
@@ -632,3 +632,45 @@ msgstr "HTTP POST 失败，%ss 后重试 %s/%s，目标: %s"
 
 msgid "HTTP POST failed after %s retries: %s"
 msgstr "HTTP POST 经 %s 次重试后失败，目标: %s"
+
+msgid "Role: master — DHCP server enabled"
+msgstr "角色: 主节点 — DHCP 服务器已启用"
+
+msgid "Role: agent — LAN IP kept, DHCP server disabled"
+msgstr "角色: 从节点 — LAN IP 保留，DHCP 服务器已禁用"
+
+msgid "Role: master — bat0 in br-lan, DHCP server enabled"
+msgstr "角色: 主节点 — bat0 已加入 br-lan，DHCP 已启用"
+
+msgid "Role: agent — br-lan=dhcp client, DHCP server disabled"
+msgstr "角色: 从节点 — br-lan 为 DHCP 客户端，DHCP 服务器已禁用"
+
+msgid "apply_mesh_config: role=%s backhaul=%s radio=%s eth=%s"
+msgstr "apply_mesh_config: 角色=%s 回程=%s 无线电=%s 网口=%s"
+
+msgid "Starting EasyMesh daemon..."
+msgstr "正在启动 EasyMesh 守护进程..."
+
+msgid "Wired backhaul: %s → bat0 (removed from %s)"
+msgstr "有线回程: %s → bat0 (已从 %s 移除)"
+
+msgid "Wireless backhaul: mesh0 → bat0"
+msgstr "无线回程: mesh0 → bat0"
+
+msgid "Backhaul: bat0 → %s"
+msgstr "回程: bat0 → %s"
+
+msgid "Backhaul ready (role=%s)"
+msgstr "回程就绪 (角色=%s)"
+
+msgid "batman-adv torn down, %s restored to %s"
+msgstr "batman-adv 已清理，%s 已还给 %s"
+
+msgid "bat0 not found after 15s — kmod-batman-adv missing?"
+msgstr "15秒内未找到 bat0，kmod-batman-adv 是否已安装？"
+
+msgid "mesh0 not found after 10s, wireless backhaul skipped"
+msgstr "10秒内未找到 mesh0，无线回程已跳过"
+
+msgid "Live topology. Link color = signal quality: green ≥70%%, yellow ≥40%%, red <40%%."
+msgstr "实时拓扑。连线颜色代表信号质量：绿色 ≥70%%，黄色 ≥40%%，红色 <40%%。"

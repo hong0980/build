@@ -56,9 +56,9 @@ return view.extend({
 		o.default = '0';
 
 		o = s.taboption('basic', form.ListValue, 'role', _('Node Role'),
-			_('Master handles DHCP and uplink. Slave extends coverage only.'));
+			_('Master handles DHCP and uplink. Agent extends coverage as a slave node.'));
 		o.value('master', _('Master (connected to modem/ISP)'));
-		o.value('agent', _('Slave (extends coverage)'));
+		o.value('agent', _('Agent (Slave, extends coverage)'));
 		o.default = 'master';
 		o.depends('enabled', '1');
 

@@ -299,7 +299,7 @@ return view.extend({
 	load: function () {
 		return Promise.all([
 			uci.load('easymesh'),
-			L.resolveDefault(fs.read('/sys/kernel/debug/batman_adv/bat0/originators'), ''),
+			callMeshTopology(),
 			callNetworkDump(),
 			callMeshPending(),
 			callMeshApproved()
@@ -327,7 +327,7 @@ return view.extend({
 
 		poll.add(function () {
 			return Promise.all([
-				L.resolveDefault(fs.read('/sys/kernel/debug/batman_adv/bat0/originators'), ''),
+				callMeshTopology(),
 				callNetworkDump(),
 				callMeshPending(),
 				callMeshApproved()
@@ -355,11 +355,15 @@ return view.extend({
 		return root;
 	},
 
-	_build: function (originatorRaw, interfaces, pendingRaw, approvedRaw) {
+	_build: function (topology, interfaces, pendingRaw, approvedRaw) {
 		var self = this;
 		var el = E('div', { id: 'easymesh-nodes-inner' });
 		var bat0 = interfaces.filter(function (i) { return i.interface === 'bat0'; })[0];
-		var mesh = parseOriginators(originatorRaw);
+		var mesh = (topology && Array.isArray(topology.links))
+				? topology.links.map(function(l) {
+					return { mac: l.dst, tq: l.tq || 0, nextHop: l.dst, iface: 'bat0', lastSeen: 0 };
+				})
+				: [];
 		var pending  = Array.isArray(pendingRaw)  ? pendingRaw
 		               : (pendingRaw  && Array.isArray(pendingRaw.nodes))  ? pendingRaw.nodes  : [];
 		var approved = Array.isArray(approvedRaw) ? approvedRaw
