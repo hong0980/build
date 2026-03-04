@@ -48,7 +48,6 @@ translate() {
     translated=$(lua -e "$lua_script" 2>/dev/null)
     [ -z "$translated" ] && translated="$tpl"
     if [ $# -gt 0 ]; then
-        # shellcheck disable=SC2059
         printf "$translated" "$@"
     else
         printf '%s' "$translated"
@@ -56,7 +55,6 @@ translate() {
 }
 
 # ── Logging ───────────────────────────────────────────────────────────────────
-# _emlog <level> <tag> <message>
 _emlog() {
     local level="$1" tag="$2"; shift 2
     local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
@@ -71,7 +69,6 @@ _emlog() {
     fi
 }
 
-# log <template> [args...]   — translate 模板，printf 插入参数
 log()  { _emlog "INFO"  "core"  "$(translate "$@")"; }
 logr() { _emlog "INFO"  "roam"  "$(translate "$@")"; }
 logd() { _emlog "INFO"  "dfs"   "$(translate "$@")"; }
@@ -128,6 +125,15 @@ _stop_jobs() {
         _pid=$(cat "$_f" 2>/dev/null)
         [ -n "$_pid" ] && kill "$_pid" 2>/dev/null || true
         rm -f "$_f"
+    done
+
+    # 使用 pgrep + kill 替代 pkill
+    for pid in $(pgrep -f "socat.*:$MASTER_PORT" 2>/dev/null); do
+        kill "$pid" 2>/dev/null || true
+    done
+
+    for pid in $(pgrep -f "socat.*UDP.*:$DISC_PORT" 2>/dev/null); do
+        kill "$pid" 2>/dev/null || true
     done
 }
 
@@ -220,87 +226,89 @@ setup_wired_backhaul() {
                 log "Wired backhaul: %s added as batman-adv hardif" "$ETH_IF"
         fi
     fi
-    # 注意：在 elect_role 之后调用，此时 role 已确定
     log "Wired backhaul ready (role=%s)" "$(get_role)"
 }
 
 ########################################
-# 5. UDP BROADCAST DISCOVERY
+# 5. UDP BROADCAST DISCOVERY (socat version)
 ########################################
-# 商业 Mesh 风格：新节点开机广播，master 自动发现并审批
-# 无需手动操作，插线即加入
-#
-# 协议（纯文本 UDP）:
-#   Agent  → 广播: "EASYMESH_HELLO <mac> <ip> <hostname>"
-#   Master → 单播回: "EASYMESH_WELCOME <master_ip> <mesh_key>"
-#   Agent  收到后: 写入 MASTER_IP_FILE，调 do_register()
-#
-# 实现：用 nc -u（busybox 有）或 /dev/udp（busybox ash 不支持）
-# OpenWrt busybox nc: nc -u -l -p PORT（监听UDP）; nc -u IP PORT（发送UDP）
+DISC_HELLO_INTERVAL=5
+DISC_TIMEOUT=60
 
-DISC_HELLO_INTERVAL=5     # 秒：agent 广播间隔
-DISC_TIMEOUT=60           # 秒：持续广播超时后放弃（等手动或已注册）
-
-# Master 侧：监听 UDP 广播，自动审批新节点
+# Master 侧：用 socat 监听 UDP 广播
 discovery_server() {
-    log "Discovery server listening on UDP %s" "$DISC_PORT"
-    while true; do
-        # nc -u -l -p: 每次接受一个 UDP 包（busybox nc 不做持久循环）
-        # 用 while true 重新启动监听
-        local msg
-        msg=$(nc -u -l -p "$DISC_PORT" 2>/dev/null)
-        [ -z "$msg" ] && { sleep 1; continue; }
+    log "Discovery server listening on UDP %s (via socat)" "$DISC_PORT"
 
-        local type mac ip hostname
-        type=$(echo "$msg" | awk '{print $1}')
-        mac=$(echo "$msg"  | awk '{print $2}')
-        ip=$(echo "$msg"   | awk '{print $3}')
-        hostname=$(echo "$msg" | awk '{print $4}')
+    # 使用 socat 创建 UDP 服务器，每收到一个包就执行处理函数
+    socat UDP-LISTEN:$DISC_PORT,fork,reuseaddr \
+        EXEC:"$0 __handle_hello" 2>/dev/null &
 
-        [ "$type" != "EASYMESH_HELLO" ] && continue
-        [ -z "$mac" ] || [ -z "$ip" ] && continue
-
-        log "Discovery: new node %s (%s) at %s" "$mac" "$hostname" "$ip"
-
-        # 自动写入 NODE_DB（跳过 PENDING，直接审批）
-        local safe; safe=$(echo "$mac" | tr ':' '_')
-        mkdir -p "$NODE_DB"
-        if [ ! -f "${NODE_DB}/${safe}.json" ]; then
-            printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"wired","status":"approved","ts":%s}\n' \
-                "$mac" "$ip" "${hostname:-unknown}" "$(date +%s)" \
-                > "${NODE_DB}/${safe}.json"
-            log "Node auto-approved: %s (%s)" "$mac" "${hostname:-unknown}"
-            # 立即推送配置
-            generate_profile
-            local mkey; mkey=$(uci get easymesh.global.mesh_key 2>/dev/null || echo "")
-            # 回复 WELCOME（单播到 agent）
-            printf 'EASYMESH_WELCOME %s %s\n' "$(get_ip)" "$mkey" | \
-                nc -u "$ip" "$DISC_PORT" 2>/dev/null &
-        fi
-    done
+    echo $! > "${EM_PID_DIR}/disc_server.pid"
 }
 
-# Agent 侧：开机广播，找到 master 后停止
+# 处理 HELLO 包的函数
+__handle_hello() {
+    local msg type mac ip hostname
+    IFS= read -r msg
+
+    type=$(echo "$msg" | awk '{print $1}')
+    mac=$(echo "$msg"  | awk '{print $2}')
+    ip=$(echo "$msg"   | awk '{print $3}')
+    hostname=$(echo "$msg" | awk '{print $4}')
+
+    [ "$type" != "EASYMESH_HELLO" ] && return
+    [ -z "$mac" ] || [ -z "$ip" ] && return
+
+    log "Discovery: new node %s (%s) at %s" "$mac" "$hostname" "$ip"
+
+    local safe; safe=$(echo "$mac" | tr ':' '_')
+    mkdir -p "$NODE_DB"
+    if [ ! -f "${NODE_DB}/${safe}.json" ]; then
+        printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"wired","status":"approved","ts":%s}\n' \
+            "$mac" "$ip" "${hostname:-unknown}" "$(date +%s)" \
+            > "${NODE_DB}/${safe}.json"
+        log "Node auto-approved: %s (%s)" "$mac" "${hostname:-unknown}"
+        generate_profile
+        local mkey; mkey=$(uci get easymesh.global.mesh_key 2>/dev/null || echo "")
+        # 回复 WELCOME（单播）
+        printf 'EASYMESH_WELCOME %s %s\n' "$(get_ip)" "$mkey" | \
+            socat - UDP:"$ip:$DISC_PORT" 2>/dev/null
+    fi
+}
+
+# Agent 侧：广播并等待回复
 discovery_client() {
     local mac ip hostname mymac myip
     mymac=$(get_mac); myip=$(get_ip)
     hostname=$(uci get system.@system[0].hostname 2>/dev/null || echo "node")
     local elapsed=0
 
-    log "Discovery: broadcasting HELLO every %ss" "$DISC_HELLO_INTERVAL"
+    log "Discovery: broadcasting HELLO every %ss (via socat)" "$DISC_HELLO_INTERVAL"
+
+    # 创建临时 FIFO 用于接收回复
+    local resp_fifo="/tmp/em_disc_resp_$$"
+    mkfifo "$resp_fifo" 2>/dev/null
+
+    # 后台启动 socat 监听回复
+    socat UDP-LISTEN:$DISC_PORT,reuseaddr,fork \
+        OPEN:"$resp_fifo",append 2>/dev/null &
+    local listen_pid=$!
+
     while [ "$elapsed" -lt "$DISC_TIMEOUT" ]; do
         # 广播 HELLO
         printf 'EASYMESH_HELLO %s %s %s\n' "$mymac" "$myip" "$hostname" | \
-            nc -u 255.255.255.255 "$DISC_PORT" 2>/dev/null
+            socat - UDP-DATAGRAM:255.255.255.255:$DISC_PORT,broadcast 2>/dev/null
 
-        # 等待 WELCOME（短暂监听，非阻塞方式：timeout 3s）
+        # 非阻塞读取回复（等待3秒）
         local reply
-        reply=$(nc -u -l -p "$DISC_PORT" -w 3 2>/dev/null)
+        read -t 3 reply < "$resp_fifo" 2>/dev/null
         if echo "$reply" | grep -q "^EASYMESH_WELCOME"; then
             local master_ip_got
             master_ip_got=$(echo "$reply" | awk '{print $2}')
             echo "$master_ip_got" > "$MASTER_IP_FILE"
             log "Discovery: master found at %s" "$master_ip_got"
+            kill "$listen_pid" 2>/dev/null
+            rm -f "$resp_fifo"
             return 0
         fi
 
@@ -308,144 +316,124 @@ discovery_client() {
         elapsed=$(( elapsed + DISC_HELLO_INTERVAL + 3 ))
     done
 
-    # 超时：fallback 到网关扫描
+    kill "$listen_pid" 2>/dev/null
+    rm -f "$resp_fifo"
     log "Discovery timeout, falling back to LAN scan"
     return 1
 }
 
 ########################################
-# 6. INTER-NODE HTTP SERVER
+# 6. INTER-NODE HTTP SERVER (纯 socat)
 ########################################
-# 用 socat（推荐）或 busybox nc while 循环（正确实现）
-# 关键：nc fifo 模式在 busybox 上死锁，必须用下面这种方式
-
 _http_ok()  { printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n%s' "$1"; }
 _http_403() { printf 'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{"status":"pending"}\n'; }
 _http_404() { printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n{"error":"not found"}\n'; }
 
-_handle_one_request() {
-    local req_line method rawpath
+# HTTP 请求处理器（每个连接独立进程）
+__http_handler() {
+    local req_line method path query content_length body line
+
+    # 读取请求行
     IFS= read -r req_line
     req_line="${req_line%$(printf '\r')}"
     method="${req_line%% *}"
-    rawpath="${req_line#* }"; rawpath="${rawpath%% *}"
+    path="${req_line#* }"; path="${path%% *}"
+
     [ "$method" = "OPTIONS" ] && { _http_ok "{}"; return; }
 
-    local content_length=0 hline
-    while IFS= read -r hline; do
-        hline="${hline%$(printf '\r')}"
-        [ -z "$hline" ] && break
-        case "$hline" in Content-Length:*|content-length:*)
-            content_length="${hline##*: }" ;; esac
+    # 读取 headers
+    content_length=0
+    while IFS= read -r line; do
+        line="${line%$(printf '\r')}"
+        [ -z "$line" ] && break
+        case "$line" in
+            [Cc]ontent-[Ll]ength:*) content_length="${line##*: }" ;;
+        esac
     done
 
-    local body=""
+    # 读取 body
     [ "$content_length" -gt 0 ] 2>/dev/null && body=$(dd bs=1 count="$content_length" 2>/dev/null)
 
-    local path query
-    query="${rawpath#*\?}"; path="${rawpath%%\?*}"
-    [ "$path" = "$rawpath" ] && query=""
+    # 解析 query string
+    query="${path#*\?}"
+    path="${path%%\?*}"
+    [ "$path" = "$query" ] && query=""
 
     case "$path" in
-    /ping)
-        _http_ok "{\"role\":\"$(get_role)\",\"mac\":\"$(get_mac)\",\"ip\":\"$(get_ip)\"}"
-        ;;
-    /wan)
-        wan_up && _http_ok '{"wan":true}' || _http_ok '{"wan":false}'
-        ;;
-    /register)
-        local src; src=$(echo "$body" | grep -o '"source":"[^"]*"' | cut -d'"' -f4)
-        register_node "$body" "${src:-wired}"
-        _http_ok '{"status":"ok","msg":"registered"}'
-        ;;
-    /profile/checksum)
-        local req_mac safe
-        req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
-        safe=$(echo "$req_mac" | tr ':' '_')
-        if [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
-            local sum; sum=$(md5sum "$PROFILE_FILE" | cut -d' ' -f1)
-            _http_ok "{\"sum\":\"$sum\"}"
-        else
-            _http_ok '{"status":"unregistered"}'
-        fi
-        ;;
-    /profile)
-        local req_mac safe
-        req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
-        safe=$(echo "$req_mac" | tr ':' '_')
-        if [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
-            _http_ok "$(cat "$PROFILE_FILE")"
-        else
-            _http_ok '{"status":"unregistered"}'
-        fi
-        ;;
-    /channel/apply)
-        local new_chan reason
-        new_chan=$(echo "$body" | grep -o '"channel":"[^"]*"' | cut -d'"' -f4)
-        reason=$(echo "$body"  | grep -o '"reason":"[^"]*"'  | cut -d'"' -f4)
-        [ -z "$new_chan" ] && { _http_ok '{"status":"ignored"}'; return; }
-        log "Channel sync from master: ch=%s reason=%s" "$new_chan" "${reason:-unknown}"
-        local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
-        uci set "${rd}.channel=${new_chan}"; uci commit wireless
-        wifi reload &
-        _http_ok "{\"status\":\"ok\",\"channel\":\"$new_chan\"}"
-        ;;
-    /roam/signal)
-        local sta_mac; sta_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
-        local ap_iface; ap_iface=$(get_ap_iface)
-        local bssid; bssid=$(cat /sys/class/net/${ap_iface}/address 2>/dev/null)
-        local sig; sig=$(iw dev "$ap_iface" station get "$sta_mac" 2>/dev/null | awk '/signal:/{print $2}' | head -1)
-        if [ -n "$sig" ]; then _http_ok "{\"rssi\":$sig,\"bssid\":\"$bssid\"}"
-        else _http_ok '{"rssi":null}'; fi
-        ;;
-    /roam/neighbors)
-        apply_neighbor_list "$body"
-        _http_ok '{"status":"ok"}'
-        ;;
-    *)
-        _http_404
-        ;;
+        /ping)
+            _http_ok "{\"role\":\"$(get_role)\",\"mac\":\"$(get_mac)\",\"ip\":\"$(get_ip)\"}"
+            ;;
+        /wan)
+            wan_up && _http_ok '{"wan":true}' || _http_ok '{"wan":false}'
+            ;;
+        /register)
+            local src; src=$(echo "$body" | grep -o '"source":"[^"]*"' | cut -d'"' -f4)
+            register_node "$body" "${src:-wired}"
+            _http_ok '{"status":"ok","msg":"registered"}'
+            ;;
+        /profile/checksum)
+            local req_mac safe
+            req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
+            safe=$(echo "$req_mac" | tr ':' '_')
+            if [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
+                local sum; sum=$(md5sum "$PROFILE_FILE" | cut -d' ' -f1)
+                _http_ok "{\"sum\":\"$sum\"}"
+            else
+                _http_ok '{"status":"unregistered"}'
+            fi
+            ;;
+        /profile)
+            local req_mac safe
+            req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
+            safe=$(echo "$req_mac" | tr ':' '_')
+            if [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
+                _http_ok "$(cat "$PROFILE_FILE")"
+            else
+                _http_ok '{"status":"unregistered"}'
+            fi
+            ;;
+        /channel/apply)
+            local new_chan reason
+            new_chan=$(echo "$body" | grep -o '"channel":"[^"]*"' | cut -d'"' -f4)
+            reason=$(echo "$body"  | grep -o '"reason":"[^"]*"'  | cut -d'"' -f4)
+            [ -z "$new_chan" ] && { _http_ok '{"status":"ignored"}'; return; }
+            log "Channel sync from master: ch=%s reason=%s" "$new_chan" "${reason:-unknown}"
+            local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
+            uci set "${rd}.channel=${new_chan}"; uci commit wireless
+            wifi reload &
+            _http_ok "{\"status\":\"ok\",\"channel\":\"$new_chan\"}"
+            ;;
+        /roam/signal)
+            local sta_mac; sta_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
+            local ap_iface; ap_iface=$(get_ap_iface)
+            local bssid; bssid=$(cat /sys/class/net/${ap_iface}/address 2>/dev/null)
+            local sig; sig=$(iw dev "$ap_iface" station get "$sta_mac" 2>/dev/null | awk '/signal:/{print $2}' | head -1)
+            if [ -n "$sig" ]; then _http_ok "{\"rssi\":$sig,\"bssid\":\"$bssid\"}"
+            else _http_ok '{"rssi":null}'; fi
+            ;;
+        /roam/neighbors)
+            apply_neighbor_list "$body"
+            _http_ok '{"status":"ok"}'
+            ;;
+        *)
+            _http_404
+            ;;
     esac
 }
 
 run_node_server() {
-    log "HTTP server starting on port %s" "$MASTER_PORT"
+    log "HTTP server starting on port %s (via socat)" "$MASTER_PORT"
 
-    # socat：最佳选择，并发，每连接 fork
-    if command -v socat >/dev/null 2>&1; then
-        log "HTTP server: socat mode (concurrent)"
-        # socat 前台运行（_bg 已把整个 run_node_server 放后台）
-        exec socat TCP-LISTEN:${MASTER_PORT},reuseaddr,fork,crnl \
-            EXEC:"$0 __http_handler"
-        return
-    fi
+    # 使用 socat 启动并发 HTTP 服务器
+    socat TCP-LISTEN:${MASTER_PORT},reuseaddr,fork,crnl \
+        EXEC:"$0 __http_handler" 2>/dev/null &
 
-    # busybox nc 正确实现：
-    # nc -l -p PORT 每次接受一个连接，stdin/stdout 即 TCP stream
-    # 用 sh -c 在子进程里运行 handler，避免变量污染
-    # 注意：busybox nc 没有 -k（keepalive），必须 while 循环
-    log "HTTP server: nc serial mode"
-    while true; do
-        # 关键：nc 的 stdin 来自 handler 的 stdout，nc 的 stdout 进 handler 的 stdin
-        # busybox nc 语法：nc -l -p PORT（监听，接受一个连接后退出）
-        # 用命名管道正确双向：req_pipe 从 nc 收数据，resp_pipe 发数据给 nc
-        local rp="/tmp/em_req_$$" sp="/tmp/em_sp_$$"
-        mkfifo "$rp" 2>/dev/null || { sleep 1; continue; }
-        # 后台开 handler，从 rp 读请求，直接输出到 nc（通过替换 stdout）
-        sh -c ". $0 __http_handler < $rp" > "$rp.out" 2>/dev/null &
-        local hpid=$!
-        # nc 把收到的数据写入 rp，并把 rp.out 发回给客户端
-        nc -l -p "$MASTER_PORT" > "$rp" < "$rp.out" 2>/dev/null
-        wait "$hpid" 2>/dev/null
-        rm -f "$rp" "$rp.out"
-    done
+    echo $! > "${EM_PID_DIR}/http_server.pid"
 }
 
 ########################################
 # 7. NODE REGISTRATION
 ########################################
-# 简化：收到注册直接写 NODE_DB（自动审批）
-# 管理员可在 LuCI 节点页查看所有已接入节点
 register_node() {
     local body="$1" source="$2"
     local mac ip hostname
@@ -455,7 +443,6 @@ register_node() {
     [ -z "$mac" ] && return 1
     local safe; safe=$(echo "$mac" | tr ':' '_')
     mkdir -p "$NODE_DB"
-    # 更新节点信息（IP 可能变化）
     printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"%s","status":"approved","ts":%s}\n' \
         "$mac" "${ip:-?}" "${hostname:-?}" "${source:-wired}" "$(date +%s)" \
         > "${NODE_DB}/${safe}.json"
@@ -466,7 +453,6 @@ register_node() {
 # 8. AGENT: FIND MASTER & JOIN
 ########################################
 find_master() {
-    # 方法1：读缓存
     local cached; cached=$(master_ip)
     if [ -n "$cached" ]; then
         if wget -q -T 3 -O- "http://${cached}:${MASTER_PORT}/ping" 2>/dev/null | grep -q '"role":"master"'; then
@@ -475,7 +461,6 @@ find_master() {
     fi
     rm -f "$MASTER_IP_FILE"
 
-    # 方法2：检查默认网关（最常见情况：master 是网关）
     local gw; gw=$(ip route 2>/dev/null | awk '/default/{print $3}' | head -1)
     if [ -n "$gw" ]; then
         if wget -q -T 3 -O- "http://${gw}:${MASTER_PORT}/ping" 2>/dev/null | grep -q '"role":"master"'; then
@@ -485,29 +470,11 @@ find_master() {
         fi
     fi
 
-    # 方法3：UDP 广播发现
-    log "Searching master via UDP broadcast..."
-    local myip; myip=$(get_ip)
-    local mymac; mymac=$(get_mac)
-    local hostname; hostname=$(uci get system.@system[0].hostname 2>/dev/null || echo "node")
-    local i=0
-    while [ "$i" -lt 6 ]; do
-        printf 'EASYMESH_HELLO %s %s %s\n' "$mymac" "$myip" "$hostname" | \
-            nc -u 255.255.255.255 "$DISC_PORT" 2>/dev/null
-        # 等待 WELCOME（3s 超时）
-        local reply; reply=$(nc -u -l -p "$DISC_PORT" -w 3 2>/dev/null)
-        if echo "$reply" | grep -q "^EASYMESH_WELCOME"; then
-            local mip; mip=$(echo "$reply" | awk '{print $2}')
-            echo "$mip" > "$MASTER_IP_FILE"
-            log "Master found via broadcast: %s" "$mip"
-            return 0
-        fi
-        i=$(( i + 1 ))
-        sleep 2
-    done
+    discovery_client && return 0
 
-    # 方法4：同子网扫描（最慢，最后用）
-    local prefix; prefix=$(echo "$myip" | cut -d. -f1-3)
+    local prefix myip
+    myip=$(get_ip)
+    prefix=$(echo "$myip" | cut -d. -f1-3)
     log "Scanning subnet %s.0/24 for master..." "$prefix"
     for j in $(seq 1 254); do
         local c="${prefix}.${j}"
@@ -655,7 +622,7 @@ gateway_watchdog() {
 prev_gw=""
 check_routing_paths() {
     local cur_gw
-    cur_gw=$(batctl meshif "$MESH_IF" gwl 2>/dev/null | awk '/===>{ print $2 }' | head -1)
+    cur_gw=$(batctl meshif "$MESH_IF" gwl 2>/dev/null | awk '/===>/{print $2}' | head -1)
     if [ -n "$cur_gw" ] && [ "$cur_gw" != "$prev_gw" ]; then
         log "Self-healing: gateway path changed -> %s (was: %s)" "$cur_gw" "${prev_gw:-none}"
         prev_gw="$cur_gw"
@@ -980,17 +947,22 @@ main_loop() {
     echo "$hw_type" > /tmp/easymesh_hw_type
     log "Hardware: %s" "$hw_type"
 
-    # 先选举角色，再配置回程（确保 role 已知）
+    # 检查 socat 是否可用
+    if ! command -v socat >/dev/null 2>&1; then
+        loge "socat not found! Please install: opkg update && opkg install socat"
+        return 1
+    fi
+
     elect_role
     tune_batman
-    setup_wired_backhaul   # 此时 role 已确定，日志正确
+    setup_wired_backhaul
 
     log "Starting as: %s" "$(get_role)"
 
-    # 启动后台服务
+    # 启动所有后台服务（全部基于 socat）
     _bg roam_watchdog  roam_watchdog
     _bg dfs_watchdog   dfs_watchdog
-    _bg node_server    run_node_server
+    _bg http_server    run_node_server
 
     if [ "$(get_role)" = "master" ]; then
         _bg disc_server discovery_server
@@ -998,7 +970,6 @@ main_loop() {
         generate_profile
     else
         _bg gw_watchdog gateway_watchdog
-        # Agent：自动发现并注册（无需人工操作）
         find_master && do_register || true
     fi
 
@@ -1006,14 +977,12 @@ main_loop() {
 
     local _registered=0 _iter=0
     while true; do
-        # 定期重选举
         if [ $(( _iter % (ELECTION_INTERVAL / 10) )) -eq 0 ]; then
             local _prev_role; _prev_role=$(get_role)
             elect_role; tune_batman
             if [ "$(get_role)" != "$_prev_role" ]; then
                 _registered=0
                 log "Role switch: %s -> %s" "$_prev_role" "$(get_role)"
-                # 角色变为 master 时启动发现服务
                 if [ "$(get_role)" = "master" ]; then
                     _bg disc_server discovery_server
                     generate_profile
@@ -1046,11 +1015,14 @@ main_loop() {
 case "$1" in
     stop)
         _stop_jobs
-        pkill -f easymesh-master 2>/dev/null || true
-        rm -rf "$EM_PID_DIR" /tmp/easymesh_master.pid /tmp/em_req_* /tmp/em_resp_*
         ;;
     __http_handler)
-        _handle_one_request
+        __http_handler
         ;;
-    *) main_loop ;;
+    __handle_hello)
+        __handle_hello
+        ;;
+    *)
+        main_loop
+        ;;
 esac

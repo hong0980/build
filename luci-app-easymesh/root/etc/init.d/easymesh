@@ -221,10 +221,9 @@ start_service() {
 
 stop_service() {
     log "EasyMesh stopping..."
-    for pattern in easymesh-master easymesh-agent; do
-        for pid in $(pgrep -f "$pattern"); do
-            kill $pid 2>/dev/null || true
-        done
+    # 清理其他 easymesh 进程
+    for pid in $(pgrep -f "easymesh-(master|agent)" 2>/dev/null); do
+        [ "$pid" != "$$" ] && kill "$pid" 2>/dev/null || true
     done
     # Remove managed wireless interfaces and mesh network config
     cleanup_wireless
@@ -232,7 +231,7 @@ stop_service() {
     # Reload wifi and network to apply the cleanup
     ( sleep 1; wifi reload ) &
     ( sleep 1; /etc/init.d/network reload ) &
-    rm -rf /tmp/easymesh* /tmp/em_req_* /tmp/em_resp_* 2>/dev/null
+    rm -rf /tmp/easymesh* /tmp/em_* 2>/dev/null
 }
 
 reload_service() {

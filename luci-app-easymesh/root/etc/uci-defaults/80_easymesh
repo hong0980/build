@@ -4,6 +4,7 @@ chmod +x /etc/init.d/easymesh
 chmod +x /usr/sbin/easymesh-master
 chmod +x /usr/sbin/easymesh-agent
 chmod +x /usr/libexec/rpcd/easymesh
+chmod +x /etc/hotplug.d/button/99-easymesh-wps
 
 /etc/init.d/easymesh enable
 
