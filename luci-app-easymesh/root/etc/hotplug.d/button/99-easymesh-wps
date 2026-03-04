@@ -1,128 +1,48 @@
 #!/bin/sh
 # /etc/hotplug.d/button/99-easymesh-wps
+#
+# 按下 WPS/Reset 键 2~10 秒松开 → 以 agent 身份加入 Mesh
+# 适用于：新子节点首次接入，无需打开 LuCI 界面
+# 条件：当前 easymesh 未启用（enabled=0）才触发，防止误操作
 
-MIN_PRESS=2
-MAX_PRESS=10
-EASYMESH_PORT=4304        # 与守护进程使用的端口一致
-DISC_PORT=4305           # UDP 发现端口
-
-WPS_LED=$(ls /sys/class/leds 2>/dev/null | grep -Ei 'wps|mesh|system|status' | head -1)
-[ -z "$WPS_LED" ] && WPS_LED=$(ls /sys/class/leds 2>/dev/null | head -1)
-LED_PATH="/sys/class/leds/$WPS_LED/brightness"
-
-led_feedback() {
-    [ -w "$LED_PATH" ] || return 0
-    local old=$(cat "$LED_PATH" 2>/dev/null || echo 0)
-
-    # 闪烁5次表示成功
-    for i in 1 2 3 4 5; do
-        echo 1 > "$LED_PATH" 2>/dev/null
-        sleep 0.1
-        echo 0 > "$LED_PATH" 2>/dev/null
-        sleep 0.1
-    done
-
-    # 恢复原状
-    echo "$old" > "$LED_PATH" 2>/dev/null
-}
-
-# 触发节点发现
-trigger_discovery() {
-    local mymac myip
-
-    # 获取本机 MAC 和 IP
-    mymac=$(cat /sys/class/net/br-lan/address 2>/dev/null || \
-            cat /sys/class/net/eth0/address 2>/dev/null)
-    myip=$(ip -4 addr show dev br-lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
-
-    [ -z "$myip" ] && myip=$(ip -4 addr show dev eth0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
-    [ -z "$myip" ] && myip="0.0.0.0"
-
-    local hostname=$(uci get system.@system[0].hostname 2>/dev/null || echo "node")
-
-    # 方法1: 使用 socat (推荐，如果安装了)
-    if command -v socat >/dev/null 2>&1; then
-        printf 'EASYMESH_HELLO %s %s %s\n' "$mymac" "$myip" "$hostname" | \
-            socat - UDP-DATAGRAM:255.255.255.255:$DISC_PORT,broadcast 2>/dev/null &
-
-    # 方法2: 使用 nc (busybox 版本)
-    elif command -v nc >/dev/null 2>&1; then
-        # busybox nc 的 UDP 广播语法
-        printf 'EASYMESH_HELLO %s %s %s\n' "$mymac" "$myip" "$hostname" | \
-            nc -u -b -I br-lan 255.255.255.255 $DISC_PORT 2>/dev/null &
-
-    # 方法3: 使用 echo 重定向到 /dev/udp (如果支持)
-    elif [ -e /dev/udp ]; then
-        printf 'EASYMESH_HELLO %s %s %s\n' "$mymac" "$myip" "$hostname" > /dev/udp/255.255.255.255/$DISC_PORT 2>/dev/null &
-    fi
-
-    # 同时也尝试通过 HTTP 唤醒已知的 master
-    local master_ip=$(cat /tmp/easymesh_master_ip 2>/dev/null)
-    if [ -n "$master_ip" ]; then
-        wget -q -T 2 -O /dev/null "http://${master_ip}:${EASYMESH_PORT}/ping" 2>/dev/null &
-    fi
-}
-
+# 只响应 WPS / Reset / BTN_0 / BTN_1 按钮
 case "$BUTTON" in
-    wps|reset|wwan|BTN_1|BTN_0|rfkill|wlan)
-        if [ "$ACTION" = "released" ]; then
-            # 兼容性处理：如果没有 SEEN 变量，默认为 3 秒
-            P_TIME=${SEEN:-3}
-
-            if [ "$P_TIME" -ge "$MIN_PRESS" ] && [ "$P_TIME" -le "$MAX_PRESS" ]; then
-
-                # 检查是否已启用
-                local enabled=$(uci -q get easymesh.global.enabled)
-
-                if [ "$enabled" = "1" ]; then
-                    # 如果已启用，直接触发发现
-                    trigger_discovery
-                    led_feedback
-                else
-                    # 确保配置文件存在
-                    if [ -z "$(uci -q get easymesh.global)" ]; then
-                        uci set easymesh.global=settings
-                        uci set easymesh.global.role='agent'    # 子节点默认为 agent
-                    fi
-
-                    # 启用 EasyMesh
-                    uci set easymesh.global.enabled='1'
-                    uci commit easymesh
-
-                    # 启动服务
-                    /etc/init.d/easymesh restart
-
-                    (
-                        sleep 10
-                        # 检查服务是否真的启动了
-                        if [ -n "$(ps | grep -v grep | grep easymesh-agent)" ]; then
-                            trigger_discovery
-                            led_feedback
-                        else
-                            if [ -w "$LED_PATH" ]; then
-                                echo 1 > "$LED_PATH"
-                                sleep 2
-                                echo 0 > "$LED_PATH"
-                            fi
-                        fi
-                    ) &
-                fi
-            elif [ "$P_TIME" -gt "$MAX_PRESS" ]; then
-                # 长按超过10秒：禁用 EasyMesh
-                uci set easymesh.global.enabled='0'
-                uci commit easymesh
-                /etc/init.d/easymesh stop
-
-                # 反馈：快速闪烁3次然后熄灭
-                (
-                    for i in 1 2 3; do
-                        [ -w "$LED_PATH" ] && echo 1 > "$LED_PATH"
-                        sleep 0.2
-                        [ -w "$LED_PATH" ] && echo 0 > "$LED_PATH"
-                        sleep 0.2
-                    done
-                ) &
-            fi
-        fi
-        ;;
+    wps|reset|BTN_0|BTN_1) ;;
+    *) exit 0 ;;
 esac
+
+# 松开事件 + 按住时间 2~10 秒
+[ "$ACTION" = "released" ] || exit 0
+[ -n "$SEEN" ] || exit 0
+[ "$SEEN" -ge 2 ] && [ "$SEEN" -le 10 ] || exit 0
+
+# 仅在未启用时触发（防止已配置节点被重置）
+enabled=$(uci -q get easymesh.global.enabled)
+[ "$enabled" = "1" ] && exit 0
+
+# 配置为子节点并启用
+uci set easymesh.global.role='agent'
+uci set easymesh.global.enabled='1'
+uci commit easymesh
+
+logger -t EasyMesh "WPS button: enabling as agent, restarting service"
+
+# 重启服务（后台执行，不阻塞 hotplug）
+( sleep 1; /etc/init.d/easymesh restart ) &
+
+# LED 反馈：快速闪烁 3 次（兼容各厂商 LED 命名）
+LED_PATH=""
+for led_pattern in wps mesh system status power wan; do
+    LED_PATH=$(ls /sys/class/leds/*${led_pattern}*/brightness 2>/dev/null | head -1)
+    [ -n "$LED_PATH" ] && [ -w "$LED_PATH" ] && break
+    LED_PATH=""
+done
+
+if [ -n "$LED_PATH" ]; then
+    for i in 1 2 3; do
+        echo 1 > "$LED_PATH" 2>/dev/null; sleep 0.2
+        echo 0 > "$LED_PATH" 2>/dev/null; sleep 0.2
+    done
+    # 最终点亮，表示服务正在启动中
+    echo 1 > "$LED_PATH" 2>/dev/null
+fi

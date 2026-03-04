@@ -27,8 +27,6 @@ call() {
         topology)  _topology ;;
         approve)   json_load "$args"; json_get_var mac mac; _approve "$mac" ;;
         reject)    json_load "$args"; json_get_var mac mac; _reject  "$mac" ;;
-        log_read)  _log_read  ;;
-        log_clear) _log_clear ;;
         *) printf '{"error":"unknown method"}\n'; return 1 ;;
     esac
 }

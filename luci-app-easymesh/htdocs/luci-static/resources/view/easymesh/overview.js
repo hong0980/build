@@ -58,7 +58,7 @@ return view.extend({
 		o = s.taboption('basic', form.ListValue, 'role', _('Node Role'),
 			_('Master handles DHCP and uplink. Slave extends coverage only.'));
 		o.value('master', _('Master (connected to modem/ISP)'));
-		o.value('slave', _('Slave (extends coverage)'));
+		o.value('agent', _('Slave (extends coverage)'));
 		o.default = 'master';
 		o.depends('enabled', '1');
 
@@ -233,17 +233,17 @@ return view.extend({
 		});
 	},
 
-	handleSave: function(ev) {
+	handleSave: function (ev) {
 		return this.map.save(null, true);
 	},
 
-	handleSaveApply: function(ev) {
-		return this.handleSave(ev).then(function() {
+	handleSaveApply: function (ev) {
+		return this.handleSave(ev).then(function () {
 			return ui.changes.apply(true);
 		});
 	},
 
-	handleReset: function(ev) {
+	handleReset: function (ev) {
 		return this.map.reset();
 	}
 });

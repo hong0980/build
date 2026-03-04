@@ -31,8 +31,9 @@ _emlog() {
     local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
     printf "%s [%-5s] [%-8s] %s\n" "$ts" "$level" "$tag" "$*" >> "$LOGFILE"
 }
-log()  { _emlog "INFO"  "initd" $(translate "$*"); }
-loge() { _emlog "ERROR" "initd" $(translate "$*"); }
+# log <template> [args...]  — translate 翻译模板，printf 插入参数
+log()  { _emlog "INFO"  "initd" "$(translate "$@")"; }
+loge() { _emlog "ERROR" "initd" "$(translate "$@")"; }
 
 # ── Find radio for given band ─────────────────────────────────────────────────
 _band_target=""; _found=""
