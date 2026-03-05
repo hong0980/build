@@ -71,10 +71,8 @@ _topology() {
     fi
 
     local bat0_up="false"
-    if [ -d /sys/class/net/bat0 ]; then
-        local _f; _f=$(cat /sys/class/net/bat0/flags 2>/dev/null || echo 0x0)
-        local _d; _d=$(printf '%d' "$_f" 2>/dev/null || echo 0)
-        [ $(( _d & 1 )) -eq 1 ] && bat0_up="true"
+    if ip link show bat0 2>/dev/null | grep -q ',UP,\|<UP\|,UP>'; then
+        bat0_up="true"
     fi
     printf '{"ts":%d,"nodes":[],"links":[],"bat0_up":%s}\n' "$(date +%s)" "$bat0_up"
 }
@@ -88,9 +86,9 @@ _approve() {
     local dst="${NODE_DB}/${safe}.json"
     mkdir -p "$NODE_DB"
     if [ -f "$src" ]; then
-        sed 's/"status"\s*:\s*"pending"/"status":"approved"/' "$src" > "$dst"
+        sed 's/"status":"pending"/"status":"approved"/' "$src" > "$dst"
         rm -f "$src"
-        local pid; pid=$(cat /tmp/easymesh_master.pid 2>/dev/null)
+        local pid; pid=$(cat /tmp/easymesh_pids/easymesh_master.pid 2>/dev/null)
         [ -n "$pid" ] && kill -USR1 "$pid" 2>/dev/null || true
         printf '{"status":"ok"}\n'
     else

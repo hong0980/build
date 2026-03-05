@@ -431,8 +431,8 @@ discovery_client() {
 _http_cors="Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
 _http_ok()  { printf "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n${_http_cors}Connection: close\r\n\r\n%s" "$1"; }
 _http_html(){ printf "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n${_http_cors}Connection: close\r\n\r\n"; cat "$1"; }
-_http_403() { printf "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n${_http_cors}Connection: close\r\n\r\n{"status":"pending"}\n"; }
-_http_404() { printf "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n{"error":"not found"}\n"; }
+_http_403() { printf 'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n'"$_http_cors"'Connection: close\r\n\r\n{"status":"pending"}\n'; }
+_http_404() { printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n{"error":"not found"}\n'; }
 
 # HTTP 请求处理器（每个连接独立进程）
 __http_handler() {
@@ -714,9 +714,9 @@ apply_profile() {
     uci_set wireless ${_ap_sect} ieee80211v 1
     uci_set wireless ${_ap_sect} bss_transition 1
     uci_set wireless ${_ap_sect} rrm_neighbor_report 1
-    [ -n "$channel" ] && [ "$channel" !  "auto" ] && {
+    [ -n "$channel" ] && [ "$channel" !=  "auto" ] && {
         local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
-        [ -n "$rd" ] && uci_add "${rd}" channel "$channel"
+        [ -n "$rd" ] && uci set "${rd}.channel=$channel"
     }
     uci_commit wireless
     setup_wired_backhaul
@@ -781,7 +781,7 @@ sync_neighbor_list() {
         }' | while read -r bssid op chan; do
         [ "$bssid" = "$my_bssid" ] && continue
         hostapd_cli -i "$ap_iface" set_neighbor "$bssid" \
-            ssid="\"$ssid\"" nr="${bssid//:/}${op}${chan}0000" 2>/dev/null && \
+            ssid="\"$ssid\"" nr="$(echo "$bssid" | tr -d ':')${op}${chan}0000" 2>/dev/null && \
         echo "$bssid $op $chan" >> "$NEIGHBOR_FILE"
     done
     if [ "$(get_role)" = "master" ]; then
@@ -1018,10 +1018,8 @@ update_topology() {
     done
     # bat0_up: 检查 bat0 接口是否存在且 UP（IFF_UP = flags & 0x1）
     local bat0_up="false"
-    if [ -d /sys/class/net/bat0 ]; then
-        local _flags; _flags=$(cat /sys/class/net/bat0/flags 2>/dev/null || echo 0x0)
-        local _fdec; _fdec=$(printf '%d' "$_flags" 2>/dev/null || echo 0)
-        [ $(( _fdec & 1 )) -eq 1 ] && bat0_up="true"
+    if ip link show bat0 2>/dev/null | grep -q ',UP,\|<UP\|,UP>'; then
+        bat0_up="true"
     fi
     printf '{"ts":%d,"nodes":[%s],"links":[%s],"bat0_up":%s}\n' "$(date +%s)" "$nodes" "${links:-}" "$bat0_up" > "$TOPO_FILE"
 }
