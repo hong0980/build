@@ -153,18 +153,18 @@ _stop_jobs() {
         fi
         rm -f "$_f"
     done
-    # 清理残留 socat（端口占用导致重启失败）
-    # 用 /proc 扫描替代 pkill（BusyBox 无 pkill）
-    local _p _cmd
+
+    local _p _pid _cmd
     for _p in /proc/[0-9]*/cmdline; do
         [ -f "$_p" ] || continue
+        _pid="${_p%/cmdline}"
+        _pid="${_pid##*/}"
         _cmd=$(tr "\0" " " < "$_p" 2>/dev/null)
+
         case "$_cmd" in
             *socat*":${MASTER_PORT}"*|*socat*":${DISC_PORT}"*|*socat*":${DISC_REPLY_PORT}"*)
-                kill "${_p%%/cmdline*}" 2>/dev/null || true
-                kill "${_p#/proc/}" 2>/dev/null || true
-                _pid="${_p%/cmdline}"; _pid="${_pid##*/}"
-                kill "$_pid" 2>/dev/null || true ;;
+                kill "$_pid" 2>/dev/null || true
+                ;;
         esac
     done
 }
