@@ -37,7 +37,8 @@ return view.extend({
 				E('li', {}, _('Set role to Agent in its EasyMesh config, then enable EasyMesh')),
 				E('li', {}, _('Connect a LAN cable: this master LAN port ↔ new node LAN port')),
 				E('li', {}, _('Wait ~30 seconds — agent auto-discovers this master via UDP broadcast')),
-				E('li', {}, _('Go to the Nodes tab on this master and click Allow to join'))
+				E('li', {}, _('Go to the Nodes tab on this master and click Allow to join')),
+				E('li', {}, '💡 ' + _('Quick join shortcut: on the new node, press and hold the WPS button for 2–10 seconds. It auto-sets Agent mode and starts discovery. Then approve in the Nodes tab here.'))
 			])
 		] : [
 			E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:12px' },

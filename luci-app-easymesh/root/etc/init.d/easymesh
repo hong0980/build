@@ -205,7 +205,17 @@ stop_service() {
     log "EasyMesh stopping..."
     # daemon 自己清理 batman-adv（batctl interface del + brctl delif）
     /usr/sbin/easymesh-master stop 2>/dev/null || true
-    pkill -f 'easymesh-master' 2>/dev/null || true
+    # 杀掉残留 easymesh-master 进程（/proc 扫描，无需 pkill）
+    local _ip _ic _ipid
+    for _ip in /proc/[0-9]*/cmdline; do
+        [ -f "$_ip" ] || continue
+        _ic=$(tr "\0" " " < "$_ip" 2>/dev/null)
+        case "$_ic" in
+            *easymesh-master*)
+                _ipid="${_ip%/cmdline}"; _ipid="${_ipid##*/}"
+                [ "$_ipid" != "$$" ] && kill "$_ipid" 2>/dev/null || true ;;
+        esac
+    done
     # 清理无线 UCI
     cleanup_wireless
     # 恢复 DHCP server

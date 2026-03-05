@@ -454,7 +454,7 @@ return view.extend({
 				})
 			]),
 			E('div', { style: 'display:flex;gap:20px;padding:10px 12px 4px;flex-wrap:wrap' },
-				[['#2ea44f', '≥ 70% (Good)'], ['#e3b341', '40–69% (Fair)'], ['#f85149', '< 40% (Weak)']].map(
+				[['#2ea44f', _('≥ 70% (Good)')], ['#e3b341', _('40–69% (Fair)')], ['#f85149', _('< 40% (Weak)')]].map(
 					function (item) {
 						return E('div', { style: 'display:flex;align-items:center;gap:6px;font-size:11px;color:#7d8590' }, [
 							E('div', { style: 'width:24px;height:3px;background:' + item[0] + ';border-radius:2px' }),

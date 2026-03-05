@@ -6,7 +6,7 @@
 
 var LOGFILE = '/tmp/easymesh.log';
 var POLL_INTERVAL = 3;
-var LOG_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\s*\] \[(\w+)\s*\] (.*)$/;
+var LOG_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[\s*(\w+)\s*\] \[\s*(\w+)\s*\] (.*)$/;
 
 /* ── Category definitions ──────────────────────────────────────────────────── */
 var CATEGORIES = {
@@ -146,14 +146,18 @@ return view.extend({
 					style: 'padding:4px 11px;border-radius:5px;font-size:12px;cursor:pointer;' +
 					       'border:1px solid ' + def.color + '55;' +
 					       'background:' + (def.key === 'all' ? def.color + '22' : def.color + '0d') + ';' +
-					       'color:' + def.color + ';transition:opacity .1s',
+					       'color:' + def.color + ';transition:opacity .1s;' +
+					       'font-weight:' + (def.key === 'all' ? '700' : '400') + ';' +
+					       'opacity:' + (def.key === 'all' ? '1' : '0.65'),
 					click: ui.createHandlerFn(this, function() {
 						self._filter = def.key;
 						filterBar.querySelectorAll('[data-filter]').forEach(function(b) {
 							b.style.fontWeight = b.dataset.filter === def.key ? '700' : '400';
 							b.style.opacity    = b.dataset.filter === def.key ? '1' : '0.65';
+							b.style.background = b.dataset.filter === def.key
+								? (CATEGORIES[b.dataset.filter] || {color:'#7d8590'}).color + '22'
+								: (CATEGORIES[b.dataset.filter] || {color:'#7d8590'}).color + '0d';
 						});
-						self._filter = def.key;
 						self._doRender();
 					})
 				}, def.icon + ' ' + def.label);
@@ -163,15 +167,17 @@ return view.extend({
 		var levelSelect = E('select', {
 			style: 'background:#0d1117;border:1px solid #30363d;border-radius:5px;' +
 			       'color:#e6edf3;padding:4px 8px;font-size:12px;cursor:pointer',
-			onchange: function() {
-				self._levelFilter = this.value;
+			onchange: function(ev) {
+				/* ev.target.value 比 this.value 更稳健，
+				   避免在某些浏览器事件代理场景下 this 丢失 */
+				self._levelFilter = (ev || window.event).target.value;
 				self._doRender();
 			}
 		}, [
-			E('option', { value: 'all'   }, _('All levels')),
-			E('option', { value: 'ERROR' }, '🔴 ' + _('ERROR only')),
-			E('option', { value: 'WARN'  }, '🟡 ' + _('WARN+')),
-			E('option', { value: 'INFO'  }, '🔵 ' + _('INFO only'))
+			E('option', { value: 'all',   selected: self._levelFilter === 'all'   }, _('All levels')),
+			E('option', { value: 'ERROR', selected: self._levelFilter === 'ERROR' }, '🔴 ' + _('ERROR only')),
+			E('option', { value: 'WARN',  selected: self._levelFilter === 'WARN'  }, '🟡 ' + _('WARN + ERROR')),
+			E('option', { value: 'INFO',  selected: self._levelFilter === 'INFO'  }, '🔵 ' + _('INFO only'))
 		]);
 
 		/* ── Search ── */
@@ -181,7 +187,7 @@ return view.extend({
 			style: 'flex:1;min-width:140px;background:#0d1117;' +
 			       'border:1px solid #30363d;border-radius:5px;' +
 			       'color:#e6edf3;padding:4px 10px;font-size:12px;font-family:monospace;outline:none',
-			oninput: function() { self._search = this.value.toLowerCase(); self._doRender(); }
+			oninput: function(ev) { self._search = (ev || window.event).target.value.toLowerCase(); self._doRender(); }
 		});
 
 		/* ── Pause ── */
@@ -277,11 +283,17 @@ return view.extend({
 			/* Repopulate list */
 			while (logList.firstChild) logList.removeChild(logList.firstChild);
 			if (!visible.length) {
+				var emptyMsg;
+				if (f === 'all' && lf === 'all' && !s) {
+					emptyMsg = '📭 ' + _('No log entries yet. Start the EasyMesh service to see logs here.');
+				} else if (f !== 'all' && !s && lf === 'all') {
+					emptyMsg = '📂 ' + _('No entries for this category.');
+				} else {
+					emptyMsg = '🔍 ' + _('No entries match the current filter.');
+				}
 				logList.appendChild(E('div', {
 					style: 'padding:48px 20px;text-align:center;color:#484f58;font-size:13px'
-				}, f === 'all' && !s
-					? '📭 ' + _('No log entries yet. Start the EasyMesh service to see logs here.')
-					: '🔍 ' + _('No entries match the current filter.')));
+				}, emptyMsg));
 			} else {
 				var frag = document.createDocumentFragment();
 				visible.forEach(function(e) { frag.appendChild(logRow(e)); });
@@ -325,7 +337,9 @@ return view.extend({
 			if (self._paused) return;
             return fs.read(LOGFILE).then(function (raw) {
 				var fresh = parseLog(raw || '');
-				if (fresh.length !== self._lastCount) {
+				var freshSig = fresh.length + (fresh[0] ? fresh[0].raw : '');
+				var prevSig  = self._lastCount + (self._entries[0] ? self._entries[0].raw : '');
+				if (freshSig !== prevSig) {
 					self._entries   = fresh;
 					self._lastCount = fresh.length;
 					self._doRender();
