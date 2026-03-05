@@ -4,11 +4,10 @@
 'require view';
 'require poll';
 
-var LOGFILE = '/tmp/easymesh.log';
 var POLL_INTERVAL = 3;
+var LOGFILE = '/tmp/easymesh.log';
 var LOG_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[\s*(\w+)\s*\] \[\s*(\w+)\s*\] (.*)$/;
 
-/* ── Category definitions ──────────────────────────────────────────────────── */
 var CATEGORIES = {
 	'core':  { label: _('Core'),    icon: '⚙️',  color: '#58a6ff' },
 	'roam':  { label: _('Roaming'), icon: '📶',  color: '#2ea44f' },
@@ -17,14 +16,12 @@ var CATEGORIES = {
 	'initd': { label: _('Init'),    icon: '🚀',  color: '#a371f7' }
 };
 
-/* ── Log level styles ──────────────────────────────────────────────────────── */
 var LEVEL_STYLE = {
 	'ERROR': 'color:#f85149;font-weight:700',
 	'WARN':  'color:#e3b341;font-weight:600',
 	'INFO':  'color:#484f58'
 };
 
-/* ── Keyword highlight rules ───────────────────────────────────────────────── */
 var HIGHLIGHTS = [
 	{ re: /\b(error|failed|fail|dead|crash)\b/gi,        style: 'color:#f85149;font-weight:600' },
 	{ re: /\b(warn|warning)\b/gi,                        style: 'color:#e3b341' },
@@ -38,7 +35,6 @@ var HIGHLIGHTS = [
 	{ re: /OGM\s*\d+ms/gi,                               style: 'color:#56d364' }
 ];
 
-/* ── Parse raw file content into entry objects ─────────────────────────────── */
 function parseLog(raw) {
 	if (!raw) return [];
 	var entries = [];
@@ -46,16 +42,14 @@ function parseLog(raw) {
 		if (!line.trim()) return;
 		var m = LOG_RE.exec(line);
 		if (!m) {
-			/* Unknown format line — show as plain core entry */
 			entries.push({ ts: '', level: 'INFO', tag: 'core', msg: line, raw: line });
 			return;
 		}
 		entries.push({ ts: m[1], level: m[2].trim(), tag: m[3].trim(), msg: m[4], raw: line });
 	});
-	return entries.reverse(); /* newest first */
+	return entries.reverse();
 }
 
-/* ── Category badge element ────────────────────────────────────────────────── */
 function badge(tag) {
 	var c = CATEGORIES[tag] || { label: tag, icon: '·', color: '#7d8590' };
 	return E('span', {
@@ -67,9 +61,7 @@ function badge(tag) {
 	}, c.icon + ' ' + c.label.toUpperCase());
 }
 
-/* ── Apply keyword highlighting to a message string ───────────────────────── */
 function highlight(msg) {
-	/* Find all non-overlapping regions to highlight */
 	var regions = [];
 	HIGHLIGHTS.forEach(function(h) {
 		var re = new RegExp(h.re.source, h.re.flags.replace('g','') + 'g');
@@ -79,7 +71,6 @@ function highlight(msg) {
 	});
 	if (!regions.length) return [msg];
 
-	/* Sort and de-overlap */
 	regions.sort(function(a, b) { return a.s - b.s; });
 	var out = [], cur = 0;
 	regions.forEach(function(r) {
@@ -92,7 +83,6 @@ function highlight(msg) {
 	return out;
 }
 
-/* ── Single log row ────────────────────────────────────────────────────────── */
 function logRow(entry) {
 	return E('div', {
 		style: 'display:grid;' +
@@ -110,14 +100,13 @@ function logRow(entry) {
 		}
 	}, [
 		E('span', { style: 'color:#484f58;font-family:monospace;font-size:11px' }, entry.ts),
-        E('span', {
+		E('span', {
 		style: (LEVEL_STYLE[entry.level] || LEVEL_STYLE['INFO']) +
 		       ';font-size:10px;font-weight:700;font-family:monospace;' +
-                'flex-shrink:0;width:36px;text-align:center'
-        }, entry.level),
+		        'flex-shrink:0;width:36px;text-align:center'
+		}, entry.level),
 		badge(entry.tag),
-		E('span', { style: 'color:#c9d1d9;font-family:monospace;word-break:break-word' },
-			highlight(entry.msg))
+		E('span', { style: 'color:#c9d1d9;font-family:monospace;word-break:break-word' }, highlight(entry.msg))
 	]);
 }
 
@@ -126,7 +115,7 @@ return view.extend({
 	_entries: [], _filter: 'all', _levelFilter: 'all',
 
 	load: function() {
-		return fs.read(LOGFILE).catch(function() { return ''; });
+		return L.resolveDefault(fs.read(LOGFILE), '');
 	},
 
 	render: function(rawData) {
@@ -134,11 +123,10 @@ return view.extend({
 		self._entries   = parseLog(rawData);
 		self._lastCount = self._entries.length;
 
-		/* ── Filter buttons ── */
 		var catButtons = [{ key: 'all', label: _('All'), icon: '📋', color: '#7d8590' }]
 			.concat(Object.keys(CATEGORIES).map(function(k) {
 				return { key: k, label: CATEGORIES[k].label,
-				         icon: CATEGORIES[k].icon, color: CATEGORIES[k].color };
+						 icon: CATEGORIES[k].icon, color: CATEGORIES[k].color };
 			}))
 			.map(function(def) {
 				return E('button', {
@@ -163,13 +151,10 @@ return view.extend({
 				}, def.icon + ' ' + def.label);
 			});
 
-		/* ── Level filter ── */
 		var levelSelect = E('select', {
 			style: 'background:#0d1117;border:1px solid #30363d;border-radius:5px;' +
 			       'color:#e6edf3;padding:4px 8px;font-size:12px;cursor:pointer',
 			onchange: function(ev) {
-				/* ev.target.value 比 this.value 更稳健，
-				   避免在某些浏览器事件代理场景下 this 丢失 */
 				self._levelFilter = (ev || window.event).target.value;
 				self._doRender();
 			}
@@ -180,17 +165,14 @@ return view.extend({
 			E('option', { value: 'INFO',  selected: self._levelFilter === 'INFO'  }, '🔵 ' + _('INFO only'))
 		]);
 
-		/* ── Search ── */
 		var searchBox = E('input', {
-			type: 'text',
-			placeholder: _('Search…'),
+			type: 'text', placeholder: _('Search…'),
 			style: 'flex:1;min-width:140px;background:#0d1117;' +
 			       'border:1px solid #30363d;border-radius:5px;' +
 			       'color:#e6edf3;padding:4px 10px;font-size:12px;font-family:monospace;outline:none',
 			oninput: function(ev) { self._search = (ev || window.event).target.value.toLowerCase(); self._doRender(); }
 		});
 
-		/* ── Pause ── */
 		var pauseBtn = E('button', {
 			style: 'padding:4px 11px;border-radius:5px;font-size:12px;cursor:pointer;' +
 			       'border:1px solid #30363d;background:#161b22;color:#e6edf3',
@@ -202,7 +184,6 @@ return view.extend({
 			})
 		}, '⏸ ' + _('Pause'));
 
-		/* ── Export ── */
 		var exportBtn = E('button', {
 			style: 'padding:4px 11px;border-radius:5px;font-size:12px;cursor:pointer;' +
 			       'border:1px solid #30363d;background:#161b22;color:#7d8590',
@@ -221,16 +202,15 @@ return view.extend({
 			       'border:1px solid #f8514933;background:#f8514908;color:#f85149',
 			click: ui.createHandlerFn(this, function() {
 				if (!window.confirm(_('Clear the log file on disk?'))) return;
-                fs.write(LOGFILE, '').then(function () {
-                    self._entries = [];
-                    self._lastCount = 0;
-                    self._doRender();
+				fs.write(LOGFILE, '').then(function () {
+					self._entries = [];
+					self._lastCount = 0;
+					self._doRender();
 					ui.addTimeLimitedNotification(null, E('p', {}, _('Log file cleared.')), 3000, 'info');
 				}).catch(function() {});
 			})
 		}, '🗑 ' + _('Clear'));
 
-		/* ── Entry counter ── */
 		var countEl = E('span', {
 			id: 'em-log-count',
 			style: 'font-size:11px;color:#484f58;margin-left:auto;white-space:nowrap'
@@ -241,7 +221,6 @@ return view.extend({
 			       'padding:10px 14px;border-bottom:1px solid #21262d;background:#0d1117'
 		}, catButtons.concat([levelSelect, searchBox, pauseBtn, exportBtn, clearBtn, countEl]));
 
-		/* ── Column headers ── */
 		var header = E('div', {
 			style: 'display:grid;grid-template-columns:150px 36px 90px 1fr;' +
 			       'gap:0 10px;padding:4px 12px;border-bottom:1px solid #30363d;' +
@@ -251,13 +230,11 @@ return view.extend({
 			return E('span', {}, h);
 		}));
 
-		/* ── Scrollable log list ── */
 		var logList = E('div', {
 			id: 'em-log-list',
 			style: 'overflow-y:auto;max-height:calc(100vh - 300px);min-height:280px'
 		});
 
-		/* ── Status bar ── */
 		var statusBar = E('div', {
 			id: 'em-log-status',
 			style: 'display:flex;gap:16px;flex-wrap:wrap;padding:6px 14px;' +
@@ -265,12 +242,10 @@ return view.extend({
 			       'font-size:11px;color:#484f58;align-items:center'
 		});
 
-		/* ── Render function ── */
 		self._doRender = function() {
 			var f  = self._filter;
 			var lf = self._levelFilter;
 			var s  = self._search;
-
 			var visible = self._entries.filter(function(e) {
 				if (f !== 'all' && e.tag !== f) return false;
 				if (lf === 'ERROR' && e.level !== 'ERROR') return false;
@@ -280,7 +255,6 @@ return view.extend({
 				return true;
 			});
 
-			/* Repopulate list */
 			while (logList.firstChild) logList.removeChild(logList.firstChild);
 			if (!visible.length) {
 				var emptyMsg;
@@ -300,11 +274,9 @@ return view.extend({
 				logList.appendChild(frag);
 			}
 
-			/* Count */
 			var cel = document.getElementById('em-log-count');
 			if (cel) cel.textContent = visible.length + ' / ' + self._entries.length + ' ' + _('lines');
 
-			/* Status bar: per-category counts + last update */
 			while (statusBar.firstChild) statusBar.removeChild(statusBar.firstChild);
 			var counts = {};
 			Object.keys(CATEGORIES).forEach(function(k) { counts[k] = 0; });
@@ -318,8 +290,7 @@ return view.extend({
 				if (!counts[k]) return;
 				var c = CATEGORIES[k];
 				statusBar.appendChild(E('span', {},
-					[E('span', { style: 'color:' + c.color }, c.icon + ' ' + c.label + ': '),
-					 String(counts[k])]));
+					[E('span', { style: 'color:' + c.color }, c.icon + ' ' + c.label + ': '), String(counts[k])]));
 			});
 			if (counts['_error'])
 				statusBar.appendChild(E('span', { style: 'color:#f85149' },
@@ -328,14 +299,14 @@ return view.extend({
 				statusBar.appendChild(E('span', { style: 'color:#e3b341' },
 					'⚠️ ' + _('Warnings') + ': ' + counts['_warn']));
 			statusBar.appendChild(E('span', { style: 'margin-left:auto' },
-				_('Updated: ') + new Date().toLocaleTimeString()));
+				_('Updated: %s').format(new Date().toLocaleTimeString())));
 		};
 
 		self._doRender();
 
 		poll.add(function() {
 			if (self._paused) return;
-            return fs.read(LOGFILE).then(function (raw) {
+			return fs.read(LOGFILE).then(function (raw) {
 				var fresh = parseLog(raw || '');
 				var freshSig = fresh.length + (fresh[0] ? fresh[0].raw : '');
 				var prevSig  = self._lastCount + (self._entries[0] ? self._entries[0].raw : '');
@@ -344,7 +315,7 @@ return view.extend({
 					self._lastCount = fresh.length;
 					self._doRender();
 				}
-            }).catch(function () {});
+			}).catch(function () {});
 		}, POLL_INTERVAL);
 
 		return E('div', {}, [

@@ -337,8 +337,8 @@ msgstr "最后更新："
 msgid "Search…"
 msgstr "搜索…"
 
-msgid "Updated: "
-msgstr "更新于："
+msgid "Updated: %s"
+msgstr "更新于：%s"
 
 msgid "Clear the log file on disk?"
 msgstr "确定清空日志文件？"
@@ -733,6 +733,9 @@ msgstr "以 %s 角色启动"
 
 msgid "Role switch: %s -> %s"
 msgstr "角色切换: %s → %s"
+
+msgid "EasyMesh daemon starting (pid=%s)"
+msgstr "EasyMesh 守护进程启动 (pid=%s)"
 
 msgid "Hardware: %s"
 msgstr "硬件类型: %s"

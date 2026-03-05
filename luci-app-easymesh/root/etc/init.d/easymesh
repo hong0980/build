@@ -1,19 +1,4 @@
 #!/bin/sh /etc/rc.common
-# EasyMesh init.d service
-#
-# 架构原则：
-#   init.d 职责：UCI wireless 配置（mesh0 + AP）+ 启停 daemon
-#   batman-adv 职责（由 easymesh-master daemon 运行时完成）：
-#     - modprobe batman-adv
-#     - batctl meshif bat0 interface add <eth>   把物理接口加入 bat0
-#     - batctl meshif bat0 interface add mesh0   把无线 mesh 加入 bat0（无线回程时）
-#     - brctl addif br-lan bat0                  master 把 bat0 桥接到 br-lan
-#   原因：OpenWrt netifd 不提供 proto=batadv/batadv_hardif，
-#         batman-adv 只能用 batctl/brctl 命令行运行时配置，不能写进 UCI network
-#
-#   agent 不改 br-lan 的 proto，不删 ipaddr：
-#     agent 的 LAN 口保持原来的 static IP，管理员仍可通过 LAN 口访问
-#     客户端流量走 bat0 → batman-adv 路由 → master DHCP
 
 USE_PROCD=1
 START=95
@@ -31,7 +16,6 @@ translate() {
     translated=$(lua -e "require \"luci.i18n\".setlanguage(\"${lang}\"); print(require \"luci.i18n\".translate([==[${tpl}]==]))" 2>/dev/null)
     [ -z "$translated" ] && translated="$tpl"
     if [ $# -gt 0 ]; then
-        # shellcheck disable=SC2059
         printf "$translated" "$@"
     else
         printf '%s' "$translated"
@@ -64,7 +48,6 @@ get_radio() {
     eval "$_v='$_found'"
 }
 
-# ── 只删除 easymesh 创建的无线接口 ───────────────────────────────────────────
 _del_managed() {
     local _n="$1" _m
     config_get _m "$_n" easymesh_managed
@@ -77,7 +60,6 @@ cleanup_wireless() {
 }
 
 # ── 配置 UCI wireless + dummy network.mesh section ───────────────────────────
-# 不动 network.lan、不动 dhcp（除了 dhcp.lan.ignore）
 apply_mesh_config() {
     local role backhaul mesh_id mesh_key mesh_band ssid key
     local ieee80211r mobility_domain ft_over_ds reassociation_deadline
@@ -108,8 +90,6 @@ apply_mesh_config() {
     log "apply_mesh_config: role=%s backhaul=%s radio=%s" "$role" "$backhaul" "$radio_mesh"
 
     # ── network.mesh：dummy section，只为给 wireless.mesh0.network 提供绑定 ──
-    # proto=none：netifd 只创建接口，不分配 IP，不影响路由
-    # batman-adv daemon 之后会用 batctl 把 mesh0 加入 bat0
     uci set network.mesh=interface
     uci set network.mesh.proto='none'
     uci commit network
@@ -132,7 +112,6 @@ apply_mesh_config() {
     uci set wireless.mesh0.disabled=$([ "$backhaul" = "wired" ] && echo '1' || echo '0')
 
     # ── DHCP server：master 开，agent 关 ─────────────────────────────────────
-    # 不改 network.lan.proto / ipaddr —— 两者都保持 static，LAN 口始终可访问
     if [ "$role" = "master" ]; then
         uci -q del dhcp.lan.ignore
         log "Role: master — DHCP server enabled"
@@ -188,8 +167,6 @@ start_service() {
 
     apply_mesh_config
 
-    # wifi reload：让 mesh0/easymesh_ap 接口起来
-    # 不 reload network，不动 br-lan，LAN 不断线
     ( sleep 2; wifi reload ) &
 
     log "Starting EasyMesh daemon..."
@@ -203,25 +180,15 @@ start_service() {
 
 stop_service() {
     log "EasyMesh stopping..."
-    # daemon 自己清理 batman-adv（batctl interface del + brctl delif）
-    /usr/sbin/easymesh-master stop 2>/dev/null || true
-    # 杀掉残留 easymesh-master 进程（/proc 扫描，无需 pkill）
-    local _ip _ic _ipid
-    for _ip in /proc/[0-9]*/cmdline; do
-        [ -f "$_ip" ] || continue
-        _ic=$(tr "\0" " " < "$_ip" 2>/dev/null)
-        case "$_ic" in
-            *easymesh-master*)
-                _ipid="${_ip%/cmdline}"; _ipid="${_ipid##*/}"
-                [ "$_ipid" != "$$" ] && kill "$_ipid" 2>/dev/null || true ;;
-        esac
+    for pid in $(pgrep -f "easymesh-(master|agent)" 2>/dev/null); do
+        [ "$pid" != "$$" ] && kill "$pid" 2>/dev/null || true
     done
-    # 清理无线 UCI
+
     cleanup_wireless
-    # 恢复 DHCP server
+
     uci -q del dhcp.lan.ignore
     uci commit dhcp
-    # 删 dummy network.mesh
+
     uci -q del network.mesh
     uci commit network
     ( sleep 1; wifi reload ) &

@@ -62,17 +62,14 @@ _approved() { _nodes_from_dir "$NODE_DB"    "approved"; }
 
 # --------------------------------------------------------------------------- #
 _topology() {
-    # bat0_up 由 daemon update_topology() 直接写入 TOPO_FILE
-    # rpcd 只需检查文件新鲜度（15秒内）并返回
     if [ -f "$TOPO_FILE" ]; then
         local now mtime age
         now=$(date +%s)
-        # BusyBox stat: stat -c %Y 或 date -r 均可
         mtime=$(date -r "$TOPO_FILE" +%s 2>/dev/null || echo 0)
         age=$(( now - mtime ))
         [ "$age" -lt 15 ] && { cat "$TOPO_FILE"; return; }
     fi
-    # 文件不存在或过期：返回带 bat0_up 的空骨架
+
     local bat0_up="false"
     if [ -d /sys/class/net/bat0 ]; then
         local _f; _f=$(cat /sys/class/net/bat0/flags 2>/dev/null || echo 0x0)
@@ -91,10 +88,8 @@ _approve() {
     local dst="${NODE_DB}/${safe}.json"
     mkdir -p "$NODE_DB"
     if [ -f "$src" ]; then
-        # Move from pending → approved, flip status field
         sed 's/"status"\s*:\s*"pending"/"status":"approved"/' "$src" > "$dst"
         rm -f "$src"
-        # Signal daemon to push profile to newly approved node
         local pid; pid=$(cat /tmp/easymesh_master.pid 2>/dev/null)
         [ -n "$pid" ] && kill -USR1 "$pid" 2>/dev/null || true
         printf '{"status":"ok"}\n'

@@ -1,5 +1,4 @@
 #!/bin/sh
-
 . /lib/functions.sh
 
 # ── Files ─────────────────────────────────────────────────────────────────────
@@ -14,8 +13,6 @@ export PENDING_DB="/tmp/easymesh_pending"
 export EM_PID_DIR="/tmp/easymesh_pids"
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-# ETH_IF: 动态获取 br-lan 的第一个成员物理接口
-# 优先从 UCI network 读（兼容 19.07 和 21.02+），fallback 到 brctl
 _get_eth_if() {
     local _raw _i=0 _name
     while true; do
@@ -28,14 +25,14 @@ _get_eth_if() {
     done
     [ -z "$_raw" ] && _raw=$(uci -q get network.lan.ifname 2>/dev/null | awk '{print $1}')
     [ -z "$_raw" ] && _raw=$(brctl show br-lan 2>/dev/null | awk 'NR==2{print $NF}')
-    echo "${_raw%%.*}"   # 剥掉 VLAN 后缀 eth0.1→eth0
+    echo "${_raw%%.*}"
 }
 ETH_IF=$(_get_eth_if)
 [ -z "$ETH_IF" ] && ETH_IF="eth0"
 BRIDGE_IF="br-lan"
 AP_IF="wlan0"
 MESH_IF="bat0"
-LOG_MAX_LINES=500
+LOG_MAX_LINES=300
 _log_seq=0
 export MASTER_PORT=4304
 export DISC_PORT=4305
@@ -58,8 +55,7 @@ GW_WATCHDOG_INTERVAL=10
 HTTP_MAX_RETRIES=3
 HTTP_TIMEOUT=5
 
-# ── i18n ──────────────────────────────────────────────────────────────────────
-lang=$(uci get luci.main.lang 2>/dev/null || echo "en")
+lang=$(uci_get luci main lang en)
 translate() {
     local tpl="$1"; shift
     local lua_script translated
@@ -73,7 +69,6 @@ translate() {
     fi
 }
 
-# ── Logging ───────────────────────────────────────────────────────────────────
 _emlog() {
     local level="$1" tag="$2"; shift 2
     local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
@@ -102,9 +97,7 @@ get_role() { cat "$ROLE_FILE" 2>/dev/null || echo "agent"; }
 master_ip(){ cat "$MASTER_IP_FILE" 2>/dev/null; }
 wan_up()   { ubus call network.interface.wan status 2>/dev/null | grep -q '"up": true'; }
 get_ap_iface() {
-    uci get wireless.easymesh_ap.ifname 2>/dev/null ||
-    uci get wireless.@wifi-iface[0].ifname 2>/dev/null ||
-    echo "$AP_IF"
+    uci_get wireless easymesh_ap ifname $(uci_get wireless @wifi-iface[0] ifname "$AP_IF")
 }
 
 roam_cooldown_key() { echo "$1" | tr ':' '_'; }
@@ -144,14 +137,12 @@ _stop_jobs() {
         _pid=$(cat "$_f" 2>/dev/null)
         if [ -n "$_pid" ]; then
             kill "$_pid" 2>/dev/null || true
-            # 等待子进程退出，最多 2 秒
             local _i=0
             while kill -0 "$_pid" 2>/dev/null && [ $_i -lt 3 ]; do
                 sleep 1; _i=$((_i+1))
             done
             kill -9 "$_pid" 2>/dev/null || true
         fi
-        rm -f "$_f"
     done
 
     local _p _pid _cmd
@@ -181,10 +172,9 @@ _bg() {
 ########################################
 elect_role() {
     local cfg_role
-    cfg_role=$(uci -q get easymesh.global.role)
+    cfg_role=$(uci_get easymesh global role)
     if [ -n "$cfg_role" ]; then
         echo "$cfg_role" > "$ROLE_FILE"
-        # master 需要知道自己的 IP
         if [ "$cfg_role" = "master" ]; then
             local _myip; _myip=$(get_ip)
             [ -n "$_myip" ] && echo "$_myip" > "$MASTER_IP_FILE"
@@ -251,16 +241,12 @@ tune_batman() {
 ########################################
 # 4. BATMAN-ADV RUNTIME SETUP
 ########################################
-# init.d 不写 UCI network（OpenWrt netifd 不支持 proto=batadv/batadv_hardif）
-# batman-adv 由本 daemon 用 batctl/brctl 在运行时完整配置：
-#   modprobe → bat0 up → eth0 hardif → mesh0 hardif（无线时）→ brctl（master）
 setup_wired_backhaul() {
     # ── 1. 加载模块，等 bat0 出现 ────────────────────────────────────────────
     if ! ip link show "$MESH_IF" >/dev/null 2>&1; then
         modprobe batman-adv 2>/dev/null || true
         sleep 1
 
-        # 创建 bat0 接口
         ip link add name "$MESH_IF" type batadv 2>/dev/null || {
             loge "Failed to create bat0 interface"
             return 1
@@ -279,7 +265,7 @@ setup_wired_backhaul() {
     ip link set "$MESH_IF" up 2>/dev/null
 
     # ── 2. 有线 hardif：eth0 从 br-lan 摘出，独占加入 bat0 ──────────────────
-    local backhaul; backhaul=$(uci -q get easymesh.global.backhaul || echo 'wired')
+    local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
     if [ "$backhaul" = "wired" ] || [ "$backhaul" = "auto" ]; then
         if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -qw "$ETH_IF"; then
             brctl delif "$BRIDGE_IF" "$ETH_IF" 2>/dev/null || true
@@ -316,11 +302,10 @@ setup_wired_backhaul() {
 
 # ── 停止时清理 batman-adv（还原 eth0 到 br-lan）─────────────────────────────
 teardown_batman() {
-    local backhaul; backhaul=$(uci -q get easymesh.global.backhaul || echo 'wired')
+    local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
     brctl delif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null || true
     batctl meshif "$MESH_IF" interface del "$ETH_IF" 2>/dev/null || true
     [ "$backhaul" != "wired" ] && batctl meshif "$MESH_IF" interface del mesh0 2>/dev/null || true
-    # 把 eth0 还给 br-lan
     ip link set "$ETH_IF" up 2>/dev/null
     brctl addif "$BRIDGE_IF" "$ETH_IF" 2>/dev/null || true
     ip link set "$MESH_IF" down 2>/dev/null || true
@@ -333,8 +318,6 @@ teardown_batman() {
 DISC_HELLO_INTERVAL=5
 DISC_TIMEOUT=60
 
-# Master 侧：用 socat 监听 UDP 广播（fork 模式，每包独立子进程处理）
-# socat UDP4-RECVFROM fork 模式：子进程 stdout → 自动 sendto 来源地址（单播回复）
 discovery_server() {
     log "Discovery server listening on UDP %s" "$DISC_PORT"
     socat UDP4-RECVFROM:${DISC_PORT},fork,reuseaddr EXEC:"$0 __handle_hello" 2>/dev/null &
@@ -362,11 +345,8 @@ __handle_hello() {
     [ "$cmd" != "EASYMESH_HELLO" ] && return 0
     [ -z "$mac" ] || [ -z "$ip" ] && return 0
 
-    # 校验 mac 格式（xx:xx:xx:xx:xx:xx）
     echo "$mac" | grep -qE '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' || return 0
 
-    # 写入 PENDING_DB（等待 master 管理员手动批准）
-    # 若已在 NODE_DB（已审批），只更新 IP/时间戳，不重新放入 pending
     local safe; safe=$(echo "$mac" | tr ':' '_')
     local approved_file="${NODE_DB}/${safe}.json"
     local pending_file="${PENDING_DB}/${safe}.json"
@@ -398,7 +378,7 @@ discovery_client() {
     local mymac myip hostname
     mymac=$(cat /sys/class/net/${BRIDGE_IF}/address 2>/dev/null)
     myip=$(get_ip)
-    hostname=$(uci -q get system.@system[0].hostname || echo "node")
+    hostname=$(uci_get system @system[0] hostname "node")
 
     [ -z "$mymac" ] || [ -z "$myip" ] && return 1
 
@@ -406,7 +386,6 @@ discovery_client() {
 
     # 用 socat 监听 WELCOME 回复（master 会单播到 DISC_REPLY_PORT）
     local resp_file="/tmp/em_disc_resp_$$"
-    # 杀掉上次可能残留的同端口监听（/proc 扫描替代 pkill）
     local _dp _dc _dpid
     for _dp in /proc/[0-9]*/cmdline; do
         [ -f "$_dp" ] || continue
@@ -467,7 +446,6 @@ __http_handler() {
 
     [ "$method" = "OPTIONS" ] && { _http_ok "{}"; return; }
 
-    # 读取 headers
     content_length=0
     while IFS= read -r line; do
         line="${line%$(printf '\r')}"
@@ -480,7 +458,6 @@ __http_handler() {
     # 读取 body
     [ "$content_length" -gt 0 ] 2>/dev/null && body=$(dd bs=1 count="$content_length" 2>/dev/null)
 
-    # 解析 query string（必须在修改 path 之前提取 query）
     local full_path="$path"
     if echo "$full_path" | grep -q '?'; then
         query="${full_path#*\?}"
@@ -515,7 +492,6 @@ __http_handler() {
             req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
             safe=$(echo "$req_mac" | tr ':' '_')
             if [ -f "${PENDING_DB}/${safe}.json" ]; then
-                # 节点在 pending 队列：告知 agent 继续等待
                 _http_ok '{"status":"pending"}'
             elif [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
                 local sum; sum=$(md5sum "$PROFILE_FILE" | cut -d' ' -f1)
@@ -529,7 +505,6 @@ __http_handler() {
             req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
             safe=$(echo "$req_mac" | tr ':' '_')
             if [ -f "${PENDING_DB}/${safe}.json" ]; then
-                # 仍在 pending：返回 pending 状态，agent 继续轮询
                 _http_ok '{"status":"pending"}'
             elif [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
                 _http_ok "$(cat "$PROFILE_FILE")"
@@ -544,7 +519,7 @@ __http_handler() {
             [ -z "$new_chan" ] && { _http_ok '{"status":"ignored"}'; return; }
             log "Channel sync from master: ch=%s reason=%s" "$new_chan" "${reason:-unknown}"
             local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
-            uci set "${rd}.channel=${new_chan}"; uci commit wireless
+            uci set "${rd}.channel=${new_chan}"; uci_commit wireless
             wifi reload &
             _http_ok "{\"status\":\"ok\",\"channel\":\"$new_chan\"}"
             ;;
@@ -568,10 +543,6 @@ __http_handler() {
 
 run_node_server() {
     log "HTTP server starting on port %s (socat)" "$MASTER_PORT"
-    # exec: 替换当前进程（由 _bg 放后台，不需要再 & ）
-    # fork: 每连接 fork 子进程，并发处理
-    # crnl: 自动 CR+LF 转换（HTTP协议要求）
-    # -T 30: 每连接最多 30 秒，防止僵尸连接
     exec socat -T 30 TCP-LISTEN:${MASTER_PORT},reuseaddr,fork,crnl EXEC:"$0 __http_handler"
 }
 
@@ -648,7 +619,7 @@ do_register() {
     [ -z "$mip" ] && { find_master || return 1; mip=$(master_ip); }
     local mac ip hostname
     mac=$(get_mac); ip=$(get_ip)
-    hostname=$(uci get system.@system[0].hostname 2>/dev/null || echo "node")
+    hostname=$(uci_get system @system[0] hostname node)
     do_http_post \
         "http://${mip}:${MASTER_PORT}/register" \
         "{\"mac\":\"$mac\",\"ip\":\"$ip\",\"hostname\":\"$hostname\",\"source\":\"wired\"}" || {
@@ -697,7 +668,7 @@ poll_for_approval() {
 # 9. PROFILE GENERATE & APPLY
 ########################################
 generate_profile() {
-    config_load easymesh
+    uci_load easymesh
     local ssid key mesh_id mesh_key routing_algo channel
     config_get ssid         global ssid          'OpenWrt'
     config_get key          global key           ''
@@ -724,30 +695,30 @@ apply_profile() {
     rm -f /tmp/em_profile_tmp.json
     [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
     log "Applying profile: ssid=%s" "$ssid"
-    uci set easymesh.global.enabled=1
-    uci set easymesh.global.role=agent
-    uci set easymesh.global.mesh_id="${mesh_id:-OpenWrt-Mesh}"
-    uci set easymesh.global.mesh_key="${mesh_key}"
-    uci set easymesh.global.ssid="$ssid"
-    uci set easymesh.global.key="$key"
-    uci set easymesh.global.backhaul=wired
-    uci set easymesh.global.routing_algo="${routing_algo:-BATMAN_IV}"
-    uci commit easymesh
+    uci_set easymesh global enabled 1
+    uci_set easymesh global role agent
+    uci_set easymesh global mesh_id "${mesh_id:-OpenWrt-Mesh}"
+    uci_set easymesh global mesh_key "${mesh_key}"
+    uci_set easymesh global ssid "$ssid"
+    uci_set easymesh global key "$key"
+    uci_set easymesh global backhaul wired
+    uci_set easymesh global routing_algo "${routing_algo:-BATMAN_IV}"
+    uci_commit easymesh
     local _ap_sect
     _ap_sect=$(uci show wireless 2>/dev/null | \
         awk -F= '/=wifi-iface/{gsub(/wireless\./,""); s=$1} /\.mode=.ap/{print s; exit}')
     [ -z "$_ap_sect" ] && _ap_sect="@wifi-iface[0]"
-    uci set "wireless.${_ap_sect}.ssid=$ssid"
-    uci set "wireless.${_ap_sect}.key=$key"
-    uci set "wireless.${_ap_sect}.ieee80211k=1"
-    uci set "wireless.${_ap_sect}.ieee80211v=1"
-    uci set "wireless.${_ap_sect}.bss_transition=1"
-    uci set "wireless.${_ap_sect}.rrm_neighbor_report=1"
-    [ -n "$channel" ] && [ "$channel" != "auto" ] && {
+    uci_set wireless ${_ap_sect} ssid "$ssid"
+    uci_set wireless ${_ap_sect} key "$key"
+    uci_set wireless ${_ap_sect} ieee80211k 1
+    uci_set wireless ${_ap_sect} ieee80211v 1
+    uci_set wireless ${_ap_sect} bss_transition 1
+    uci_set wireless ${_ap_sect} rrm_neighbor_report 1
+    [ -n "$channel" ] && [ "$channel" !  "auto" ] && {
         local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
-        [ -n "$rd" ] && uci set "${rd}.channel=$channel"
+        [ -n "$rd" ] && uci_add "${rd}" channel "$channel"
     }
-    uci commit wireless
+    uci_commit wireless
     setup_wired_backhaul
     wifi reload
     log "Profile applied. Joined mesh."
@@ -794,7 +765,7 @@ check_routing_paths() {
 sync_neighbor_list() {
     local ap_iface ssid
     ap_iface=$(get_ap_iface)
-    ssid=$(uci get wireless.easymesh_ap.ssid 2>/dev/null || uci get wireless.@wifi-iface[0].ssid 2>/dev/null)
+    ssid=$(uci_get wireless easymesh_ap ssid || uci_get wireless @wifi-iface[0] ssid)
     [ -z "$ssid" ] && return
     local my_bssid; my_bssid=$(cat /sys/class/net/${ap_iface}/address 2>/dev/null)
     > "$NEIGHBOR_FILE"
@@ -932,7 +903,7 @@ handle_dfs_channel_change() {
     local new_chan="$1"
     log "DFS: mesh-wide channel change -> %s" "$new_chan"
     local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
-    uci set "${rd}.channel=${new_chan}"; uci commit wireless
+    uci set "${rd}.channel=${new_chan}"; uci_commit wireless
     if [ "$(get_role)" = "master" ]; then
         local payload="{\"channel\":\"$new_chan\",\"reason\":\"dfs\"}"
         for f in "$NODE_DB"/*.json; do
@@ -954,7 +925,7 @@ optimize_channel() {
     local now; now=$(date +%s)
     [ $(( now - _last_ch )) -lt "$CHANNEL_SCAN_INTERVAL" ] && return
     _last_ch=$now
-    local dfs_enable; dfs_enable=$(uci get easymesh.global.dfs_enable 2>/dev/null || echo 1)
+    local dfs_enable; dfs_enable=$(uci_get easymesh global dfs_enable 1)
     local ch_24="1 6 11" ch_5_nodfs="36 40 44 48 149 153 157 161 165"
     local ch_5="${ch_5_nodfs}"
     [ "$dfs_enable" = "1" ] && ch_5="${ch_5_nodfs} 52 56 60 64 100 104 108 112 116 132 136 140"
@@ -971,7 +942,7 @@ optimize_channel() {
     local cur; cur=$(uci get "${rd}.channel" 2>/dev/null)
     [ "$cur" = "$best_ch" ] && return
     log "ACS: channel %s -> %s (occupancy: %s APs)" "$cur" "$best_ch" "$best_count"
-    uci set "${rd}.channel=$best_ch"; uci commit wireless && wifi reload
+    uci set "${rd}.channel=$best_ch"; uci_commit wireless && wifi reload
     local payload="{\"channel\":\"$best_ch\",\"reason\":\"acs\"}"
     for f in "$NODE_DB"/*.json; do
         [ -f "$f" ] || continue
@@ -982,38 +953,38 @@ optimize_channel() {
 }
 
 setup_dedicated_backhaul() {
-    local enabled; enabled=$(uci get easymesh.global.dedicated_backhaul 2>/dev/null || echo 0)
+    local enabled; enabled=$(uci_get easymesh global dedicated_backhaul 0)
     [ "$enabled" != "1" ] && return
     local hw; hw=$(cat /tmp/easymesh_hw_type 2>/dev/null || echo "dual-band")
     [ "$hw" != "tri-band" ] && { log "Dedicated backhaul: skipped (hw=%s)" "$hw"; return 1; }
     local backhaul_radio="" seen5g=0
     for dev in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
-        local b; b=$(uci get "wireless.${dev}.band" 2>/dev/null)
+        local b; b=$(uci_get wireless "${dev}" band)
         case "$b" in 5g*|5GHz*) seen5g=$(( seen5g+1 )); [ "$seen5g" -ge 2 ] && { backhaul_radio="$dev"; break; };; esac
     done
     [ -z "$backhaul_radio" ] && { log "Dedicated backhaul: no second 5GHz radio"; return 1; }
     log "Dedicated backhaul: %s reserved for mesh" "$backhaul_radio"
     for iface in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-iface/{gsub(/wireless\./,""); print $1}'); do
-        local dev; dev=$(uci get "wireless.${iface}.device" 2>/dev/null)
+        local dev; dev=$(uci_get wireless "${iface}" device)
         local mode; mode=$(uci get "wireless.${iface}.mode" 2>/dev/null)
         [ "$dev" = "$backhaul_radio" ] && [ "$mode" = "ap" ] && {
             uci del "wireless.${iface}"
             log "Dedicated backhaul: removed AP %s" "$iface"
         }
     done
-    local bh_ch; bh_ch=$(uci get easymesh.global.backhaul_channel 2>/dev/null || echo 149)
-    uci set "wireless.${backhaul_radio}.channel=${bh_ch}"
-    uci set "wireless.${backhaul_radio}.htmode=VHT80"
-    uci set wireless.easymesh_bh=wifi-iface
-    uci set wireless.easymesh_bh.device="$backhaul_radio"
-    uci set wireless.easymesh_bh.mode=mesh
-    uci set wireless.easymesh_bh.mesh_id=$(uci get easymesh.global.mesh_id 2>/dev/null)
-    uci set wireless.easymesh_bh.network=mesh
-    uci set wireless.easymesh_bh.easymesh_managed=1
-    local mesh_key; mesh_key=$(uci get easymesh.global.mesh_key 2>/dev/null)
-    if [ -n "$mesh_key" ]; then uci set wireless.easymesh_bh.encryption=sae; uci set wireless.easymesh_bh.key="$mesh_key"
-    else uci set wireless.easymesh_bh.encryption=none; fi
-    uci commit wireless
+    local bh_ch; bh_ch=$(uci_get easymesh global backhaul_channel 149)
+    uci_set wireless "${backhaul_radio}" channel "${bh_ch}"
+    uci_set wireless "${backhaul_radio}" htmode VHT80
+    uci_add wireless easymesh_bh wifi-iface
+    uci_set wireless easymesh_bh device "$backhaul_radio"
+    uci_set wireless easymesh_bh mode mesh
+    uci_set wireless easymesh_bh mesh_id $(uci_get easymesh global mesh_id)
+    uci_set wireless easymesh_bh network mesh
+    uci_set wireless easymesh_bh easymesh_managed 1
+    local mesh_key; mesh_key=$(uci_get easymesh global mesh_key 2>/dev/null)
+    if [ -n "$mesh_key" ]; then uci_set wireless easymesh_bh encryption sae; uci_set wireless easymesh_bh key "$mesh_key"
+    else uci_set wireless easymesh_bh encryption none; fi
+    uci_commit wireless
     log "Dedicated backhaul: %s configured (ch %s, VHT80)" "$backhaul_radio" "$bh_ch"
 }
 
@@ -1097,14 +1068,13 @@ HAPD
 main_loop() {
     _stop_jobs
     mkdir -p "$NODE_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR"
-    echo $$ > /tmp/easymesh_master.pid
+    echo $$ > "${EM_PID_DIR}/easymesh_master.pid"
 
     { printf "\n" >> "$LOGFILE" 2>/dev/null
-      _emlog "INFO" "core" "================================================"
-      _emlog "INFO" "core" "EasyMesh daemon starting (pid=$$)"
-      _emlog "INFO" "core" "================================================"; }
+      log "================================================"
+      log "EasyMesh daemon starting (pid=%s)" "$$"
+      log "================================================"; }
 
-    # 硬件检测
     local hw_type="dual-band" count5g=0 _dev
     for _dev in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
         local _b; _b=$(uci get "wireless.${_dev}.band" 2>/dev/null || echo "")
@@ -1120,7 +1090,6 @@ main_loop() {
 
     log "Starting as: %s" "$(get_role)"
 
-    # 启动所有后台服务（全部基于 socat）
     _bg roam_watchdog  roam_watchdog
     _bg dfs_watchdog   dfs_watchdog
     _bg http_server    run_node_server
@@ -1179,11 +1148,9 @@ case "$1" in
         _stop_jobs
         ;;
     __http_handler)
-        # socat fork 子进程：加载脚本所有函数后处理请求
         __http_handler
         ;;
     __handle_hello)
-        # socat fork 子进程：处理 UDP HELLO 包
         __handle_hello
         ;;
     *)
