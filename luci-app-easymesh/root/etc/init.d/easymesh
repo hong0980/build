@@ -59,6 +59,108 @@ cleanup_wireless() {
     uci commit wireless
 }
 
+# ── agent 有线回程：IP 冲突检测与自动修复 ────────────────────────────────────
+# 在守护进程启动之前调用，确保：
+#   1. 从路由器有唯一的 IP
+#   2. dnsmasq 绑定在正确的 IP 上，LAN 客户端能获取 DHCP
+_agent_fix_ip() {
+    local my_ip my_mac
+    my_ip=$(ip -4 addr show dev br-lan 2>/dev/null \
+        | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
+    my_mac=$(cat /sys/class/net/br-lan/address 2>/dev/null)
+    [ -z "$my_ip" ] && { log "IP fix: br-lan has no IP, skipping"; return 0; }
+
+    log "IP fix: checking %s (mac=%s)" "$my_ip" "$my_mac"
+
+    # 等待 LAN 口有物理链路（最多 8 秒）
+    local _w=0
+    while [ $_w -lt 8 ]; do
+        local _p _c
+        for _p in $(ip link show 2>/dev/null \
+                | awk -F'[@: ]+' '/lan[0-9]+@/{print $2}'); do
+            _c=$(cat "/sys/class/net/${_p}/carrier" 2>/dev/null || echo 0)
+            [ "$_c" = "1" ] && break 2
+        done
+        sleep 1; _w=$((_w+1))
+    done
+    # 再等链路稳定
+    sleep 2
+
+    # 检测 IP 冲突：用 arping -D（Duplicate Address Detection）
+    # 发 ARP 请求探测本 IP，如有其他设备响应 → 冲突 → 退出码非0
+    local conflict=0
+    if command -v arping >/dev/null 2>&1; then
+        arping -D -c 3 -w 4 -I br-lan "$my_ip" >/dev/null 2>&1 || conflict=1
+    else
+        # 无 arping：ping 触发 ARP，然后查 ARP 表
+        ping -c 2 -W 1 -q "$my_ip" >/dev/null 2>&1 || true
+        sleep 1
+        local other_mac
+        other_mac=$(ip neigh show 2>/dev/null \
+            | awk -v ip="$my_ip" -v me="$my_mac" \
+              '$1==ip && $4=="lladdr" && $5!=me {print $5; exit}')
+        [ -n "$other_mac" ] && conflict=1
+    fi
+
+    if [ "$conflict" = "0" ]; then
+        log "IP fix: no conflict detected, keeping %s" "$my_ip"
+        return 0
+    fi
+
+    log "IP fix: CONFLICT detected for %s, finding free IP..." "$my_ip"
+
+    # 找空闲 IP：从 .2 扫到 .254
+    local prefix; prefix=$(echo "$my_ip" | cut -d. -f1-3)
+    local new_ip="" n
+    for n in $(seq 2 254); do
+        local c="${prefix}.${n}"
+        [ "$c" = "$my_ip" ] && continue
+        if command -v arping >/dev/null 2>&1; then
+            # arping -c 1 -w 1：发1包等1秒，无响应 = 空闲
+            arping -c 1 -w 1 -I br-lan "$c" >/dev/null 2>&1 || { new_ip="$c"; break; }
+        else
+            ping -c 1 -W 1 -q "$c" >/dev/null 2>&1 || { new_ip="$c"; break; }
+        fi
+    done
+
+    if [ -z "$new_ip" ]; then
+        loge "IP fix: no free IP in %s.0/24, cannot resolve conflict!" "$prefix"
+        return 1
+    fi
+
+    log "IP fix: assigning %s -> %s" "$my_ip" "$new_ip"
+
+    # 持久化到 UCI
+    uci set network.lan.ipaddr="$new_ip"
+    uci commit network
+
+    # 更新 hostname（方便区分两台路由器）
+    local suffix; suffix=$(echo "$new_ip" | cut -d. -f4)
+    local cur_host; cur_host=$(uci -q get system.@system[0].hostname 2>/dev/null)
+    if [ "$cur_host" = "OpenWrt" ]; then
+        uci set system.@system[0].hostname="OpenWrt-${suffix}"
+        uci commit system
+        log "IP fix: hostname -> OpenWrt-%s" "$suffix"
+    fi
+
+    # 重新加载网络（比 restart 更快，dnsmasq 会用新 IP 重启）
+    /etc/init.d/network reload
+
+    # 等 br-lan 拿到新 IP（最多 20 秒）
+    local _nw=0
+    while [ $_nw -lt 20 ]; do
+        local cur
+        cur=$(ip -4 addr show dev br-lan 2>/dev/null \
+            | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
+        [ "$cur" = "$new_ip" ] && break
+        sleep 1; _nw=$((_nw+1))
+    done
+
+    log "IP fix: done, br-lan now %s" \
+        "$(ip -4 addr show dev br-lan 2>/dev/null \
+            | awk '/inet /{print $2}' | head -1)"
+}
+
 # ── 配置 UCI wireless + dummy network.mesh section ───────────────────────────
 apply_mesh_config() {
     local role backhaul mesh_id mesh_key mesh_band ssid key
@@ -111,13 +213,19 @@ apply_mesh_config() {
     fi
     uci set wireless.mesh0.disabled=$([ "$backhaul" = "wired" ] && echo '1' || echo '0')
 
-    # ── DHCP server：master 开，agent 关 ─────────────────────────────────────
+    # ── DHCP server 策略 ──────────────────────────────────────────────────────
+    # 有线直连：两台路由器 br-lan 各自独立，agent 必须保留自己的 DHCP
+    #           否则下挂客户端拿不到 IP（两台路由器 br-lan 之间不是同一个二层域）
+    # 无线 mesh：bat0 把所有节点联成同一个二层域，agent 关 DHCP 由 master 统一服务
     if [ "$role" = "master" ]; then
         uci -q del dhcp.lan.ignore
-        log "Role: master — DHCP server enabled"
+        log "Role: master — DHCP enabled"
+    elif [ "$backhaul" = "wired" ]; then
+        uci -q del dhcp.lan.ignore
+        log "Role: agent (wired) — DHCP kept enabled"
     else
         uci set dhcp.lan.ignore='1'
-        log "Role: agent — DHCP server disabled, LAN IP kept"
+        log "Role: agent (wireless) — DHCP disabled"
     fi
     uci commit dhcp
 
@@ -157,15 +265,23 @@ apply_mesh_config() {
 
 # ── procd ─────────────────────────────────────────────────────────────────────
 start_service() {
-    local enabled role
+    local enabled role backhaul
     config_load "$UCI_APP"
     config_get_bool enabled global enabled 0
     [ "$enabled" -eq 0 ] && return 0
 
-    config_get role global role 'master'
+    config_get role     global role     'master'
+    config_get backhaul global backhaul 'wired'
     log "EasyMesh starting (role=%s)" "$role"
 
     apply_mesh_config
+
+    # ── agent 有线回程：启动守护进程之前先修好 IP ────────────────────────────
+    # 必须在这里做，守护进程里改 IP 后 dnsmasq 不会自动重绑新 IP
+    # 在这里改 → network reload → dnsmasq 重启 → 自动用新 IP 服务 DHCP
+    if [ "$role" = "agent" ] && [ "$backhaul" = "wired" ]; then
+        _agent_fix_ip
+    fi
 
     ( sleep 2; wifi reload ) &
 

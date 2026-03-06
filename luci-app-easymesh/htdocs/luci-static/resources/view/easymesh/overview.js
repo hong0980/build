@@ -1,9 +1,9 @@
 'use strict';
+'require ui';
+'require rpc';
 'require view';
 'require form';
 'require uci';
-'require ui';
-'require rpc';
 
 var callGetWirelessDevices = rpc.declare({
 	object: 'network.wireless',
@@ -24,46 +24,45 @@ return view.extend({
 	render: function (data) {
 		var m, s, o;
 		var role = uci.get('easymesh', 'global', 'role') || 'master';
-		var isMaster = (role === 'master');
-		var qrSection = E('div', {
-			style: 'border-radius:12px;padding:15px 20px;'
-		}, isMaster ? [
-			E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:12px' },
-				'➕ ' + _('Add New Node (Master Mode)')),
-			E('ol', {
-				style: 'padding-left:20px;font-size:13px;line-height:2.4;color:#e6edf3;margin:0'
-			}, [
-				E('li', {}, _('Flash OpenWrt + install luci-app-easymesh on the new node')),
-				E('li', {}, _('Set role to Agent in its EasyMesh config, then enable EasyMesh')),
-				E('li', {}, _('Connect a LAN cable: this master LAN port ↔ new node LAN port')),
-				E('li', {}, _('Wait ~30 seconds — agent auto-discovers this master via UDP broadcast')),
-				E('li', {}, _('Go to the Nodes tab on this master and click Allow to join')),
-				E('li', {}, '💡 ' + _('Quick join shortcut: on the new node, press and hold the WPS button for 2–10 seconds. It auto-sets Agent mode and starts discovery. Then approve in the Nodes tab here.'))
-			])
-		] : [
-			E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:12px' },
-				'📡 ' + _('Agent Mode — Joining Mesh')),
-			E('ol', {
-				style: 'padding-left:20px;font-size:13px;line-height:2.4;color:#e6edf3;margin:0'
-			}, [
-				E('li', {}, _('Connect a LAN cable from this node to the master router')),
-				E('li', {}, _('Make sure Enable EasyMesh is on and role is Agent, then Save & Apply')),
-				E('li', {}, _('This node will broadcast discovery packets to find the master')),
-				E('li', {}, _('Master will show this node in its Nodes tab — approve it there')),
-				E('li', {}, _('Once approved, master pushes WiFi config automatically'))
-			])
+		m = new form.Map('easymesh', _('EasyMesh Configuration'), [
+			E('strong', {}, _('Wireless mesh network based on batman-adv + 802.11s.')),
+			E('div', { style: 'border-radius:12px;padding:15px 20px;' },
+				role === 'master'
+					? [E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:12px' },
+						'➕ ' + _('Add New Node (Master Mode)')),
+					E('ol', {
+						style: 'padding-left:20px;font-size:13px;line-height:2.4;color:#e6edf3;margin:0'
+					}, [
+						E('li', {}, _('Flash OpenWrt + install luci-app-easymesh on the new node')),
+						E('li', {}, _('Set role to Agent in its EasyMesh config, then enable EasyMesh')),
+						E('li', {}, _('Connect a LAN cable: this master LAN port ↔ new node LAN port')),
+						E('li', {}, _('Wait ~30 seconds — agent auto-discovers this master via UDP broadcast')),
+						E('li', {}, _('Go to the Nodes tab on this master and click Allow to join')),
+						E('li', {}, '💡 ' + _('Quick join shortcut: on the new node, press and hold the WPS button for 2–10 seconds. It auto-sets Agent mode and starts discovery. Then approve in the Nodes tab here.'))
+					])]
+					: [E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:12px' },
+						'📡 ' + _('Agent Mode — Joining Mesh')),
+					E('ol', {
+						style: 'padding-left:20px;font-size:13px;line-height:2.4;color:#e6edf3;margin:0'
+					}, [
+						E('li', {}, _('Connect a LAN cable from this node to the master router')),
+						E('li', {}, _('Make sure Enable EasyMesh is on and role is Agent, then Save & Apply')),
+						E('li', {}, _('This node will broadcast discovery packets to find the master')),
+						E('li', {}, _('Master will show this node in its Nodes tab — approve it there')),
+						E('li', {}, _('Once approved, master pushes WiFi config automatically'))
+					])
+					])
 		]);
 
-		/* ── Form ─────────────────────────────────────────────────────────── */
-		m = new form.Map('easymesh',
-			_('EasyMesh Configuration'),
-			_('Wireless mesh network based on batman-adv + 802.11s.'));
-
-		s = m.section(form.NamedSection, 'global', 'easymesh', _('Basic Settings'));
+		s = m.section(form.NamedSection, 'global', 'easymesh');
 		s.addremove = false;
 		s.anonymous = true;
+
 		s.tab('basic', _('Basic'));
-		s.tab('advanced', _('Advanced / Radio'));
+		s.tab('backhaul', _('Mesh Backhaul'));
+		s.tab('wifi', _('Client WiFi (AP)'));
+		s.tab('roaming', _('Roaming'));
+		s.tab('advanced', _('Advanced'));
 
 		o = s.taboption('basic', form.Flag, 'enabled', _('Enable EasyMesh'));
 		o.rmempty = false;
@@ -96,11 +95,97 @@ return view.extend({
 		o.placeholder = _('Auto (EasyMesh-Setup-XXXXXX)');
 		o.depends({ enabled: '1', role: 'master', wireless_onboard: '1' });
 
+		o = s.taboption('backhaul', form.Value, 'mesh_id',
+			_('Mesh Network ID'), _('Must be identical on all nodes'));
+		o.placeholder = 'OpenWrt-Mesh';
+		o.depends('enabled', '1');
+
+		o = s.taboption('backhaul', form.Value, 'mesh_key',
+			_('Mesh Password (SAE)'),
+			_('Must be identical on all nodes. Leave empty to disable encryption (not recommended).'));
+		o.datatype = 'minlength(8)';
+		o.password = true;
+		o.placeholder = _('Minimum 8 characters');
+		o.depends('enabled', '1');
+
+		o = s.taboption('backhaul', form.ListValue, 'mesh_band',
+			_('Mesh Backhaul Band'));
+		o.value('2g', _('2.4 GHz (better range, slower)'));
+		o.value('5g', _('5 GHz (faster, recommended)'));
+		o.default = '5g';
+		o.depends([
+			{ enabled: '1', backhaul: 'wireless' },
+			{ enabled: '1', backhaul: 'auto' }
+		]);
+
+		o = s.taboption('wifi', form.Value, 'ssid',
+			_('WiFi Name (SSID)'), _('Must be identical on all nodes'));
+		o.datatype = 'maxlength(32)';
+		o.placeholder = 'OpenWrt';
+		o.depends('enabled', '1');
+
+		o = s.taboption('wifi', form.Value, 'key',
+			_('WiFi Password'),
+			_('WPA2/WPA3. Leave empty for open network.'));
+		o.datatype = 'minlength(8)';
+		o.password = true;
+		o.depends('enabled', '1');
+
+		o = s.taboption('roaming', form.Flag, 'ieee80211r',
+			_('802.11r Fast BSS Transition'),
+			_('Greatly reduces disconnect time when switching nodes. Recommended.'));
+		o.default = '1';
+		o.depends('enabled', '1');
+
+		o = s.taboption('roaming', form.Value, 'mobility_domain',
+			_('Mobility Domain ID'),
+			_('4-digit hex string. Must be identical on all nodes.'));
+		o.datatype = 'and(hexstring,rangelength(4,4))';
+		o.placeholder = 'aabb';
+		o.depends({ enabled: '1', ieee80211r: '1' });
+
+		o = s.taboption('roaming', form.Flag, 'ieee80211k',
+			_('802.11k Neighbor Report'),
+			_('Informs devices about nearby nodes to assist proactive roaming.'));
+		o.default = '1';
+		o.depends('enabled', '1');
+
+		o = s.taboption('roaming', form.Flag, 'ieee80211v',
+			_('802.11v BSS Transition Management'),
+			_('Actively steers weak-signal devices to a better node.'));
+		o.default = '1';
+		o.depends('enabled', '1');
+
+		o = s.taboption('roaming', form.Flag, 'ft_over_ds',
+			_('FT over DS'),
+			_('Pre-negotiate keys over wired backbone for faster transition. Disable if issues occur.'));
+		o.default = '1';
+		o.depends({ enabled: '1', ieee80211r: '1' });
+
+		o = s.taboption('roaming', form.Value, 'reassociation_deadline',
+			_('Reassociation Deadline (ms)'));
+		o.datatype = 'range(1000,65535)';
+		o.placeholder = '1000';
+		o.depends({ enabled: '1', ieee80211r: '1' });
+
 		o = s.taboption('advanced', form.Flag, 'dfs_enable',
 			_('Enable DFS Channels'),
 			_('Include radar-protected 5 GHz DFS channels (52–140) in ACS scan. ' +
 				'Daemon monitors for radar events and mesh-wide channel jump automatically.'));
 		o.default = '1';
+		o.depends('enabled', '1');
+
+		o = s.taboption('advanced', form.ListValue, 'routing_algo',
+			_('batman-adv Routing Algorithm'));
+		o.value('BATMAN_IV', 'BATMAN IV ' + _('(default, best compatibility)'));
+		o.value('BATMAN_V', 'BATMAN V ' + _('(more accurate, requires kernel support)'));
+		o.default = 'BATMAN_IV';
+		o.depends('enabled', '1');
+
+		o = s.taboption('advanced', form.Flag, 'mesh_fwding',
+			_('802.11s Native Forwarding'),
+			_('Normally disabled — batman-adv handles forwarding.'));
+		o.default = '0';
 		o.depends('enabled', '1');
 
 		o = s.taboption('advanced', form.Flag, 'dedicated_backhaul',
@@ -126,135 +211,6 @@ return view.extend({
 		o.datatype = 'range(1,177)';
 		o.depends({ enabled: '1', dedicated_backhaul: '1' });
 
-		/* ── Section 2: Mesh Backhaul ──────────────────────────────────────── */
-		s = m.section(form.NamedSection, 'global', 'easymesh',
-			_('Mesh Backhaul'),
-			_('Internal wireless link between nodes, invisible to clients.'));
-		s.addremove = false;
-		s.anonymous = true;
-		s.tab('mesh_basic', _('Mesh Settings'));
-		s.tab('mesh_advanced', _('Advanced'));
-
-		o = s.taboption('mesh_basic', form.Value, 'mesh_id',
-			_('Mesh Network ID'), _('Must be identical on all nodes'));
-		o.placeholder = 'OpenWrt-Mesh';
-		o.depends('enabled', '1');
-
-		o = s.taboption('mesh_basic', form.Value, 'mesh_key',
-			_('Mesh Password (SAE)'),
-			_('Must be identical on all nodes. Leave empty to disable encryption (not recommended).'));
-		o.datatype = 'minlength(8)';
-		o.password = true;
-		o.placeholder = _('Minimum 8 characters');
-		o.depends('enabled', '1');
-
-		o = s.taboption('mesh_basic', form.ListValue, 'mesh_band',
-			_('Mesh Backhaul Band'));
-		o.value('2g', _('2.4 GHz (better range, slower)'));
-		o.value('5g', _('5 GHz (faster, recommended)'));
-		o.default = '5g';
-		o.depends([
-			{ enabled: '1', backhaul: 'wireless' },
-			{ enabled: '1', backhaul: 'auto' }
-		]);
-
-		o = s.taboption('mesh_advanced', form.ListValue, 'routing_algo',
-			_('batman-adv Routing Algorithm'));
-		o.value('BATMAN_IV', 'BATMAN IV ' + _('(default, best compatibility)'));
-		o.value('BATMAN_V', 'BATMAN V ' + _('(more accurate, requires kernel support)'));
-		o.default = 'BATMAN_IV';
-		o.depends('enabled', '1');
-
-		o = s.taboption('mesh_advanced', form.Flag, 'mesh_fwding',
-			_('802.11s Native Forwarding'),
-			_('Normally disabled — batman-adv handles forwarding.'));
-		o.default = '0';
-		o.depends('enabled', '1');
-
-		/* ── Section 3: Client WiFi ────────────────────────────────────────── */
-		s = m.section(form.NamedSection, 'global', 'easymesh',
-			_('Client WiFi (AP)'),
-			_('SSID visible to phones and laptops. Must be identical on all nodes for seamless roaming.'));
-		s.addremove = false;
-		s.anonymous = true;
-
-		o = s.option(form.Value, 'ssid',
-			_('WiFi Name (SSID)'), _('Must be identical on all nodes'));
-		o.datatype = 'maxlength(32)';
-		o.placeholder = 'OpenWrt';
-		o.depends('enabled', '1');
-
-		o = s.option(form.Value, 'key',
-			_('WiFi Password'),
-			_('WPA2/WPA3. Leave empty for open network.'));
-		o.datatype = 'minlength(8)';
-		o.password = true;
-		o.depends('enabled', '1');
-
-		/* ── Section 4: Roaming ────────────────────────────────────────────── */
-		s = m.section(form.NamedSection, 'global', 'easymesh',
-			_('Roaming (802.11r/k/v)'),
-			_('Helps devices switch nodes quickly. Requires open-source mac80211 driver support.'));
-		s.addremove = false;
-		s.anonymous = true;
-		s.tab('roam_basic', _('Fast Roaming'));
-		s.tab('roam_advanced', _('Advanced'));
-
-		o = s.taboption('roam_basic', form.Flag, 'ieee80211r',
-			_('802.11r Fast BSS Transition'),
-			_('Greatly reduces disconnect time when switching nodes. Recommended.'));
-		o.default = '1';
-		o.depends('enabled', '1');
-
-		o = s.taboption('roam_basic', form.Value, 'mobility_domain',
-			_('Mobility Domain ID'),
-			_('4-digit hex string. Must be identical on all nodes.'));
-		o.datatype = 'and(hexstring,rangelength(4,4))';
-		o.placeholder = 'aabb';
-		o.depends({ enabled: '1', ieee80211r: '1' });
-
-		o = s.taboption('roam_basic', form.Flag, 'ieee80211k',
-			_('802.11k Neighbor Report'),
-			_('Informs devices about nearby nodes to assist proactive roaming.'));
-		o.default = '1';
-		o.depends('enabled', '1');
-
-		o = s.taboption('roam_basic', form.Flag, 'ieee80211v',
-			_('802.11v BSS Transition Management'),
-			_('Actively steers weak-signal devices to a better node.'));
-		o.default = '1';
-		o.depends('enabled', '1');
-
-		o = s.taboption('roam_advanced', form.Flag, 'ft_over_ds',
-			_('FT over DS'),
-			_('Pre-negotiate keys over wired backbone for faster transition. Disable if issues occur.'));
-		o.default = '1';
-		o.depends({ enabled: '1', ieee80211r: '1' });
-
-		o = s.taboption('roam_advanced', form.Value, 'reassociation_deadline',
-			_('Reassociation Deadline (ms)'));
-		o.datatype = 'range(1000,65535)';
-		o.placeholder = '1000';
-		o.depends({ enabled: '1', ieee80211r: '1' });
-
-		this.map = m;
-		return m.render().then(function (node) {
-			node.insertBefore(qrSection, node.firstChild);
-			return node;
-		});
+		return m.render();
 	},
-
-	handleSave: function (ev) {
-		return this.map.save(null, true);
-	},
-
-	handleSaveApply: function (ev) {
-		return this.handleSave(ev).then(function () {
-			return ui.changes.apply(true);
-		});
-	},
-
-	handleReset: function (ev) {
-		return this.map.reset();
-	}
 });

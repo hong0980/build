@@ -157,9 +157,6 @@ msgstr "802.11v BSS 过渡管理"
 msgid "Actively steers weak-signal devices to a better node."
 msgstr "主动引导信号弱的设备切换到更好的节点。"
 
-msgid "FT over DS"
-msgstr "FT over DS"
-
 msgid "Pre-negotiate keys over wired backbone for faster transition. Disable if issues occur."
 msgstr "通过有线骨干预协商密钥，切换更快。如遇问题可关闭。"
 

@@ -13,26 +13,50 @@ export PENDING_DB="/tmp/easymesh_pending"
 export EM_PID_DIR="/tmp/easymesh_pids"
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-_get_eth_if() {
-    local _raw _i=0 _name
-    while true; do
-        _name=$(uci -q get "network.@device[${_i}].name" 2>/dev/null) || break
-        if [ "$_name" = "br-lan" ]; then
-            _raw=$(uci -q get "network.@device[${_i}].ports" 2>/dev/null | awk '{print $1}')
-            break
-        fi
-        _i=$((_i + 1))
-    done
-    [ -z "$_raw" ] && _raw=$(uci -q get network.lan.ifname 2>/dev/null | awk '{print $1}')
-    [ -z "$_raw" ] && _raw=$(brctl show br-lan 2>/dev/null | awk 'NR==2{print $NF}')
-    echo "${_raw%%.*}"
+
+# 检测是否为 DSA 硬件（特征：存在 lanX@ethY 格式的接口）
+_is_dsa() {
+    ip link show 2>/dev/null | grep -qE 'lan[0-9]+@eth'
 }
+
+# 获取 batman-adv hardif 用的接口
+# DSA 硬件：返回 eth0（DSA parent），不返回任何 lanX 子口
+#   原因：lanX 是逻辑分口，从 br-lan 摘出会立刻断网
+#         eth0 是底层物理接口，加入 bat0 不影响 lanX 正常工作
+# 非 DSA：返回第一个 LAN 口（传统做法）
+_get_eth_if() {
+    if _is_dsa; then
+        local _parent
+        _parent=$(ip link show 2>/dev/null \
+            | awk -F'[@: ]+' '/lan[0-9]+@eth/{print $3; exit}')
+        [ -n "$_parent" ] && echo "$_parent" && return
+        echo "eth0"
+    else
+        local _raw _i=0 _name
+        while true; do
+            _name=$(uci -q get "network.@device[${_i}].name" 2>/dev/null) || break
+            if [ "$_name" = "br-lan" ]; then
+                _raw=$(uci -q get "network.@device[${_i}].ports" 2>/dev/null \
+                    | awk '{print $1}')
+                break
+            fi
+            _i=$((_i + 1))
+        done
+        [ -z "$_raw" ] && _raw=$(uci -q get network.lan.ifname 2>/dev/null \
+            | awk '{print $1}')
+        echo "${_raw%%.*}"
+    fi
+}
+
 ETH_IF=$(_get_eth_if)
 [ -z "$ETH_IF" ] && ETH_IF="eth0"
+export ETH_IF
 BRIDGE_IF="br-lan"
+export BRIDGE_IF
 AP_IF="wlan0"
 MESH_IF="bat0"
-LOG_MAX_LINES=300
+export MESH_IF
+LOG_MAX_LINES=500
 _log_seq=0
 export MASTER_PORT=4304
 export DISC_PORT=4305
@@ -89,6 +113,12 @@ logd() { _emlog "INFO"  "dfs"   "$(translate "$@")"; }
 logh() { _emlog "INFO"  "heal"  "$(translate "$@")"; }
 logw() { _emlog "WARN"  "core"  "$(translate "$@")"; }
 loge() { _emlog "ERROR" "core"  "$(translate "$@")"; }
+
+# 调试日志：直接写文件，不经过 translate（socat 子进程里 lua 可能不可用）
+_dbg() {
+    local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
+    printf "%s [DEBUG] [dbg     ] %s\n" "$ts" "$*" >> "${LOGFILE:-/tmp/easymesh.log}"
+}
 
 # ── Basic helpers ──────────────────────────────────────────────────────────────
 get_mac()  { cat /sys/class/net/${BRIDGE_IF}/address 2>/dev/null || cat /sys/class/net/${ETH_IF}/address 2>/dev/null; }
@@ -207,9 +237,15 @@ elect_role() {
             log "Election: peer %s has WAN -> agent" "$peer_ip"
             return 0
         fi
-        [ -n "$peer_mac" ] && [ "$peer_mac" \< "$best_mac" ] && {
-            best_mac="$peer_mac"; best_ip="$peer_ip"
-        }
+
+        if [ -n "$peer_mac" ]; then
+            local peer_mac_hex best_mac_hex
+            peer_mac_hex=$(echo "$peer_mac" | tr -d ':')
+            best_mac_hex=$(echo "$best_mac" | tr -d ':')
+            [ "$peer_mac_hex" -lt "$best_mac_hex" ] 2>/dev/null && {
+                best_mac="$peer_mac"; best_ip="$peer_ip"
+            }
+        fi
     done
 
     if [ "$best_mac" = "$mymac" ]; then
@@ -241,22 +277,27 @@ tune_batman() {
 ########################################
 # 4. BATMAN-ADV RUNTIME SETUP
 ########################################
+# 核心原则（避免断网）：
+#   DSA 硬件（lanX@eth0）：用 eth0 作为 batman-adv hardif
+#     eth0 是底层物理接口，加入 bat0 不影响 lanX 在 br-lan 里的工作
+#     绝不摘出任何 lanX！摘出 lanX 会立刻断网！
+#   非 DSA 硬件：仅当有专用回程口时才摘出，否则也不摘
 setup_wired_backhaul() {
-    # ── 1. 加载模块，等 bat0 出现 ────────────────────────────────────────────
+    log "DBG backhaul: ETH_IF=%s DSA=%s MESH_IF=%s role=%s" \
+        "$ETH_IF" "$(_is_dsa && echo yes || echo no)" "$MESH_IF" "$(get_role)"
+
+    # ── 1. 加载模块，确保 bat0 存在 ──────────────────────────────────────────
     if ! ip link show "$MESH_IF" >/dev/null 2>&1; then
         modprobe batman-adv 2>/dev/null || true
         sleep 1
-
         ip link add name "$MESH_IF" type batadv 2>/dev/null || {
             loge "Failed to create bat0 interface"
             return 1
         }
-
-        local _wait=0
+        local _w=0
         while ! ip link show "$MESH_IF" >/dev/null 2>&1; do
-            _wait=$((_wait + 1))
-            [ $_wait -ge 15 ] && {
-                loge "bat0 not found after 15s — kmod-batman-adv missing?"
+            _w=$((_w+1)); [ $_w -ge 15 ] && {
+                loge "bat0 not found after 15s - kmod-batman-adv missing?"
                 return 1
             }
             sleep 1
@@ -264,17 +305,37 @@ setup_wired_backhaul() {
     fi
     ip link set "$MESH_IF" up 2>/dev/null
 
-    # ── 2. 有线 hardif：eth0 从 br-lan 摘出，独占加入 bat0 ──────────────────
     local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
+    log "DBG backhaul: mode=%s" "$backhaul"
+
+    # ── 2. 有线 hardif ────────────────────────────────────────────────────────
     if [ "$backhaul" = "wired" ] || [ "$backhaul" = "auto" ]; then
-        if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -qw "$ETH_IF"; then
-            brctl delif "$BRIDGE_IF" "$ETH_IF" 2>/dev/null || true
-            ip link set "$ETH_IF" up 2>/dev/null
-            batctl meshif "$MESH_IF" interface add "$ETH_IF" 2>/dev/null && log "Wired backhaul: %s → bat0 (removed from %s)" "$ETH_IF" "$BRIDGE_IF"
+        if _is_dsa; then
+            # DSA 硬件：eth0 是 switch CPU port，MTU=1504，batman-adv 不接受
+            # LAN-LAN 有线直连时不需要 batman-adv hardif
+            # bat0 加入 br-lan 后，OGM 广播通过 br-lan 里的 lanX 物理口自然传播
+            log "DBG backhaul: DSA hw, skipping batman-adv hardif (LAN-LAN direct bridge)"
+        else
+            # 非 DSA：同样不摘 LAN 口，依靠 br-lan 二层互通即可
+            # 除非 UCI 明确配了 backhaul_port（用户指定的专用回程口）
+            local bport; bport=$(uci_get easymesh global backhaul_port '')
+            if [ -n "$bport" ] && ip link show "$bport" >/dev/null 2>&1; then
+                if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -qw "$bport"; then
+                    ip link set "$bport" nomaster 2>/dev/null || \
+                        brctl delif "$BRIDGE_IF" "$bport" 2>/dev/null || true
+                    ip link set "$bport" up 2>/dev/null
+                    batctl meshif "$MESH_IF" interface add "$bport" 2>/dev/null \
+                        && log "Wired backhaul: dedicated port %s -> bat0" "$bport" \
+                        || loge "DBG backhaul: failed to add %s to bat0" "$bport"
+                    ETH_IF="$bport"; export ETH_IF
+                fi
+            else
+                log "DBG backhaul: non-DSA, no dedicated port, relying on br-lan L2"
+            fi
         fi
     fi
 
-    # ── 3. 无线 hardif：mesh0 加入 bat0（wireless/auto 时）───────────────────
+    # ── 3. 无线 hardif（backhaul=wireless/auto 时）───────────────────────────
     if [ "$backhaul" != "wired" ]; then
         local _mw=0
         while ! ip link show mesh0 >/dev/null 2>&1 && [ $_mw -lt 10 ]; do
@@ -283,109 +344,192 @@ setup_wired_backhaul() {
         if ip link show mesh0 >/dev/null 2>&1; then
             if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -qw mesh0; then
                 ip link set mesh0 up 2>/dev/null
-                batctl meshif "$MESH_IF" interface add mesh0 2>/dev/null && log "Wireless backhaul: mesh0 → bat0"
+                batctl meshif "$MESH_IF" interface add mesh0 2>/dev/null \
+                    && log "Wireless backhaul: mesh0 -> bat0"
             fi
         else
-            logw "mesh0 not found after 10s, wireless backhaul skipped"
+            [ "$backhaul" = "wireless" ] && logw "mesh0 not found, wireless backhaul failed"
         fi
     fi
 
-    # ── 4. master：bat0 桥接进 br-lan ────────────────────────────────────────
-    if [ "$(get_role)" = "master" ]; then
-        if ! brctl show "$BRIDGE_IF" 2>/dev/null | grep -q "$MESH_IF"; then
-            brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null && log "Backhaul: bat0 → %s" "$BRIDGE_IF"
-        fi
+    # ── 4. bat0 加入 br-lan ───────────────────────────────────────────────────
+    if ! ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan"; then
+        ip link set "$MESH_IF" master br-lan 2>/dev/null \
+            || brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null
+        ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan" \
+            && log "Backhaul: bat0 joined br-lan (role=%s)" "$(get_role)" \
+            || loge "DBG backhaul: FAILED to add bat0 to br-lan"
+    else
+        log "DBG backhaul: bat0 already in br-lan"
     fi
 
+    # ── 5. 状态摘要 ──────────────────────────────────────────────────────────
+    log "DBG backhaul: bat0 hardifs=[%s]" \
+        "$(batctl meshif bat0 if 2>/dev/null | tr '\n' ' ')"
+    log "DBG backhaul: br-lan members=[%s]" \
+        "$(ip link show 2>/dev/null | awk '/master br-lan/{print $2}' \
+           | tr -d ':' | tr '\n' ' ')"
+    log "DBG backhaul: br-lan IP=%s" \
+        "$(ip -4 addr show br-lan 2>/dev/null | awk '/inet /{print $2}')"
     log "Backhaul ready (role=%s)" "$(get_role)"
 }
 
-# ── 停止时清理 batman-adv（还原 eth0 到 br-lan）─────────────────────────────
+# ── 停止时清理 batman-adv ────────────────────────────────────────────────────
 teardown_batman() {
+    # 把 bat0 从 br-lan 摘出
+    ip link set "$MESH_IF" nomaster 2>/dev/null \
+        || brctl delif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null || true
+
+    # 清理 hardif
+    if _is_dsa; then
+        # DSA：eth0 从 bat0 摘出（eth0 不在 br-lan，不需要还回）
+        batctl meshif "$MESH_IF" interface del "$ETH_IF" 2>/dev/null || true
+    else
+        # 非 DSA 专用回程口：摘出 bat0，还回 br-lan
+        local bport; bport=$(uci_get easymesh global backhaul_port '')
+        if [ -n "$bport" ]; then
+            batctl meshif "$MESH_IF" interface del "$bport" 2>/dev/null || true
+            ip link set "$bport" up 2>/dev/null
+            ip link set "$bport" master br-lan 2>/dev/null \
+                || brctl addif "$BRIDGE_IF" "$bport" 2>/dev/null || true
+        fi
+    fi
+
     local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
-    brctl delif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null || true
-    batctl meshif "$MESH_IF" interface del "$ETH_IF" 2>/dev/null || true
-    [ "$backhaul" != "wired" ] && batctl meshif "$MESH_IF" interface del mesh0 2>/dev/null || true
-    ip link set "$ETH_IF" up 2>/dev/null
-    brctl addif "$BRIDGE_IF" "$ETH_IF" 2>/dev/null || true
+    [ "$backhaul" != "wired" ] \
+        && batctl meshif "$MESH_IF" interface del mesh0 2>/dev/null || true
     ip link set "$MESH_IF" down 2>/dev/null || true
-    log "batman-adv torn down, %s restored to %s" "$ETH_IF" "$BRIDGE_IF"
+    log "batman-adv torn down"
 }
 
 ########################################
-# 5. UDP BROADCAST DISCOVERY (socat version)
+# 5. UDP BROADCAST DISCOVERY
 ########################################
 DISC_HELLO_INTERVAL=5
 DISC_TIMEOUT=60
 
 discovery_server() {
     log "Discovery server listening on UDP %s" "$DISC_PORT"
-    socat UDP4-RECVFROM:${DISC_PORT},fork,reuseaddr EXEC:"$0 __handle_hello" 2>/dev/null &
-    echo $! > "${EM_PID_DIR}/disc_server.pid"
+    # FIX1: 用绝对路径替代 $0，避免 agent 以 easymesh-agent 启动时 $0 指向错误
+    socat UDP4-RECVFROM:${DISC_PORT},fork,reuseaddr \
+        EXEC:"/usr/sbin/easymesh-master __handle_hello" 2>/dev/null &
+    local _spid=$!
+    echo $_spid > "${EM_PID_DIR}/disc_server.pid"
+    log "DBG disc_server: socat pid=%s listening UDP %s" "$_spid" "$DISC_PORT"
 }
 
-# __handle_hello: 由 socat fork 调用，stdin=UDP包内容，stdout→单播回来源
-# 环境变量通过 export 传递（ROLE_FILE/NODE_DB/LOGFILE/MASTER_PORT/DISC_PORT）
+# __handle_hello: socat fork 的子进程，每收到一个 UDP 包调用一次
+# stdin = UDP 包内容，不使用 stdout（回包用独立 socat 单播）
 __handle_hello() {
-    # socat fork 子进程：export 变量已继承，但防御性补全
-    [ -z "$NODE_DB"     ] && NODE_DB="/tmp/easymesh_nodes"
-    [ -z "$PENDING_DB"  ] && PENDING_DB="/tmp/easymesh_pending"
-    [ -z "$LOGFILE"     ] && LOGFILE="/tmp/easymesh.log"
-    [ -z "$MASTER_PORT" ] && MASTER_PORT=4304
+    # ── 防御性变量补全 ────────────────────────────────────────────────────────
+    [ -z "$NODE_DB"         ] && NODE_DB="/tmp/easymesh_nodes"
+    [ -z "$PENDING_DB"      ] && PENDING_DB="/tmp/easymesh_pending"
+    [ -z "$LOGFILE"         ] && LOGFILE="/tmp/easymesh.log"
+    [ -z "$MASTER_PORT"     ] && MASTER_PORT=4304
+    [ -z "$DISC_REPLY_PORT" ] && DISC_REPLY_PORT=4306
+    [ -z "$BRIDGE_IF"       ] && BRIDGE_IF="br-lan"
 
+    _dbg "__handle_hello invoked pid=$$"
+
+    # ── 读取 UDP 包内容（加超时防止永久挂起）────────────────────────────────
     local msg
-    IFS= read -r msg || return 0
+    IFS= read -r -t 5 msg 2>/dev/null
+    if [ -z "$msg" ]; then
+        _dbg "__handle_hello: empty or timeout reading stdin"
+        return 0
+    fi
+    _dbg "__handle_hello: raw msg=[$msg]"
 
-    local cmd mac ip host
-    cmd=$(echo "$msg"  | awk '{print $1}')
-    mac=$(echo "$msg"  | awk '{print $2}')
-    ip=$(echo "$msg"   | awk '{print $3}')
-    host=$(echo "$msg" | awk '{print $4}')
+    # ── 解析字段 ─────────────────────────────────────────────────────────────
+    local cmd mac agent_ip host
+    cmd=$(      printf '%s' "$msg" | awk '{print $1}')
+    mac=$(      printf '%s' "$msg" | awk '{print $2}')
+    agent_ip=$( printf '%s' "$msg" | awk '{print $3}')
+    host=$(     printf '%s' "$msg" | awk '{print $4}')
 
-    [ "$cmd" != "EASYMESH_HELLO" ] && return 0
-    [ -z "$mac" ] || [ -z "$ip" ] && return 0
+    # ── 验证命令字 ────────────────────────────────────────────────────────────
+    if [ "$cmd" != "EASYMESH_HELLO" ]; then
+        _dbg "__handle_hello: unknown cmd=[$cmd] ignoring"
+        return 0
+    fi
 
-    echo "$mac" | grep -qE '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' || return 0
+    # FIX2: 原代码 [ -z "$mac" ] || [ -z "$ip" ] && return 0
+    # shell 优先级 bug：&& 高于 ||，只有 ip 为空才退出，mac 为空不退出
+    # 正确写法：用 if 语句明确逻辑
+    if [ -z "$mac" ] || [ -z "$agent_ip" ]; then
+        _dbg "__handle_hello: missing fields mac=[$mac] agent_ip=[$agent_ip]"
+        return 0
+    fi
 
+    # FIX3: 原正则只匹配小写，加 -i 兼容大写 MAC（理论上 Linux 都小写，但更健壮）
+    if ! echo "$mac" | grep -qiE '^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$'; then
+        _dbg "__handle_hello: invalid MAC format=[$mac]"
+        return 0
+    fi
+    # 统一转小写，保证文件名一致
+    mac=$(echo "$mac" | tr 'A-F' 'a-f')
+
+    _dbg "__handle_hello: valid HELLO mac=%s agent_ip=%s host=%s" "$mac" "$agent_ip" "${host:-unknown}"
+
+    # ── 写入 pending 或更新已批准节点 ────────────────────────────────────────
     local safe; safe=$(echo "$mac" | tr ':' '_')
     local approved_file="${NODE_DB}/${safe}.json"
     local pending_file="${PENDING_DB}/${safe}.json"
     mkdir -p "$NODE_DB" "$PENDING_DB"
+
     if [ -f "$approved_file" ]; then
-        # 已审批节点：只更新 IP 和时间戳
-        sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"$ip\"/" "$approved_file"
+        sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"$agent_ip\"/" "$approved_file"
         sed -i "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" "$approved_file"
+        _dbg "__handle_hello: updated approved node %s" "$mac"
     else
-        # 新节点：写入 pending 队列（source 标记为 discovery）
-        printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"wired","status":"pending","ts":%s}\n'             "$mac" "$ip" "${host:-unknown}" "$(date +%s)" > "$pending_file"
-        printf "%s [INFO ] [core    ] Pending node: %s (%s) via wired discovery\n"             "$(date '+%Y-%m-%d %H:%M:%S')" "$mac" "${host:-unknown}" >> "$LOGFILE"
+        printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"wired","status":"pending","ts":%s}\n' \
+            "$mac" "$agent_ip" "${host:-unknown}" "$(date +%s)" > "$pending_file"
+        printf "%s [INFO ] [core    ] Pending node: %s (%s) via wired discovery\n" \
+            "$(date '+%Y-%m-%d %H:%M:%S')" "$mac" "${host:-unknown}" >> "$LOGFILE"
+        _dbg "__handle_hello: wrote pending %s" "$pending_file"
     fi
 
-    # 获取本机 IP（master 的 br-lan IP）
+    # ── 获取本机 IP（master 的 br-lan IP）────────────────────────────────────
     local myip
-    myip=$(ip -4 addr show dev br-lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
-    [ -z "$myip" ] && return 0
+    myip=$(ip -4 addr show dev "${BRIDGE_IF}" 2>/dev/null \
+        | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
 
-    # 单播回复到 agent 的固定监听端口（DISC_REPLY_PORT）
-    # 注意：不能用 socat stdout 回写（那是临时端口），
-    #       必须主动 sendto agent_ip:DISC_REPLY_PORT
-    [ -z "$DISC_REPLY_PORT" ] && DISC_REPLY_PORT=4306
-    printf 'EASYMESH_WELCOME %s\n' "$myip" |         socat - "UDP-DATAGRAM:${ip}:${DISC_REPLY_PORT}" 2>/dev/null
+    # FIX4: 原来 br-lan 没 IP 就静默 return 0，不发 WELCOME 也不记日志
+    # 修复：加调试日志，并尝试用路由表获取 src IP
+    if [ -z "$myip" ]; then
+        _dbg "__handle_hello: br-lan has no IP, trying route src to %s" "$agent_ip"
+        myip=$(ip -4 route get "$agent_ip" 2>/dev/null \
+            | awk '/src/{for(i=1;i<=NF;i++) if($i=="src") print $(i+1); exit}')
+    fi
+    if [ -z "$myip" ]; then
+        _dbg "__handle_hello: ERROR cannot determine local IP, giving up"
+        return 0
+    fi
+    _dbg "__handle_hello: myip=%s sending WELCOME to %s:%s" "$myip" "$agent_ip" "$DISC_REPLY_PORT"
+
+    # ── 发送 WELCOME 单播回复 ─────────────────────────────────────────────────
+    printf 'EASYMESH_WELCOME %s\n' "$myip" | \
+        socat - "UDP-DATAGRAM:${agent_ip}:${DISC_REPLY_PORT}" 2>/dev/null
+    local _ret=$?
+    _dbg "__handle_hello: WELCOME sent ret=%s" "$_ret"
 }
+
 # discovery_client: 广播 HELLO，等待 master 回复 WELCOME
-# 返回 0 = 找到 master（MASTER_IP_FILE 已写），1 = 超时未找到
+# 返回 0=找到 master，1=超时
 discovery_client() {
     local mymac myip hostname
     mymac=$(cat /sys/class/net/${BRIDGE_IF}/address 2>/dev/null)
     myip=$(get_ip)
     hostname=$(uci_get system @system[0] hostname "node")
 
-    [ -z "$mymac" ] || [ -z "$myip" ] && return 1
+    log "DBG disc_client: mymac=%s myip=%s hostname=%s" "$mymac" "$myip" "$hostname"
 
-    log "Discovery: broadcasting HELLO (MAC=%s IP=%s)" "$mymac" "$myip"
+    if [ -z "$mymac" ] || [ -z "$myip" ]; then
+        loge "DBG disc_client: missing MAC or IP, abort"
+        return 1
+    fi
 
-    # 用 socat 监听 WELCOME 回复（master 会单播到 DISC_REPLY_PORT）
-    local resp_file="/tmp/em_disc_resp_$$"
+    # ── 清理残留的 reply 端口监听进程 ────────────────────────────────────────
     local _dp _dc _dpid
     for _dp in /proc/[0-9]*/cmdline; do
         [ -f "$_dp" ] || continue
@@ -393,38 +537,55 @@ discovery_client() {
         case "$_dc" in
             *socat*"UDP4-LISTEN:${DISC_REPLY_PORT}"*)
                 _dpid="${_dp%/cmdline}"; _dpid="${_dpid##*/}"
-                kill "$_dpid" 2>/dev/null || true ;;
+                log "DBG disc_client: killing stale reply listener pid=%s" "$_dpid"
+                kill "$_dpid" 2>/dev/null || true
+                sleep 1
+                ;;
         esac
     done
     sleep 1
-    socat -T 35 UDP4-LISTEN:${DISC_REPLY_PORT},reuseaddr OPEN:"${resp_file}",creat,trunc 2>/dev/null &
+
+    # ── 启动 WELCOME 监听 ─────────────────────────────────────────────────────
+    local resp_file="/tmp/em_disc_resp_$$"
+    socat -T 45 UDP4-LISTEN:${DISC_REPLY_PORT},reuseaddr \
+        OPEN:"${resp_file}",creat,trunc 2>/dev/null &
     local listen_pid=$!
-    # 等待 socat 绑定端口
+    log "DBG disc_client: reply listener pid=%s on UDP %s" "$listen_pid" "$DISC_REPLY_PORT"
     sleep 1
 
-    # 广播 HELLO（重试 6 次，每 5 秒一次，共 30 秒）
+    # ── 广播 HELLO，重试 8 次 ────────────────────────────────────────────────
     local found=0 i=0
-    while [ $i -lt 6 ]; do
-        printf 'EASYMESH_HELLO %s %s %s\n' "$mymac" "$myip" "$hostname" | socat - UDP-DATAGRAM:255.255.255.255:${DISC_PORT},broadcast 2>/dev/null
+    while [ $i -lt 8 ]; do
+        log "DBG disc_client: HELLO attempt %s/8 -> 255.255.255.255:%s" "$((i+1))" "$DISC_PORT"
+        printf 'EASYMESH_HELLO %s %s %s\n' "$mymac" "$myip" "$hostname" | \
+            socat - UDP-DATAGRAM:255.255.255.255:${DISC_PORT},broadcast 2>/dev/null
         sleep 5
-        # 检查是否收到回复
-        if [ -f "$resp_file" ] && grep -q "^EASYMESH_WELCOME" "$resp_file" 2>/dev/null; then
-            local master_ip_got
-            master_ip_got=$(awk '/^EASYMESH_WELCOME/{print $2; exit}' "$resp_file")
-            if [ -n "$master_ip_got" ]; then
-                echo "$master_ip_got" > "$MASTER_IP_FILE"
-                log "Discovery: master found at %s" "$master_ip_got"
-                found=1
-                break
+        if [ -f "$resp_file" ] && [ -s "$resp_file" ]; then
+            local _content; _content=$(cat "$resp_file" 2>/dev/null)
+            log "DBG disc_client: resp_file content=[%s]" "$_content"
+            if echo "$_content" | grep -q "^EASYMESH_WELCOME"; then
+                local master_ip_got
+                master_ip_got=$(echo "$_content" | awk '/^EASYMESH_WELCOME/{print $2; exit}')
+                if [ -n "$master_ip_got" ]; then
+                    echo "$master_ip_got" > "$MASTER_IP_FILE"
+                    log "Discovery: master found at %s" "$master_ip_got"
+                    found=1
+                    break
+                fi
             fi
+        else
+            log "DBG disc_client: no WELCOME yet after attempt %s" "$((i+1))"
         fi
         i=$((i+1))
     done
 
     kill "$listen_pid" 2>/dev/null || true
     rm -f "$resp_file"
+
+    [ "$found" = "0" ] && log "DBG disc_client: all attempts exhausted, not found"
     return $((1 - found))
 }
+
 ########################################
 # 6. INTER-NODE HTTP SERVER (纯 socat)
 ########################################
@@ -434,11 +595,9 @@ _http_html(){ printf "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\
 _http_403() { printf 'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n'"$_http_cors"'Connection: close\r\n\r\n{"status":"pending"}\n'; }
 _http_404() { printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n{"error":"not found"}\n'; }
 
-# HTTP 请求处理器（每个连接独立进程）
 __http_handler() {
     local req_line method path query content_length body line
 
-    # 读取请求行
     IFS= read -r req_line
     req_line="${req_line%$(printf '\r')}"
     method="${req_line%% *}"
@@ -455,7 +614,6 @@ __http_handler() {
         esac
     done
 
-    # 读取 body
     [ "$content_length" -gt 0 ] 2>/dev/null && body=$(dd bs=1 count="$content_length" 2>/dev/null)
 
     local full_path="$path"
@@ -471,13 +629,12 @@ __http_handler() {
         /|/index.html)
             local _html="/www/easymesh-pair/index.html"
             if [ -f "$_html" ]; then _http_html "$_html"
-            else _http_ok "{"error":"index.html not found"}"; fi
+            else _http_ok '{"error":"index.html not found"}'; fi
             ;;
-        /favicon.ico)
-            _http_404
-            ;;
+        /favicon.ico) _http_404 ;;
         /ping)
-            _http_ok "{\"role\":\"$(get_role)\",\"mac\":\"$(get_mac)\",\"ip\":\"$(get_ip)\"}"
+            _http_ok "$(printf '{"role":"%s","mac":"%s","ip":"%s"}' \
+                "$(get_role)" "$(get_mac)" "$(get_ip)")"
             ;;
         /wan)
             wan_up && _http_ok '{"wan":true}' || _http_ok '{"wan":false}'
@@ -490,7 +647,7 @@ __http_handler() {
         /profile/checksum)
             local req_mac safe
             req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
-            safe=$(echo "$req_mac" | tr ':' '_')
+            safe=$(echo "$req_mac" | tr ':' '_' | tr 'A-F' 'a-f')
             if [ -f "${PENDING_DB}/${safe}.json" ]; then
                 _http_ok '{"status":"pending"}'
             elif [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
@@ -503,7 +660,7 @@ __http_handler() {
         /profile)
             local req_mac safe
             req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
-            safe=$(echo "$req_mac" | tr ':' '_')
+            safe=$(echo "$req_mac" | tr ':' '_' | tr 'A-F' 'a-f')
             if [ -f "${PENDING_DB}/${safe}.json" ]; then
                 _http_ok '{"status":"pending"}'
             elif [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
@@ -511,6 +668,35 @@ __http_handler() {
             else
                 _http_ok '{"status":"unregistered"}'
             fi
+            ;;
+        /nodes/approve)
+            # FIX5: 新增审批接口，将 pending 移入 NODE_DB（approved）
+            local req_mac safe
+            req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
+            [ -z "$req_mac" ] && req_mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
+            safe=$(echo "$req_mac" | tr ':' '_' | tr 'A-F' 'a-f')
+            local pf="${PENDING_DB}/${safe}.json"
+            local af="${NODE_DB}/${safe}.json"
+            if [ -f "$pf" ]; then
+                sed 's/"status":"pending"/"status":"approved"/' "$pf" > "$af"
+                rm -f "$pf"
+                _http_ok '{"status":"ok","msg":"approved"}'
+                log "Node approved: %s" "$req_mac"
+            elif [ -f "$af" ]; then
+                _http_ok '{"status":"ok","msg":"already approved"}'
+            else
+                _http_ok '{"status":"error","msg":"node not found"}'
+            fi
+            ;;
+        /nodes/list)
+            # FIX6: 新增节点列表接口，返回全部 pending + approved 节点
+            local out="[" first=1
+            for f in "$PENDING_DB"/*.json "$NODE_DB"/*.json; do
+                [ -f "$f" ] || continue
+                [ "$first" = "1" ] && first=0 || out="${out},"
+                out="${out}$(cat "$f")"
+            done
+            _http_ok "${out}]"
             ;;
         /channel/apply)
             local new_chan reason
@@ -527,7 +713,8 @@ __http_handler() {
             local sta_mac; sta_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
             local ap_iface; ap_iface=$(get_ap_iface)
             local bssid; bssid=$(cat /sys/class/net/${ap_iface}/address 2>/dev/null)
-            local sig; sig=$(iw dev "$ap_iface" station get "$sta_mac" 2>/dev/null | awk '/signal:/{print $2}' | head -1)
+            local sig; sig=$(iw dev "$ap_iface" station get "$sta_mac" 2>/dev/null \
+                | awk '/signal:/{print $2}' | head -1)
             if [ -n "$sig" ]; then _http_ok "{\"rssi\":$sig,\"bssid\":\"$bssid\"}"
             else _http_ok '{"rssi":null}'; fi
             ;;
@@ -543,7 +730,9 @@ __http_handler() {
 
 run_node_server() {
     log "HTTP server starting on port %s (socat)" "$MASTER_PORT"
-    exec socat -T 30 TCP-LISTEN:${MASTER_PORT},reuseaddr,fork,crnl EXEC:"$0 __http_handler"
+    # FIX7: 绝对路径，与 discovery_server 保持一致
+    exec socat -T 30 TCP-LISTEN:${MASTER_PORT},reuseaddr,fork,crnl \
+        EXEC:"/usr/sbin/easymesh-master __http_handler"
 }
 
 ########################################
@@ -552,81 +741,126 @@ run_node_server() {
 register_node() {
     local body="$1" source="$2"
     local mac ip hostname
-    mac=$(echo "$body"      | grep -o '"mac":"[^"]*"'      | cut -d'"' -f4)
-    ip=$(echo "$body"       | grep -o '"ip":"[^"]*"'       | cut -d'"' -f4)
-    hostname=$(echo "$body" | grep -o '"hostname":"[^"]*"' | cut -d'"' -f4)
-    [ -z "$mac" ] && return 1
+    mac=$(      echo "$body" | grep -o '"mac":"[^"]*"'      | cut -d'"' -f4)
+    ip=$(       echo "$body" | grep -o '"ip":"[^"]*"'       | cut -d'"' -f4)
+    hostname=$( echo "$body" | grep -o '"hostname":"[^"]*"' | cut -d'"' -f4)
+
+    if [ -z "$ip" ]; then
+        loge "register_node: missing ip in body=[%s]" "$body"
+        return 1
+    fi
+    if [ -z "$mac" ]; then
+        loge "register_node: missing mac in body=[%s]" "$body"
+        return 1
+    fi
+
+    mac=$(echo "$mac" | tr 'A-F' 'a-f')
     local safe; safe=$(echo "$mac" | tr ':' '_')
     mkdir -p "$NODE_DB" "$PENDING_DB"
     local approved_file="${NODE_DB}/${safe}.json"
     local pending_file="${PENDING_DB}/${safe}.json"
+
     if [ -f "$approved_file" ]; then
-        # 已审批节点重新上线：更新 IP/时间戳
         sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"${ip:-?}\"/" "$approved_file"
         sed -i "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" "$approved_file"
-        log "Node re-registered (approved): %s (%s)" "$mac" "${hostname:-?}"
+        log "Node re-registered (approved): %s (%s) ip=%s" "$mac" "${hostname:-?}" "$ip"
     else
-        # 新节点：放入 pending 队列等待管理员批准
         printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"%s","status":"pending","ts":%s}\n' \
             "$mac" "${ip:-?}" "${hostname:-?}" "${source:-wired}" "$(date +%s)" \
             > "$pending_file"
-        log "Pending node: %s (%s) via %s" "$mac" "${hostname:-?}" "$source"
+        log "Pending node: %s (%s) ip=%s via %s" "$mac" "${hostname:-?}" "$ip" "$source"
     fi
 }
 
 ########################################
 # 8. AGENT: FIND MASTER & JOIN
 ########################################
+# IP 冲突由 initd 在守护进程启动前处理，这里无需再处理
+
 find_master() {
+    log "DBG find_master: starting (my_ip=%s)" "$(get_ip)"
+
+    local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
+
+    # 无线回程：等 batman-adv 邻居（有线直连不需要等，bat0 无 hardif 邻居永远为0）
+    if [ "$backhaul" != "wired" ]; then
+        local _bwait=0
+        log "DBG find_master: waiting for batman-adv neighbor (wireless)"
+        while [ $_bwait -lt 40 ]; do
+            local _nb
+            _nb=$(batctl meshif bat0 neighbors 2>/dev/null \
+                | grep -vcE "^B\.A\.T|^No |^$" 2>/dev/null || echo 0)
+            [ "$_nb" -gt 0 ] && {
+                log "batman-adv neighbor found after %ss" "$_bwait"; break; }
+            sleep 2; _bwait=$((_bwait + 2))
+        done
+        [ $_bwait -ge 40 ] && logw "No batman-adv neighbor in 40s, proceeding anyway"
+    fi
+
+    # ── 1. 尝试缓存的 master IP ──────────────────────────────────────────────
     local cached; cached=$(master_ip)
     if [ -n "$cached" ]; then
-        if wget -q -T 3 -O- "http://${cached}:${MASTER_PORT}/ping" 2>/dev/null | grep -q '"role":"master"'; then
+        if wget -q -T 3 -O- "http://${cached}:${MASTER_PORT}/ping" 2>/dev/null \
+                | grep -q '"role":"master"'; then
+            log "DBG find_master: cached master OK at %s" "$cached"
             return 0
         fi
     fi
     rm -f "$MASTER_IP_FILE"
 
+    # ── 2. 尝试默认网关 ──────────────────────────────────────────────────────
     local gw; gw=$(ip route 2>/dev/null | awk '/default/{print $3}' | head -1)
+    log "DBG find_master: default gw=%s" "${gw:-none}"
     if [ -n "$gw" ]; then
-        if wget -q -T 3 -O- "http://${gw}:${MASTER_PORT}/ping" 2>/dev/null | grep -q '"role":"master"'; then
+        if wget -q -T 3 -O- "http://${gw}:${MASTER_PORT}/ping" 2>/dev/null \
+                | grep -q '"role":"master"'; then
             echo "$gw" > "$MASTER_IP_FILE"
             log "Master found at gateway: %s" "$gw"
             return 0
         fi
     fi
 
+    # ── 3. UDP 广播发现 ───────────────────────────────────────────────────────
+    # initd 已保证 agent IP 唯一，master 的 WELCOME 回包能正确送达
+    log "DBG find_master: starting UDP broadcast discovery"
     discovery_client && return 0
 
-    local prefix myip
-    myip=$(get_ip)
-    prefix=$(echo "$myip" | cut -d. -f1-3)
+    # ── 4. 子网全扫描（兜底）────────────────────────────────────────────────
+    local myip prefix
+    myip=$(get_ip); prefix=$(echo "$myip" | cut -d. -f1-3)
     log "Scanning subnet %s.0/24 for master..." "$prefix"
     for j in $(seq 1 254); do
         local c="${prefix}.${j}"
         [ "$c" = "$myip" ] && continue
-        if wget -q -T 1 -O- "http://${c}:${MASTER_PORT}/ping" 2>/dev/null | grep -q '"role":"master"'; then
+        if wget -q -T 1 -O- "http://${c}:${MASTER_PORT}/ping" 2>/dev/null \
+                | grep -q '"role":"master"'; then
             echo "$c" > "$MASTER_IP_FILE"
             log "Master found via scan: %s" "$c"
             return 0
         fi
     done
 
+    loge "Master not found by any method"
     return 1
 }
 
 do_register() {
     local mip; mip=$(master_ip)
     [ -z "$mip" ] && { find_master || return 1; mip=$(master_ip); }
+    [ -z "$mip" ] && return 1
+
     local mac ip hostname
     mac=$(get_mac); ip=$(get_ip)
     hostname=$(uci_get system @system[0] hostname node)
-    do_http_post \
+    log "DBG do_register: to master=%s mac=%s ip=%s" "$mip" "$mac" "$ip"
+    local resp
+    resp=$(do_http_post \
         "http://${mip}:${MASTER_PORT}/register" \
-        "{\"mac\":\"$mac\",\"ip\":\"$ip\",\"hostname\":\"$hostname\",\"source\":\"wired\"}" || {
+        "{\"mac\":\"$mac\",\"ip\":\"$ip\",\"hostname\":\"$hostname\",\"source\":\"wired\"}") || {
         loge "Failed to register with master %s" "$mip"
         return 1
     }
-    log "Registered with master: %s" "$mip"
+    log "Registered with master %s (resp=%s)" "$mip" "$resp"
 }
 
 _last_profile_sum=""
@@ -639,19 +873,21 @@ poll_for_approval() {
         "http://${mip}:${MASTER_PORT}/profile/checksum?mac=$(get_mac)" 2>/dev/null)
     remote_sum=$(echo "$sum_resp" | grep -o '"sum":"[^"]*"' | cut -d'"' -f4)
 
-    if [ -n "$remote_sum" ] && [ "$remote_sum" = "$_last_profile_sum" ]; then
+    if [ -n "$remote_sum" ] && [ -n "$_last_profile_sum" ] \
+            && [ "$remote_sum" = "$_last_profile_sum" ]; then
         return 0
     fi
 
     local resp
     resp=$(wget -q -T 5 -O- "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
+    log "DBG poll_approval: resp=[%s]" "$resp"
 
     if echo "$resp" | grep -q '"status":"pending"'; then
         log "Waiting for master approval..."
         return 1
     fi
     if echo "$resp" | grep -q '"status":"unregistered"'; then
-        logw "Master has no record of this node, re-registering"
+        logw "Master has no record, re-registering"
         rm -f "$MASTER_IP_FILE"
         do_register
         return 1
@@ -680,21 +916,22 @@ generate_profile() {
     channel=$(uci get "${radio_dev}.channel" 2>/dev/null || echo 'auto')
     printf '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211k":"1","ieee80211v":"1","backhaul":"wired"}\n' \
         "$ssid" "$key" "$channel" "$mesh_id" "$mesh_key" "$routing_algo" > "$PROFILE_FILE"
+    log "DBG generate_profile: ssid=%s channel=%s" "$ssid" "$channel"
 }
 
 apply_profile() {
     local body="$1"
     echo "$body" > /tmp/em_profile_tmp.json
     local ssid key channel mesh_id mesh_key routing_algo
-    ssid=$(jsonfilter         -i /tmp/em_profile_tmp.json -e '@.ssid'         2>/dev/null)
-    key=$(jsonfilter          -i /tmp/em_profile_tmp.json -e '@.key'          2>/dev/null)
-    channel=$(jsonfilter      -i /tmp/em_profile_tmp.json -e '@.channel'      2>/dev/null)
-    mesh_id=$(jsonfilter      -i /tmp/em_profile_tmp.json -e '@.mesh_id'      2>/dev/null)
-    mesh_key=$(jsonfilter     -i /tmp/em_profile_tmp.json -e '@.mesh_key'     2>/dev/null)
+    ssid=$(        jsonfilter -i /tmp/em_profile_tmp.json -e '@.ssid'         2>/dev/null)
+    key=$(         jsonfilter -i /tmp/em_profile_tmp.json -e '@.key'          2>/dev/null)
+    channel=$(     jsonfilter -i /tmp/em_profile_tmp.json -e '@.channel'      2>/dev/null)
+    mesh_id=$(     jsonfilter -i /tmp/em_profile_tmp.json -e '@.mesh_id'      2>/dev/null)
+    mesh_key=$(    jsonfilter -i /tmp/em_profile_tmp.json -e '@.mesh_key'     2>/dev/null)
     routing_algo=$(jsonfilter -i /tmp/em_profile_tmp.json -e '@.routing_algo' 2>/dev/null)
     rm -f /tmp/em_profile_tmp.json
     [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
-    log "Applying profile: ssid=%s" "$ssid"
+    log "Applying profile: ssid=%s channel=%s" "$ssid" "$channel"
     uci_set easymesh global enabled 1
     uci_set easymesh global role agent
     uci_set easymesh global mesh_id "${mesh_id:-OpenWrt-Mesh}"
@@ -714,7 +951,7 @@ apply_profile() {
     uci_set wireless ${_ap_sect} ieee80211v 1
     uci_set wireless ${_ap_sect} bss_transition 1
     uci_set wireless ${_ap_sect} rrm_neighbor_report 1
-    [ -n "$channel" ] && [ "$channel" !=  "auto" ] && {
+    [ -n "$channel" ] && [ "$channel" != "auto" ] && {
         local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
         [ -n "$rd" ] && uci set "${rd}.channel=$channel"
     }
@@ -860,7 +1097,8 @@ pick_best_candidate() {
         [ -f "$f" ] || continue
         local peer_ip; peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
         [ -z "$peer_ip" ] && continue
-        local resp; resp=$(wget -q -T 2 -O- "http://${peer_ip}:${MASTER_PORT}/roam/signal?mac=${sta_mac}" 2>/dev/null)
+        local resp; resp=$(wget -q -T 2 -O- \
+            "http://${peer_ip}:${MASTER_PORT}/roam/signal?mac=${sta_mac}" 2>/dev/null)
         local peer_rssi; peer_rssi=$(echo "$resp"  | grep -o '"rssi":-\?[0-9]*' | cut -d: -f2)
         local peer_bssid; peer_bssid=$(echo "$resp" | grep -o '"bssid":"[^"]*"'  | cut -d'"' -f4)
         [ -z "$peer_rssi" ] || [ -z "$peer_bssid" ] && continue
@@ -960,13 +1198,15 @@ setup_dedicated_backhaul() {
     local backhaul_radio="" seen5g=0
     for dev in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
         local b; b=$(uci_get wireless "${dev}" band)
-        case "$b" in 5g*|5GHz*) seen5g=$(( seen5g+1 )); [ "$seen5g" -ge 2 ] && { backhaul_radio="$dev"; break; };; esac
+        case "$b" in 5g*|5GHz*) seen5g=$(( seen5g+1 ))
+            [ "$seen5g" -ge 2 ] && { backhaul_radio="$dev"; break; };; esac
     done
     [ -z "$backhaul_radio" ] && { log "Dedicated backhaul: no second 5GHz radio"; return 1; }
     log "Dedicated backhaul: %s reserved for mesh" "$backhaul_radio"
     for iface in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-iface/{gsub(/wireless\./,""); print $1}'); do
-        local dev; dev=$(uci_get wireless "${iface}" device)
-        local mode; mode=$(uci get "wireless.${iface}.mode" 2>/dev/null)
+        local dev mode
+        dev=$(uci_get wireless "${iface}" device)
+        mode=$(uci get "wireless.${iface}.mode" 2>/dev/null)
         [ "$dev" = "$backhaul_radio" ] && [ "$mode" = "ap" ] && {
             uci del "wireless.${iface}"
             log "Dedicated backhaul: removed AP %s" "$iface"
@@ -982,8 +1222,12 @@ setup_dedicated_backhaul() {
     uci_set wireless easymesh_bh network mesh
     uci_set wireless easymesh_bh easymesh_managed 1
     local mesh_key; mesh_key=$(uci_get easymesh global mesh_key 2>/dev/null)
-    if [ -n "$mesh_key" ]; then uci_set wireless easymesh_bh encryption sae; uci_set wireless easymesh_bh key "$mesh_key"
-    else uci_set wireless easymesh_bh encryption none; fi
+    if [ -n "$mesh_key" ]; then
+        uci_set wireless easymesh_bh encryption sae
+        uci_set wireless easymesh_bh key "$mesh_key"
+    else
+        uci_set wireless easymesh_bh encryption none
+    fi
     uci_commit wireless
     log "Dedicated backhaul: %s configured (ch %s, VHT80)" "$backhaul_radio" "$bh_ch"
 }
@@ -1016,12 +1260,12 @@ update_topology() {
     for f in "$NODE_DB"/*.json; do
         [ -f "$f" ] || continue; nodes="${nodes},$(cat "$f")"
     done
-    # bat0_up: 检查 bat0 接口是否存在且 UP（IFF_UP = flags & 0x1）
     local bat0_up="false"
     if ip link show bat0 2>/dev/null | grep -q ',UP,\|<UP\|,UP>'; then
         bat0_up="true"
     fi
-    printf '{"ts":%d,"nodes":[%s],"links":[%s],"bat0_up":%s}\n' "$(date +%s)" "$nodes" "${links:-}" "$bat0_up" > "$TOPO_FILE"
+    printf '{"ts":%d,"nodes":[%s],"links":[%s],"bat0_up":%s}\n' \
+        "$(date +%s)" "$nodes" "${links:-}" "$bat0_up" > "$TOPO_FILE"
 }
 
 ########################################
@@ -1065,7 +1309,8 @@ HAPD
 ########################################
 main_loop() {
     _stop_jobs
-    mkdir -p "$NODE_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR"
+    # FIX8: main_loop 开始时就创建 PENDING_DB，原来没创建导致目录不存在
+    mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR"
     echo $$ > "${EM_PID_DIR}/easymesh_master.pid"
 
     { printf "\n" >> "$LOGFILE" 2>/dev/null
@@ -1074,7 +1319,8 @@ main_loop() {
       log "================================================"; }
 
     local hw_type="dual-band" count5g=0 _dev
-    for _dev in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
+    for _dev in $(uci show wireless 2>/dev/null | \
+            awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
         local _b; _b=$(uci get "wireless.${_dev}.band" 2>/dev/null || echo "")
         case "$_b" in 5g*|5GHz*) count5g=$(( count5g+1 ));; esac
     done
@@ -1096,8 +1342,10 @@ main_loop() {
         _bg disc_server discovery_server
         manage_wireless_onboard
         generate_profile
+        log "DBG main: master ready, disc_server started, profile written"
     else
         _bg gw_watchdog gateway_watchdog
+        log "DBG main: agent starting find_master+register"
         find_master && do_register || true
     fi
 
@@ -1124,6 +1372,7 @@ main_loop() {
             manage_wireless_onboard
         else
             if [ "$_registered" = "0" ]; then
+                log "DBG main_loop iter=%s: agent not registered, retrying find_master" "$_iter"
                 find_master && do_register && _registered=1
             else
                 poll_for_approval
