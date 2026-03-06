@@ -265,6 +265,15 @@ elect_role() {
 tune_batman() {
     batctl meshif "$MESH_IF" orig_interval "$BATMAN_OGM_INTERVAL" 2>/dev/null
     batctl meshif "$MESH_IF" hop_penalty   "$BATMAN_HOP_PENALTY"  2>/dev/null
+    local _bmode; _bmode=$(uci_get easymesh global backhaul 'wired')
+    if [ "$_bmode" = "wired" ]; then
+        # 有线回程：禁用 BLA 和 DAT
+        # BLA 在 LAN 直连时误判 bridge loop，会 DROP ARP 导致二层不通
+        # DAT 在没有 hardif 时拦截 ARP 但无法查询，同样导致 ARP 失败
+        echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null || true
+        echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null || true
+        log "batman-adv: BLA=off DAT=off (wired mode)"
+    fi
     if [ "$(get_role)" = "master" ]; then
         batctl meshif "$MESH_IF" gw_mode server 2>/dev/null
         log "batman-adv: GW mode=server, OGM=%sms" "$BATMAN_OGM_INTERVAL"
@@ -352,15 +361,35 @@ setup_wired_backhaul() {
         fi
     fi
 
-    # ── 4. bat0 加入 br-lan ───────────────────────────────────────────────────
-    if ! ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan"; then
-        ip link set "$MESH_IF" master br-lan 2>/dev/null \
-            || brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null
-        ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan" \
-            && log "Backhaul: bat0 joined br-lan (role=%s)" "$(get_role)" \
-            || loge "DBG backhaul: FAILED to add bat0 to br-lan"
+    # ── 4. bat0 加入 br-lan（仅无线回程需要）────────────────────────────────
+    # 有线回程时绝对不能把 bat0 加入 br-lan！
+    # 原因：batman-adv BLA（Bridge Loop Avoidance）会检测到两台路由器的
+    # bat0 在同一个 L2 domain 里，误判为 bridge loop，主动 DROP ARP 广播！
+    # 结果：两台路由器之间 ARP 完全不通，ping/TCP 全部失败。
+    local _backhaul_mode; _backhaul_mode=$(uci_get easymesh global backhaul 'wired')
+    if [ "$_backhaul_mode" = "wired" ]; then
+        # 有线回程：确保 bat0 不在 br-lan 里（防止 BLA 干扰）
+        if ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan"; then
+            ip link set "$MESH_IF" nomaster 2>/dev/null \
+                || brctl delif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null || true
+            log "Backhaul: bat0 removed from br-lan (wired mode, prevents BLA ARP drop)"
+        else
+            log "DBG backhaul: bat0 not in br-lan (correct for wired mode)"
+        fi
+        # 禁用 BLA 和 DAT，避免干扰 LAN 流量
+        echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null || true
+        echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table 2>/dev/null || true
     else
-        log "DBG backhaul: bat0 already in br-lan"
+        # 无线/自动回程：bat0 需要在 br-lan 里（通过 bat0 转发 mesh 流量）
+        if ! ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan"; then
+            ip link set "$MESH_IF" master br-lan 2>/dev/null \
+                || brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null
+            ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan" \
+                && log "Backhaul: bat0 joined br-lan (role=%s)" "$(get_role)" \
+                || loge "DBG backhaul: FAILED to add bat0 to br-lan"
+        else
+            log "DBG backhaul: bat0 already in br-lan"
+        fi
     fi
 
     # ── 5. 状态摘要 ──────────────────────────────────────────────────────────
@@ -751,11 +780,13 @@ __http_handler() {
 run_node_server() {
     log "HTTP server starting on port %s (socat)" "$MASTER_PORT"
 
+    # ✅ 修复 1：明确绑定到所有网卡
     exec socat -T 30 \
         TCP4-LISTEN:${MASTER_PORT},reuseaddr,bind=0.0.0.0,fork,crnl \
         EXEC:"/usr/sbin/easymesh-master __http_handler" \
         2>&1 | tee -a "$LOGFILE" &
 
+    # ✅ 修复 2：等待 socat 启动并验证
     sleep 1
 
     # 验证监听
@@ -1626,6 +1657,7 @@ _handle_approval_signal() {
 
 main_loop() {
     _stop_jobs
+    # FIX8: main_loop 开始时就创建 PENDING_DB，原来没创建导致目录不存在
     mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR"
     echo $$ > "${EM_PID_DIR}/easymesh_master.pid"
 

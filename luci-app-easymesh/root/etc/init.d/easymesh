@@ -59,9 +59,14 @@ cleanup_wireless() {
     uci commit wireless
 }
 
+# ============================================================================
+# Agent 启动准备：正确顺序 = 先改IP+reload，然后设MAC（reload后MAC会被重置）
+# 彻底废弃3分钟IP恢复watchdog，永久保持唯一IP和MAC，守护进程无限重试
+# ============================================================================
 _agent_prepare() {
     local my_ip prefix new_ip i
 
+    # ── 步骤1：分配唯一IP，然后 network reload ────────────────────────────
     my_ip=$(ip -4 addr show dev br-lan 2>/dev/null \
         | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
     [ -z "$my_ip" ] && { log "agent_prepare: br-lan has no IP"; return 1; }
@@ -83,6 +88,7 @@ _agent_prepare() {
             uci set system.@system[0].hostname="OpenWrt-Agent-$(echo "$new_ip" | cut -d. -f4)"
             uci commit system
             /etc/init.d/network reload
+            # 等待新IP生效（最多15秒）
             local _w=0
             while [ $_w -lt 15 ]; do
                 my_ip=$(ip -4 addr show dev br-lan 2>/dev/null \
@@ -96,11 +102,14 @@ _agent_prepare() {
         log "agent_prepare: IP=%s (not .1), skipping IP change" "$my_ip"
     fi
 
-    # ── 步骤2：设置唯一MAC ────────────────
+    # ── 步骤2：设置唯一MAC（必须在 network reload 之后！）────────────────
+    # network reload 会重置 br-lan MAC 为默认值
+    # 因此 MAC 修改必须放在所有 network reload 之后
     local saved_mac
     saved_mac=$(uci -q get easymesh.global.agent_br_mac 2>/dev/null)
 
     if [ -z "$saved_mac" ]; then
+        # 用硬件序列号派生确定性 MAC，保证重启后相同
         local seed
         seed=$(cat /sys/bus/soc/devices/soc0/serial_number 2>/dev/null)
         [ -z "$seed" ] && seed=$(grep -i "serial" /proc/cpuinfo 2>/dev/null | awk '{print $NF}' | head -1)
@@ -109,6 +118,7 @@ _agent_prepare() {
         [ -z "$seed" ] && seed="$(date +%s%N 2>/dev/null || date +%s)$$"
         local mac_raw
         mac_raw=$(printf '%s' "$seed" | md5sum | cut -c1-12)
+        # bit0=0(unicast), bit1=1(locally administered)
         local b1; b1=$(printf "%02x" $(( (0x${mac_raw:0:2} & 0xFE) | 0x02 )))
         saved_mac="${b1}:${mac_raw:2:2}:${mac_raw:4:2}:${mac_raw:6:2}:${mac_raw:8:2}:${mac_raw:10:2}"
         uci set easymesh.global.agent_br_mac="$saved_mac"
@@ -118,6 +128,7 @@ _agent_prepare() {
         log "agent_prepare: using saved MAC=%s" "$saved_mac"
     fi
 
+    # 尝试通过 UCI device section 持久化（network reload 后自动生效）
     local dev_name dev_sec=""
     while IFS= read -r line; do
         case "$line" in
@@ -135,6 +146,7 @@ _agent_prepare() {
         fi
     done < <(uci show network 2>/dev/null)
 
+    # 立即设置（当前 network reload 已完成）
     local old_mac; old_mac=$(cat /sys/class/net/br-lan/address 2>/dev/null)
     if ip link set dev br-lan address "$saved_mac" 2>/dev/null; then
         log "agent_prepare: br-lan MAC %s -> %s" "$old_mac" "$saved_mac"
@@ -202,6 +214,10 @@ apply_mesh_config() {
     fi
     uci set wireless.mesh0.disabled=$([ "$backhaul" = "wired" ] && echo '1' || echo '0')
 
+    # ── DHCP server 策略 ──────────────────────────────────────────────────────
+    # 有线直连：两台路由器 br-lan 各自独立，agent 必须保留自己的 DHCP
+    #           否则下挂客户端拿不到 IP（两台路由器 br-lan 之间不是同一个二层域）
+    # 无线 mesh：bat0 把所有节点联成同一个二层域，agent 关 DHCP 由 master 统一服务
     if [ "$role" = "master" ]; then
         uci -q del dhcp.lan.ignore
         log "Role: master — DHCP enabled"
@@ -261,8 +277,44 @@ start_service() {
 
     apply_mesh_config
 
+    # ── agent 有线回程：启动守护进程之前先修好 IP ────────────────────────────
+    # 必须在这里做，守护进程里改 IP 后 dnsmasq 不会自动重绑新 IP
+    # 在这里改 → network reload → dnsmasq 重启 → 自动用新 IP 服务 DHCP
     if [ "$role" = "agent" ] && [ "$backhaul" = "wired" ]; then
+        # 正确顺序：先改IP(network reload)，再设MAC(reload后不会被重置)
         _agent_prepare
+    fi
+
+    # ── 开放防火墙端口（iptables + nftables 双支持）────────────────────────
+    # 主路由器默认防火墙可能 DROP 来自 br-lan 的 TCP 4304
+    # 必须显式放行，否则 ping 通但 HTTP 不通
+    _open_firewall_ports() {
+        # 兼容 fw3(iptables) 和 fw4(nftables)
+        if command -v iptables >/dev/null 2>&1; then
+            iptables -C INPUT -i br-lan -p tcp --dport 4304 -j ACCEPT 2>/dev/null                 || iptables -I INPUT -i br-lan -p tcp --dport 4304 -j ACCEPT 2>/dev/null
+            iptables -C INPUT -i br-lan -p udp --dport 4305 -j ACCEPT 2>/dev/null                 || iptables -I INPUT -i br-lan -p udp --dport 4305 -j ACCEPT 2>/dev/null
+            log "Firewall: opened TCP/UDP 4304/4305 via iptables"
+        fi
+        if command -v nft >/dev/null 2>&1; then
+            nft add rule inet fw4 input iifname br-lan tcp dport 4304 accept 2>/dev/null || true
+            nft add rule inet fw4 input iifname br-lan udp dport 4305 accept 2>/dev/null || true
+            log "Firewall: opened TCP/UDP 4304/4305 via nft"
+        fi
+    }
+    _open_firewall_ports
+
+    # ── 等待 br-lan IP 就绪（最多 20 秒）────────────────────────────────────
+    # 防止守护进程在 network reload 后 br-lan 还没有 IP 时启动
+    local _lip _lw=0
+    while [ $_lw -lt 20 ]; do
+        _lip=$(ip -4 addr show dev br-lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
+        [ -n "$_lip" ] && break
+        sleep 1; _lw=$((_lw+1))
+    done
+    if [ -z "$_lip" ]; then
+        log "WARN: br-lan has no IP after 20s, starting daemon anyway"
+    else
+        log "br-lan IP ready: %s" "$_lip"
     fi
 
     ( sleep 2; wifi reload ) &
