@@ -10,12 +10,19 @@ SEEN_TIME=${SEEN:-0}
 [ "$SEEN_TIME" -ge 2 ] && [ "$SEEN_TIME" -le 10 ] || exit 0
 
 enabled=$(uci -q get easymesh.global.enabled)
-[ "$enabled" = "1" ] && exit 0
+if [ "$enabled" = "1" -a -f /tmp/easymesh_agent_ip ]; then
+    original_ip=$(cat /tmp/easymesh_agent_ip)
+    uci set network.lan.ipaddr="$original_ip"
+    uci commit network
 
-uci set easymesh.global.role='agent'
-uci set easymesh.global.enabled='1'
-uci commit easymesh
-( sleep 1; /etc/init.d/easymesh restart ) &
+    /etc/init.d/network reload
+    sleep 2
+else
+    uci set easymesh.global.role='agent'
+    uci set easymesh.global.enabled='1'
+    uci commit easymesh
+    ( sleep 1; /etc/init.d/easymesh restart ) &
+fi
 
 (
     RED_LED=""
