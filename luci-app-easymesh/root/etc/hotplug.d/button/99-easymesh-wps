@@ -9,14 +9,23 @@ esac
 SEEN_TIME=${SEEN:-0}
 [ "$SEEN_TIME" -ge 2 ] && [ "$SEEN_TIME" -le 10 ] || exit 0
 
+role=$(uci get easymesh.global.role)
 enabled=$(uci -q get easymesh.global.enabled)
-if [ "$enabled" = "1" -a -f /tmp/easymesh_agent_ip ]; then
-    original_ip=$(cat /tmp/easymesh_agent_ip)
-    uci set network.lan.ipaddr="$original_ip"
-    uci commit network
+if [ "${enabled:-0}" = "1" ] && [ "${role:-}" = "agent" ] && [ -f /etc/easymesh_agent ]; then
+    original_ip=$(sed -n 's/^ipaddr=//p' /etc/easymesh_agent)
+    original_hostname=$(sed -n 's/^hostname=//p' /etc/easymesh_agent)
+    if [ -n "$original_hostname" ]; then
+        uci set system.@system[0].hostname="$original_hostname"
+        uci commit system
+    fi
+    if [ -n "$original_ip" ]; then
+        uci set network.lan.ipaddr="$original_ip"
+        uci commit network
+        /etc/init.d/network reload &
+        sleep 3
+    fi
 
-    /etc/init.d/network reload
-    sleep 2
+    rm -f /etc/easymesh_agent
 else
     uci set easymesh.global.role='agent'
     uci set easymesh.global.enabled='1'

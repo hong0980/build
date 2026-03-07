@@ -13,17 +13,10 @@ export PENDING_DB="/tmp/easymesh_pending"
 export EM_PID_DIR="/tmp/easymesh_pids"
 
 # -- Constants --
-
-# 检测是否为 DSA 硬件（特征：存在 lanX@ethY 格式的接口）
 _is_dsa() {
     ip link show 2>/dev/null | grep -qE 'lan[0-9]+@eth'
 }
 
-# 获取 batman-adv hardif 用的接口
-# DSA 硬件：返回 eth0（DSA parent），不返回任何 lanX 子口
-#   原因：lanX 是逻辑分口，从 br-lan 摘出会立刻断网
-#         eth0 是底层物理接口，加入 bat0 不影响 lanX 正常工作
-# 非 DSA：返回第一个 LAN 口（传统做法）
 _get_eth_if() {
     if _is_dsa; then
         local _parent
@@ -81,8 +74,6 @@ HTTP_TIMEOUT=5
 
 lang=$(uci_get luci main lang en)
 
-# translate: 单条翻译，调用 lua/luci.i18n
-# 结果用 printf 格式展开（如有 %s 参数）
 translate() {
     local tpl="$1"; shift
     local translated
@@ -95,11 +86,7 @@ translate() {
 # 用于把翻译结果存入变量再格式化
 _t() { translate "$1"; }
 
-# _dbg_init: 在主进程中把常用 _dbg 字符串预翻译并 export
-# socat fork 的子进程继承这些变量，_dbg 直接查表，不需要调用 lua
 _dbg_init() {
-    # 格式：export _DT_<安全key>=<翻译后字符串>
-    # key = 原始字符串去掉非字母数字后截断40字符
     _dbg_export() {
         local raw="$1"
         local key; key=$(printf '%s' "$raw" | tr -cd 'a-zA-Z0-9' | cut -c1-40)
@@ -121,8 +108,6 @@ _dbg_init() {
     _dbg_export "__handle_hello: WELCOME sent"
 }
 
-# _dbg: 调试日志，先查预翻译表再 fallback 到原文
-# 格式支持：_dbg "模板 %s" "$var"
 _dbg() {
     local tpl="$1"; shift
     local ts msg translated
@@ -161,16 +146,6 @@ logh() { _emlog "INFO"  "heal"  "$(translate "$@")"; }
 logw() { _emlog "WARN"  "core"  "$(translate "$@")"; }
 loge() { _emlog "ERROR" "core"  "$(translate "$@")"; }
 
-# 调试日志：直接写文件，不经过 translate（socat 子进程里 lua 可能不可用）
-# 调试日志：轻量无翻译，可在 socat 子进程中安全使用
-# 支持 printf 格式：_dbg "msg %s" "$var"
-_dbg() {
-    local ts msg
-    ts=$(date "+%Y-%m-%d %H:%M:%S")
-    msg=$(printf "$@" 2>/dev/null || printf '%s' "$*")
-    printf "%s [DEBUG] [dbg     ] %s\n" "$ts" "$msg" >> "${LOGFILE:-/tmp/easymesh.log}"
-}
-
 # -- Basic helpers --
 get_mac()  { cat /sys/class/net/${BRIDGE_IF}/address 2>/dev/null || cat /sys/class/net/${ETH_IF}/address 2>/dev/null; }
 get_ip()   { ip -4 addr show dev "$BRIDGE_IF" 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1; }
@@ -190,7 +165,6 @@ do_http_post() {
     local url="$1" data="$2"
     local retry=0 wait_time resp
     while [ "$retry" -lt "$HTTP_MAX_RETRIES" ]; do
-        # curl 比 BusyBox wget 更可靠：HTTP/1.1, 正确处理 socat/uhttpd 响应
         if command -v curl >/dev/null 2>&1; then
             resp=$(curl -s -m "$HTTP_TIMEOUT" \
                 -H "Content-Type: application/json" \
@@ -357,17 +331,11 @@ tune_batman() {
 ########################################
 # 4. BATMAN-ADV RUNTIME SETUP
 ########################################
-# 核心原则（避免断网）：
-#   DSA 硬件（lanX@eth0）：用 eth0 作为 batman-adv hardif
-#     eth0 是底层物理接口，加入 bat0 不影响 lanX 在 br-lan 里的工作
-#     绝不摘出任何 lanX！摘出 lanX 会立刻断网！
-#   非 DSA 硬件：仅当有专用回程口时才摘出，否则也不摘
 setup_wired_backhaul() {
     local role; role=$(get_role)
     log "DBG backhaul: ETH_IF=%s DSA=%s MESH_IF=%s role=%s" \
         "$ETH_IF" "$(_is_dsa && echo yes || echo no)" "$MESH_IF" "$role"
 
-    # -- 1. 加载模块，确保 bat0 存在 --
     if ! ip link show "$MESH_IF" >/dev/null 2>&1; then
         modprobe batman-adv 2>/dev/null || true
         sleep 1
@@ -392,13 +360,8 @@ setup_wired_backhaul() {
     # -- 2. 有线 hardif --
     if [ "$backhaul" = "wired" ] || [ "$backhaul" = "auto" ]; then
         if _is_dsa; then
-            # DSA 硬件：eth0 是 switch CPU port，MTU=1504，batman-adv 不接受
-            # LAN-LAN 有线直连时不需要 batman-adv hardif
-            # bat0 加入 br-lan 后，OGM 广播通过 br-lan 里的 lanX 物理口自然传播
             log "DBG backhaul: DSA hw, skipping batman-adv hardif (LAN-LAN direct bridge)"
         else
-            # 非 DSA：同样不摘 LAN 口，依靠 br-lan 二层互通即可
-            # 除非 UCI 明确配了 backhaul_port（用户指定的专用回程口）
             local bport; bport=$(uci_get easymesh global backhaul_port '')
             if [ -n "$bport" ] && ip link show "$bport" >/dev/null 2>&1; then
                 if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -qw "$bport"; then
@@ -434,10 +397,6 @@ setup_wired_backhaul() {
     fi
 
     # -- 4. bat0 加入 br-lan（仅无线回程需要）--
-    # 有线回程时绝对不能把 bat0 加入 br-lan！
-    # 原因：batman-adv BLA（Bridge Loop Avoidance）会检测到两台路由器的
-    # bat0 在同一个 L2 domain 里，误判为 bridge loop，主动 DROP ARP 广播！
-    # 结果：两台路由器之间 ARP 完全不通，ping/TCP 全部失败。
     local _backhaul_mode; _backhaul_mode=$(uci_get easymesh global backhaul 'wired')
     if [ "$_backhaul_mode" = "wired" ]; then
         # 有线回程：确保 bat0 不在 br-lan 里（防止 BLA 干扰）
@@ -519,8 +478,6 @@ discovery_server() {
         EXEC:"/usr/sbin/easymesh-master __handle_hello" 2>/dev/null &
 }
 
-# __handle_hello: socat fork 的子进程，每收到一个 UDP 包调用一次
-# stdin = UDP 包内容，不使用 stdout（回包用独立 socat 单播）
 __handle_hello() {
     # -- 防御性变量补全 --
     [ -z "$NODE_DB"         ] && NODE_DB="/tmp/easymesh_nodes"
@@ -554,9 +511,6 @@ __handle_hello() {
         return 0
     fi
 
-    # FIX2: 原代码 [ -z "$mac" ] || [ -z "$ip" ] && return 0
-    # shell 优先级 bug：&& 高于 ||，只有 ip 为空才退出，mac 为空不退出
-    # 正确写法：用 if 语句明确逻辑
     if [ -z "$mac" ] || [ -z "$agent_ip" ]; then
         _dbg "__handle_hello: missing fields mac=[$mac] agent_ip=[$agent_ip]"
         return 0
@@ -595,7 +549,6 @@ __handle_hello() {
     myip=$(ip -4 addr show dev "${BRIDGE_IF}" 2>/dev/null \
         | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
 
-    # ✅ 【修复】如果 br-lan 没 IP，重试几次
     while [ -z "$myip" ] && [ $retry_ip -lt 3 ]; do
         _dbg "__handle_hello: br-lan has no IP yet, waiting (retry $retry_ip/3)..."
         sleep 1
@@ -769,8 +722,6 @@ __http_handler() {
     esac
 }
 
-# socat 每个连接调用一次本函数（stdin=TCP流，stdout=TCP流）
-# 解析 HTTP 请求行 + headers，设置环境变量，调用 __http_handler
 __socat_http() {
     # -- 读取请求行 --
     local req_line
@@ -1132,7 +1083,6 @@ generate_profile() {
     channel=$(uci get "${radio_dev}.channel" 2>/dev/null || echo 'auto')
     local new_profile
     new_profile=$(printf '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211k":"1","ieee80211v":"1","backhaul":"wired"}'         "$ssid" "$key" "$channel" "$mesh_id" "$mesh_key" "$routing_algo")
-    # 只在 profile 内容变化时写文件并记录日志（避免每 10 秒刷日志）
     local old_profile; old_profile=$(cat "$PROFILE_FILE" 2>/dev/null | tr -d '\n')
     if [ "$new_profile" != "$old_profile" ]; then
         printf '%s\n' "$new_profile" > "$PROFILE_FILE"
@@ -1551,7 +1501,6 @@ _handle_approval_signal() {
 main_loop() {
     _dbg_init   # 预翻译 _dbg 字符串，export 给 socat 子进程
     _stop_jobs
-    # FIX8: main_loop 开始时就创建 PENDING_DB，原来没创建导致目录不存在
     mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR"
     echo $$ > "${EM_PID_DIR}/easymesh_$(get_role).pid"
 
@@ -1560,8 +1509,12 @@ main_loop() {
       log "EasyMesh daemon starting (pid=%s)" "$$"
       log "================================================"; }
 
-    [ "$(get_role)" = "master" -a ! -f /tmp/easymesh_agent_ip ] && \
-        echo $(uci get network.lan.ipaddr) > /tmp/easymesh_agent_ip
+    [ "$(get_role)" = "agent" -a ! -f /etc/easymesh_agent ] && {
+        local ipaddr; ipaddr=$(uci_get network lan ipaddr '192.168.1.1')
+        local hostname; hostname=$(uci_get system @system[0] hostname openwrt)
+        echo  "ipaddr=$ipaddr" > /etc/easymesh_agent
+        echo  "hostname=$hostname" >> /etc/easymesh_agent
+    }
     local hw_type="dual-band"
     local count5g; count5g=$(uci show wireless 2>/dev/null \
         | awk -F= '/=wifi-device/{dev=$1} dev && /\.band=/{gsub(/.*=/,""); if(/^5g|^5GHz/) n++} END{print n+0}')
@@ -1615,8 +1568,6 @@ main_loop() {
             manage_wireless_onboard
         else
             if [ "$_registered" = "0" ]; then
-                # find_master 若找到则同步返回 0，否则启动后台扫描返回 1
-                # 无论如何都尝试 do_register（可能后台扫描已写入 MASTER_IP_FILE）
                 if find_master; then
                     do_register && _registered=1
                 elif [ -f "$MASTER_IP_FILE" ]; then
