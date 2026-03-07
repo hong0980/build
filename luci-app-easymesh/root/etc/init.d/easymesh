@@ -66,7 +66,6 @@ cleanup_wireless() {
 _agent_prepare() {
     local my_ip prefix new_ip i
 
-    # ── 步骤1：分配唯一IP，然后 network reload ────────────────────────────
     my_ip=$(ip -4 addr show dev br-lan 2>/dev/null \
         | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
     [ -z "$my_ip" ] && { log "agent_prepare: br-lan has no IP"; return 1; }
@@ -102,64 +101,8 @@ _agent_prepare() {
         log "agent_prepare: IP=%s (not .1), skipping IP change" "$my_ip"
     fi
 
-    # ── 步骤2：设置唯一MAC（必须在 network reload 之后！）────────────────
-    # network reload 会重置 br-lan MAC 为默认值
-    # 因此 MAC 修改必须放在所有 network reload 之后
-    local saved_mac
-    saved_mac=$(uci -q get easymesh.global.agent_br_mac 2>/dev/null)
-
-    if [ -z "$saved_mac" ]; then
-        # 用硬件序列号派生确定性 MAC，保证重启后相同
-        local seed
-        seed=$(cat /sys/bus/soc/devices/soc0/serial_number 2>/dev/null)
-        [ -z "$seed" ] && seed=$(grep -i "serial" /proc/cpuinfo 2>/dev/null | awk '{print $NF}' | head -1)
-        [ -z "$seed" ] && seed=$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')
-        [ -z "$seed" ] && seed=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null | tr -d '-')
-        [ -z "$seed" ] && seed="$(date +%s%N 2>/dev/null || date +%s)$$"
-        local mac_raw
-        mac_raw=$(printf '%s' "$seed" | md5sum | cut -c1-12)
-        # bit0=0(unicast), bit1=1(locally administered)
-        local b1; b1=$(printf "%02x" $(( (0x${mac_raw:0:2} & 0xFE) | 0x02 )))
-        saved_mac="${b1}:${mac_raw:2:2}:${mac_raw:4:2}:${mac_raw:6:2}:${mac_raw:8:2}:${mac_raw:10:2}"
-        uci set easymesh.global.agent_br_mac="$saved_mac"
-        uci commit easymesh
-        log "agent_prepare: generated unique MAC=%s" "$saved_mac"
-    else
-        log "agent_prepare: using saved MAC=%s" "$saved_mac"
-    fi
-
-    # 尝试通过 UCI device section 持久化（network reload 后自动生效）
-    local dev_name dev_sec=""
-    while IFS= read -r line; do
-        case "$line" in
-            network.*=device) dev_sec="${line%%=*}" ;;
-        esac
-        if [ -n "$dev_sec" ]; then
-            local dname; dname=$(uci -q get "${dev_sec}.name" 2>/dev/null)
-            if [ "$dname" = "br-lan" ]; then
-                uci set "${dev_sec}.macaddr=${saved_mac}"
-                uci commit network
-                log "agent_prepare: MAC persisted via %s.macaddr" "$dev_sec"
-                break
-            fi
-            dev_sec=""
-        fi
-    done < <(uci show network 2>/dev/null)
-
-    # 立即设置（当前 network reload 已完成）
-    local old_mac; old_mac=$(cat /sys/class/net/br-lan/address 2>/dev/null)
-    if ip link set dev br-lan address "$saved_mac" 2>/dev/null; then
-        log "agent_prepare: br-lan MAC %s -> %s" "$old_mac" "$saved_mac"
-    else
-        loge "agent_prepare: ip link set failed, trying via bridge"
-        ip link set dev br-lan down 2>/dev/null
-        ip link set dev br-lan address "$saved_mac" 2>/dev/null
-        ip link set dev br-lan up 2>/dev/null
-    fi
-
-    log "agent_prepare: done. IP=%s MAC=%s" \
-        "$(ip -4 addr show dev br-lan 2>/dev/null | awk '/inet /{print $2}' | head -1)" \
-        "$(cat /sys/class/net/br-lan/address 2>/dev/null)"
+    log "agent_prepare: done. IP=%s" \
+        "$(ip -4 addr show dev br-lan 2>/dev/null | awk '/inet /{print $2}' | head -1)"
 }
 
 # ── 配置 UCI wireless + dummy network.mesh section ───────────────────────────
@@ -281,7 +224,6 @@ start_service() {
     # 必须在这里做，守护进程里改 IP 后 dnsmasq 不会自动重绑新 IP
     # 在这里改 → network reload → dnsmasq 重启 → 自动用新 IP 服务 DHCP
     if [ "$role" = "agent" ] && [ "$backhaul" = "wired" ]; then
-        # 正确顺序：先改IP(network reload)，再设MAC(reload后不会被重置)
         _agent_prepare
     fi
 

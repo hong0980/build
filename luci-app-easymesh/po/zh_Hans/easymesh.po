@@ -460,23 +460,14 @@ msgstr "agent_prepare: br-lan IP 已更新为 %s"
 msgid "agent_prepare: IP=%s (not .1), skipping IP change"
 msgstr "agent_prepare: IP=%s（非 .1），跳过 IP 更改"
 
-msgid "agent_prepare: generated unique MAC=%s"
-msgstr "agent_prepare: 已生成唯一 MAC=%s"
-
-msgid "agent_prepare: using saved MAC=%s"
-msgstr "agent_prepare: 使用已保存的 MAC=%s"
-
-msgid "agent_prepare: MAC persisted via %s.macaddr"
-msgstr "agent_prepare: MAC 已通过 %s.macaddr 持久化"
-
 msgid "agent_prepare: br-lan MAC %s -> %s"
 msgstr "agent_prepare: br-lan MAC %s → %s"
 
 msgid "agent_prepare: ip link set failed, trying via bridge"
 msgstr "agent_prepare: ip link set 失败，尝试通过 bridge 设置"
 
-msgid "agent_prepare: done. IP=%s MAC=%s"
-msgstr "agent_prepare: 完成。IP=%s MAC=%s"
+msgid "agent_prepare: done. IP=%s"
+msgstr "agent_prepare: 完成。IP=%s"
 
 msgid "apply_mesh_config: role=%s backhaul=%s radio=%s"
 msgstr "apply_mesh_config: 角色=%s 回程=%s 无线电=%s"

@@ -124,9 +124,8 @@ _dbg() {
 _emlog() {
     local level="$1" tag="$2"; shift 2
     local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
-    # flock 防止多进程并发写入导致日志行粘连
     (
-        flock -w 1 200
+        flock 200
         printf "%s [%-5s] [%-8s] %s\n" "$ts" "$level" "$tag" "$*" >> "$LOGFILE"
         _log_seq=$(( _log_seq + 1 ))
         if [ $(( _log_seq % 50 )) -eq 0 ]; then
