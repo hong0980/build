@@ -56,7 +56,7 @@ export BRIDGE_IF
 AP_IF="wlan0"
 MESH_IF="bat0"
 export MESH_IF
-LOG_MAX_LINES=500
+LOG_MAX_LINES=300
 _log_seq=0
 export MASTER_PORT=4304
 export DISC_PORT=4305
@@ -139,15 +139,19 @@ _dbg() {
 _emlog() {
     local level="$1" tag="$2"; shift 2
     local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
-    _log_seq=$(( _log_seq + 1 ))
-    printf "%s [%-5s] [%-8s] %s\n" "$ts" "$level" "$tag" "$*" >> "$LOGFILE"
-    if [ $(( _log_seq % 50 )) -eq 0 ]; then
-        local lc; lc=$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)
-        if [ "$lc" -gt "$LOG_MAX_LINES" ]; then
-            local keep=$(( LOG_MAX_LINES * 4 / 5 ))
-            tail -n "$keep" "$LOGFILE" > "${LOGFILE}.tmp" && mv "${LOGFILE}.tmp" "$LOGFILE"
+    # flock 防止多进程并发写入导致日志行粘连
+    (
+        flock -w 1 200
+        printf "%s [%-5s] [%-8s] %s\n" "$ts" "$level" "$tag" "$*" >> "$LOGFILE"
+        _log_seq=$(( _log_seq + 1 ))
+        if [ $(( _log_seq % 50 )) -eq 0 ]; then
+            local lc; lc=$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)
+            if [ "$lc" -gt "$LOG_MAX_LINES" ]; then
+                local keep=$(( LOG_MAX_LINES * 4 / 5 ))
+                tail -n "$keep" "$LOGFILE" > "${LOGFILE}.tmp" && mv "${LOGFILE}.tmp" "$LOGFILE"
+            fi
         fi
-    fi
+    ) 200>>"${LOGFILE}.lock"
 }
 
 log()  { _emlog "INFO"  "core"  "$(translate "$@")"; }
@@ -320,20 +324,33 @@ tune_batman() {
     batctl meshif "$MESH_IF" orig_interval "$BATMAN_OGM_INTERVAL" 2>/dev/null
     batctl meshif "$MESH_IF" hop_penalty   "$BATMAN_HOP_PENALTY"  2>/dev/null
     local _bmode; _bmode=$(uci_get easymesh global backhaul 'wired')
-    if [ "$_bmode" = "wired" ]; then
-        # 有线回程：禁用 BLA 和 DAT
-        # BLA 在 LAN 直连时误判 bridge loop，会 DROP ARP 导致二层不通
-        # DAT 在没有 hardif 时拦截 ARP 但无法查询，同样导致 ARP 失败
-        echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null || true
-        echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null || true
-        log "batman-adv: BLA=off DAT=off (wired mode)"
-    fi
-    if [ "$(get_role)" = "master" ]; then
-        batctl meshif "$MESH_IF" gw_mode server 2>/dev/null
-        log "batman-adv: GW mode=server, OGM=%sms" "$BATMAN_OGM_INTERVAL"
+    local _role; _role=$(get_role)
+    # 只在状态真正改变时才写日志（避免每 30s 刷屏）
+    local _state_key="${_bmode}:${_role}"
+    local _last; _last=$(cat /tmp/easymesh_batman_state 2>/dev/null)
+    if [ "$_state_key" != "$_last" ]; then
+        if [ "$_bmode" = "wired" ]; then
+            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null || true
+            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null || true
+            log "batman-adv: BLA=off DAT=off (wired mode)"
+        fi
+        if [ "$_role" = "master" ]; then
+            batctl meshif "$MESH_IF" gw_mode server 2>/dev/null
+            log "batman-adv: GW mode=server, OGM=%sms" "$BATMAN_OGM_INTERVAL"
+        else
+            batctl meshif "$MESH_IF" gw_mode "$BATMAN_GW_MODE" 2>/dev/null
+            log "batman-adv: GW 模式=%s，OGM=%sms" "$BATMAN_GW_MODE" "$BATMAN_OGM_INTERVAL"
+        fi
+        printf '%s' "$_state_key" > /tmp/easymesh_batman_state
     else
-        batctl meshif "$MESH_IF" gw_mode "$BATMAN_GW_MODE" 2>/dev/null
-        log "batman-adv: GW mode=%s, OGM=%sms" "$BATMAN_GW_MODE" "$BATMAN_OGM_INTERVAL"
+        # 静默执行，不打日志
+        [ "$_bmode" = "wired" ] && {
+            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null || true
+            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null || true
+        }
+        [ "$_role" = "master" ] \
+            && batctl meshif "$MESH_IF" gw_mode server 2>/dev/null \
+            || batctl meshif "$MESH_IF" gw_mode "$BATMAN_GW_MODE" 2>/dev/null
     fi
 }
 
@@ -1231,12 +1248,19 @@ sync_neighbor_list() {
         nb_json=$(awk '{printf "{\"bssid\":\"%s\",\"op\":%s,\"chan\":%s},", $1,$2,$3}' \
             "$NEIGHBOR_FILE" | sed 's/,$//')
         local payload="{\"ssid\":\"$ssid\",\"neighbors\":[$nb_json],\"my_bssid\":\"$my_bssid\"}"
-        for f in "$NODE_DB"/*.json; do
-            [ -f "$f" ] || continue
-            local peer_ip; peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
-            [ -z "$peer_ip" ] && continue
-            do_http_post "http://${peer_ip}:${MASTER_PORT}/roam/neighbors" "$payload" >/dev/null 2>&1 &
-        done
+        # 只在 payload 变化时才推送，避免每 10s 对离线 agent 产生大量 ERROR
+        local _nb_hash; _nb_hash=$(printf '%s' "$payload" | md5sum | cut -c1-8)
+        local _nb_last; _nb_last=$(cat /tmp/easymesh_nb_hash 2>/dev/null)
+        if [ "$_nb_hash" != "$_nb_last" ]; then
+            printf '%s' "$_nb_hash" > /tmp/easymesh_nb_hash
+            for f in "$NODE_DB"/*.json; do
+                [ -f "$f" ] || continue
+                local peer_ip; peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
+                [ -z "$peer_ip" ] && continue
+                # 静默推送：不经 do_http_post，不产生重试日志
+                ( curl -s -m 5 -X POST -H "Content-Type: application/json"                     -d "$payload" "http://${peer_ip}:${MASTER_PORT}/roam/neighbors"                     >/dev/null 2>&1 ) &
+            done
+        fi
     fi
 }
 
@@ -1249,7 +1273,8 @@ apply_neighbor_list() {
         [ -n "$bssid" ] && hostapd_cli -i "$ap_iface" \
             set_neighbor "$bssid" ssid="\"$ssid\"" >/dev/null 2>&1
     done
-    logr "Neighbor list applied: %s APs" "$(echo "$body" | grep -c '"bssid"')"
+    local _nb_count; _nb_count=$(echo "$body" | grep -c '"bssid"')
+    [ "$_nb_count" -gt 0 ] && logr "Neighbor list applied: %s APs" "$_nb_count"
 }
 
 roam_watchdog() {
