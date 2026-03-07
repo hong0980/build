@@ -80,17 +80,60 @@ HTTP_MAX_RETRIES=3
 HTTP_TIMEOUT=5
 
 lang=$(uci_get luci main lang en)
+
+# translate: 单条翻译，调用 lua/luci.i18n
+# 结果用 printf 格式展开（如有 %s 参数）
 translate() {
     local tpl="$1"; shift
-    local lua_script translated
-    lua_script="require \"luci.i18n\".setlanguage(\"${lang}\"); print(require \"luci.i18n\".translate([==[${tpl}]==]))"
-    translated=$(lua -e "$lua_script" 2>/dev/null)
+    local translated
+    translated=$(lua -e "require \"luci.i18n\".setlanguage(\"${lang}\"); print(require \"luci.i18n\".translate([==[${tpl}]==]))" 2>/dev/null)
     [ -z "$translated" ] && translated="$tpl"
-    if [ $# -gt 0 ]; then
-        printf "$translated" "$@"
-    else
-        printf '%s' "$translated"
-    fi
+    [ $# -gt 0 ] && printf "$translated" "$@" || printf '%s' "$translated"
+}
+
+# _t: 只翻译不格式化，返回翻译后的模板字符串
+# 用于把翻译结果存入变量再格式化
+_t() { translate "$1"; }
+
+# _dbg_init: 在主进程中把常用 _dbg 字符串预翻译并 export
+# socat fork 的子进程继承这些变量，_dbg 直接查表，不需要调用 lua
+_dbg_init() {
+    # 格式：export _DT_<安全key>=<翻译后字符串>
+    # key = 原始字符串去掉非字母数字后截断40字符
+    _dbg_export() {
+        local raw="$1"
+        local key; key=$(printf '%s' "$raw" | tr -cd 'a-zA-Z0-9' | cut -c1-40)
+        local val; val=$(translate "$raw")
+        export "_DT_${key}=${val}"
+    }
+    _dbg_export "__handle_hello invoked"
+    _dbg_export "__handle_hello: empty or timeout"
+    _dbg_export "__handle_hello: unknown cmd"
+    _dbg_export "__handle_hello: missing fields"
+    _dbg_export "__handle_hello: invalid MAC format"
+    _dbg_export "__handle_hello: valid HELLO"
+    _dbg_export "__handle_hello: updated approved node"
+    _dbg_export "__handle_hello: wrote pending"
+    _dbg_export "__handle_hello: br-lan has no IP"
+    _dbg_export "__handle_hello: br-lan no IP, trying route"
+    _dbg_export "__handle_hello: ERROR cannot determine IP"
+    _dbg_export "__handle_hello: sending WELCOME"
+    _dbg_export "__handle_hello: WELCOME sent"
+}
+
+# _dbg: 调试日志，先查预翻译表再 fallback 到原文
+# 格式支持：_dbg "模板 %s" "$var"
+_dbg() {
+    local tpl="$1"; shift
+    local ts msg translated
+    ts=$(date "+%Y-%m-%d %H:%M:%S")
+    # 查预翻译表
+    local key; key=$(printf '%s' "$tpl" | tr -cd 'a-zA-Z0-9' | cut -c1-40)
+    local varname="_DT_${key}"
+    eval "translated=\${${varname}:-}"
+    [ -z "$translated" ] && translated="$tpl"
+    msg=$(printf "$translated" "$@" 2>/dev/null || printf '%s' "$translated $*")
+    printf "%s [DEBUG] [dbg     ] %s\n" "$ts" "$msg" >> "${LOGFILE:-/tmp/easymesh.log}"
 }
 
 _emlog() {
@@ -115,9 +158,13 @@ logw() { _emlog "WARN"  "core"  "$(translate "$@")"; }
 loge() { _emlog "ERROR" "core"  "$(translate "$@")"; }
 
 # 调试日志：直接写文件，不经过 translate（socat 子进程里 lua 可能不可用）
+# 调试日志：轻量无翻译，可在 socat 子进程中安全使用
+# 支持 printf 格式：_dbg "msg %s" "$var"
 _dbg() {
-    local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
-    printf "%s [DEBUG] [dbg     ] %s\n" "$ts" "$*" >> "${LOGFILE:-/tmp/easymesh.log}"
+    local ts msg
+    ts=$(date "+%Y-%m-%d %H:%M:%S")
+    msg=$(printf "$@" 2>/dev/null || printf '%s' "$*")
+    printf "%s [DEBUG] [dbg     ] %s\n" "$ts" "$msg" >> "${LOGFILE:-/tmp/easymesh.log}"
 }
 
 # -- Basic helpers --
@@ -155,22 +202,12 @@ do_http_post() {
         if [ -n "$resp" ]; then echo "$resp"; return 0; fi
         retry=$(( retry + 1 ))
         [ "$retry" -ge "$HTTP_MAX_RETRIES" ] && break
-        case "$retry" in 1) wait_time=2;; 2) wait_time=4;; *) wait_time=8;; esac
+        wait_time=$(( retry < 3 ? retry * 2 : 8 ))
         logw "HTTP POST retry %s/%s in %ss: %s" "$retry" "$HTTP_MAX_RETRIES" "$wait_time" "$url"
         sleep "$wait_time"
     done
     loge "HTTP POST failed after %s retries: %s" "$HTTP_MAX_RETRIES" "$url"
     return 1
-}
-
-# HTTP GET（curl 优先于 BusyBox wget）
-_http_get() {
-    local url="$1" timeout="${2:-4}"
-    if command -v curl >/dev/null 2>&1; then
-        curl -s -m "$timeout" "$url" 2>/dev/null
-    else
-        wget -q -T "$timeout" -O- "$url" 2>/dev/null
-    fi
 }
 
 ########################################
@@ -185,8 +222,8 @@ _stop_jobs() {
         if [ -n "$_pid" ]; then
             kill "$_pid" 2>/dev/null || true
             local _i=0
-            while kill -0 "$_pid" 2>/dev/null && [ $_i -lt 3 ]; do
-                sleep 1; _i=$((_i+1))
+            while [ $_i -lt 3 ] && kill -0 "$_pid" 2>/dev/null; do
+                sleep 1; _i=$(( _i + 1 ))
             done
             kill -9 "$_pid" 2>/dev/null || true
         fi
@@ -309,8 +346,9 @@ tune_batman() {
 #     绝不摘出任何 lanX！摘出 lanX 会立刻断网！
 #   非 DSA 硬件：仅当有专用回程口时才摘出，否则也不摘
 setup_wired_backhaul() {
+    local role; role=$(get_role)
     log "DBG backhaul: ETH_IF=%s DSA=%s MESH_IF=%s role=%s" \
-        "$ETH_IF" "$(_is_dsa && echo yes || echo no)" "$MESH_IF" "$(get_role)"
+        "$ETH_IF" "$(_is_dsa && echo yes || echo no)" "$MESH_IF" "$role"
 
     # -- 1. 加载模块，确保 bat0 存在 --
     if ! ip link show "$MESH_IF" >/dev/null 2>&1; then
@@ -568,98 +606,6 @@ __handle_hello() {
     local _ret=$?
     _dbg "__handle_hello: WELCOME sent ret=%s" "$_ret"
 }
-
-# discovery_client: 广播 HELLO，等待 master 回复 WELCOME
-# 返回 0=找到 master，1=超时
-discovery_client() {
-    local mymac myip hostname
-    local retry_count=0 max_retry=60
-
-    mymac=$(cat /sys/class/net/${BRIDGE_IF}/address 2>/dev/null)
-    hostname=$(uci_get system @system[0] hostname "node")
-
-    # ✅ 【修复】等待 DHCP 获得 IP，最多 60 秒
-    log "DBG disc_client: waiting for IP from DHCP (max 60s)..."
-    while [ $retry_count -lt $max_retry ]; do
-        myip=$(get_ip)
-        [ -n "$myip" ] && break
-        sleep 1
-        retry_count=$((retry_count+1))
-    done
-
-    log "DBG disc_client: mymac=%s myip=%s hostname=%s" "$mymac" "$myip" "$hostname"
-
-    if [ -z "$mymac" ] || [ -z "$myip" ]; then
-        loge "DBG disc_client: missing MAC or IP after ${max_retry}s, abort"
-        return 1
-    fi
-
-    # -- 清理残留的 reply 端口监听进程 --
-    local _dp _dc _dpid
-    for _dp in /proc/[0-9]*/cmdline; do
-        [ -f "$_dp" ] || continue
-        _dc=$(tr "\0" " " < "$_dp" 2>/dev/null)
-        case "$_dc" in
-            *socat*"UDP4-LISTEN:${DISC_REPLY_PORT}"*|*uhttpd*"${MASTER_PORT}"*)
-                _dpid="${_dp%/cmdline}"; _dpid="${_dpid##*/}"
-                log "DBG disc_client: killing stale reply listener pid=%s" "$_dpid"
-                kill "$_dpid" 2>/dev/null || true
-                sleep 1
-                ;;
-        esac
-    done
-    sleep 1
-
-    # -- 启动 WELCOME 监听 --
-    local resp_file="/tmp/em_disc_resp_$$"
-    socat -T 45 UDP4-LISTEN:${DISC_REPLY_PORT},reuseaddr \
-        OPEN:"${resp_file}",creat,trunc 2>/dev/null &
-    local listen_pid=$!
-    log "DBG disc_client: reply listener pid=%s on UDP %s" "$listen_pid" "$DISC_REPLY_PORT"
-    sleep 1
-
-    # -- 广播 HELLO，重试 8 次 --
-    local found=0 i=0
-    while [ $i -lt 8 ]; do
-        log "DBG disc_client: HELLO attempt %s/8 -> 255.255.255.255:%s" "$((i+1))" "$DISC_PORT"
-        # bind 到 br-lan IP，防止从 bat0 等接口发出
-        printf 'EASYMESH_HELLO %s %s %s\n' "$mymac" "$myip" "$hostname" | \
-            socat - "UDP-DATAGRAM:255.255.255.255:${DISC_PORT},broadcast,bind=${myip}" 2>/dev/null
-        sleep 5
-        if [ -f "$resp_file" ] && [ -s "$resp_file" ]; then
-            local _content; _content=$(cat "$resp_file" 2>/dev/null)
-            log "DBG disc_client: resp_file content=[%s]" "$_content"
-            if echo "$_content" | grep -q "^EASYMESH_WELCOME"; then
-                local master_ip_got
-                master_ip_got=$(echo "$_content" | awk '/^EASYMESH_WELCOME/{print $2; exit}')
-                if [ -n "$master_ip_got" ]; then
-                    echo "$master_ip_got" > "$MASTER_IP_FILE"
-                    log "Discovery: master found at %s" "$master_ip_got"
-                    found=1
-                    break
-                fi
-            fi
-        else
-            log "DBG disc_client: no WELCOME yet after attempt %s" "$((i+1))"
-        fi
-        i=$((i+1))
-    done
-
-    kill "$listen_pid" 2>/dev/null || true
-    rm -f "$resp_file"
-
-    [ "$found" = "0" ] && log "DBG disc_client: all attempts exhausted, not found"
-    return $((1 - found))
-}
-
-########################################
-# 6. INTER-NODE HTTP SERVER (socat + raw HTTP)
-########################################
-# socat TCP-LISTEN fork 模式：每个连接 fork 一次，调用 __socat_http
-# __socat_http 从 stdin 解析 HTTP 请求，设置环境变量，调用 __http_handler
-# __http_handler 输出 CGI 格式（Content-Type\r\n\r\nbody），
-# __socat_http 把它包装成完整 HTTP/1.0 200 OK 响应
-
 
 _http_ok()  {
     printf "HTTP/1.0 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n%s" "$1"
@@ -973,14 +919,8 @@ register_node() {
     ip=$(       echo "$body" | grep -o '"ip":"[^"]*"'       | cut -d'"' -f4)
     hostname=$( echo "$body" | grep -o '"hostname":"[^"]*"' | cut -d'"' -f4)
 
-    if [ -z "$ip" ]; then
-        loge "register_node: missing ip in body=[%s]" "$body"
-        return 1
-    fi
-    if [ -z "$mac" ]; then
-        loge "register_node: missing mac in body=[%s]" "$body"
-        return 1
-    fi
+    [ -z "$mac" ] && { loge "register_node: missing mac in body=[%s]" "$body"; return 1; }
+    [ -z "$ip"  ] && { loge "register_node: missing ip in body=[%s]"  "$body"; return 1; }
 
     mac=$(echo "$mac" | tr 'A-F' 'a-f')
     local safe; safe=$(echo "$mac" | tr ':' '_')
@@ -1081,20 +1021,19 @@ find_master() {
 
     # -- 4. 全子网扫描（后台非阻塞，找到后写 MASTER_IP_FILE，main_loop 轮询时生效）--
     log "DBG find_master: launching background full scan %s.0/24" "$prefix"
-    local _lf="$LOGFILE" _mp="$MASTER_IP_FILE" _port="$MASTER_PORT" _pfx="$prefix" _myip="$my_ip"
     (
+        local j c
         for j in $(seq 3 253); do
-            c="${_pfx}.${j}"
-            [ "$c" = "$_myip" ] && continue
-            [ $((j % 50)) -eq 0 ] && printf "%s [INFO ] [core    ] DBG find_master: bg scan .%d\n" \
-                "$(date '+%Y-%m-%d %H:%M:%S')" "$j" >> "$_lf"
-            # 一旦主循环已写入则退出
-            [ -f "$_mp" ] && break
-            if curl -s -m 1 "http://${c}:${_port}/ping" 2>/dev/null \
+            c="${prefix}.${j}"
+            [ "$c" = "$my_ip" ] && continue
+            [ -f "$MASTER_IP_FILE" ] && break
+            [ $(( j % 50 )) -eq 0 ] && printf "%s [INFO ] [core    ] DBG find_master: bg scan .%d\n" \
+                "$(date '+%Y-%m-%d %H:%M:%S')" "$j" >> "$LOGFILE"
+            if curl -s -m 1 "http://${c}:${MASTER_PORT}/ping" 2>/dev/null \
                     | grep -q '"role":"master"'; then
-                echo "$c" > "$_mp"
+                echo "$c" > "$MASTER_IP_FILE"
                 printf "%s [INFO ] [core    ] Master found at %s (bg scan)\n" \
-                    "$(date '+%Y-%m-%d %H:%M:%S')" "$c" >> "$_lf"
+                    "$(date '+%Y-%m-%d %H:%M:%S')" "$c" >> "$LOGFILE"
                 break
             fi
         done
@@ -1140,7 +1079,7 @@ poll_for_approval() {
 
     local resp
     resp=$(curl -s -m 5 "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
-    log "DBG poll_approval: resp=[%s]" "$(echo "$resp" | head -c 120)"
+    log "DBG poll_approval: resp=[%s]" "${resp:0:120}"
 
     if echo "$resp" | grep -q '"status":"pending"'; then
         log "Waiting for master approval..."
@@ -1186,15 +1125,16 @@ generate_profile() {
 
 apply_profile() {
     local body="$1"
-    echo "$body" > /tmp/em_profile_tmp.json
     local ssid key channel mesh_id mesh_key routing_algo
-    ssid=$(        jsonfilter -i /tmp/em_profile_tmp.json -e '@.ssid'         2>/dev/null)
-    key=$(         jsonfilter -i /tmp/em_profile_tmp.json -e '@.key'          2>/dev/null)
-    channel=$(     jsonfilter -i /tmp/em_profile_tmp.json -e '@.channel'      2>/dev/null)
-    mesh_id=$(     jsonfilter -i /tmp/em_profile_tmp.json -e '@.mesh_id'      2>/dev/null)
-    mesh_key=$(    jsonfilter -i /tmp/em_profile_tmp.json -e '@.mesh_key'     2>/dev/null)
-    routing_algo=$(jsonfilter -i /tmp/em_profile_tmp.json -e '@.routing_algo' 2>/dev/null)
-    rm -f /tmp/em_profile_tmp.json
+    local _pf="/tmp/em_profile_$$.json"
+    printf '%s\n' "$body" > "$_pf"
+    ssid=$(        jsonfilter -i "$_pf" -e '@.ssid'         2>/dev/null)
+    key=$(         jsonfilter -i "$_pf" -e '@.key'          2>/dev/null)
+    channel=$(     jsonfilter -i "$_pf" -e '@.channel'      2>/dev/null)
+    mesh_id=$(     jsonfilter -i "$_pf" -e '@.mesh_id'      2>/dev/null)
+    mesh_key=$(    jsonfilter -i "$_pf" -e '@.mesh_key'     2>/dev/null)
+    routing_algo=$(jsonfilter -i "$_pf" -e '@.routing_algo' 2>/dev/null)
+    rm -f "$_pf"
     [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
     log "Applying profile: ssid=%s channel=%s" "$ssid" "$channel"
     uci_set easymesh global enabled 1
@@ -1371,8 +1311,7 @@ pick_best_candidate() {
             best_rssi="$peer_rssi"; best_bssid="$peer_bssid"
         fi
     done
-    local threshold=$(( cur_rssi + ROAM_HYSTERESIS ))
-    if [ -n "$best_bssid" ] && [ "$best_rssi" -gt "$threshold" ] 2>/dev/null; then
+    if [ -n "$best_bssid" ] && [ "$best_rssi" -gt $(( cur_rssi + ROAM_HYSTERESIS )) ] 2>/dev/null; then
         echo "$best_bssid"
     fi
 }
@@ -1525,10 +1464,9 @@ update_topology() {
     for f in "$NODE_DB"/*.json; do
         [ -f "$f" ] || continue; nodes="${nodes},$(cat "$f")"
     done
-    local bat0_up="false"
-    if ip link show bat0 2>/dev/null | grep -q ',UP,\|<UP\|,UP>'; then
-        bat0_up="true"
-    fi
+    local bat0_up
+    ip link show bat0 2>/dev/null | grep -q ',UP,\|<UP\|,UP>' \
+        && bat0_up="true" || bat0_up="false"
     printf '{"ts":%d,"nodes":[%s],"links":[%s],"bat0_up":%s}\n' \
         "$(date +%s)" "$nodes" "${links:-}" "$bat0_up" > "$TOPO_FILE"
 }
@@ -1586,10 +1524,11 @@ _handle_approval_signal() {
 }
 
 main_loop() {
+    _dbg_init   # 预翻译 _dbg 字符串，export 给 socat 子进程
     _stop_jobs
     # FIX8: main_loop 开始时就创建 PENDING_DB，原来没创建导致目录不存在
     mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR"
-    echo $$ > "${EM_PID_DIR}/easymesh_master.pid"
+    echo $$ > "${EM_PID_DIR}/easymesh_$(get_role).pid"
 
     { printf "\n" >> "$LOGFILE" 2>/dev/null
       log "================================================"
@@ -1598,12 +1537,9 @@ main_loop() {
 
     [ "$(get_role)" = "master" -a ! -f /tmp/easymesh_agent_ip ] && \
         echo $(uci get network.lan.ipaddr) > /tmp/easymesh_agent_ip
-    local hw_type="dual-band" count5g=0 _dev
-    for _dev in $(uci show wireless 2>/dev/null | \
-            awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
-        local _b; _b=$(uci get "wireless.${_dev}.band" 2>/dev/null || echo "")
-        case "$_b" in 5g*|5GHz*) count5g=$(( count5g+1 ));; esac
-    done
+    local hw_type="dual-band"
+    local count5g; count5g=$(uci show wireless 2>/dev/null \
+        | awk -F= '/=wifi-device/{dev=$1} dev && /\.band=/{gsub(/.*=/,""); if(/^5g|^5GHz/) n++} END{print n+0}')
     [ "$count5g" -ge 2 ] && hw_type="tri-band"
     echo "$hw_type" > /tmp/easymesh_hw_type
     log "Hardware: %s" "$hw_type"
@@ -1679,19 +1615,9 @@ main_loop() {
     done
 }
 
-case "$1" in
-    stop)
-        teardown_batman
-        _stop_jobs
-        ;;
-    __socat_http)
-        # socat TCP fork 入口：解析 HTTP 请求，调用 __http_handler
-        __socat_http
-        ;;
-    __handle_hello)
-        __handle_hello
-        ;;
-    *)
-        main_loop
-        ;;
+case "${1:-}" in
+    stop)           teardown_batman; _stop_jobs ;;
+    __socat_http)   __socat_http ;;
+    __handle_hello) __handle_hello ;;
+    *)              main_loop ;;
 esac
