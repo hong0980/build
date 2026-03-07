@@ -370,14 +370,36 @@ return view.extend({
 					_('Review and approve each device before it receives mesh configuration.')),
 				E('div', {}, pending.map(function (node) {
 					return pendingCard(node,
-						function () {
+						function (ev) {
+							var btn = ev.currentTarget;
+							btn.disabled = true;
+							btn.textContent = _('Approving...');
 							callMeshApprove(node.mac)
-								.then(function () {
+								.then(function (res) {
+									if (res && res.error) {
+										ui.addNotification(null,
+											E('p', {}, _('Approval failed: ') + res.error), 'error');
+										btn.disabled = false;
+										btn.textContent = '✓ ' + _('Allow to join');
+									} else {
+										ui.addNotification(null,
+											E('p', {}, _('Approved. Node will receive config shortly.')), 'info');
+									}
+								})
+								.catch(function (err) {
 									ui.addNotification(null,
-										E('p', {}, _('Approved. Node will receive config shortly.')), 'info');
+										E('p', {}, _('RPC error: ') + (err.message || String(err))), 'error');
+									btn.disabled = false;
+									btn.textContent = '✓ ' + _('Allow to join');
 								});
 						},
-						function () { callMeshReject(node.mac); }
+						function (ev) {
+						var btn = ev.currentTarget;
+						btn.disabled = true;
+						callMeshReject(node.mac)
+							.catch(function () {})
+							.then(function () { btn.disabled = false; });
+					}
 					);
 				}))
 			]));

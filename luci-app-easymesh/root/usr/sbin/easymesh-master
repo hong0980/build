@@ -1,7 +1,7 @@
 #!/bin/sh
 . /lib/functions.sh
 
-# ── Files ─────────────────────────────────────────────────────────────────────
+# -- Files --
 PROFILE_FILE="/tmp/easymesh_profile.json"
 TOPO_FILE="/tmp/easymesh_topo.json"
 NEIGHBOR_FILE="/tmp/easymesh_neighbors.conf"
@@ -12,7 +12,7 @@ export NODE_DB="/tmp/easymesh_nodes"
 export PENDING_DB="/tmp/easymesh_pending"
 export EM_PID_DIR="/tmp/easymesh_pids"
 
-# ── Constants ──────────────────────────────────────────────────────────────────
+# -- Constants --
 
 # 检测是否为 DSA 硬件（特征：存在 lanX@ethY 格式的接口）
 _is_dsa() {
@@ -63,7 +63,7 @@ export DISC_PORT=4305
 export DISC_REPLY_PORT=4306
 export LOGFILE="/tmp/easymesh.log"
 
-# ── Tuning ────────────────────────────────────────────────────────────────────
+# -- Tuning --
 BATMAN_OGM_INTERVAL=500
 BATMAN_HOP_PENALTY=30
 BATMAN_GW_MODE="client"
@@ -120,7 +120,7 @@ _dbg() {
     printf "%s [DEBUG] [dbg     ] %s\n" "$ts" "$*" >> "${LOGFILE:-/tmp/easymesh.log}"
 }
 
-# ── Basic helpers ──────────────────────────────────────────────────────────────
+# -- Basic helpers --
 get_mac()  { cat /sys/class/net/${BRIDGE_IF}/address 2>/dev/null || cat /sys/class/net/${ETH_IF}/address 2>/dev/null; }
 get_ip()   { ip -4 addr show dev "$BRIDGE_IF" 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1; }
 get_role() { cat "$ROLE_FILE" 2>/dev/null || echo "agent"; }
@@ -134,17 +134,24 @@ roam_cooldown_key() { echo "$1" | tr ':' '_'; }
 roam_cooldown_get() { cat "${ROAM_COOLDOWN_DIR}/${1}" 2>/dev/null || echo 0; }
 roam_cooldown_set() { mkdir -p "$ROAM_COOLDOWN_DIR"; printf '%s\n' "$2" > "${ROAM_COOLDOWN_DIR}/${1}"; }
 
-# ── HTTP helpers ───────────────────────────────────────────────────────────────
+# -- HTTP helpers --
 do_http_post() {
     local url="$1" data="$2"
-    local retry=0 wait_time resp tmp
-    tmp="/tmp/em_http_$$.json"
+    local retry=0 wait_time resp
     while [ "$retry" -lt "$HTTP_MAX_RETRIES" ]; do
-        resp=$(wget -q -T "$HTTP_TIMEOUT" \
-            --post-data="$data" \
-            --header='Content-Type: application/json' \
-            -O "$tmp" "$url" 2>/dev/null && cat "$tmp" 2>/dev/null)
-        rm -f "$tmp"
+        # curl 比 BusyBox wget 更可靠：HTTP/1.1, 正确处理 socat/uhttpd 响应
+        if command -v curl >/dev/null 2>&1; then
+            resp=$(curl -s -m "$HTTP_TIMEOUT" \
+                -H "Content-Type: application/json" \
+                -d "$data" "$url" 2>/dev/null)
+        else
+            local tmp; tmp="/tmp/em_http_$$.json"
+            resp=$(wget -q -T "$HTTP_TIMEOUT" \
+                --post-data="$data" \
+                --header='Content-Type: application/json' \
+                -O "$tmp" "$url" 2>/dev/null && cat "$tmp" 2>/dev/null)
+            rm -f "$tmp"
+        fi
         if [ -n "$resp" ]; then echo "$resp"; return 0; fi
         retry=$(( retry + 1 ))
         [ "$retry" -ge "$HTTP_MAX_RETRIES" ] && break
@@ -154,6 +161,16 @@ do_http_post() {
     done
     loge "HTTP POST failed after %s retries: %s" "$HTTP_MAX_RETRIES" "$url"
     return 1
+}
+
+# HTTP GET（curl 优先于 BusyBox wget）
+_http_get() {
+    local url="$1" timeout="${2:-4}"
+    if command -v curl >/dev/null 2>&1; then
+        curl -s -m "$timeout" "$url" 2>/dev/null
+    else
+        wget -q -T "$timeout" -O- "$url" 2>/dev/null
+    fi
 }
 
 ########################################
@@ -183,7 +200,7 @@ _stop_jobs() {
         _cmd=$(tr "\0" " " < "$_p" 2>/dev/null)
 
         case "$_cmd" in
-            *socat*":${MASTER_PORT}"*|*socat*":${DISC_PORT}"*|*socat*":${DISC_REPLY_PORT}"*)
+            *socat*":${MASTER_PORT}"*|*socat*":${DISC_PORT}"*|*socat*":${DISC_REPLY_PORT}"*|*uhttpd*":${MASTER_PORT}"*)
                 kill "$_pid" 2>/dev/null || true
                 ;;
         esac
@@ -230,7 +247,7 @@ elect_role() {
         peer_mac=$(jsonfilter -i "$f" -e '@.mac' 2>/dev/null)
         [ -z "$peer_ip" ] && continue
         local resp
-        resp=$(wget -q -T 3 -O- "http://${peer_ip}:${MASTER_PORT}/wan" 2>/dev/null)
+        resp=$(curl -s -m 3 "http://${peer_ip}:${MASTER_PORT}/wan" 2>/dev/null)
         if echo "$resp" | grep -q '"wan":true'; then
             echo "agent"    > "$ROLE_FILE"
             echo "$peer_ip" > "$MASTER_IP_FILE"
@@ -295,7 +312,7 @@ setup_wired_backhaul() {
     log "DBG backhaul: ETH_IF=%s DSA=%s MESH_IF=%s role=%s" \
         "$ETH_IF" "$(_is_dsa && echo yes || echo no)" "$MESH_IF" "$(get_role)"
 
-    # ── 1. 加载模块，确保 bat0 存在 ──────────────────────────────────────────
+    # -- 1. 加载模块，确保 bat0 存在 --
     if ! ip link show "$MESH_IF" >/dev/null 2>&1; then
         modprobe batman-adv 2>/dev/null || true
         sleep 1
@@ -317,7 +334,7 @@ setup_wired_backhaul() {
     local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
     log "DBG backhaul: mode=%s" "$backhaul"
 
-    # ── 2. 有线 hardif ────────────────────────────────────────────────────────
+    # -- 2. 有线 hardif --
     if [ "$backhaul" = "wired" ] || [ "$backhaul" = "auto" ]; then
         if _is_dsa; then
             # DSA 硬件：eth0 是 switch CPU port，MTU=1504，batman-adv 不接受
@@ -344,7 +361,7 @@ setup_wired_backhaul() {
         fi
     fi
 
-    # ── 3. 无线 hardif（backhaul=wireless/auto 时）───────────────────────────
+    # -- 3. 无线 hardif（backhaul=wireless/auto 时）--
     if [ "$backhaul" != "wired" ]; then
         local _mw=0
         while ! ip link show mesh0 >/dev/null 2>&1 && [ $_mw -lt 10 ]; do
@@ -361,7 +378,7 @@ setup_wired_backhaul() {
         fi
     fi
 
-    # ── 4. bat0 加入 br-lan（仅无线回程需要）────────────────────────────────
+    # -- 4. bat0 加入 br-lan（仅无线回程需要）--
     # 有线回程时绝对不能把 bat0 加入 br-lan！
     # 原因：batman-adv BLA（Bridge Loop Avoidance）会检测到两台路由器的
     # bat0 在同一个 L2 domain 里，误判为 bridge loop，主动 DROP ARP 广播！
@@ -392,7 +409,7 @@ setup_wired_backhaul() {
         fi
     fi
 
-    # ── 5. 状态摘要 ──────────────────────────────────────────────────────────
+    # -- 5. 状态摘要 --
     log "DBG backhaul: bat0 hardifs=[%s]" \
         "$(batctl meshif bat0 if 2>/dev/null | tr '\n' ' ')"
     log "DBG backhaul: br-lan members=[%s]" \
@@ -403,7 +420,7 @@ setup_wired_backhaul() {
     log "Backhaul ready (role=%s)" "$(get_role)"
 }
 
-# ── 停止时清理 batman-adv ────────────────────────────────────────────────────
+# -- 停止时清理 batman-adv --
 teardown_batman() {
     # 把 bat0 从 br-lan 摘出
     ip link set "$MESH_IF" nomaster 2>/dev/null \
@@ -450,7 +467,7 @@ discovery_server() {
 # __handle_hello: socat fork 的子进程，每收到一个 UDP 包调用一次
 # stdin = UDP 包内容，不使用 stdout（回包用独立 socat 单播）
 __handle_hello() {
-    # ── 防御性变量补全 ────────────────────────────────────────────────────────
+    # -- 防御性变量补全 --
     [ -z "$NODE_DB"         ] && NODE_DB="/tmp/easymesh_nodes"
     [ -z "$PENDING_DB"      ] && PENDING_DB="/tmp/easymesh_pending"
     [ -z "$LOGFILE"         ] && LOGFILE="/tmp/easymesh.log"
@@ -460,7 +477,7 @@ __handle_hello() {
 
     _dbg "__handle_hello invoked pid=$$"
 
-    # ── 读取 UDP 包内容（加超时防止永久挂起）────────────────────────────────
+    # -- 读取 UDP 包内容（加超时防止永久挂起）--
     local msg
     IFS= read -r -t 5 msg 2>/dev/null
     if [ -z "$msg" ]; then
@@ -469,14 +486,14 @@ __handle_hello() {
     fi
     _dbg "__handle_hello: raw msg=[$msg]"
 
-    # ── 解析字段 ─────────────────────────────────────────────────────────────
+    # -- 解析字段 --
     local cmd mac agent_ip host
     cmd=$(      printf '%s' "$msg" | awk '{print $1}')
     mac=$(      printf '%s' "$msg" | awk '{print $2}')
     agent_ip=$( printf '%s' "$msg" | awk '{print $3}')
     host=$(     printf '%s' "$msg" | awk '{print $4}')
 
-    # ── 验证命令字 ────────────────────────────────────────────────────────────
+    # -- 验证命令字 --
     if [ "$cmd" != "EASYMESH_HELLO" ]; then
         _dbg "__handle_hello: unknown cmd=[$cmd] ignoring"
         return 0
@@ -500,7 +517,7 @@ __handle_hello() {
 
     _dbg "__handle_hello: valid HELLO mac=%s agent_ip=%s host=%s" "$mac" "$agent_ip" "${host:-unknown}"
 
-    # ── 写入 pending 或更新已批准节点 ────────────────────────────────────────
+    # -- 写入 pending 或更新已批准节点 --
     local safe; safe=$(echo "$mac" | tr ':' '_')
     local approved_file="${NODE_DB}/${safe}.json"
     local pending_file="${PENDING_DB}/${safe}.json"
@@ -518,7 +535,7 @@ __handle_hello() {
         _dbg "__handle_hello: wrote pending %s" "$pending_file"
     fi
 
-    # ── 获取本机 IP（master 的 br-lan IP）────────────────────────────────────
+    # -- 获取本机 IP（master 的 br-lan IP）--
     local myip retry_ip=0
     myip=$(ip -4 addr show dev "${BRIDGE_IF}" 2>/dev/null \
         | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
@@ -545,7 +562,7 @@ __handle_hello() {
     fi
     _dbg "__handle_hello: myip=%s sending WELCOME to %s:%s" "$myip" "$agent_ip" "$DISC_REPLY_PORT"
 
-    # ── 发送 WELCOME 单播回复 ─────────────────────────────────────────────────
+    # -- 发送 WELCOME 单播回复 --
     printf 'EASYMESH_WELCOME %s\n' "$myip" | \
         socat - "UDP-DATAGRAM:${agent_ip}:${DISC_REPLY_PORT}" 2>/dev/null
     local _ret=$?
@@ -577,13 +594,13 @@ discovery_client() {
         return 1
     fi
 
-    # ── 清理残留的 reply 端口监听进程 ────────────────────────────────────────
+    # -- 清理残留的 reply 端口监听进程 --
     local _dp _dc _dpid
     for _dp in /proc/[0-9]*/cmdline; do
         [ -f "$_dp" ] || continue
         _dc=$(tr "\0" " " < "$_dp" 2>/dev/null)
         case "$_dc" in
-            *socat*"UDP4-LISTEN:${DISC_REPLY_PORT}"*)
+            *socat*"UDP4-LISTEN:${DISC_REPLY_PORT}"*|*uhttpd*"${MASTER_PORT}"*)
                 _dpid="${_dp%/cmdline}"; _dpid="${_dpid##*/}"
                 log "DBG disc_client: killing stale reply listener pid=%s" "$_dpid"
                 kill "$_dpid" 2>/dev/null || true
@@ -593,7 +610,7 @@ discovery_client() {
     done
     sleep 1
 
-    # ── 启动 WELCOME 监听 ─────────────────────────────────────────────────────
+    # -- 启动 WELCOME 监听 --
     local resp_file="/tmp/em_disc_resp_$$"
     socat -T 45 UDP4-LISTEN:${DISC_REPLY_PORT},reuseaddr \
         OPEN:"${resp_file}",creat,trunc 2>/dev/null &
@@ -601,7 +618,7 @@ discovery_client() {
     log "DBG disc_client: reply listener pid=%s on UDP %s" "$listen_pid" "$DISC_REPLY_PORT"
     sleep 1
 
-    # ── 广播 HELLO，重试 8 次 ────────────────────────────────────────────────
+    # -- 广播 HELLO，重试 8 次 --
     local found=0 i=0
     while [ $i -lt 8 ]; do
         log "DBG disc_client: HELLO attempt %s/8 -> 255.255.255.255:%s" "$((i+1))" "$DISC_PORT"
@@ -636,43 +653,42 @@ discovery_client() {
 }
 
 ########################################
-# 6. INTER-NODE HTTP SERVER (纯 socat)
+# 6. INTER-NODE HTTP SERVER (socat + raw HTTP)
 ########################################
-_http_cors="Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
-_http_ok()  { printf "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n${_http_cors}Connection: close\r\n\r\n%s" "$1"; }
-_http_html(){ printf "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n${_http_cors}Connection: close\r\n\r\n"; cat "$1"; }
-_http_403() { printf 'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n'"$_http_cors"'Connection: close\r\n\r\n{"status":"pending"}\n'; }
-_http_404() { printf 'HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n{"error":"not found"}\n'; }
+# socat TCP-LISTEN fork 模式：每个连接 fork 一次，调用 __socat_http
+# __socat_http 从 stdin 解析 HTTP 请求，设置环境变量，调用 __http_handler
+# __http_handler 输出 CGI 格式（Content-Type\r\n\r\nbody），
+# __socat_http 把它包装成完整 HTTP/1.0 200 OK 响应
+
+
+_http_ok()  {
+    printf "HTTP/1.0 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n%s" "$1"
+}
+_http_html(){
+    printf "HTTP/1.0 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n"
+    cat "$1"
+}
+_http_403() {
+    printf 'HTTP/1.0 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{"status":"pending"}\n'
+}
+_http_404() {
+    printf 'HTTP/1.0 404 Not Found\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{"error":"not found"}\n'
+}
 
 __http_handler() {
-    local req_line method path query content_length body line
+    # socat 模式：环境变量由 __socat_http 设置
+    # REQUEST_METHOD, PATH_INFO, QUERY_STRING, CONTENT_LENGTH, stdin=body
+    local method path query body content_length
 
-    IFS= read -r req_line
-    req_line="${req_line%$(printf '\r')}"
-    method="${req_line%% *}"
-    path="${req_line#* }"; path="${path%% *}"
-
-    [ "$method" = "OPTIONS" ] && { _http_ok "{}"; return; }
-
-    content_length=0
-    while IFS= read -r line; do
-        line="${line%$(printf '\r')}"
-        [ -z "$line" ] && break
-        case "$line" in
-            [Cc]ontent-[Ll]ength:*) content_length="${line##*: }" ;;
-        esac
-    done
+    method="${REQUEST_METHOD:-GET}"
+    path="${PATH_INFO:-/}"
+    [ -z "$path" ] && path="/"
+    query="${QUERY_STRING:-}"
+    content_length="${CONTENT_LENGTH:-0}"
 
     [ "$content_length" -gt 0 ] 2>/dev/null && body=$(dd bs=1 count="$content_length" 2>/dev/null)
 
-    local full_path="$path"
-    if echo "$full_path" | grep -q '?'; then
-        query="${full_path#*\?}"
-        path="${full_path%%\?*}"
-    else
-        query=""
-        path="$full_path"
-    fi
+    [ "$method" = "OPTIONS" ] && { _http_ok "{}"; return; }
 
     case "$path" in
         /|/index.html)
@@ -706,6 +722,19 @@ __http_handler() {
                 _http_ok '{"status":"unregistered"}'
             fi
             ;;
+        /profile/push)
+            # master 主动推送 profile 给 agent（由 USR1 信号触发）
+            [ "$method" != "POST" ] && { _http_ok '{"status":"ignored"}'; return; }
+            local push_ssid
+            push_ssid=$(echo "$body" | grep -o '"ssid":"[^"]*"' | cut -d'"' -f4)
+            if [ -n "$push_ssid" ]; then
+                apply_profile "$body"
+                _http_ok '{"status":"ok","msg":"profile applied"}'
+                log "Profile received via push from master"
+            else
+                _http_ok '{"status":"error","msg":"invalid profile"}'
+            fi
+            ;;
         /profile)
             local req_mac safe
             req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
@@ -719,11 +748,12 @@ __http_handler() {
             fi
             ;;
         /nodes/approve)
-            # FIX5: 新增审批接口，将 pending 移入 NODE_DB（approved）
             local req_mac safe
             req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
             [ -z "$req_mac" ] && req_mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
-            safe=$(echo "$req_mac" | tr ':' '_' | tr 'A-F' 'a-f')
+            # 统一转小写，与 register_node 保持一致
+            req_mac=$(echo "$req_mac" | tr 'A-F' 'a-f')
+            safe=$(echo "$req_mac" | tr ':' '_')
             local pf="${PENDING_DB}/${safe}.json"
             local af="${NODE_DB}/${safe}.json"
             if [ -f "$pf" ]; then
@@ -738,7 +768,6 @@ __http_handler() {
             fi
             ;;
         /nodes/list)
-            # FIX6: 新增节点列表接口，返回全部 pending + approved 节点
             local out="[" first=1
             for f in "$PENDING_DB"/*.json "$NODE_DB"/*.json; do
                 [ -f "$f" ] || continue
@@ -777,40 +806,78 @@ __http_handler() {
     esac
 }
 
+# socat 每个连接调用一次本函数（stdin=TCP流，stdout=TCP流）
+# 解析 HTTP 请求行 + headers，设置环境变量，调用 __http_handler
+__socat_http() {
+    # -- 读取请求行 --
+    local req_line
+    IFS= read -r req_line
+    # 去掉 \r
+    req_line="${req_line%$'\r'}"
+    [ -z "$req_line" ] && return
+
+    # 解析 METHOD URL HTTP/x.x
+    local method full_url _ver
+    method=$(echo "$req_line" | awk '{print $1}')
+    full_url=$(echo "$req_line" | awk '{print $2}')
+
+    # 分离 path 和 query
+    local path_part query_part
+    path_part="${full_url%%\?*}"
+    if echo "$full_url" | grep -q '?'; then
+        query_part="${full_url#*\?}"
+    else
+        query_part=""
+    fi
+
+    # -- 读取并丢弃所有 headers，找 Content-Length --
+    local content_length=0
+    while IFS= read -r header; do
+        header="${header%$'\r'}"
+        [ -z "$header" ] && break   # 空行 = headers 结束
+        case "$(echo "$header" | tr 'A-Z' 'a-z')" in
+            content-length:*)
+                content_length=$(echo "$header" | awk -F': ' '{print $2}' | tr -d '\r\n ')
+                ;;
+        esac
+    done
+
+    # -- 设置 CGI 环境变量，调用 handler --
+    export REQUEST_METHOD="$method"
+    export PATH_INFO="$path_part"
+    export QUERY_STRING="$query_part"
+    export CONTENT_LENGTH="$content_length"
+
+    __http_handler
+}
+
 run_node_server() {
-    log "HTTP server starting on port %s (socat)" "$MASTER_PORT"
+    log "HTTP server starting on port %s (socat+TCP)" "$MASTER_PORT"
 
-    # ✅ 修复 1：明确绑定到所有网卡
-    exec socat -T 30 \
-        TCP4-LISTEN:${MASTER_PORT},reuseaddr,bind=0.0.0.0,fork,crnl \
-        EXEC:"/usr/sbin/easymesh-master __http_handler" \
-        2>&1 | tee -a "$LOGFILE" &
+    # 杀掉旧的同端口进程
+    pkill -f "socat.*TCP.*${MASTER_PORT}" 2>/dev/null || true
+    pkill -f "uhttpd.*${MASTER_PORT}" 2>/dev/null || true
+    sleep 1
 
-    # ✅ 修复 2：等待 socat 启动并验证
+    # socat TCP listener：每个连接 fork，调用本脚本的 __socat_http 入口
+    socat TCP4-LISTEN:${MASTER_PORT},fork,reuseaddr \
+        EXEC:"/usr/sbin/easymesh-master __socat_http" \
+        2>>"$LOGFILE" &
+
     sleep 1
 
     # 验证监听
-    local listen_count
-    if command -v netstat >/dev/null 2>&1; then
-        listen_count=$(netstat -tulnp 2>/dev/null | grep ":${MASTER_PORT}" | wc -l)
-    elif command -v ss >/dev/null 2>&1; then
-        listen_count=$(ss -tulnp 2>/dev/null | grep ":${MASTER_PORT}" | wc -l)
+    local ok=0
+    if command -v ss >/dev/null 2>&1; then
+        ss -tlnp 2>/dev/null | grep -q ":${MASTER_PORT}" && ok=1
+    elif command -v netstat >/dev/null 2>&1; then
+        netstat -tlnp 2>/dev/null | grep -q ":${MASTER_PORT}" && ok=1
     fi
 
-    if [ "$listen_count" -gt 0 ]; then
+    if [ "$ok" = "1" ]; then
         log "✓ HTTP server successfully listening on port ${MASTER_PORT}"
     else
-        loge "✗ WARNING: HTTP server may not be listening properly"
-        log "Attempting fallback: restarting socat..."
-
-        # 杀掉旧的，重新启动
-        pkill -f "socat.*${MASTER_PORT}" 2>/dev/null || true
-        sleep 1
-
-        socat -T 30 \
-            TCP4-LISTEN:${MASTER_PORT},reuseaddr,bind=0.0.0.0,fork,crnl \
-            EXEC:"/usr/sbin/easymesh-master __http_handler" &
-        sleep 1
+        loge "✗ socat HTTP server failed to start on port ${MASTER_PORT}"
     fi
 }
 _diagnose_http_connection() {
@@ -820,7 +887,7 @@ _diagnose_http_connection() {
     log "=== HTTP CONNECTION DIAGNOSTIC ==="
     log "DBG httpdiag: target=$target_ip:$port"
 
-    # ── 1. 检查目标是否可达 ────────────────────────────────────────────────
+    # -- 1. 检查目标是否可达 --
     log "DBG httpdiag: step 1 - checking if $target_ip is reachable..."
     if ping -c 1 -W 2 -q "$target_ip" >/dev/null 2>&1; then
         log "✓ httpdiag: ping $target_ip OK"
@@ -829,69 +896,30 @@ _diagnose_http_connection() {
         return 1
     fi
 
-    # ── 2. 检查目标端口是否开放（用 nc 或 telnet）────────────────────────
+    # -- 2. 检查端口：直接用 curl 请求 /ping（比 nc 更准确）--
     log "DBG httpdiag: step 2 - checking if port $port is open..."
-    local port_check
-    if command -v nc >/dev/null 2>&1; then
-        # 用 nc 检查
-        timeout 2 nc -zv "$target_ip" "$port" >/dev/null 2>&1
-        port_check=$?
-    elif command -v busybox >/dev/null 2>&1; then
-        # 用 busybox nc
-        timeout 2 busybox nc -zv "$target_ip" "$port" >/dev/null 2>&1
-        port_check=$?
-    else
-        # 降级方案：用 /dev/tcp
-        timeout 2 bash -c "cat < /dev/null > /dev/tcp/$target_ip/$port" 2>&1
-        port_check=$?
-    fi
-
-    if [ $port_check -eq 0 ]; then
-        log "✓ httpdiag: port $port on $target_ip is OPEN"
+    local port_check_resp
+    port_check_resp=$(curl -s -m 3 "http://${target_ip}:${port}/ping" 2>/dev/null)
+    if echo "$port_check_resp" | grep -q '"role"'; then
+        log "✓ httpdiag: port $port on $target_ip is OPEN (got ping response)"
     else
         log "✗ httpdiag: port $port on $target_ip is CLOSED or FILTERED"
         return 1
     fi
 
-    # ── 3. 尝试发送 HTTP 请求，详细输出 ────────────────────────────────
+    # -- 3. 尝试发送 HTTP 请求，详细输出 --
     log "DBG httpdiag: step 3 - sending HTTP GET request..."
     local response
-    response=$(wget -q -T 3 -O- "http://${target_ip}:${port}/ping" 2>&1)
-    local wget_ret=$?
+    response=$(curl -s -m 3 "http://${target_ip}:${port}/ping" 2>&1)
+    local curl_ret=$?
 
-    if [ $wget_ret -eq 0 ]; then
+    if [ $curl_ret -eq 0 ]; then
         log "✓ httpdiag: HTTP request OK"
         log "  response: $response"
         return 0
     else
-        log "✗ httpdiag: HTTP request FAILED (wget exit code: $wget_ret)"
-        log "  wget output: $response"
-
-        # ── 4. 尝试用 curl 作为备选（如果有的话）────────────────────────
-        if command -v curl >/dev/null 2>&1; then
-            log "DBG httpdiag: step 4 - retrying with curl..."
-            response=$(curl -m 3 -v "http://${target_ip}:${port}/ping" 2>&1)
-            if [ $? -eq 0 ]; then
-                log "✓ httpdiag: curl succeeded"
-                log "  response: $response"
-                return 0
-            else
-                log "✗ httpdiag: curl also failed"
-                log "  curl output: $response"
-            fi
-        fi
-
-        # ── 5. 检查本地 HTTP 服务是否真的在监听 ────────────────────────
-        log "DBG httpdiag: step 5 - checking local HTTP listeners..."
-        if command -v netstat >/dev/null 2>&1; then
-            netstat -tulnp 2>/dev/null | grep ":${port}" | while read line; do
-                log "  netstat: $line"
-            done
-        elif command -v ss >/dev/null 2>&1; then
-            ss -tulnp 2>/dev/null | grep ":${port}" | while read line; do
-                log "  ss: $line"
-            done
-        fi
+        log "✗ httpdiag: HTTP request FAILED (curl exit: $curl_ret)"
+        log "  response: $response"
 
         return 1
     fi
@@ -901,11 +929,11 @@ _diagnose_http_connection() {
 _diagnose_network_improved() {
     local myip; myip=$(get_ip)
     local prefix; prefix=$(echo "$myip" | cut -d. -f1-3)
-    local role; config_load easymesh; config_get role global role 'master'
+    local role; role=$(uci_get easymesh global role 'master')
 
     log "=== NETWORK DIAGNOSIS START (role=$role, my_ip=$myip) ==="
 
-    # ── 1. 检查 br-lan 状态 ────────────────────────────────────────────────
+    # -- 1. 检查 br-lan 状态 --
     log "DBG netdiag: checking br-lan interface..."
     local br_status; br_status=$(ip link show br-lan 2>/dev/null)
     if [ -n "$br_status" ]; then
@@ -916,7 +944,7 @@ _diagnose_network_improved() {
         return 1
     fi
 
-    # ── 2. 检查 br-lan IP ──────────────────────────────────────────────────
+    # -- 2. 检查 br-lan IP --
     log "DBG netdiag: checking br-lan IP..."
     local br_ip; br_ip=$(ip -4 addr show dev br-lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
     if [ -n "$br_ip" ]; then
@@ -926,7 +954,7 @@ _diagnose_network_improved() {
         return 1
     fi
 
-    # ── 3. 如果是 agent，诊断与主节点的连接 ────────────────────────────────
+    # -- 3. 如果是 agent，诊断与主节点的连接 --
     if [ "$role" = "agent" ]; then
         local master_default="${prefix}.1"
         log "DBG netdiag: agent mode - testing connection to master $master_default..."
@@ -984,6 +1012,7 @@ find_master() {
     log "DBG find_master: start my_ip=%s my_mac=%s" "$my_ip" "$my_mac"
 
     local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
+    local prefix; prefix=$(echo "$my_ip" | cut -d. -f1-3)
 
     # 无线回程等 batman-adv 邻居；有线直连跳过
     if [ "$backhaul" != "wired" ]; then
@@ -991,81 +1020,89 @@ find_master() {
         log "DBG find_master: waiting batman-adv (wireless)"
         while [ $_bwait -lt 40 ]; do
             local _nb
-            _nb=$(batctl meshif bat0 neighbors 2>/dev/null                 | grep -vcE "^B\.A\.T|^No |^$" 2>/dev/null || echo 0)
+            _nb=$(batctl meshif bat0 neighbors 2>/dev/null \
+                | grep -vcE "^B\.A\.T|^No |^$" 2>/dev/null || echo 0)
             [ "$_nb" -gt 0 ] && { log "batman neighbor after %ss" "$_bwait"; break; }
             sleep 2; _bwait=$((_bwait + 2))
         done
         [ $_bwait -ge 40 ] && logw "No batman neighbor in 40s, continuing"
     fi
 
-    # ── 1. 缓存的 master IP ──────────────────────────────────────────────────
+    # -- 1. 缓存的 master IP --
     local cached; cached=$(master_ip)
     if [ -n "$cached" ] && [ "$cached" != "$my_ip" ]; then
-        if wget -q -T 4 -O- "http://${cached}:${MASTER_PORT}/ping" 2>/dev/null                 | grep -q '"role":"master"'; then
+        if curl -s -m 3 "http://${cached}:${MASTER_PORT}/ping" 2>/dev/null \
+                | grep -q '"role":"master"'; then
             log "DBG find_master: cached master OK at %s" "$cached"
             return 0
         fi
         rm -f "$MASTER_IP_FILE"
     fi
 
-    # ── 2. 默认网关 ──────────────────────────────────────────────────────────
-    local gw; gw=$(ip route 2>/dev/null | awk '/default/{print $3; exit}')
-    if [ -n "$gw" ] && [ "$gw" != "$my_ip" ]; then
-        log "DBG find_master: trying gateway %s" "$gw"
-        if wget -q -T 4 -O- "http://${gw}:${MASTER_PORT}/ping" 2>/dev/null                 | grep -q '"role":"master"'; then
-            echo "$gw" > "$MASTER_IP_FILE"
-            log "Master found at gateway %s" "$gw"
-            return 0
-        fi
-    fi
-
-    # ── 3. 有线直连：直接尝试 .1（主路由器固定 IP）──────────────────────────
-    # 注意：UDP 广播在 OpenWrt LAN 直连场景下不可靠（防火墙/batman干扰）
-    # 有线 LAN 直连时，主路由器 IP 永远是 .1（不会被改），直接连即可
-    local prefix; prefix=$(echo "$my_ip" | cut -d. -f1-3)
+    # -- 2. 有线直连：尝试 prefix.1（主路由器固定 IP）--
+    # 不能用默认网关！agent 可能有无线上行（phy1-sta0），默认网关是上游路由器，不是 master
     local master_candidate="${prefix}.1"
-
-    if [ "$backhaul" = "wired" ] && [ "$master_candidate" != "$my_ip" ]; then
+    if [ "$master_candidate" != "$my_ip" ]; then
         log "DBG find_master: wired direct - trying %s" "$master_candidate"
         local _try=0
-        while [ $_try -lt 6 ]; do
-            if wget -q -T 4 -O- "http://${master_candidate}:${MASTER_PORT}/ping" 2>/dev/null                     | grep -q '"role":"master"'; then
+        while [ $_try -lt 3 ]; do
+            if curl -s -m 3 "http://${master_candidate}:${MASTER_PORT}/ping" 2>/dev/null \
+                    | grep -q '"role":"master"'; then
                 echo "$master_candidate" > "$MASTER_IP_FILE"
                 log "Master found at %s (wired direct)" "$master_candidate"
                 return 0
             fi
             _try=$((_try+1))
-            log "DBG find_master: attempt %s/6 to %s failed, waiting 5s..." "$_try" "$master_candidate"
-            sleep 5
+            log "DBG find_master: attempt %s/3 to %s failed, waiting 3s..." "$_try" "$master_candidate"
+            sleep 3
         done
-        log "DBG find_master: wired direct failed after 6 attempts, trying subnet scan"
+        log "DBG find_master: wired direct .1 failed"
+        # 诊断：是网络不通还是 uhttpd 有问题
+        if ping -c 1 -W 2 -q "$master_candidate" >/dev/null 2>&1; then
+            local _cr
+            _cr=$(curl -s -m 3 "http://${master_candidate}:${MASTER_PORT}/ping" 2>&1)
+            log "DBG find_master: ping OK, curl=[%s]" "$(echo "$_cr" | head -c 200)"
+        else
+            log "DBG find_master: ping %s FAILED - no L3 link (check cable/VLAN)" "$master_candidate"
+        fi
     fi
 
-    # ── 4. 子网扫描（兜底）──────────────────────────────────────────────────
-    log "DBG find_master: subnet scan %s.0/24" "$prefix"
-    for s in 1 2 254; do
+    # -- 3. 快速扫描常见备用 IP --
+    for s in 2 254 100 101; do
         local c="${prefix}.${s}"
         [ "$c" = "$my_ip" ] && continue
-        if wget -q -T 3 -O- "http://${c}:${MASTER_PORT}/ping" 2>/dev/null                 | grep -q '"role":"master"'; then
+        if curl -s -m 2 "http://${c}:${MASTER_PORT}/ping" 2>/dev/null \
+                | grep -q '"role":"master"'; then
             echo "$c" > "$MASTER_IP_FILE"
-            log "Master found at %s" "$c"
-            return 0
-        fi
-    done
-    for j in $(seq 3 253); do
-        local c="${prefix}.${j}"
-        [ "$c" = "$my_ip" ] && continue
-        [ $((j % 30)) -eq 0 ] && log "DBG find_master: scanned .%d" "$j"
-        if wget -q -T 1 -O- "http://${c}:${MASTER_PORT}/ping" 2>/dev/null                 | grep -q '"role":"master"'; then
-            echo "$c" > "$MASTER_IP_FILE"
-            log "Master found at %s (scan)" "$c"
+            log "Master found at %s (quick scan)" "$c"
             return 0
         fi
     done
 
-    loge "Master not found"
+    # -- 4. 全子网扫描（后台非阻塞，找到后写 MASTER_IP_FILE，main_loop 轮询时生效）--
+    log "DBG find_master: launching background full scan %s.0/24" "$prefix"
+    local _lf="$LOGFILE" _mp="$MASTER_IP_FILE" _port="$MASTER_PORT" _pfx="$prefix" _myip="$my_ip"
+    (
+        for j in $(seq 3 253); do
+            c="${_pfx}.${j}"
+            [ "$c" = "$_myip" ] && continue
+            [ $((j % 50)) -eq 0 ] && printf "%s [INFO ] [core    ] DBG find_master: bg scan .%d\n" \
+                "$(date '+%Y-%m-%d %H:%M:%S')" "$j" >> "$_lf"
+            # 一旦主循环已写入则退出
+            [ -f "$_mp" ] && break
+            if curl -s -m 1 "http://${c}:${_port}/ping" 2>/dev/null \
+                    | grep -q '"role":"master"'; then
+                echo "$c" > "$_mp"
+                printf "%s [INFO ] [core    ] Master found at %s (bg scan)\n" \
+                    "$(date '+%Y-%m-%d %H:%M:%S')" "$c" >> "$_lf"
+                break
+            fi
+        done
+    ) &
+
     return 1
 }
+
 
 do_register() {
     local mip; mip=$(master_ip)
@@ -1092,7 +1129,7 @@ poll_for_approval() {
     [ -z "$mip" ] && return 1
 
     local sum_resp remote_sum
-    sum_resp=$(wget -q -T 3 -O- \
+    sum_resp=$(curl -s -m 3 \
         "http://${mip}:${MASTER_PORT}/profile/checksum?mac=$(get_mac)" 2>/dev/null)
     remote_sum=$(echo "$sum_resp" | grep -o '"sum":"[^"]*"' | cut -d'"' -f4)
 
@@ -1102,8 +1139,8 @@ poll_for_approval() {
     fi
 
     local resp
-    resp=$(wget -q -T 5 -O- "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
-    log "DBG poll_approval: resp=[%s]" "$resp"
+    resp=$(curl -s -m 5 "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
+    log "DBG poll_approval: resp=[%s]" "$(echo "$resp" | head -c 120)"
 
     if echo "$resp" | grep -q '"status":"pending"'; then
         log "Waiting for master approval..."
@@ -1137,9 +1174,14 @@ generate_profile() {
     local radio_dev
     radio_dev=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
     channel=$(uci get "${radio_dev}.channel" 2>/dev/null || echo 'auto')
-    printf '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211k":"1","ieee80211v":"1","backhaul":"wired"}\n' \
-        "$ssid" "$key" "$channel" "$mesh_id" "$mesh_key" "$routing_algo" > "$PROFILE_FILE"
-    log "DBG generate_profile: ssid=%s channel=%s" "$ssid" "$channel"
+    local new_profile
+    new_profile=$(printf '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211k":"1","ieee80211v":"1","backhaul":"wired"}'         "$ssid" "$key" "$channel" "$mesh_id" "$mesh_key" "$routing_algo")
+    # 只在 profile 内容变化时写文件并记录日志（避免每 10 秒刷日志）
+    local old_profile; old_profile=$(cat "$PROFILE_FILE" 2>/dev/null | tr -d '\n')
+    if [ "$new_profile" != "$old_profile" ]; then
+        printf '%s\n' "$new_profile" > "$PROFILE_FILE"
+        log "generate_profile: ssid=%s channel=%s" "$ssid" "$channel"
+    fi
 }
 
 apply_profile() {
@@ -1194,7 +1236,7 @@ gateway_watchdog() {
         sleep "$GW_WATCHDOG_INTERVAL"
         local mip; mip=$(master_ip)
         [ -z "$mip" ] && continue
-        if wget -q -T 4 -O/dev/null "http://${mip}:${MASTER_PORT}/ping" 2>/dev/null; then
+        if curl -s -m 4 -o /dev/null "http://${mip}:${MASTER_PORT}/ping" 2>/dev/null; then
             fail=0
         else
             fail=$(( fail + 1 ))
@@ -1320,8 +1362,8 @@ pick_best_candidate() {
         [ -f "$f" ] || continue
         local peer_ip; peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
         [ -z "$peer_ip" ] && continue
-        local resp; resp=$(wget -q -T 2 -O- \
-            "http://${peer_ip}:${MASTER_PORT}/roam/signal?mac=${sta_mac}" 2>/dev/null)
+        local resp; resp=$(curl -s -m 2 \
+        "http://${peer_ip}:${MASTER_PORT}/roam/signal?mac=${sta_mac}" 2>/dev/null)
         local peer_rssi; peer_rssi=$(echo "$resp"  | grep -o '"rssi":-\?[0-9]*' | cut -d: -f2)
         local peer_bssid; peer_bssid=$(echo "$resp" | grep -o '"bssid":"[^"]*"'  | cut -d'"' -f4)
         [ -z "$peer_rssi" ] || [ -z "$peer_bssid" ] && continue
@@ -1526,133 +1568,21 @@ HAPD
         --pid-file=/tmp/easymesh_pair_dnsmasq.pid 2>/dev/null
     log "Wireless onboard AP: %s" "$ssid"
 }
-# 诊断网络连接
-_diagnose_network() {
-    local myip; myip=$(get_ip)
-    local prefix; prefix=$(echo "$myip" | cut -d. -f1-3)
-    local role; config_load easymesh; config_get role global role 'master'
-
-    log "=== NETWORK DIAGNOSIS START (role=$role, my_ip=$myip) ==="
-
-    # ── 1. 检查 br-lan 成员 ────────────────────────────────────────────────
-    log "DBG netdiag: checking br-lan members..."
-    local br_members; br_members=$(ip link show | awk -F'[<>@]' '/^[0-9]+: (eth|lan)[0-9]+@/ {print $2}')
-    if [ -z "$br_members" ]; then
-        log "WARN netdiag: no physical members in br-lan! Check bridge config"
-    else
-        log "DBG netdiag: br-lan members: $br_members"
-    fi
-
-    # ── 2. 如果是 agent，尝试 ping 主节点默认 IP ────────────────────────────
-    if [ "$role" = "agent" ]; then
-        local master_default="${prefix}.1"
-        log "DBG netdiag: agent mode, testing connectivity to $master_default..."
-
-        if ping -c 1 -W 2 -q "$master_default" >/dev/null 2>&1; then
-            log "✓ netdiag: ping $master_default OK"
-        else
-            log "✗ netdiag: ping $master_default FAILED - network may be isolated"
-        fi
-
-        # ── 3. 尝试 HTTP 连接 ──────────────────────────────────────────────
-        log "DBG netdiag: testing HTTP 4304 port on $master_default..."
-        local http_resp; http_resp=$(wget -q -T 3 -O- "http://${master_default}:4304/ping" 2>&1)
-
-        if [ $? -eq 0 ]; then
-            log "✓ netdiag: HTTP port 4304 on $master_default OK"
-            log "  response: $http_resp"
-        else
-            log "✗ netdiag: HTTP port 4304 on $master_default FAILED"
-            log "  error: $http_resp"
-
-            # ── 尝试自动修复：添加静态路由 ────────────────────────────────
-            log "WARN netdiag: attempting auto-fix with static route..."
-            _auto_add_static_route "$master_default"
-        fi
-    fi
-
-    # ── 4. 检查路由表 ──────────────────────────────────────────────────────
-    log "DBG netdiag: routing table:"
-    ip route show | while read line; do
-        log "  route: $line"
-    done
-
-    # ── 5. 检查 ARP 表 ────────────────────────────────────────────────────
-    log "DBG netdiag: ARP table (first 10 entries):"
-    ip neigh show | head -10 | while read line; do
-        log "  arp: $line"
-    done
-
-    log "=== NETWORK DIAGNOSIS END ==="
-}
-
-# 自动添加静态路由
-_auto_add_static_route() {
-    local target_ip="$1"
-
-    log "INFO netdiag: adding static route to $target_ip..."
-
-    # 检查路由是否已存在
-    if ip route show | grep -q "^${target_ip}/32"; then
-        log "DBG netdiag: route to $target_ip already exists"
-        return 0
-    fi
-
-    # 添加路由到目标 IP（直接通过 br-lan）
-    if ip route add "${target_ip}/32" dev br-lan 2>/dev/null; then
-        log "✓ netdiag: added route: ip route add ${target_ip}/32 dev br-lan"
-    else
-        log "✗ netdiag: failed to add route"
-        return 1
-    fi
-
-    # 验证路由
-    sleep 1
-    if ping -c 1 -W 2 -q "$target_ip" >/dev/null 2>&1; then
-        log "✓ netdiag: ping $target_ip OK after route add"
-        return 0
-    else
-        log "✗ netdiag: ping $target_ip still FAILED after route add"
-        return 1
-    fi
-}
-
-# 持续监控网络连接
-_monitor_network() {
-    local role; config_load easymesh; config_get role global role 'master'
-
-    # 只有 agent 需要持续监控
-    [ "$role" != "agent" ] && return 0
-
-    # 后台运行，每 30 秒检查一次
-    while true; do
-        sleep 30
-
-        local myip; myip=$(get_ip)
-        local prefix; prefix=$(echo "$myip" | cut -d. -f1-3)
-        local master_default="${prefix}.1"
-
-        # 检查是否已连接到主节点
-        if [ -f /tmp/easymesh_master_ip ]; then
-            local connected_master; connected_master=$(cat /tmp/easymesh_master_ip 2>/dev/null)
-            if ping -c 1 -W 1 -q "$connected_master" >/dev/null 2>&1; then
-                # 已连接，跳过诊断
-                continue
-            fi
-        fi
-
-        # 未连接，进行诊断
-        log "DBG netmon: periodic network check (agent not connected yet)"
-        _diagnose_network
-    done
-}
 ########################################
 # MAIN
 ########################################
 _handle_approval_signal() {
-    log "USR1: node approved, will push profile on next poll"
-    # 设置标志，让 main_loop 立即处理
-    touch /tmp/easymesh_approval_pending 2>/dev/null || true
+    log "USR1: node approved — pushing profile to all approved agents"
+    # 主动推送 profile 给所有已批准节点，不等 agent 的 10 秒轮询
+    local profile; profile=$(cat "$PROFILE_FILE" 2>/dev/null)
+    [ -z "$profile" ] && { log "WARN USR1: no profile file, agent will get it on next poll"; return; }
+    for f in "$NODE_DB"/*.json; do
+        [ -f "$f" ] || continue
+        local peer_ip; peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
+        [ -z "$peer_ip" ] && continue
+        ( curl -s -m 5 -X POST             -H "Content-Type: application/json"             -d "$profile"             "http://${peer_ip}:${MASTER_PORT}/profile/push" >/dev/null 2>&1 ) &
+        log "USR1: pushed profile to agent %s" "$peer_ip"
+    done
 }
 
 main_loop() {
@@ -1701,8 +1631,7 @@ main_loop() {
     fi
 
     setup_dedicated_backhaul
-    _diagnose_network &
-    _monitor_network &
+    # 只启动一个轻量诊断（不重复，不阻塞）
     _diagnose_network_improved &
     local _registered=0 _iter=0
     while true; do
@@ -1725,8 +1654,16 @@ main_loop() {
             manage_wireless_onboard
         else
             if [ "$_registered" = "0" ]; then
-                log "DBG main_loop iter=%s: agent not registered, retrying find_master" "$_iter"
-                find_master && do_register && _registered=1
+                # find_master 若找到则同步返回 0，否则启动后台扫描返回 1
+                # 无论如何都尝试 do_register（可能后台扫描已写入 MASTER_IP_FILE）
+                if find_master; then
+                    do_register && _registered=1
+                elif [ -f "$MASTER_IP_FILE" ]; then
+                    # 后台扫描已写入，直接注册
+                    do_register && _registered=1
+                else
+                    log "DBG main_loop iter=%s: master not found yet, will retry" "$_iter"
+                fi
             else
                 poll_for_approval
             fi
@@ -1747,8 +1684,9 @@ case "$1" in
         teardown_batman
         _stop_jobs
         ;;
-    __http_handler)
-        __http_handler
+    __socat_http)
+        # socat TCP fork 入口：解析 HTTP 请求，调用 __http_handler
+        __socat_http
         ;;
     __handle_hello)
         __handle_hello

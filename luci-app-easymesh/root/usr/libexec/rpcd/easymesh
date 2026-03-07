@@ -81,6 +81,8 @@ _topology() {
 _approve() {
     local mac="$1"
     [ -z "$mac" ] && { printf '{"error":"mac required"}\n'; return 1; }
+    # 统一转小写，与 master 守护进程的 register_node 保持一致
+    mac=$(echo "$mac" | tr 'A-F' 'a-f')
     local safe; safe=$(echo "$mac" | tr ':' '_')
     local src="${PENDING_DB}/${safe}.json"
     local dst="${NODE_DB}/${safe}.json"
@@ -91,8 +93,13 @@ _approve() {
         local pid; pid=$(cat /tmp/easymesh_pids/easymesh_master.pid 2>/dev/null)
         [ -n "$pid" ] && kill -USR1 "$pid" 2>/dev/null || true
         printf '{"status":"ok"}\n'
+    elif [ -f "$dst" ]; then
+        # 已批准过（重复点击）
+        local pid; pid=$(cat /tmp/easymesh_pids/easymesh_master.pid 2>/dev/null)
+        [ -n "$pid" ] && kill -USR1 "$pid" 2>/dev/null || true
+        printf '{"status":"ok","msg":"already approved"}\n'
     else
-        printf '{"error":"not found"}\n'; return 1
+        printf '{"error":"node not found in pending or approved"}\n'; return 1
     fi
 }
 
