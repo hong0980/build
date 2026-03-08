@@ -134,6 +134,24 @@ _agent_prepare() {
 #   mesh0（802.11s 回程）放在 backhaul 频段 radio 上；
 #   backhaul=wired 时 mesh0 禁用，backhaul=wireless/auto 时启用。
 # ─────────────────────────────────────────────────────────────────────────────
+# radio 分类辅助函数（被 config_foreach _classify_radio wifi-device 调用）
+_classify_radio() {
+    local _n="$1" _b
+    config_get _b "$_n" band
+    case "$_b" in
+        2g*|2.4*|bgn|bg|b)
+            [ -z "$radio_2g" ] && radio_2g="$_n" ;;
+        5g*|5GHz*|an|a)
+            _seen5g=$((_seen5g+1))
+            if [ "$_seen5g" -eq 1 ]; then
+                [ -z "$radio_5g" ] && radio_5g="$_n"
+            else
+                [ -z "$radio_5g2" ] && radio_5g2="$_n"
+            fi
+            ;;
+    esac
+}
+
 _setup_ap_iface() {
     local name="$1" radio="$2" ssid="$3" key="$4"
     local ieee80211r="$5" mobility_domain="$6" ft_over_ds="$7"
@@ -271,23 +289,7 @@ apply_mesh_config() {
     log "apply_mesh_config done (%s AP(s) created)" "$_ap_idx"
 }
 
-# radio 分类辅助函数（被 config_foreach 调用）
-_classify_radio() {
-    local _n="$1" _b
-    config_get _b "$_n" band
-    case "$_b" in
-        2g*|2.4*|bgn|bg|b)
-            [ -z "$radio_2g" ] && radio_2g="$_n" ;;
-        5g*|5GHz*|an|a)
-            _seen5g=$((_seen5g+1))
-            if [ "$_seen5g" -eq 1 ]; then
-                [ -z "$radio_5g" ] && radio_5g="$_n"
-            else
-                [ -z "$radio_5g2" ] && radio_5g2="$_n"
-            fi
-            ;;
-    esac
-}
+
 
 # ── procd ─────────────────────────────────────────────────────────────────────
 start_service() {
@@ -362,6 +364,15 @@ stop_service() {
     for pid in $(pgrep -f "easymesh-(master|agent)" 2>/dev/null); do
         [ "$pid" != "$$" ] && kill "$pid" 2>/dev/null || true
     done
+
+    # 停止无线 onboard AP（临时开放热点）
+    if [ -f /tmp/easymesh_pair_hostapd.pid ]; then
+        kill "$(cat /tmp/easymesh_pair_hostapd.pid)" 2>/dev/null || true
+    fi
+    if [ -f /tmp/easymesh_pair_dnsmasq.pid ]; then
+        kill "$(cat /tmp/easymesh_pair_dnsmasq.pid)" 2>/dev/null || true
+    fi
+    iw dev easymesh-pair0 del 2>/dev/null || true
 
     cleanup_wireless
 

@@ -904,3 +904,53 @@ msgstr "有线"
 
 msgid "Applied on all radios (2.4 GHz + 5 GHz). Pushed to all agent nodes automatically."
 msgstr "应用于所有频段（2.4 GHz + 5 GHz）。批准后自动推送到所有 Agent 节点。"
+
+
+msgid "Multi-node mesh using batman-adv routing over wired Ethernet or 802.11s wireless backhaul."
+msgstr "多节点 Mesh 网络，通过有线以太网或 802.11s 无线回程运行 batman-adv 路由。"
+
+msgid "Wired uses LAN cable between nodes (batman-adv over Ethernet). Wireless uses a dedicated 802.11s link (batman-adv over 802.11s)."
+msgstr "有线模式通过 LAN 网线连接节点（batman-adv over Ethernet）；无线模式使用专用 802.11s 链路（batman-adv over 802.11s）。"
+
+msgid "Wireless (802.11s)"
+msgstr "无线（802.11s）"
+
+msgid "Client WiFi Name (SSID)"
+msgstr "客户端 WiFi 名称（SSID）"
+
+msgid "Name of the WiFi network that phones and computers connect to. Applied on all radios (2.4 GHz + 5 GHz). Pushed to all agent nodes."
+msgstr "手机和电脑连接的 WiFi 网络名称。应用于所有频段（2.4 GHz + 5 GHz），并自动推送到所有 Agent 节点。"
+
+msgid "Client WiFi Password"
+msgstr "客户端 WiFi 密码"
+
+msgid "802.11s Mesh ID"
+msgstr "802.11s Mesh 网络标识"
+
+msgid "Network name used by the wireless mesh backhaul (802.11s). Must be identical on all nodes. Not the same as the client WiFi SSID."
+msgstr "无线 Mesh 回程（802.11s）使用的网络标识，所有节点必须相同。与客户端连接的 WiFi 名称不同。"
+
+msgid "802.11s Mesh Password (SAE)"
+msgstr "802.11s Mesh 密码（SAE）"
+
+msgid "Encryption key for the wireless mesh backhaul. Must match on all nodes. Leave empty to disable mesh encryption (not recommended on wireless backhaul)."
+msgstr "无线 Mesh 回程的加密密钥，所有节点必须相同。留空则禁用 Mesh 加密（无线回程不推荐）。"
+
+msgid "802.11s Backhaul Band"
+msgstr "802.11s 回程频段"
+
+msgid "Radio band used for the 802.11s mesh backhaul link between nodes."
+msgstr "节点间 802.11s Mesh 回程链路使用的无线频段。"
+
+msgid "Wired backhaul active"
+msgstr "有线回程已启用"
+
+msgid "batman-adv routes mesh traffic over the LAN cable between nodes. No 802.11s configuration is needed — the wireless radio is fully available for client traffic."
+msgstr "batman-adv 通过节点间 LAN 网线转发 Mesh 流量。无需配置 802.11s，无线频段完全用于客户端接入。"
+
+msgid "Enable 802.11s path selection in addition to batman-adv. Normally disabled."
+msgstr "在 batman-adv 之外启用 802.11s 自身的路径选择。通常禁用，由 batman-adv 统一管理路由。"
+
+
+msgid "All Wi-Fi settings (SSID, password, channel, roaming, etc.) are automatically applied according to the master node's configuration once the agent is approved. No manual configuration required."
+msgstr "所有 Wi-Fi 设置（SSID、密码、信道、漫游等）在 Agent 被批准后，将自动按照主节点的配置应用，无需手动配置。"

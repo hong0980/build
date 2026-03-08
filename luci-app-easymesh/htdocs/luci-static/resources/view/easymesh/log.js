@@ -152,17 +152,18 @@ return view.extend({
 			});
 
 		var levelSelect = E('select', {
+			id: 'em-level-select',
 			style: 'background:#0d1117;border:1px solid #30363d;border-radius:5px;' +
 			       'color:#e6edf3;padding:4px 8px;font-size:12px;cursor:pointer',
-			onchange: function(ev) {
-				self._levelFilter = (ev || window.event).target.value;
+			onchange: function() {
+				self._levelFilter = this.value;
 				self._doRender();
 			}
 		}, [
-			E('option', { value: 'all',   selected: self._levelFilter === 'all'   }, _('All levels')),
-			E('option', { value: 'ERROR', selected: self._levelFilter === 'ERROR' }, '🔴 ' + _('ERROR only')),
-			E('option', { value: 'WARN',  selected: self._levelFilter === 'WARN'  }, '🟡 ' + _('WARN + ERROR')),
-			E('option', { value: 'INFO',  selected: self._levelFilter === 'INFO'  }, '🔵 ' + _('INFO only'))
+			E('option', { value: 'all'   }, _('All levels')),
+			E('option', { value: 'ERROR' }, '🔴 ' + _('ERROR only')),
+			E('option', { value: 'WARN'  }, '🟡 ' + _('WARN + ERROR')),
+			E('option', { value: 'INFO'  }, '🔵 ' + _('INFO only'))
 		]);
 
 		var searchBox = E('input', {
@@ -300,6 +301,9 @@ return view.extend({
 					'⚠️ ' + _('Warnings') + ': ' + counts['_warn']));
 			statusBar.appendChild(E('span', { style: 'margin-left:auto' },
 				_('Updated: %s').format(new Date().toLocaleTimeString())));
+			// 确保 select 显示当前值（DOM 重用时 selected 属性不会自动更新）
+			var _ls = document.getElementById('em-level-select');
+			if (_ls) _ls.value = self._levelFilter;
 		};
 
 		self._doRender();

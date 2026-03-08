@@ -981,7 +981,8 @@ find_master() {
     fi
 
     # -- 3. 快速扫描常见备用 IP --
-    for s in 2 254 100 101; do
+    # .250 是 wireless onboard AP（easymesh-pair0）的固定网关 IP
+    for s in 2 254 250 100 101; do
         local c="${prefix}.${s}"
         [ "$c" = "$my_ip" ] && continue
         if curl -s -m 2 "http://${c}:${MASTER_PORT}/ping" 2>/dev/null \
@@ -1022,17 +1023,38 @@ do_register() {
     [ -z "$mip" ] && return 1
 
     local mac ip hostname
-    mac=$(get_mac); ip=$(get_ip)
+    mac=$(get_mac)
     hostname=$(uci_get system @system[0] hostname node)
-    log "DBG do_register: to master=%s mac=%s ip=%s" "$mip" "$mac" "$ip"
+
+    # 判断注册来源：master IP 是 .250 说明是通过无线 onboard AP 发现的
+    local reg_source="wired"
+    echo "$mip" | grep -qE '\.250$' && reg_source="wireless"
+
+    if [ "$reg_source" = "wireless" ]; then
+        # 无线 onboard：br-lan 可能与 master IP 冲突（都是 .1）
+        # 优先取 wlan 接口拿到的临时 IP（DHCP 来自 onboard AP）作为注册 IP
+        local wlan_ip
+        wlan_ip=$(ip -4 addr show 2>/dev/null             | awk '/inet /{ip=$2} /wlan/{print ip; exit}'             | cut -d/ -f1)
+        # 若 wlan IP 在 master 同子网（onboard DHCP 范围 .200-.249），用它
+        local mprefix; mprefix=$(echo "$mip" | cut -d. -f1-3)
+        if echo "$wlan_ip" | grep -q "^${mprefix}\."; then
+            ip="$wlan_ip"
+            log "DBG do_register: onboard mode, using wlan IP=%s" "$ip"
+        else
+            ip=$(get_ip)
+        fi
+    else
+        ip=$(get_ip)
+    fi
+    log "DBG do_register: to master=%s mac=%s ip=%s via=%s" "$mip" "$mac" "$ip" "$reg_source"
     local resp
     resp=$(do_http_post \
         "http://${mip}:${MASTER_PORT}/register" \
-        "{\"mac\":\"$mac\",\"ip\":\"$ip\",\"hostname\":\"$hostname\",\"source\":\"wired\"}") || {
+        "{\"mac\":\"$mac\",\"ip\":\"$ip\",\"hostname\":\"$hostname\",\"source\":\"$reg_source\"}") || {
         loge "Failed to register with master %s" "$mip"
         return 1
     }
-    log "Registered with master %s (resp=%s)" "$mip" "$resp"
+    log "Registered with master %s via %s (resp=%s)" "$mip" "$reg_source" "$resp"
 }
 
 _last_profile_sum=""
@@ -1141,6 +1163,27 @@ apply_profile() {
     [ -n "$ft_over_ds" ]       && uci_set easymesh global ft_over_ds       "$ft_over_ds"
     [ -n "$mobility_domain" ]  && uci_set easymesh global mobility_domain  "$mobility_domain"
     uci_commit easymesh
+    # 更新 mesh0（802.11s 回程接口）—— 根据 backhaul 决定启用/禁用
+    # backhaul=wired  → mesh0 禁用（disabled=1），节省 5G 空口
+    # backhaul=wireless/auto → mesh0 启用，同步 mesh_id/mesh_key
+    if uci show wireless.mesh0 >/dev/null 2>&1; then
+        if [ "${backhaul:-wired}" = "wired" ]; then
+            uci_set wireless mesh0 disabled 1
+            log "apply_profile: mesh0 disabled (wired backhaul)"
+        else
+            uci_set wireless mesh0 disabled 0
+            [ -n "$mesh_id" ]  && uci_set wireless mesh0 mesh_id  "$mesh_id"
+            if [ -n "$mesh_key" ]; then
+                uci_set wireless mesh0 encryption sae
+                uci_set wireless mesh0 key "$mesh_key"
+            else
+                uci_set wireless mesh0 encryption none
+                uci -q del wireless.mesh0.key
+            fi
+            log "apply_profile: mesh0 enabled, mesh_id=%s" "${mesh_id:-OpenWrt-Mesh}"
+        fi
+        uci_commit wireless
+    fi
     # 更新无线 AP 接口配置
     # 更新所有 easymesh 管理的 AP（双频同名 AP，统一推送 ssid/key/roaming 参数）
     local _upd_ap
@@ -1512,10 +1555,47 @@ update_topology() {
 ########################################
 # 13. WIRELESS ONBOARDING AP
 ########################################
+_stop_onboard_ap() {
+    local _pid
+    if [ -f /tmp/easymesh_pair_hostapd.pid ]; then
+        _pid=$(cat /tmp/easymesh_pair_hostapd.pid)
+        kill "$_pid" 2>/dev/null || true
+        rm -f /tmp/easymesh_pair_hostapd.pid /tmp/easymesh_pair_hostapd.conf
+    fi
+    if [ -f /tmp/easymesh_pair_dnsmasq.pid ]; then
+        _pid=$(cat /tmp/easymesh_pair_dnsmasq.pid)
+        kill "$_pid" 2>/dev/null || true
+        rm -f /tmp/easymesh_pair_dnsmasq.pid
+    fi
+    iw dev easymesh-pair0 del 2>/dev/null || true
+    log "Wireless onboard AP stopped"
+}
+
 manage_wireless_onboard() {
     [ "$(get_role)" != "master" ] && return
     local en; en=$(uci get easymesh.global.wireless_onboard 2>/dev/null || echo 0)
-    [ "$en" != "1" ] && return
+
+    # onboard 功能关闭时：确保 AP 已停止
+    if [ "$en" != "1" ]; then
+        [ -f /tmp/easymesh_pair_hostapd.pid ] && _stop_onboard_ap
+        return
+    fi
+
+    # 如果没有 pending 节点 且 至少有一个 approved 节点 → 自动关闭 onboard AP
+    # （所有节点都已经加入，不需要继续广播临时 SSID）
+    local pending_count approved_count
+    pending_count=$(ls "$PENDING_DB"/*.json 2>/dev/null | wc -l)
+    approved_count=$(ls "$NODE_DB"/*.json   2>/dev/null | wc -l)
+    if [ "$pending_count" -eq 0 ] && [ "$approved_count" -gt 0 ]; then
+        if [ -f /tmp/easymesh_pair_hostapd.pid ] && \
+                kill -0 "$(cat /tmp/easymesh_pair_hostapd.pid)" 2>/dev/null; then
+            log "All nodes approved, stopping wireless onboard AP"
+            _stop_onboard_ap
+        fi
+        return
+    fi
+
+    # AP 已在运行
     [ -f /tmp/easymesh_pair_hostapd.pid ] && \
         kill -0 "$(cat /tmp/easymesh_pair_hostapd.pid)" 2>/dev/null && return
     local ssid mac prefix
