@@ -285,6 +285,10 @@ apply_mesh_config() {
         _setup_ap_iface easymesh_ap "radio0" "$ssid" "$key"             "$ieee80211r" "$mobility_domain" "$ft_over_ds"             "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
         log "AP created: easymesh_ap on radio0 (fallback)"
     fi
+    # 确保相关 radio 设备本身不处于 disabled 状态
+    [ -n "$radio_mesh" ] && uci -q del wireless.${radio_mesh}.disabled
+    [ -n "$radio_5g" ]  && uci -q del wireless.${radio_5g}.disabled
+    [ -n "$radio_2g" ]  && uci -q del wireless.${radio_2g}.disabled
     uci commit wireless
     log "apply_mesh_config done (%s AP(s) created)" "$_ap_idx"
 }
@@ -349,7 +353,9 @@ start_service() {
         log "br-lan IP ready: %s" "$_lip"
     fi
 
-    ( sleep 2; wifi reload ) &
+    log "Reloading wireless config..."
+    wifi reload
+    log "Wireless reload done"
 
     log "Starting EasyMesh daemon..."
     procd_open_instance "easymesh-${role}"

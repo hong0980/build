@@ -190,6 +190,21 @@ do_http_post() {
 ########################################
 # 1. PROCESS MANAGEMENT
 ########################################
+# pkill -f 的替代实现（不依赖 pkill 包）
+_pkill() {
+    local pattern="$1"
+    local _p _pid _cmd
+    for _p in /proc/[0-9]*/cmdline; do
+        [ -f "$_p" ] || continue
+        _pid="${_p%/cmdline}"; _pid="${_pid##*/}"
+        [ "$_pid" = "$$" ] && continue
+        _cmd=$(tr '\0' ' ' < "$_p" 2>/dev/null)
+        case "$_cmd" in
+            *${pattern}*) kill "$_pid" 2>/dev/null || true ;;
+        esac
+    done
+}
+
 _stop_jobs() {
     [ -d "$EM_PID_DIR" ] || return 0
     local _f _pid
@@ -356,10 +371,12 @@ setup_wired_backhaul() {
     ip link set "$MESH_IF" up 2>/dev/null
     # 等待 bat0 sysfs mesh 目录就绪（驱动初始化需要片刻）
     local _sw=0
-    while [ ! -d "/sys/class/net/$MESH_IF/mesh" ] && [ $_sw -lt 10 ]; do
+    while [ ! -d "/sys/class/net/$MESH_IF/mesh" ] && [ $_sw -lt 2 ]; do
         sleep 1; _sw=$((_sw+1))
     done
-    [ ! -d "/sys/class/net/$MESH_IF/mesh" ] &&         log "WARN: bat0/mesh sysfs not ready after 10s (batman-adv version issue?)"
+    [ -d "/sys/class/net/$MESH_IF/mesh" ] \
+        && log "DBG backhaul: bat0/mesh sysfs ready" \
+        || log "DBG backhaul: bat0/mesh sysfs not present (normal for this batman-adv version)"
 
     local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
     log "DBG backhaul: mode=%s" "$backhaul"
@@ -778,8 +795,8 @@ run_node_server() {
     log "HTTP server starting on port %s (socat+TCP)" "$MASTER_PORT"
 
     # 杀掉旧的同端口进程
-    pkill -f "socat.*TCP.*${MASTER_PORT}" 2>/dev/null || true
-    pkill -f "uhttpd.*${MASTER_PORT}" 2>/dev/null || true
+    _pkill "socat.*TCP.*${MASTER_PORT}"
+    _pkill "uhttpd.*${MASTER_PORT}"
     sleep 1
 
     # socat TCP listener：每个连接 fork，调用本脚本的 __socat_http 入口
@@ -1649,7 +1666,6 @@ main_loop() {
     _dbg_init   # 预翻译 _dbg 字符串，export 给 socat 子进程
     _stop_jobs
     mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR"
-    echo $$ > "${EM_PID_DIR}/easymesh_$(get_role).pid"
 
     { printf "\n" >> "$LOGFILE" 2>/dev/null
       log "================================================"
@@ -1664,6 +1680,7 @@ main_loop() {
     log "Hardware: %s" "$hw_type"
 
     elect_role
+    echo $$ > "${EM_PID_DIR}/easymesh_$(get_role).pid"  # elect_role 之后写，角色确定
     tune_batman
     setup_wired_backhaul
 
@@ -1696,6 +1713,9 @@ main_loop() {
             if [ "$(get_role)" != "$_prev_role" ]; then
                 _registered=0
                 log "Role switch: %s -> %s" "$_prev_role" "$(get_role)"
+                # 角色变了，更新 pid 文件名
+                rm -f "${EM_PID_DIR}/easymesh_${_prev_role}.pid"
+                echo $$ > "${EM_PID_DIR}/easymesh_$(get_role).pid"
                 if [ "$(get_role)" = "master" ]; then
                     _bg disc_server discovery_server
                     generate_profile
