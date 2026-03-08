@@ -4,25 +4,25 @@
 		"read": {
 			"uci": [ "easymesh", "wireless", "network", "batman-adv" ],
 			"ubus": {
-				"uci": [ "get", "changes" ],
-				"network.interface": [ "status", "dump" ],
-				"network.wireless": [ "status" ],
 				"file": [ "read", "stat" ],
-				"easymesh": [ "pending", "approved", "topology", "log_read" ]
+				"uci": [ "get", "changes" ],
+				"network.wireless": [ "status" ],
+				"network.interface": [ "status", "dump" ],
+				"easymesh": [ "pending", "approved", "topology", "log_read", "neighbors" ]
 			},
 			"file": {
 				"/tmp/easymesh.log": [ "read", "write" ],
-				"/sys/kernel/debug/batman_adv/bat0/originators": [ "read" ],
 				"/sys/kernel/debug/batman_adv/bat0/neighbors": [ "read" ],
+				"/sys/kernel/debug/batman_adv/bat0/originators": [ "read" ],
 				"/sys/kernel/debug/batman_adv/bat0/transtable_global": [ "read" ]
 			}
 		},
 		"write": {
 			"uci": [ "easymesh", "wireless", "network", "batman-adv" ],
 			"ubus": {
-				"uci": [ "add", "set", "delete", "apply", "confirm", "order" ],
 				"network.interface": [ "up", "down" ],
-				"easymesh": [ "approve", "reject", "log_clear" ]
+				"easymesh": [ "approve", "reject", "log_clear" ],
+				"uci": [ "add", "set", "delete", "apply", "confirm", "order" ]
 			},
 			"file": {
 				"/tmp/easymesh.log": [ "read", "write" ]

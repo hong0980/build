@@ -128,8 +128,47 @@ _agent_prepare() {
 }
 
 # ── 配置 UCI wireless + dummy network.mesh section ───────────────────────────
-# agent 模式：ssid/key/mesh_id/mesh_key 等 WiFi 参数由 master 通过 profile push
-# 自动下发并写入 UCI，这里只建立 wifi-iface 框架和结构，值用 UCI 里已有的即可。
+#   master 配置 ssid/key，initd 在所有可用 radio 上各创建一个同名 AP，
+#   实现 2.4G + 5G 合并同一 SSID（Band Steering 由客户端自动选频）。
+#   agent 收到 master profile push 后也执行同样逻辑，配置完全一致。
+#   mesh0（802.11s 回程）放在 backhaul 频段 radio 上；
+#   backhaul=wired 时 mesh0 禁用，backhaul=wireless/auto 时启用。
+# ─────────────────────────────────────────────────────────────────────────────
+_setup_ap_iface() {
+    local name="$1" radio="$2" ssid="$3" key="$4"
+    local ieee80211r="$5" mobility_domain="$6" ft_over_ds="$7"
+    local reassociation_deadline="$8" ieee80211k="$9" ieee80211v="${10}"
+    uci set wireless.${name}=wifi-iface
+    uci set wireless.${name}.device="$radio"
+    uci set wireless.${name}.mode='ap'
+    uci set wireless.${name}.ssid="$ssid"
+    uci set wireless.${name}.network='lan'
+    uci set wireless.${name}.easymesh_managed='1'
+    uci set wireless.${name}.disabled='0'
+    if [ -n "$key" ]; then
+        uci set wireless.${name}.encryption='psk2+ccmp'
+        uci set wireless.${name}.key="$key"
+    else
+        uci set wireless.${name}.encryption='none'
+    fi
+    [ "$ieee80211r" = "1" ] && {
+        uci set wireless.${name}.ieee80211r='1'
+        uci set wireless.${name}.mobility_domain="$mobility_domain"
+        uci set wireless.${name}.ft_over_ds="$ft_over_ds"
+        uci set wireless.${name}.ft_psk_generate_local='1'
+        uci set wireless.${name}.reassociation_deadline="$reassociation_deadline"
+    }
+    [ "$ieee80211k" = "1" ] && {
+        uci set wireless.${name}.ieee80211k='1'
+        uci set wireless.${name}.rrm_neighbor_report='1'
+        uci set wireless.${name}.rrm_beacon_report='1'
+    }
+    [ "$ieee80211v" = "1" ] && {
+        uci set wireless.${name}.ieee80211v='1'
+        uci set wireless.${name}.bss_transition='1'
+    }
+}
+
 apply_mesh_config() {
     local role backhaul mesh_id mesh_key mesh_band ssid key
     local ieee80211r mobility_domain ft_over_ds reassociation_deadline
@@ -154,17 +193,29 @@ apply_mesh_config() {
 
     cleanup_wireless
 
+    # ── 找出所有可用 radio，分类为 2.4G 和 5G ────────────────────────────────
+    local radio_2g="" radio_5g="" radio_5g2=""
+    local _seen5g=0
+    config_load wireless
+    config_foreach _classify_radio wifi-device
+    # 回程 radio：优先使用 mesh_band 对应的那个
     local radio_mesh
-    get_radio radio_mesh "$mesh_band"
-    [ -z "$radio_mesh" ] && radio_mesh="radio0"
-    log "apply_mesh_config: role=%s backhaul=%s radio=%s" "$role" "$backhaul" "$radio_mesh"
+    if [ "$mesh_band" = "2g" ]; then
+        radio_mesh="$radio_2g"
+    else
+        radio_mesh="$radio_5g"
+    fi
+    [ -z "$radio_mesh" ] && radio_mesh=$(uci show wireless 2>/dev/null         | awk -F= '/=wifi-device/{print $1}' | head -1 | sed 's/wireless\.//')
+    log "apply_mesh_config: role=%s backhaul=%s mesh_radio=%s 2g=%s 5g=%s"         "$role" "$backhaul" "$radio_mesh" "$radio_2g" "$radio_5g"
 
-    # ── network.mesh：dummy section，只为给 wireless.mesh0.network 提供绑定 ──
+    # ── network.mesh dummy section ────────────────────────────────────────────
     uci set network.mesh=interface
     uci set network.mesh.proto='none'
     uci commit network
 
-    # ── 无线 mesh 回程（802.11s），backhaul=wired 时禁用 ─────────────────────
+    # ── 无线 mesh 回程（802.11s）─────────────────────────────────────────────
+    # backhaul=wired → disabled=1（禁用，节省空口）
+    # backhaul=wireless/auto → disabled=0（启用，作为 mesh 回程）
     uci set wireless.mesh0=wifi-iface
     uci set wireless.mesh0.device="$radio_mesh"
     uci set wireless.mesh0.mode='mesh'
@@ -182,9 +233,6 @@ apply_mesh_config() {
     uci set wireless.mesh0.disabled=$([ "$backhaul" = "wired" ] && echo '1' || echo '0')
 
     # ── DHCP server 策略 ──────────────────────────────────────────────────────
-    # 有线直连：两台路由器 br-lan 各自独立，agent 必须保留自己的 DHCP
-    #           否则下挂客户端拿不到 IP
-    # 无线 mesh：bat0 联成同一二层域，agent 关 DHCP 由 master 统一服务
     if [ "$role" = "master" ]; then
         uci -q del dhcp.lan.ignore
         log "Role: master — DHCP enabled"
@@ -197,38 +245,48 @@ apply_mesh_config() {
     fi
     uci commit dhcp
 
-    # ── 客户端 AP ─────────────────────────────────────────────────────────────
-    uci set wireless.easymesh_ap=wifi-iface
-    uci set wireless.easymesh_ap.device="$radio_mesh"
-    uci set wireless.easymesh_ap.mode='ap'
-    uci set wireless.easymesh_ap.ssid="$ssid"
-    uci set wireless.easymesh_ap.network='lan'
-    uci set wireless.easymesh_ap.easymesh_managed='1'
-    uci set wireless.easymesh_ap.disabled='0'
-    if [ -n "$key" ]; then
-        uci set wireless.easymesh_ap.encryption='psk2+ccmp'
-        uci set wireless.easymesh_ap.key="$key"
-    else
-        uci set wireless.easymesh_ap.encryption='none'
+    # ── 客户端 AP（双频合并）───────────────────────────────
+    # 所有可用频段均创建同名 AP，客户端自动选择 2.4G/5G（BSS 由 802.11k/v 辅助）
+    # 5G 优先：5G radio 上创建 easymesh_ap（主 AP，用于 rpcd 统计）
+    # 2.4G radio 上创建 easymesh_ap_2g（覆盖补充）
+    local _ap_idx=0
+    # 5G AP（主）
+    if [ -n "$radio_5g" ]; then
+        _setup_ap_iface easymesh_ap "$radio_5g" "$ssid" "$key"             "$ieee80211r" "$mobility_domain" "$ft_over_ds"             "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+        _ap_idx=$((_ap_idx+1))
+        log "AP created: easymesh_ap on %s (5G, ssid=%s)" "$radio_5g" "$ssid"
     fi
-    [ "$ieee80211r" = "1" ] && {
-        uci set wireless.easymesh_ap.ieee80211r='1'
-        uci set wireless.easymesh_ap.mobility_domain="$mobility_domain"
-        uci set wireless.easymesh_ap.ft_over_ds="$ft_over_ds"
-        uci set wireless.easymesh_ap.ft_psk_generate_local='1'
-        uci set wireless.easymesh_ap.reassociation_deadline="$reassociation_deadline"
-    }
-    [ "$ieee80211k" = "1" ] && {
-        uci set wireless.easymesh_ap.ieee80211k='1'
-        uci set wireless.easymesh_ap.rrm_neighbor_report='1'
-        uci set wireless.easymesh_ap.rrm_beacon_report='1'
-    }
-    [ "$ieee80211v" = "1" ] && {
-        uci set wireless.easymesh_ap.ieee80211v='1'
-        uci set wireless.easymesh_ap.bss_transition='1'
-    }
+    # 2.4G AP（补充覆盖）
+    if [ -n "$radio_2g" ]; then
+        _setup_ap_iface easymesh_ap_2g "$radio_2g" "$ssid" "$key"             "$ieee80211r" "$mobility_domain" "$ft_over_ds"             "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+        _ap_idx=$((_ap_idx+1))
+        log "AP created: easymesh_ap_2g on %s (2.4G, ssid=%s)" "$radio_2g" "$ssid"
+    fi
+    # 兜底：如果没有识别到任何 radio，用 radio0
+    if [ "$_ap_idx" -eq 0 ]; then
+        _setup_ap_iface easymesh_ap "radio0" "$ssid" "$key"             "$ieee80211r" "$mobility_domain" "$ft_over_ds"             "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+        log "AP created: easymesh_ap on radio0 (fallback)"
+    fi
     uci commit wireless
-    log "apply_mesh_config done"
+    log "apply_mesh_config done (%s AP(s) created)" "$_ap_idx"
+}
+
+# radio 分类辅助函数（被 config_foreach 调用）
+_classify_radio() {
+    local _n="$1" _b
+    config_get _b "$_n" band
+    case "$_b" in
+        2g*|2.4*|bgn|bg|b)
+            [ -z "$radio_2g" ] && radio_2g="$_n" ;;
+        5g*|5GHz*|an|a)
+            _seen5g=$((_seen5g+1))
+            if [ "$_seen5g" -eq 1 ]; then
+                [ -z "$radio_5g" ] && radio_5g="$_n"
+            else
+                [ -z "$radio_5g2" ] && radio_5g2="$_n"
+            fi
+            ;;
+    esac
 }
 
 # ── procd ─────────────────────────────────────────────────────────────────────

@@ -858,3 +858,49 @@ msgstr "角色切换: %s → %s"
 msgid "DBG main_loop iter=%s: master not found yet, will retry"
 msgstr "主循环第 %s 次: 主节点尚未找到，继续重试"
 
+
+
+msgid "Agent configuration is managed by the Master"
+msgstr "Agent 的配置由 Master 统一管理"
+
+msgid "Broadcast a temporary open SSID so new nodes can join without a cable."
+msgstr "广播一个临时的开放 SSID，让新节点无需网线即可加入。"
+
+msgid "Fixed channel for dedicated backhaul radio. 149/153/157/161 recommended."
+msgstr "专用回程 radio 的固定信道，推荐使用 149/153/157/161（无 DFS，80 MHz 干净）。"
+
+msgid "Include radar-protected 5 GHz DFS channels in ACS scan."
+msgstr "在 ACS 自动选频时包含受雷达保护的 5 GHz DFS 信道（52–140）。"
+
+msgid "Live topology map. Link color = signal quality: green ≥70%, yellow ≥40%, red <40%. Hover nodes for details."
+msgstr "实时拓扑图。链路颜色表示信号质量：绿色 ≥70%，黄色 ≥40%，红色 <40%。悬停节点可查看详情。"
+
+msgid "Must be identical on all nodes. Leave empty to disable encryption."
+msgstr "所有节点必须相同。留空则禁用加密（不推荐）。"
+
+msgid "No topology data yet. Waiting for mesh to form..."
+msgstr "暂无拓扑数据，等待 Mesh 网络形成……"
+
+msgid "Pre-negotiate keys over wired backbone for faster transition."
+msgstr "通过有线骨干网预协商密钥，实现更快的漫游切换。禁用可解决兼容性问题。"
+
+msgid "Pushed to all agent nodes automatically."
+msgstr "批准后自动推送到所有 Agent 节点。"
+
+msgid "Real-time batman-adv originator table. TQ: 255 = best. Refreshes every 5 seconds."
+msgstr "实时 batman-adv 邻居表。TQ：255 为最佳。每 5 秒自动刷新。"
+
+msgid "Reserve the second 5 GHz radio exclusively for node-to-node backhaul."
+msgstr "将第二块 5 GHz radio 专用于节点间回程通信，客户端不连接此 radio，保障回程带宽。"
+
+msgid "WPA2/WPA3. Leave empty for open network. Will be pushed to all agents."
+msgstr "WPA2/WPA3 加密。留空则为开放网络。批准后自动推送到所有 Agent。"
+
+msgid "bat0 interface is not running. Check batman-adv installation (kmod-batman-adv)."
+msgstr "bat0 接口未运行。请检查 batman-adv 是否已安装（kmod-batman-adv）。"
+
+msgid "wired"
+msgstr "有线"
+
+msgid "Applied on all radios (2.4 GHz + 5 GHz). Pushed to all agent nodes automatically."
+msgstr "应用于所有频段（2.4 GHz + 5 GHz）。批准后自动推送到所有 Agent 节点。"

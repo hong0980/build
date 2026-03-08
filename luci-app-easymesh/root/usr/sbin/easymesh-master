@@ -1142,29 +1142,31 @@ apply_profile() {
     [ -n "$mobility_domain" ]  && uci_set easymesh global mobility_domain  "$mobility_domain"
     uci_commit easymesh
     # 更新无线 AP 接口配置
-    local _ap_sect
-    _ap_sect=$(uci show wireless 2>/dev/null |         awk -F= '/=wifi-iface/{gsub(/wireless\./,""); s=$1} /\.mode=.ap/{print s; exit}')
-    [ -z "$_ap_sect" ] && _ap_sect="@wifi-iface[0]"
-    uci_set wireless ${_ap_sect} ssid "$ssid"
-    [ -n "$key" ] && {
-        uci_set wireless ${_ap_sect} encryption 'psk2+ccmp'
-        uci_set wireless ${_ap_sect} key "$key"
-    }
-    [ "${ieee80211k:-1}" = "1" ] && {
-        uci_set wireless ${_ap_sect} ieee80211k 1
-        uci_set wireless ${_ap_sect} rrm_neighbor_report 1
-        uci_set wireless ${_ap_sect} rrm_beacon_report 1
-    }
-    [ "${ieee80211v:-1}" = "1" ] && {
-        uci_set wireless ${_ap_sect} ieee80211v 1
-        uci_set wireless ${_ap_sect} bss_transition 1
-    }
-    [ "${ieee80211r:-1}" = "1" ] && {
-        uci_set wireless ${_ap_sect} ieee80211r 1
-        uci_set wireless ${_ap_sect} ft_psk_generate_local 1
-        [ -n "$mobility_domain" ] && uci_set wireless ${_ap_sect} mobility_domain "$mobility_domain"
-        [ -n "$ft_over_ds" ]      && uci_set wireless ${_ap_sect} ft_over_ds "$ft_over_ds"
-    }
+    # 更新所有 easymesh 管理的 AP（双频同名 AP，统一推送 ssid/key/roaming 参数）
+    local _upd_ap
+    for _upd_ap in easymesh_ap easymesh_ap_2g; do
+        uci show wireless."${_upd_ap}" >/dev/null 2>&1 || continue
+        uci_set wireless ${_upd_ap} ssid "$ssid"
+        [ -n "$key" ] && {
+            uci_set wireless ${_upd_ap} encryption 'psk2+ccmp'
+            uci_set wireless ${_upd_ap} key "$key"
+        }
+        [ "${ieee80211k:-1}" = "1" ] && {
+            uci_set wireless ${_upd_ap} ieee80211k 1
+            uci_set wireless ${_upd_ap} rrm_neighbor_report 1
+            uci_set wireless ${_upd_ap} rrm_beacon_report 1
+        }
+        [ "${ieee80211v:-1}" = "1" ] && {
+            uci_set wireless ${_upd_ap} ieee80211v 1
+            uci_set wireless ${_upd_ap} bss_transition 1
+        }
+        [ "${ieee80211r:-1}" = "1" ] && {
+            uci_set wireless ${_upd_ap} ieee80211r 1
+            uci_set wireless ${_upd_ap} ft_psk_generate_local 1
+            [ -n "$mobility_domain" ] && uci_set wireless ${_upd_ap} mobility_domain "$mobility_domain"
+            [ -n "$ft_over_ds" ]      && uci_set wireless ${_upd_ap} ft_over_ds "$ft_over_ds"
+        }
+    done
     [ -n "$channel" ] && [ "$channel" != "auto" ] && {
         local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
         [ -n "$rd" ] && uci set "${rd}.channel=$channel"
@@ -1172,7 +1174,7 @@ apply_profile() {
     uci_commit wireless
     setup_wired_backhaul
     wifi reload
-    log "Profile applied. Agent now mirrors master config."
+    log "Profile applied. Agent now mirrors master config (dual-band AP)."
 }
 
 ########################################
