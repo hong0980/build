@@ -86,13 +86,13 @@ translate() {
 # 用于把翻译结果存入变量再格式化
 _t() { translate "$1"; }
 
+_dbg_export() {
+    local raw="$1"
+    local key; key=$(printf '%s' "$raw" | tr -cd 'a-zA-Z0-9' | cut -c1-40)
+    local val; val=$(translate "$raw")
+    export "_DT_${key}=${val}"
+}
 _dbg_init() {
-    _dbg_export() {
-        local raw="$1"
-        local key; key=$(printf '%s' "$raw" | tr -cd 'a-zA-Z0-9' | cut -c1-40)
-        local val; val=$(translate "$raw")
-        export "_DT_${key}=${val}"
-    }
     _dbg_export "__handle_hello invoked"
     _dbg_export "__handle_hello: empty or timeout"
     _dbg_export "__handle_hello: unknown cmd"
@@ -303,8 +303,10 @@ tune_batman() {
     local _last; _last=$(cat /tmp/easymesh_batman_state 2>/dev/null)
     if [ "$_state_key" != "$_last" ]; then
         if [ "$_bmode" = "wired" ]; then
-            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null || true
-            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null || true
+            if [ -d /sys/class/net/bat0/mesh ]; then
+                echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null
+                echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
+            fi
             log "batman-adv: BLA=off DAT=off (wired mode)"
         fi
         if [ "$_role" = "master" ]; then
@@ -317,9 +319,9 @@ tune_batman() {
         printf '%s' "$_state_key" > /tmp/easymesh_batman_state
     else
         # 静默执行，不打日志
-        [ "$_bmode" = "wired" ] && {
-            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null || true
-            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null || true
+        [ "$_bmode" = "wired" ] && [ -d /sys/class/net/bat0/mesh ] && {
+            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null
+            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
         }
         [ "$_role" = "master" ] \
             && batctl meshif "$MESH_IF" gw_mode server 2>/dev/null \
@@ -413,8 +415,10 @@ setup_wired_backhaul() {
             log "DBG backhaul: bat0 not in br-lan (correct for wired mode)"
         fi
         # 禁用 BLA 和 DAT，避免干扰 LAN 流量
-        echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null || true
-        echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table 2>/dev/null || true
+        if [ -d /sys/class/net/bat0/mesh ]; then
+            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null
+            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table 2>/dev/null
+        fi
     else
         # 无线/自动回程：bat0 需要在 br-lan 里（通过 bat0 转发 mesh 流量）
         if ! ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan"; then
@@ -1546,7 +1550,7 @@ update_topology() {
         nodes="${nodes},{\"mac\":\"$db_mac\",\"ip\":\"$db_ip\",\"role\":\"agent\",\"hostname\":\"$db_hostname\",\"backhaul\":\"$db_source\",\"clients\":0}"
     done
     local bat0_up
-    ip link show bat0 2>/dev/null | grep -q ',UP,\|<UP\|,UP>' \
+    ip link show bat0 2>/dev/null | grep -qE ',UP,|<UP|,UP>' \
         && bat0_up="true" || bat0_up="false"
     printf '{"ts":%d,"nodes":[%s],"links":[%s],"bat0_up":%s}\n' \
         "$(date +%s)" "$nodes" "${links:-}" "$bat0_up" > "$TOPO_FILE"

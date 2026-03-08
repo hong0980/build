@@ -12,6 +12,7 @@ var callMeshTopology  = rpc.declare({ object: 'easymesh', method: 'topology'  })
 var callMeshNeighbors = rpc.declare({ object: 'easymesh', method: 'neighbors' });
 var callMeshApprove   = rpc.declare({ object: 'easymesh', method: 'approve', params: ['mac'] });
 var callMeshReject    = rpc.declare({ object: 'easymesh', method: 'reject',  params: ['mac'] });
+var callMeshStatus    = rpc.declare({ object: 'easymesh', method: 'status'  });
 
 /* ── TQ helpers ─────────────────────────────────────────────────────────── */
 function tqColor(tq) {
@@ -180,7 +181,8 @@ return view.extend({
 			callMeshTopology(),
 			callMeshPending(),
 			callMeshApproved(),
-			callMeshNeighbors()
+			callMeshNeighbors(),
+			callMeshStatus()
 		]);
 	},
 
@@ -199,7 +201,7 @@ return view.extend({
 		}
 
 		var root = E('div', { id: 'easymesh-nodes-root' });
-		root.appendChild(self._buildInner(data[1], data[2], data[3], data[4]));
+		root.appendChild(self._buildInner(data[1], data[2], data[3], data[4], data[5]));
 
 		/* Poll 1: refresh all data blocks every 5s */
 		poll.add(function() {
@@ -207,10 +209,11 @@ return view.extend({
 				callMeshTopology(),
 				callMeshPending(),
 				callMeshApproved(),
-				callMeshNeighbors()
+				callMeshNeighbors(),
+				callMeshStatus()
 			]).then(function(r) {
 				var old = document.getElementById('easymesh-nodes-inner');
-				if (old) old.replaceWith(self._buildInner(r[0], r[1], r[2], r[3]));
+				if (old) old.replaceWith(self._buildInner(r[0], r[1], r[2], r[3], r[4]));
 			}).catch(function() {});
 		}, 5);
 
@@ -259,7 +262,7 @@ return view.extend({
 	},
 
 	/* _buildInner ───────────────────────────────────────────────────────── */
-	_buildInner: function(topology, pendingResp, approvedResp, neighborsResp) {
+	_buildInner: function(topology, pendingResp, approvedResp, neighborsResp, statusResp) {
 		var self = this;
 		var el   = E('div', { id: 'easymesh-nodes-inner' });
 
@@ -368,21 +371,33 @@ return view.extend({
 		}
 
 		/* ── Section 3: Mesh Status ──────────────────────────────────── */
-		var bat0Up = topology && topology.bat0_up;
-		var links  = (topology && Array.isArray(topology.links)) ? topology.links : [];
+		var bat0Up     = topology && topology.bat0_up;
+		var links      = (topology && Array.isArray(topology.links)) ? topology.links : [];
+		var svc        = statusResp || {};
+		var daemonUp   = svc.daemon_running === true;
+		var kmodLoaded = svc.kmod_loaded   === true;
 		el.appendChild(E('div', { class: 'cbi-section' }, [
 			E('h3', {}, _('Mesh Status')),
 			E('div', { class: 'table' }, [
 				E('div', { class: 'tr' }, [
 					E('div', { class: 'td left', style: 'width:160px' }, 'bat0'),
 					E('div', { class: 'td' }, bat0Up
-						? E('span', { class: 'label',
-							style: 'background:#2ea44f;color:#fff;padding:2px 8px;border-radius:4px'
-						  }, _('Running'))
-						: E('span', { class: 'label',
-							style: 'background:#f85149;color:#fff;padding:2px 8px;border-radius:4px'
-						  }, _('Not running'))
-					)
+						? E('span', { style: 'background:#2ea44f;color:#fff;padding:2px 8px;border-radius:4px' }, _('Running'))
+						: E('span', { style: 'background:#f85149;color:#fff;padding:2px 8px;border-radius:4px' }, _('Not running')))
+				]),
+				E('div', { class: 'tr' }, [
+					E('div', { class: 'td left' }, _('Daemon')),
+					E('div', { class: 'td' }, daemonUp
+						? E('span', { style: 'background:#2ea44f;color:#fff;padding:2px 8px;border-radius:4px' },
+							_('Running') + (svc.role ? ' (' + svc.role + ')' : ''))
+						: E('span', { style: 'background:#f85149;color:#fff;padding:2px 8px;border-radius:4px' }, _('Not running')))
+				]),
+				E('div', { class: 'tr' }, [
+					E('div', { class: 'td left' }, 'kmod-batman-adv'),
+					E('div', { class: 'td' }, kmodLoaded
+						? E('span', { style: 'background:#2ea44f;color:#fff;padding:2px 8px;border-radius:4px' }, _('Loaded'))
+						: E('span', { style: 'background:#f85149;color:#fff;padding:2px 8px;border-radius:4px' }, _('Not loaded')))
+					
 				]),
 				E('div', { class: 'tr' }, [
 					E('div', { class: 'td left' }, _('Neighbor nodes')),
@@ -397,9 +412,11 @@ return view.extend({
 			E('p', { class: 'cbi-section-descr' },
 				_('Real-time batman-adv originator table. TQ: 255 = best. Refreshes every 5 seconds.')),
 			neighbors.length === 0
-				? E('div', { class: 'alert-message' }, bat0Up
-					? _('No neighbors found. Verify all nodes share the same Mesh ID and password.')
-					: _('bat0 interface is not running. Check batman-adv installation (kmod-batman-adv).'))
+				? E('div', { class: 'alert-message' },
+					!daemonUp ? _('EasyMesh daemon is not running. Enable EasyMesh and restart the service.')
+					: !kmodLoaded ? _('kmod-batman-adv is not installed. Run: opkg install kmod-batman-adv')
+					: !bat0Up ? _('bat0 is not running. Try restarting the EasyMesh service.')
+					: _('No neighbors found. Verify all nodes share the same Mesh ID and password.'))
 				: E('div', { class: 'table' },
 					[E('div', { class: 'tr table-titles' }, [
 						E('div', { class: 'td', style: 'font-family:monospace;width:160px' }, _('MAC')),

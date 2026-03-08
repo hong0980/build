@@ -954,3 +954,21 @@ msgstr "在 batman-adv 之外启用 802.11s 自身的路径选择。通常禁用
 
 msgid "All Wi-Fi settings (SSID, password, channel, roaming, etc.) are automatically applied according to the master node's configuration once the agent is approved. No manual configuration required."
 msgstr "所有 Wi-Fi 设置（SSID、密码、信道、漫游等）在 Agent 被批准后，将自动按照主节点的配置应用，无需手动配置。"
+
+msgid "Daemon"
+msgstr "守护进程"
+
+msgid "Loaded"
+msgstr "已加载"
+
+msgid "Not loaded"
+msgstr "未加载"
+
+msgid "EasyMesh daemon is not running. Enable EasyMesh and restart the service."
+msgstr "EasyMesh 守护进程未运行，请在概览页面启用 EasyMesh 并重启服务。"
+
+msgid "kmod-batman-adv is not installed. Run: opkg install kmod-batman-adv"
+msgstr "kmod-batman-adv 内核模块未安装，请执行：opkg install kmod-batman-adv"
+
+msgid "bat0 is not running. Try restarting the EasyMesh service."
+msgstr "bat0 接口未启动，请尝试重启 EasyMesh 服务。"

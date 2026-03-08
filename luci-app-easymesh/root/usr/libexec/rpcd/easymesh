@@ -13,6 +13,7 @@ list() {
     printf '  "approved":  {},\n'
     printf '  "topology":  {},\n'
     printf '  "neighbors": {},\n'
+    printf '  "status":    {},\n'
     printf '  "log":       { "lines": 0 },\n'
     printf '  "approve":   { "mac": "" },\n'
     printf '  "reject":    { "mac": "" }\n'
@@ -44,6 +45,7 @@ call() {
             _reject "$mac"
             ;;
         neighbors) _neighbors ;;
+        status)    _status ;;
         *) printf '{"error":"unknown method: %s"}\n' "$method"; return 1 ;;
     esac
 }
@@ -104,6 +106,28 @@ _neighbors() {
     json_dump
 }
 
+_status() {
+    # 检查 daemon 是否运行
+    local daemon_running="false" role="unknown" bat0_up="false" kmod_loaded="false"
+    # 检查 kmod-batman-adv
+    if grep -q batman_adv /proc/modules 2>/dev/null ||        lsmod 2>/dev/null | grep -q batman_adv; then
+        kmod_loaded="true"
+    fi
+    # 检查 bat0 是否 UP
+    ip link show bat0 2>/dev/null | grep -qE ',UP,|<UP|,UP>' && bat0_up="true"
+    # 检查 daemon 进程
+    local pid
+    for r in master agent; do
+        pid=$(cat "${EM_PID_DIR}/easymesh_${r}.pid" 2>/dev/null)
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            daemon_running="true"
+            role="$r"
+            break
+        fi
+    done
+    printf '{"daemon_running":%s,"role":"%s","bat0_up":%s,"kmod_loaded":%s}\n'         "$daemon_running" "$role" "$bat0_up" "$kmod_loaded"
+}
+
 _topology() {
     if [ -f "$TOPO_FILE" ]; then
         local now mtime age
@@ -113,7 +137,7 @@ _topology() {
         [ "$age" -lt 15 ] && { cat "$TOPO_FILE"; return; }
     fi
     local bat0_up="false"
-    ip link show bat0 2>/dev/null | grep -q ',UP,\|<UP\|,UP>' && bat0_up="true"
+    ip link show bat0 2>/dev/null | grep -qE ',UP,|<UP|,UP>' && bat0_up="true"
     printf '{"ts":%d,"nodes":[],"links":[],"bat0_up":%s}\n' "$(date +%s)" "$bat0_up"
 }
 

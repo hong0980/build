@@ -292,6 +292,23 @@ apply_mesh_config() {
 
 
 # ── procd ─────────────────────────────────────────────────────────────────────
+_open_firewall_ports() {
+    if command -v iptables >/dev/null 2>&1; then
+        iptables -C INPUT -p tcp --dport 4304 -j ACCEPT 2>/dev/null \
+            || iptables -I INPUT 1 -p tcp --dport 4304 -j ACCEPT 2>/dev/null
+        iptables -C INPUT -p udp --dport 4305 -j ACCEPT 2>/dev/null \
+            || iptables -I INPUT 1 -p udp --dport 4305 -j ACCEPT 2>/dev/null
+        log "Firewall: opened TCP/UDP 4304/4305 via iptables"
+    fi
+    if command -v nft >/dev/null 2>&1; then
+        nft insert rule inet fw4 input tcp dport 4304 accept 2>/dev/null \
+            || nft insert rule inet filter input tcp dport 4304 accept 2>/dev/null || true
+        nft insert rule inet fw4 input udp dport 4305 accept 2>/dev/null \
+            || nft insert rule inet filter input udp dport 4305 accept 2>/dev/null || true
+        log "Firewall: opened TCP/UDP 4304/4305 via nft"
+    fi
+}
+
 start_service() {
     local enabled role backhaul
     config_load "$UCI_APP"
@@ -317,22 +334,6 @@ start_service() {
     fi
 
     # ── 开放防火墙端口（iptables + nftables 双支持）────────────────────────
-    _open_firewall_ports() {
-        if command -v iptables >/dev/null 2>&1; then
-            iptables -C INPUT -p tcp --dport 4304 -j ACCEPT 2>/dev/null \
-                || iptables -I INPUT 1 -p tcp --dport 4304 -j ACCEPT 2>/dev/null
-            iptables -C INPUT -p udp --dport 4305 -j ACCEPT 2>/dev/null \
-                || iptables -I INPUT 1 -p udp --dport 4305 -j ACCEPT 2>/dev/null
-            log "Firewall: opened TCP/UDP 4304/4305 via iptables"
-        fi
-        if command -v nft >/dev/null 2>&1; then
-            nft insert rule inet fw4 input tcp dport 4304 accept 2>/dev/null \
-                || nft insert rule inet filter input tcp dport 4304 accept 2>/dev/null || true
-            nft insert rule inet fw4 input udp dport 4305 accept 2>/dev/null \
-                || nft insert rule inet filter input udp dport 4305 accept 2>/dev/null || true
-            log "Firewall: opened TCP/UDP 4304/4305 via nft"
-        fi
-    }
     _open_firewall_ports
 
     # ── 等待 br-lan IP 就绪（最多 20 秒）────────────────────────────────────
