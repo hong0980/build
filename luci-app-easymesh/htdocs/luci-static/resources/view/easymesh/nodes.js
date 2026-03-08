@@ -6,22 +6,34 @@
 'require ui';
 
 /* ── RPC declarations ──────────────────────────────────────────────────── */
-var callMeshPending  = rpc.declare({ object: 'easymesh', method: 'pending'  });
-var callMeshApproved = rpc.declare({ object: 'easymesh', method: 'approved' });
-var callMeshTopology = rpc.declare({ object: 'easymesh', method: 'topology' });
-var callMeshApprove  = rpc.declare({ object: 'easymesh', method: 'approve', params: ['mac'] });
-var callMeshReject   = rpc.declare({ object: 'easymesh', method: 'reject',  params: ['mac'] });
+var callMeshPending   = rpc.declare({ object: 'easymesh', method: 'pending'   });
+var callMeshApproved  = rpc.declare({ object: 'easymesh', method: 'approved'  });
+var callMeshTopology  = rpc.declare({ object: 'easymesh', method: 'topology'  });
+var callMeshNeighbors = rpc.declare({ object: 'easymesh', method: 'neighbors' });
+var callMeshApprove   = rpc.declare({ object: 'easymesh', method: 'approve', params: ['mac'] });
+var callMeshReject    = rpc.declare({ object: 'easymesh', method: 'reject',  params: ['mac'] });
 
-/* ── Canvas: TQ helpers ─────────────────────────────────────────────────── */
+/* ── TQ helpers ─────────────────────────────────────────────────────────── */
 function tqColor(tq) {
 	return tq / 255 >= 0.70 ? '#2ea44f' : tq / 255 >= 0.40 ? '#e3b341' : '#f85149';
 }
-
 function hexToRgb(hex) {
 	return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
 }
 
-/* ── Canvas: layout + draw topology ────────────────────────────────────── */
+/* ── TQ bar widget ─────────────────────────────────────────────────────── */
+function tqBar(tq) {
+	var pct   = Math.round(tq / 255 * 100);
+	var color = tqColor(tq);
+	return E('div', { style: 'display:flex;align-items:center;gap:6px' }, [
+		E('div', { style: 'width:60px;height:5px;background:#30363d;border-radius:3px;overflow:hidden' }, [
+			E('div', { style: 'width:' + pct + '%;height:100%;background:' + color })
+		]),
+		E('span', { style: 'font-size:11px;color:#7d8590' }, pct + '%')
+	]);
+}
+
+/* ── Canvas topology ────────────────────────────────────────────────────── */
 function drawTopo(topo, canvas) {
 	if (!canvas) return {};
 	var ctx = canvas.getContext('2d');
@@ -37,21 +49,31 @@ function drawTopo(topo, canvas) {
 	var nodes = (topo && topo.nodes) ? topo.nodes : [];
 	var links = (topo && topo.links) ? topo.links : [];
 
-	/* Layout: master in centre, agents on circle */
+	/* Deduplicate nodes by MAC — batctl orig + NODE_DB may overlap */
+	var nodeMap = {};
+	nodes.forEach(function(n) {
+		if (!n.mac) return;
+		var k = n.mac.toLowerCase();
+		/* Prefer entries with more info (hostname/ip) */
+		if (!nodeMap[k] || (!nodeMap[k].hostname && n.hostname)) nodeMap[k] = n;
+	});
+	nodes = Object.keys(nodeMap).map(function(k) { return nodeMap[k]; });
+
+	/* Layout: master centre, agents on circle */
 	var positions = {};
 	var cx = W / 2, cy = H / 2, r = Math.min(W, H) * 0.33;
 	var master = null, others = [];
-	nodes.forEach(function(n) { if (n.role === 'master') master = n; else others.push(n); });
-	if (master) positions[master.mac] = { x: cx, y: cy, node: master };
+	nodes.forEach(function(n) {
+		if (n.role === 'master') master = n; else others.push(n);
+	});
+	if (master) positions[master.mac.toLowerCase()] = { x: cx, y: cy, node: master };
 	others.forEach(function(n, i) {
 		var angle = (2 * Math.PI * i / Math.max(others.length, 1)) - Math.PI / 2;
-		positions[n.mac] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), node: n };
-	});
-	nodes.forEach(function(n, i) {
-		if (!positions[n.mac]) {
-			var angle = (2 * Math.PI * i / nodes.length) - Math.PI / 2;
-			positions[n.mac] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), node: n };
-		}
+		positions[n.mac.toLowerCase()] = {
+			x: cx + r * Math.cos(angle),
+			y: cy + r * Math.sin(angle),
+			node: n
+		};
 	});
 
 	/* Background + grid dots */
@@ -65,7 +87,8 @@ function drawTopo(topo, canvas) {
 
 	/* Links */
 	links.forEach(function(link) {
-		var a = positions[link.src], b = positions[link.dst];
+		var a = positions[(link.src||'').toLowerCase()];
+		var b = positions[(link.dst||'').toLowerCase()];
 		if (!a || !b) return;
 		var tq = link.tq || 0;
 		var col = tqColor(tq), rgb = hexToRgb(col);
@@ -92,7 +115,7 @@ function drawTopo(topo, canvas) {
 
 	/* Nodes */
 	nodes.forEach(function(node) {
-		var pos = positions[node.mac];
+		var pos = positions[(node.mac||'').toLowerCase()];
 		if (!pos) return;
 		var isMaster = node.role === 'master';
 		var radius = isMaster ? 32 : 24;
@@ -117,6 +140,7 @@ function drawTopo(topo, canvas) {
 		ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 		ctx.fillText(isMaster ? '🌐' : '📡', pos.x, pos.y - 3);
 
+		/* Client badge */
 		if (node.clients > 0) {
 			ctx.save();
 			ctx.beginPath(); ctx.arc(pos.x + radius * 0.7, pos.y - radius * 0.7, 9, 0, Math.PI * 2);
@@ -127,6 +151,7 @@ function drawTopo(topo, canvas) {
 			ctx.restore();
 		}
 
+		/* Label */
 		var label = node.hostname || (node.mac ? node.mac.slice(-8) : '?');
 		ctx.save();
 		ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#e6edf3';
@@ -144,18 +169,6 @@ function drawTopo(topo, canvas) {
 	return positions;
 }
 
-/* ── TQ bar widget (used in Mesh Neighbors table) ───────────────────────── */
-function tqBar(tq) {
-	var pct   = Math.round(tq / 255 * 100);
-	var color = tqColor(tq);
-	return E('div', { style: 'display:flex;align-items:center;gap:6px' }, [
-		E('div', { style: 'width:60px;height:5px;background:#30363d;border-radius:3px;overflow:hidden' }, [
-			E('div', { style: 'width:' + pct + '%;height:100%;background:' + color })
-		]),
-		E('span', { style: 'font-size:11px;color:#7d8590' }, pct + '%')
-	]);
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════
    VIEW
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -166,7 +179,8 @@ return view.extend({
 			uci.load('easymesh'),
 			callMeshTopology(),
 			callMeshPending(),
-			callMeshApproved()
+			callMeshApproved(),
+			callMeshNeighbors()
 		]);
 	},
 
@@ -185,17 +199,18 @@ return view.extend({
 		}
 
 		var root = E('div', { id: 'easymesh-nodes-root' });
-		root.appendChild(self._buildInner(data[1], data[2], data[3]));
+		root.appendChild(self._buildInner(data[1], data[2], data[3], data[4]));
 
-		/* Poll 1: refresh pending/approved/topology blocks every 5s */
+		/* Poll 1: refresh all data blocks every 5s */
 		poll.add(function() {
 			return Promise.all([
 				callMeshTopology(),
 				callMeshPending(),
-				callMeshApproved()
+				callMeshApproved(),
+				callMeshNeighbors()
 			]).then(function(r) {
 				var old = document.getElementById('easymesh-nodes-inner');
-				if (old) old.replaceWith(self._buildInner(r[0], r[1], r[2]));
+				if (old) old.replaceWith(self._buildInner(r[0], r[1], r[2], r[3]));
 			}).catch(function() {});
 		}, 5);
 
@@ -220,6 +235,7 @@ return view.extend({
 						if (hit) {
 							var lines = [
 								(hit.role === 'master' ? '🌐 ' + _('Master') : '📡 ' + _('Agent')),
+								_('Hostname') + ': ' + (hit.hostname || '—'),
 								_('MAC') + ': ' + (hit.mac || '—'),
 								_('IP')  + ': ' + (hit.ip  || '—'),
 								_('Clients') + ': ' + (hit.clients || 0),
@@ -242,18 +258,20 @@ return view.extend({
 		return root;
 	},
 
-	/* _buildInner: build the entire replaceable DOM block ──────────────── */
-	_buildInner: function(topology, pendingResp, approvedResp) {
+	/* _buildInner ───────────────────────────────────────────────────────── */
+	_buildInner: function(topology, pendingResp, approvedResp, neighborsResp) {
 		var self = this;
 		var el   = E('div', { id: 'easymesh-nodes-inner' });
 
-		/* Normalise response shapes: {nodes:[...]} or [...] */
+		/* Normalise response shapes */
 		var pending  = (pendingResp  && Array.isArray(pendingResp.nodes))  ? pendingResp.nodes  :
 		               Array.isArray(pendingResp)  ? pendingResp  : [];
 		var approved = (approvedResp && Array.isArray(approvedResp.nodes)) ? approvedResp.nodes :
 		               Array.isArray(approvedResp) ? approvedResp : [];
+		var neighbors = (neighborsResp && Array.isArray(neighborsResp.neighbors)) ?
+		               neighborsResp.neighbors : [];
 
-		/* ── Section 1: Pending approval cards ───────────────────────── */
+		/* ── Section 1: Pending approval cards ──────────────────────── */
 		if (pending.length) {
 			el.appendChild(E('div', { class: 'cbi-section' }, [
 				E('h3', { style: 'color:#e3b341;margin-bottom:4px' },
@@ -326,7 +344,7 @@ return view.extend({
 			]));
 		}
 
-		/* ── Section 2: Approved nodes list ──────────────────────────── */
+		/* ── Section 2: Approved nodes list ─────────────────────────── */
 		if (approved.length) {
 			el.appendChild(E('div', { class: 'cbi-section' }, [
 				E('h3', {}, '✅ ' + _('Approved Nodes') + ' (' + approved.length + ')'),
@@ -349,7 +367,7 @@ return view.extend({
 			]));
 		}
 
-		/* ── Section 3: Mesh Status (bat0 + neighbour count) ─────────── */
+		/* ── Section 3: Mesh Status ──────────────────────────────────── */
 		var bat0Up = topology && topology.bat0_up;
 		var links  = (topology && Array.isArray(topology.links)) ? topology.links : [];
 		el.appendChild(E('div', { class: 'cbi-section' }, [
@@ -368,62 +386,68 @@ return view.extend({
 				]),
 				E('div', { class: 'tr' }, [
 					E('div', { class: 'td left' }, _('Neighbor nodes')),
-					E('div', { class: 'td' }, links.length + ' ' + _('found'))
+					E('div', { class: 'td' }, neighbors.length + ' ' + _('found'))
 				])
 			])
 		]));
 
-		/* ── Section 4: Mesh Neighbours table ────────────────────────── */
-		var meshRows = links.map(function(l) {
-			return { mac: l.dst, tq: l.tq || 0, nextHop: l.dst, iface: 'bat0', lastSeen: 0 };
-		});
+		/* ── Section 4: Mesh Neighbors table (real-time batctl orig) ─── */
 		el.appendChild(E('div', { class: 'cbi-section' }, [
 			E('h3', {}, _('Mesh Neighbors')),
 			E('p', { class: 'cbi-section-descr' },
-				_('TQ link quality: 255 = best. Refreshes every 5 seconds.')),
-			meshRows.length === 0
-				? E('div', { class: 'alert-message' },
-					_('No neighbors found. Verify all nodes share the same Mesh ID and password.'))
-				: E('table', { class: 'table' }, [
-					E('tr', { class: 'tr table-titles' }, [
-						E('th', { class: 'th' }, _('MAC')),
-						E('th', { class: 'th' }, _('Link Quality (TQ)')),
-						E('th', { class: 'th' }, _('Next Hop')),
-						E('th', { class: 'th' }, _('Interface')),
-						E('th', { class: 'th' }, _('Last Seen'))
-					])
-				].concat(meshRows.map(function(n) {
-					return E('tr', { class: 'tr' }, [
-						E('td', { class: 'td', style: 'font-family:monospace' }, n.mac),
-						E('td', { class: 'td' }, tqBar(n.tq)),
-						E('td', { class: 'td', style: 'font-family:monospace;color:#7d8590' }, n.nextHop),
-						E('td', { class: 'td' }, n.iface),
-						E('td', { class: 'td' }, n.lastSeen + 's')
-					]);
-				})))
+				_('Real-time batman-adv originator table. TQ: 255 = best. Refreshes every 5 seconds.')),
+			neighbors.length === 0
+				? E('div', { class: 'alert-message' }, bat0Up
+					? _('No neighbors found. Verify all nodes share the same Mesh ID and password.')
+					: _('bat0 interface is not running. Check batman-adv installation (kmod-batman-adv).'))
+				: E('div', { class: 'table' },
+					[E('div', { class: 'tr table-titles' }, [
+						E('div', { class: 'td', style: 'font-family:monospace;width:160px' }, _('MAC')),
+						E('div', { class: 'td', style: 'width:140px' }, _('Link Quality (TQ)')),
+						E('div', { class: 'td', style: 'font-family:monospace;width:160px' }, _('Next Hop')),
+						E('div', { class: 'td', style: 'width:80px' }, _('Interface')),
+						E('div', { class: 'td', style: 'width:80px' }, _('Last Seen'))
+					])].concat(neighbors.map(function(n) {
+						var isSameHop = n.mac === n.nexthop || !n.nexthop;
+						return E('div', { class: 'tr' }, [
+							E('div', { class: 'td', style: 'font-family:monospace;color:#d2a8ff' }, n.mac || '—'),
+							E('div', { class: 'td' }, tqBar(n.tq || 0)),
+							E('div', { class: 'td', style: 'font-family:monospace;color:' +
+								(isSameHop ? '#7d8590' : '#79c0ff') },
+								n.nexthop || n.mac),
+							E('div', { class: 'td', style: 'color:#7d8590' }, n.iface || 'bat0'),
+							E('div', { class: 'td', style: 'color:#7d8590' },
+								(n.last_seen != null ? n.last_seen : '—') + 's')
+						]);
+					}))
+				)
 		]));
 
-		/* ── Section 5: Topology canvas ──────────────────────────────── */
+		/* ── Section 5: Topology canvas ─────────────────────────────── */
+		var topoNodes = (topology && Array.isArray(topology.nodes)) ? topology.nodes : [];
 		el.appendChild(E('div', { class: 'cbi-section' }, [
 			E('h3', {}, '🌐 ' + _('Mesh Topology')),
 			E('p', { class: 'cbi-section-descr' },
-				_('Live topology. Link color = signal quality: green ≥70%, yellow ≥40%, red <40%.')),
-			E('div', {
-				style: 'background:#0d1117;border:1px solid #30363d;border-radius:12px;' +
-				       'padding:8px;overflow:hidden;position:relative'
-			}, [
-				E('canvas', {
-					id: 'easymesh-topo-canvas', width: '900', height: '400',
-					style: 'width:100%;display:block;border-radius:8px'
-				}),
-				E('div', {
-					id: 'easymesh-topo-tooltip',
-					style: 'display:none;position:absolute;background:rgba(22,27,34,.95);' +
-					       'border:1px solid #30363d;border-radius:8px;padding:10px 14px;' +
-					       'font-size:12px;color:#e6edf3;pointer-events:none;' +
-					       'font-family:monospace;line-height:1.7;max-width:220px'
-				})
-			]),
+				_('Live topology map. Link color = signal quality: green ≥70%, yellow ≥40%, red <40%. Hover nodes for details.')),
+			topoNodes.length === 0
+				? E('div', { class: 'alert-message' },
+					_('No topology data yet. Waiting for mesh to form...'))
+				: E('div', {
+					style: 'background:#0d1117;border:1px solid #30363d;border-radius:12px;' +
+					       'padding:8px;overflow:hidden;position:relative'
+				}, [
+					E('canvas', {
+						id: 'easymesh-topo-canvas', width: '900', height: '400',
+						style: 'width:100%;display:block;border-radius:8px'
+					}),
+					E('div', {
+						id: 'easymesh-topo-tooltip',
+						style: 'display:none;position:absolute;background:rgba(22,27,34,.95);' +
+						       'border:1px solid #30363d;border-radius:8px;padding:10px 14px;' +
+						       'font-size:12px;color:#e6edf3;pointer-events:none;' +
+						       'font-family:monospace;line-height:1.7;max-width:220px'
+					})
+				]),
 			E('div', { style: 'display:flex;gap:20px;padding:10px 12px 4px;flex-wrap:wrap' },
 				[['#2ea44f', _('≥ 70% (Good)')],
 				 ['#e3b341', _('40–69% (Fair)')],
@@ -435,6 +459,14 @@ return view.extend({
 				})
 			)
 		]));
+
+		/* Draw topology on next tick (canvas must be in DOM first) */
+		if (topoNodes.length > 0) {
+			setTimeout(function() {
+				var canvas = document.getElementById('easymesh-topo-canvas');
+				if (canvas) drawTopo(topology, canvas);
+			}, 50);
+		}
 
 		return el;
 	},

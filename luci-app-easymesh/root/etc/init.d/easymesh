@@ -60,52 +60,76 @@ cleanup_wireless() {
 }
 
 # ============================================================================
-# Agent 启动准备：正确顺序 = 先改IP+reload，然后设MAC（reload后MAC会被重置）
-# 彻底废弃3分钟IP恢复watchdog，永久保持唯一IP和MAC，守护进程无限重试
+# Agent 启动准备
+#
+# IP 唯一性策略：用本机 MAC 后3字节哈希派生固定偏移量 → .100-.197 范围
+# 同一硬件重启后得到同一IP，不同路由器因MAC不同大概率不碰撞。
+# 只在末段是 .1（与主路由冲突）时才执行。
+# 极小概率碰撞时：ping探测后线性往后找空闲IP兜底。
 # ============================================================================
 _agent_prepare() {
-    local my_ip prefix new_ip i
+    local my_ip prefix suffix new_ip
 
     my_ip=$(ip -4 addr show dev br-lan 2>/dev/null \
         | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
     [ -z "$my_ip" ] && { log "agent_prepare: br-lan has no IP"; return 1; }
-    prefix=$(echo "$my_ip" | cut -d. -f1-3)
 
-    if [ "$(echo "$my_ip" | cut -d. -f4)" = "1" ]; then
-        log "agent_prepare: IP=%s (.1), finding free IP..." "$my_ip"
+    suffix=$(echo "$my_ip" | cut -d. -f4)
+    if [ "$suffix" != "1" ]; then
+        log "agent_prepare: IP=%s (not .1, no change needed)" "$my_ip"
+        return 0
+    fi
+
+    prefix=$(echo "$my_ip" | cut -d. -f1-3)
+    log "agent_prepare: IP=%s (.1 conflict detected), computing stable IP..." "$my_ip"
+
+    # 用 br-lan MAC 后3字节 → 十六进制 → 十进制 → 模98 → 加100基准
+    local mac_raw
+    mac_raw=$(ip link show br-lan 2>/dev/null | awk '/ether/{print $2}' | tr -d ':')
+    [ -z "$mac_raw" ] && mac_raw=$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')
+    [ -z "$mac_raw" ] && mac_raw="000000aabbcc"
+    local mac_tail; mac_tail=$(printf '%s' "$mac_raw" | tail -c 6)
+    local mac_dec;  mac_dec=$(printf '%d' "0x${mac_tail}" 2>/dev/null || echo 0)
+    local offset;   offset=$(( mac_dec % 98 ))
+    local candidate="${prefix}.$((100 + offset))"
+
+    new_ip="$candidate"
+    # 碰撞检测：如果派生IP已被占用则线性扫描
+    if ping -c 1 -W 1 -q "$candidate" >/dev/null 2>&1; then
+        log "agent_prepare: candidate %s busy, linear scan..." "$candidate"
         new_ip=""
-        for i in $(seq 100 254); do
+        local i
+        for i in $(seq 100 197); do
             local c="${prefix}.${i}"
             ping -c 1 -W 1 -q "$c" >/dev/null 2>&1 || { new_ip="$c"; break; }
         done
-        if [ -z "$new_ip" ]; then
-            loge "agent_prepare: no free IP in .100-.254, keeping .1"
-        else
-            log "agent_prepare: assigning %s -> %s" "$my_ip" "$new_ip"
-            uci set network.lan.ipaddr="$new_ip"
-            uci commit network
-            uci set system.@system[0].hostname="OpenWrt-Agent-$(echo "$new_ip" | cut -d. -f4)"
-            uci commit system
-            /etc/init.d/network reload
-            # 等待新IP生效（最多15秒）
-            local _w=0
-            while [ $_w -lt 15 ]; do
-                my_ip=$(ip -4 addr show dev br-lan 2>/dev/null \
-                    | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
-                [ "$my_ip" = "$new_ip" ] && break
-                sleep 1; _w=$((_w+1))
-            done
-            log "agent_prepare: br-lan IP now %s" "$my_ip"
-        fi
-    else
-        log "agent_prepare: IP=%s (not .1), skipping IP change" "$my_ip"
+        [ -z "$new_ip" ] && {
+            loge "agent_prepare: no free IP in .100-.197, keeping .1"
+            return 0
+        }
     fi
 
-    log "agent_prepare: done. IP=%s" \
-        "$(ip -4 addr show dev br-lan 2>/dev/null | awk '/inet /{print $2}' | head -1)"
+    log "agent_prepare: assigning %s -> %s" "$my_ip" "$new_ip"
+    uci set network.lan.ipaddr="$new_ip"
+    uci commit network
+    uci set system.@system[0].hostname="OpenWrt-Agent-$(echo "$new_ip" | cut -d. -f4)"
+    uci commit system
+    /etc/init.d/network reload
+
+    # 等待新IP生效（最多20秒）
+    local _w=0
+    while [ $_w -lt 20 ]; do
+        my_ip=$(ip -4 addr show dev br-lan 2>/dev/null \
+            | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
+        [ "$my_ip" = "$new_ip" ] && break
+        sleep 1; _w=$((_w+1))
+    done
+    log "agent_prepare: done. br-lan IP=%s" "$my_ip"
 }
 
 # ── 配置 UCI wireless + dummy network.mesh section ───────────────────────────
+# agent 模式：ssid/key/mesh_id/mesh_key 等 WiFi 参数由 master 通过 profile push
+# 自动下发并写入 UCI，这里只建立 wifi-iface 框架和结构，值用 UCI 里已有的即可。
 apply_mesh_config() {
     local role backhaul mesh_id mesh_key mesh_band ssid key
     local ieee80211r mobility_domain ft_over_ds reassociation_deadline
@@ -159,8 +183,8 @@ apply_mesh_config() {
 
     # ── DHCP server 策略 ──────────────────────────────────────────────────────
     # 有线直连：两台路由器 br-lan 各自独立，agent 必须保留自己的 DHCP
-    #           否则下挂客户端拿不到 IP（两台路由器 br-lan 之间不是同一个二层域）
-    # 无线 mesh：bat0 把所有节点联成同一个二层域，agent 关 DHCP 由 master 统一服务
+    #           否则下挂客户端拿不到 IP
+    # 无线 mesh：bat0 联成同一二层域，agent 关 DHCP 由 master 统一服务
     if [ "$role" = "master" ]; then
         uci -q del dhcp.lan.ignore
         log "Role: master — DHCP enabled"
@@ -218,20 +242,22 @@ start_service() {
     config_get backhaul global backhaul 'wired'
     log "EasyMesh starting (role=%s)" "$role"
 
+    # 首次以 agent 模式启动时保存原始 IP 和 hostname，供 WPS 按钮恢复使用
+    [ "$role" = "agent" -a ! -f /etc/easymesh_agent ] && {
+        local ipaddr; ipaddr=$(uci_get network lan ipaddr '192.168.1.1')
+        local hostname; hostname=$(uci_get system @system[0] hostname openwrt)
+        printf 'ipaddr=%s\nhostname=%s\n' "$ipaddr" "$hostname" > /etc/easymesh_agent
+    }
+
     apply_mesh_config
 
-    # ── agent 有线回程：启动守护进程之前先修好 IP ────────────────────────────
-    # 必须在这里做，守护进程里改 IP 后 dnsmasq 不会自动重绑新 IP
-    # 在这里改 → network reload → dnsmasq 重启 → 自动用新 IP 服务 DHCP
+    # ── agent 有线回程：启动守护进程之前先确保 IP 不与主路由冲突 ────────────
     if [ "$role" = "agent" ] && [ "$backhaul" = "wired" ]; then
         _agent_prepare
     fi
 
     # ── 开放防火墙端口（iptables + nftables 双支持）────────────────────────
-    # 主路由器默认防火墙可能 DROP 来自 br-lan 的 TCP 4304
-    # 必须显式放行，否则 ping 通但 HTTP 不通
     _open_firewall_ports() {
-        # 兼容 fw3(iptables) 和 fw4(nftables)
         if command -v iptables >/dev/null 2>&1; then
             iptables -C INPUT -p tcp --dport 4304 -j ACCEPT 2>/dev/null \
                 || iptables -I INPUT 1 -p tcp --dport 4304 -j ACCEPT 2>/dev/null
@@ -240,8 +266,6 @@ start_service() {
             log "Firewall: opened TCP/UDP 4304/4305 via iptables"
         fi
         if command -v nft >/dev/null 2>&1; then
-            # 用 insert 插到链头，确保在 drop rule 之前命中
-            # fw4 下 input chain 可能叫 input 或 fw4-input，先尝试 inet fw4 input
             nft insert rule inet fw4 input tcp dport 4304 accept 2>/dev/null \
                 || nft insert rule inet filter input tcp dport 4304 accept 2>/dev/null || true
             nft insert rule inet fw4 input udp dport 4305 accept 2>/dev/null \
@@ -252,7 +276,6 @@ start_service() {
     _open_firewall_ports
 
     # ── 等待 br-lan IP 就绪（最多 20 秒）────────────────────────────────────
-    # 防止守护进程在 network reload 后 br-lan 还没有 IP 时启动
     local _lip _lw=0
     while [ $_lw -lt 20 ]; do
         _lip=$(ip -4 addr show dev br-lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)

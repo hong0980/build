@@ -5,6 +5,18 @@ msgstr ""
 
 # ── overview.js: 入口说明面板 ─────────────────────────────────────────
 
+msgid "Overview & Config"
+msgstr "概览与配置"
+
+msgid "Nodes"
+msgstr "节点状态"
+
+msgid "Log"
+msgstr "运行日志"
+
+msgid "Add New Node"
+msgstr "添加新节点"
+
 msgid "EasyMesh Configuration"
 msgstr "EasyMesh 配置"
 

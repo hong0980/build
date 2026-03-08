@@ -12,6 +12,7 @@ list() {
     printf '  "pending":   {},\n'
     printf '  "approved":  {},\n'
     printf '  "topology":  {},\n'
+    printf '  "neighbors": {},\n'
     printf '  "log":       { "lines": 0 },\n'
     printf '  "approve":   { "mac": "" },\n'
     printf '  "reject":    { "mac": "" }\n'
@@ -42,6 +43,7 @@ call() {
             mac=$(printf '%s' "$args" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
             _reject "$mac"
             ;;
+        neighbors) _neighbors ;;
         *) printf '{"error":"unknown method: %s"}\n' "$method"; return 1 ;;
     esac
 }
@@ -74,6 +76,33 @@ _nodes_from_dir() {
 
 _pending()  { _nodes_from_dir "$PENDING_DB" "pending";  }
 _approved() { _nodes_from_dir "$NODE_DB"    "approved"; }
+
+_neighbors() {
+    json_init
+    json_add_array "neighbors"
+    local MESH_IF="bat0"
+    # batctl orig 输出: MAC  last-seen  (TQ)  nexthop  [iface]
+    batctl meshif "$MESH_IF" orig 2>/dev/null | awk 'NR>2{print}' |     while IFS= read -r line; do
+        local mac tq nexthop iface last_seen_raw last_seen
+        mac=$(         printf '%s' "$line" | awk '{print $1}')
+        last_seen_raw=$(printf '%s' "$line" | awk '{print $2}')
+        tq=$(          printf '%s' "$line" | awk '{gsub(/[()]/,""); print $3}')
+        nexthop=$(     printf '%s' "$line" | awk '{print $4}')
+        iface=$(       printf '%s' "$line" | awk '{gsub(/[\[\]]/,""); print $5}')
+        [ -z "$mac" ] || [ "$mac" = "Originator" ] && continue
+        # 把 "0.600s" 转成整数秒
+        last_seen=$(printf '%s' "$last_seen_raw" | sed 's/s$//' | awk '{printf "%d", $1}')
+        json_add_object
+        json_add_string "mac"       "$mac"
+        json_add_int    "tq"        "${tq:-0}"
+        json_add_string "nexthop"   "${nexthop:-$mac}"
+        json_add_string "iface"     "${iface:-bat0}"
+        json_add_int    "last_seen" "${last_seen:-0}"
+        json_close_object
+    done
+    json_close_array
+    json_dump
+}
 
 _topology() {
     if [ -f "$TOPO_FILE" ]; then

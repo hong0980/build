@@ -352,6 +352,12 @@ setup_wired_backhaul() {
         done
     fi
     ip link set "$MESH_IF" up 2>/dev/null
+    # 等待 bat0 sysfs mesh 目录就绪（驱动初始化需要片刻）
+    local _sw=0
+    while [ ! -d "/sys/class/net/$MESH_IF/mesh" ] && [ $_sw -lt 10 ]; do
+        sleep 1; _sw=$((_sw+1))
+    done
+    [ ! -d "/sys/class/net/$MESH_IF/mesh" ] &&         log "WARN: bat0/mesh sysfs not ready after 10s (batman-adv version issue?)"
 
     local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
     log "DBG backhaul: mode=%s" "$backhaul"
@@ -1072,56 +1078,93 @@ poll_for_approval() {
 generate_profile() {
     uci_load easymesh
     local ssid key mesh_id mesh_key routing_algo channel
-    config_get ssid         global ssid          'OpenWrt'
-    config_get key          global key           ''
-    config_get mesh_id      global mesh_id       'OpenWrt-Mesh'
-    config_get mesh_key     global mesh_key      ''
-    config_get routing_algo global routing_algo  'BATMAN_IV'
+    local ieee80211r ieee80211k ieee80211v ft_over_ds mobility_domain backhaul
+    config_get ssid             global ssid              'OpenWrt'
+    config_get key              global key               ''
+    config_get mesh_id          global mesh_id           'OpenWrt-Mesh'
+    config_get mesh_key         global mesh_key          ''
+    config_get routing_algo     global routing_algo      'BATMAN_IV'
+    config_get ieee80211r       global ieee80211r        '1'
+    config_get ieee80211k       global ieee80211k        '1'
+    config_get ieee80211v       global ieee80211v        '1'
+    config_get ft_over_ds       global ft_over_ds        '1'
+    config_get mobility_domain  global mobility_domain   'aabb'
+    config_get backhaul         global backhaul          'wired'
     local radio_dev
     radio_dev=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
     channel=$(uci get "${radio_dev}.channel" 2>/dev/null || echo 'auto')
     local new_profile
-    new_profile=$(printf '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211k":"1","ieee80211v":"1","backhaul":"wired"}'         "$ssid" "$key" "$channel" "$mesh_id" "$mesh_key" "$routing_algo")
-    local old_profile; old_profile=$(cat "$PROFILE_FILE" 2>/dev/null | tr -d '\n')
+    new_profile=$(printf         '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211r":"%s","ieee80211k":"%s","ieee80211v":"%s","ft_over_ds":"%s","mobility_domain":"%s","backhaul":"%s"}'         "$ssid" "$key" "$channel" "$mesh_id" "$mesh_key" "$routing_algo"         "$ieee80211r" "$ieee80211k" "$ieee80211v" "$ft_over_ds" "$mobility_domain" "$backhaul")
+    local old_profile; old_profile=$(cat "$PROFILE_FILE" 2>/dev/null | tr -d '
+')
     if [ "$new_profile" != "$old_profile" ]; then
-        printf '%s\n' "$new_profile" > "$PROFILE_FILE"
-        log "generate_profile: ssid=%s channel=%s" "$ssid" "$channel"
+        printf '%s
+' "$new_profile" > "$PROFILE_FILE"
+        log "generate_profile: ssid=%s channel=%s backhaul=%s" "$ssid" "$channel" "$backhaul"
     fi
 }
 
 apply_profile() {
     local body="$1"
     local ssid key channel mesh_id mesh_key routing_algo
+    local ieee80211r ieee80211k ieee80211v ft_over_ds mobility_domain backhaul
     local _pf="/tmp/em_profile_$$.json"
-    printf '%s\n' "$body" > "$_pf"
-    ssid=$(        jsonfilter -i "$_pf" -e '@.ssid'         2>/dev/null)
-    key=$(         jsonfilter -i "$_pf" -e '@.key'          2>/dev/null)
-    channel=$(     jsonfilter -i "$_pf" -e '@.channel'      2>/dev/null)
-    mesh_id=$(     jsonfilter -i "$_pf" -e '@.mesh_id'      2>/dev/null)
-    mesh_key=$(    jsonfilter -i "$_pf" -e '@.mesh_key'     2>/dev/null)
-    routing_algo=$(jsonfilter -i "$_pf" -e '@.routing_algo' 2>/dev/null)
+    printf '%s
+' "$body" > "$_pf"
+    ssid=$(           jsonfilter -i "$_pf" -e '@.ssid'            2>/dev/null)
+    key=$(            jsonfilter -i "$_pf" -e '@.key'             2>/dev/null)
+    channel=$(        jsonfilter -i "$_pf" -e '@.channel'         2>/dev/null)
+    mesh_id=$(        jsonfilter -i "$_pf" -e '@.mesh_id'         2>/dev/null)
+    mesh_key=$(       jsonfilter -i "$_pf" -e '@.mesh_key'        2>/dev/null)
+    routing_algo=$(   jsonfilter -i "$_pf" -e '@.routing_algo'    2>/dev/null)
+    ieee80211r=$(     jsonfilter -i "$_pf" -e '@.ieee80211r'      2>/dev/null)
+    ieee80211k=$(     jsonfilter -i "$_pf" -e '@.ieee80211k'      2>/dev/null)
+    ieee80211v=$(     jsonfilter -i "$_pf" -e '@.ieee80211v'      2>/dev/null)
+    ft_over_ds=$(     jsonfilter -i "$_pf" -e '@.ft_over_ds'      2>/dev/null)
+    mobility_domain=$(jsonfilter -i "$_pf" -e '@.mobility_domain' 2>/dev/null)
+    backhaul=$(       jsonfilter -i "$_pf" -e '@.backhaul'        2>/dev/null)
     rm -f "$_pf"
     [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
-    log "Applying profile: ssid=%s channel=%s" "$ssid" "$channel"
+    log "Applying profile: ssid=%s channel=%s backhaul=%s" "$ssid" "$channel" "${backhaul:-wired}"
+    # 写入 UCI easymesh —— agent 节点配置与 master 保持完全一致
     uci_set easymesh global enabled 1
     uci_set easymesh global role agent
     uci_set easymesh global mesh_id "${mesh_id:-OpenWrt-Mesh}"
     uci_set easymesh global mesh_key "${mesh_key}"
     uci_set easymesh global ssid "$ssid"
     uci_set easymesh global key "$key"
-    uci_set easymesh global backhaul wired
+    uci_set easymesh global backhaul "${backhaul:-wired}"
     uci_set easymesh global routing_algo "${routing_algo:-BATMAN_IV}"
+    [ -n "$ieee80211r" ]       && uci_set easymesh global ieee80211r       "$ieee80211r"
+    [ -n "$ieee80211k" ]       && uci_set easymesh global ieee80211k       "$ieee80211k"
+    [ -n "$ieee80211v" ]       && uci_set easymesh global ieee80211v       "$ieee80211v"
+    [ -n "$ft_over_ds" ]       && uci_set easymesh global ft_over_ds       "$ft_over_ds"
+    [ -n "$mobility_domain" ]  && uci_set easymesh global mobility_domain  "$mobility_domain"
     uci_commit easymesh
+    # 更新无线 AP 接口配置
     local _ap_sect
-    _ap_sect=$(uci show wireless 2>/dev/null | \
-        awk -F= '/=wifi-iface/{gsub(/wireless\./,""); s=$1} /\.mode=.ap/{print s; exit}')
+    _ap_sect=$(uci show wireless 2>/dev/null |         awk -F= '/=wifi-iface/{gsub(/wireless\./,""); s=$1} /\.mode=.ap/{print s; exit}')
     [ -z "$_ap_sect" ] && _ap_sect="@wifi-iface[0]"
     uci_set wireless ${_ap_sect} ssid "$ssid"
-    uci_set wireless ${_ap_sect} key "$key"
-    uci_set wireless ${_ap_sect} ieee80211k 1
-    uci_set wireless ${_ap_sect} ieee80211v 1
-    uci_set wireless ${_ap_sect} bss_transition 1
-    uci_set wireless ${_ap_sect} rrm_neighbor_report 1
+    [ -n "$key" ] && {
+        uci_set wireless ${_ap_sect} encryption 'psk2+ccmp'
+        uci_set wireless ${_ap_sect} key "$key"
+    }
+    [ "${ieee80211k:-1}" = "1" ] && {
+        uci_set wireless ${_ap_sect} ieee80211k 1
+        uci_set wireless ${_ap_sect} rrm_neighbor_report 1
+        uci_set wireless ${_ap_sect} rrm_beacon_report 1
+    }
+    [ "${ieee80211v:-1}" = "1" ] && {
+        uci_set wireless ${_ap_sect} ieee80211v 1
+        uci_set wireless ${_ap_sect} bss_transition 1
+    }
+    [ "${ieee80211r:-1}" = "1" ] && {
+        uci_set wireless ${_ap_sect} ieee80211r 1
+        uci_set wireless ${_ap_sect} ft_psk_generate_local 1
+        [ -n "$mobility_domain" ] && uci_set wireless ${_ap_sect} mobility_domain "$mobility_domain"
+        [ -n "$ft_over_ds" ]      && uci_set wireless ${_ap_sect} ft_over_ds "$ft_over_ds"
+    }
     [ -n "$channel" ] && [ "$channel" != "auto" ] && {
         local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
         [ -n "$rd" ] && uci set "${rd}.channel=$channel"
@@ -1129,7 +1172,7 @@ apply_profile() {
     uci_commit wireless
     setup_wired_backhaul
     wifi reload
-    log "Profile applied. Joined mesh."
+    log "Profile applied. Agent now mirrors master config."
 }
 
 ########################################
@@ -1423,20 +1466,39 @@ load_balance() {
 }
 
 update_topology() {
-    local my_mac my_ip my_role clients
+    local my_mac my_ip my_role clients my_hostname
     my_mac=$(get_mac); my_ip=$(get_ip); my_role=$(get_role)
     clients=$(iw dev "$(get_ap_iface)" station dump 2>/dev/null | grep -c "^Station")
-    local nodes="{\"mac\":\"$my_mac\",\"ip\":\"$my_ip\",\"role\":\"$my_role\",\"clients\":$clients}"
+    my_hostname=$(uci_get system @system[0] hostname 'OpenWrt')
+    local nodes="{\"mac\":\"$my_mac\",\"ip\":\"$my_ip\",\"role\":\"$my_role\",\"hostname\":\"$my_hostname\",\"clients\":$clients}"
     local links="" _orig_tmp="/tmp/em_orig_$$.txt"
     batctl meshif "$MESH_IF" orig 2>/dev/null | awk 'NR>2{print}' > "$_orig_tmp"
     while read -r peer_mac _ tq _rest; do
         [ -z "$peer_mac" ] && continue
-        nodes="${nodes},{\"mac\":\"$peer_mac\",\"tq\":$tq}"
+        # 从 NODE_DB 查找该 peer 的完整信息
+        local peer_norm; peer_norm=$(printf '%s' "$peer_mac" | tr 'A-F' 'a-f')
+        local peer_safe; peer_safe=$(printf '%s' "$peer_norm" | tr ':' '_')
+        local peer_f="${NODE_DB}/${peer_safe}.json"
+        local peer_hostname="" peer_ip="" peer_role="agent" peer_clients=0
+        if [ -f "$peer_f" ]; then
+            peer_hostname=$(jsonfilter -i "$peer_f" -e '@.hostname' 2>/dev/null || echo "")
+            peer_ip=$(      jsonfilter -i "$peer_f" -e '@.ip'       2>/dev/null || echo "")
+        fi
+        nodes="${nodes},{\"mac\":\"$peer_mac\",\"ip\":\"${peer_ip}\",\"role\":\"${peer_role}\",\"hostname\":\"${peer_hostname}\",\"tq\":$tq,\"clients\":$peer_clients}"
         links="${links:+$links,}{\"src\":\"$my_mac\",\"dst\":\"$peer_mac\",\"tq\":$tq}"
     done < "$_orig_tmp"
     rm -f "$_orig_tmp"
+    # 追加 NODE_DB 中存在但 batctl orig 未出现的已批准节点（有线模式下 orig 可能为空）
     for f in "$NODE_DB"/*.json; do
-        [ -f "$f" ] || continue; nodes="${nodes},$(cat "$f")"
+        [ -f "$f" ] || continue
+        local db_mac; db_mac=$(jsonfilter -i "$f" -e '@.mac' 2>/dev/null || echo "")
+        [ -z "$db_mac" ] && continue
+        case "$nodes" in *"\"$db_mac\""*) continue ;; esac
+        local db_ip db_hostname db_source
+        db_ip=$(      jsonfilter -i "$f" -e '@.ip'       2>/dev/null || echo "")
+        db_hostname=$(jsonfilter -i "$f" -e '@.hostname' 2>/dev/null || echo "")
+        db_source=$(  jsonfilter -i "$f" -e '@.source'   2>/dev/null || echo "wired")
+        nodes="${nodes},{\"mac\":\"$db_mac\",\"ip\":\"$db_ip\",\"role\":\"agent\",\"hostname\":\"$db_hostname\",\"backhaul\":\"$db_source\",\"clients\":0}"
     done
     local bat0_up
     ip link show bat0 2>/dev/null | grep -q ',UP,\|<UP\|,UP>' \
@@ -1508,12 +1570,6 @@ main_loop() {
       log "EasyMesh daemon starting (pid=%s)" "$$"
       log "================================================"; }
 
-    [ "$(get_role)" = "agent" -a ! -f /etc/easymesh_agent ] && {
-        local ipaddr; ipaddr=$(uci_get network lan ipaddr '192.168.1.1')
-        local hostname; hostname=$(uci_get system @system[0] hostname openwrt)
-        echo  "ipaddr=$ipaddr" > /etc/easymesh_agent
-        echo  "hostname=$hostname" >> /etc/easymesh_agent
-    }
     local hw_type="dual-band"
     local count5g; count5g=$(uci show wireless 2>/dev/null \
         | awk -F= '/=wifi-device/{dev=$1} dev && /\.band=/{gsub(/.*=/,""); if(/^5g|^5GHz/) n++} END{print n+0}')
