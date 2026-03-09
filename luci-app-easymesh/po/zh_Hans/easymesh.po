@@ -26,6 +26,45 @@ msgstr "EasyMesh 配置"
 msgid "Multi-node mesh using batman-adv routing over wired Ethernet or 802.11s wireless backhaul."
 msgstr "多节点 Mesh 网络，通过有线以太网或 802.11s 无线回程运行 batman-adv 路由。"
 
+msgid "Add New Node (Master Mode)"
+msgstr "添加新节点（主节点模式）"
+
+msgid "Flash OpenWrt + install luci-app-easymesh on the new node"
+msgstr "在新节点上刷入 OpenWrt，并安装 luci-app-easymesh"
+
+msgid "Set role to Agent in its EasyMesh config, then enable EasyMesh"
+msgstr "在新节点的 EasyMesh 配置中将角色设为 Agent，然后启用 EasyMesh"
+
+msgid "Connect a LAN cable: this master LAN port ↔ new node LAN port"
+msgstr "用网线连接：本主节点 LAN 口 ↔ 新节点 LAN 口"
+
+msgid "Wait ~30 seconds — agent auto-discovers this master via UDP broadcast"
+msgstr "等待约 30 秒，新节点通过 UDP 广播自动发现主节点"
+
+msgid "Go to the Nodes tab on this master and click Allow to join"
+msgstr "在主节点的「节点状态」页面点击「允许加入」"
+
+msgid "Quick join shortcut: on the new node, press and hold the WPS button for 2–10 seconds. It auto-sets Agent mode and starts discovery. Then approve in the Nodes tab here."
+msgstr "快速加入：在新节点上按住 WPS 按钮 2～10 秒松开，自动切换为 Agent 模式并开始发现主节点。然后在本页「节点状态」中批准即可。"
+
+msgid "Agent Mode — Joining Mesh"
+msgstr "从节点模式 — 正在加入 Mesh"
+
+msgid "Connect a LAN cable from this node to the master router"
+msgstr "用网线将本节点的 LAN 口连接到主节点路由器"
+
+msgid "Make sure Enable EasyMesh is on and role is Agent, then Save & Apply"
+msgstr "确认已启用 EasyMesh 且角色为 Agent，然后保存并应用"
+
+msgid "This node will broadcast discovery packets to find the master"
+msgstr "本节点将通过 UDP 广播自动发现主节点"
+
+msgid "Master will show this node in its Nodes tab — approve it there"
+msgstr "主节点的「节点状态」页面会显示本节点，在那里点击批准"
+
+msgid "Once approved, master pushes WiFi config automatically"
+msgstr "批准后主节点将自动推送 WiFi 配置"
+
 # ══════════════════════════════════════════════════════════════════════════════
 # overview.js — 标签页名称
 # ══════════════════════════════════════════════════════════════════════════════

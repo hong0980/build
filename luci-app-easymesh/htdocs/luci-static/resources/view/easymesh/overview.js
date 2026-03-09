@@ -23,10 +23,36 @@ return view.extend({
 
 	render: function (data) {
 		var m, s, o;
-
-		m = new form.Map('easymesh', _('EasyMesh Configuration'),
-			E('strong', {}, _('Multi-node mesh using batman-adv routing over wired Ethernet or 802.11s wireless backhaul.')));
-
+		var role = uci.get('easymesh', 'global', 'role') || 'master';
+		m = new form.Map('easymesh', _('EasyMesh Configuration'), [
+			E('strong', {}, _('Multi-node mesh using batman-adv routing over wired Ethernet or 802.11s wireless backhaul.')),
+			E('div', { style: 'border-radius:12px;padding:15px 20px;' },
+				role === 'master'
+					? [E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:12px' },
+						'➕ ' + _('Add New Node (Master Mode)')),
+					E('ol', {
+						style: 'padding-left:20px;font-size:13px;line-height:2.4;color:#e6edf3;margin:0'
+					}, [
+						E('li', {}, _('Flash OpenWrt + install luci-app-easymesh on the new node')),
+						E('li', {}, _('Set role to Agent in its EasyMesh config, then enable EasyMesh')),
+						E('li', {}, _('Connect a LAN cable: this master LAN port ↔ new node LAN port')),
+						E('li', {}, _('Wait ~30 seconds — agent auto-discovers this master via UDP broadcast')),
+						E('li', {}, _('Go to the Nodes tab on this master and click Allow to join')),
+						E('li', {}, '💡 ' + _('Quick join shortcut: on the new node, press and hold the WPS button for 2–10 seconds. It auto-sets Agent mode and starts discovery. Then approve in the Nodes tab here.'))
+					])]
+					: [E('div', { style: 'font-weight:700;font-size:15px;margin-bottom:12px' },
+						'📡 ' + _('Agent Mode — Joining Mesh')),
+					E('ol', {
+						style: 'padding-left:20px;font-size:13px;line-height:2.4;color:#e6edf3;margin:0'
+					}, [
+						E('li', {}, _('Connect a LAN cable from this node to the master router')),
+						E('li', {}, _('Enable EasyMesh below and set role to Agent, then Save & Apply')),
+						E('li', {}, _('This node will broadcast discovery packets to find the master')),
+						E('li', {}, _('Master will show this node in its Nodes tab — approve it there')),
+						E('li', {}, _('Once approved, master pushes WiFi config (SSID, password, channel) automatically — no manual setup needed here'))
+					])
+					]
+		)]);
 		s = m.section(form.NamedSection, 'global', 'easymesh');
 		s.addremove = false;
 		s.anonymous = true;
@@ -191,6 +217,13 @@ return view.extend({
 			_('Reserve the second 5 GHz radio exclusively for node-to-node backhaul.'));
 		o.default = '0';
 		o.depends({ enabled: '1', role: 'master' });
+
+		o = s.taboption('advanced', form.ListValue, 'backhaul_band',
+			_('Backhaul Radio Band'));
+		o.value('5g_2', _('Second 5 GHz radio (recommended)'));
+		o.value('5g_1', _('First 5 GHz radio'));
+		o.default = '5g_2';
+		o.depends({ enabled: '1', role: 'master', dedicated_backhaul: '1' });
 
 		o = s.taboption('advanced', form.Value, 'backhaul_channel',
 			_('Backhaul Channel'),

@@ -60,22 +60,31 @@ function drawTopo(topo, canvas) {
 	});
 	nodes = Object.keys(nodeMap).map(function(k) { return nodeMap[k]; });
 
-	/* Layout: master centre, agents on circle */
+	/* Layout: 2 nodes → horizontal split; 3+ → master centre + agents on circle */
 	var positions = {};
 	var cx = W / 2, cy = H / 2, r = Math.min(W, H) * 0.33;
 	var master = null, others = [];
 	nodes.forEach(function(n) {
 		if (n.role === 'master') master = n; else others.push(n);
 	});
-	if (master) positions[master.mac.toLowerCase()] = { x: cx, y: cy, node: master };
-	others.forEach(function(n, i) {
-		var angle = (2 * Math.PI * i / Math.max(others.length, 1)) - Math.PI / 2;
-		positions[n.mac.toLowerCase()] = {
-			x: cx + r * Math.cos(angle),
-			y: cy + r * Math.sin(angle),
-			node: n
-		};
-	});
+	if (master && others.length <= 1) {
+		/* Horizontal layout: master left-centre, agent right-centre */
+		var lx = W * 0.30, rx = W * 0.70;
+		if (master) positions[master.mac.toLowerCase()] = { x: lx, y: cy, node: master };
+		if (others.length === 1)
+			positions[others[0].mac.toLowerCase()] = { x: rx, y: cy, node: others[0] };
+	} else {
+		/* Radial layout for 3+ nodes */
+		if (master) positions[master.mac.toLowerCase()] = { x: cx, y: cy, node: master };
+		others.forEach(function(n, i) {
+			var angle = (2 * Math.PI * i / Math.max(others.length, 1)) - Math.PI / 2;
+			positions[n.mac.toLowerCase()] = {
+				x: cx + r * Math.cos(angle),
+				y: cy + r * Math.sin(angle),
+				node: n
+			};
+		});
+	}
 
 	/* Background + grid dots */
 	ctx.fillStyle = '#0d1117';
@@ -212,14 +221,12 @@ return view.extend({
 				callMeshNeighbors(),
 				callMeshStatus()
 			]).then(function(r) {
+				var topo = r[0];
+				/* 1. Rebuild inner DOM */
 				var old = document.getElementById('easymesh-nodes-inner');
-				if (old) old.replaceWith(self._buildInner(r[0], r[1], r[2], r[3], r[4]));
-			}).catch(function() {});
-		}, 5);
+				if (old) old.replaceWith(self._buildInner(topo, r[1], r[2], r[3], r[4]));
 
-		/* Poll 2: redraw topology canvas every 5s */
-		poll.add(function() {
-			return callMeshTopology().then(function(topo) {
+				/* 2. Redraw topology canvas using the same topo data — no extra RPC */
 				if (!topo || !topo.nodes) return;
 				var canvas  = document.getElementById('easymesh-topo-canvas');
 				var tooltip = document.getElementById('easymesh-topo-tooltip');
@@ -236,6 +243,8 @@ return view.extend({
 							if (Math.sqrt(dx*dx + dy*dy) < (p.radius || 24) * 1.4) hit = p.node;
 						});
 						if (hit) {
+							/* Fix: use DOM nodes instead of innerHTML to avoid XSS from hostname/mac */
+							var frag = document.createDocumentFragment();
 							var lines = [
 								(hit.role === 'master' ? '🌐 ' + _('Master') : '📡 ' + _('Agent')),
 								_('Hostname') + ': ' + (hit.hostname || '—'),
@@ -245,7 +254,13 @@ return view.extend({
 								_('Backhaul') + ': ' + (hit.backhaul || _('wired'))
 							];
 							if (hit.tq) lines.push(_('TQ') + ': ' + Math.round(hit.tq / 255 * 100) + '%');
-							tooltip.innerHTML = lines.map(function(l) { return '<div>' + l + '</div>'; }).join('');
+							lines.forEach(function(l) {
+								var d = document.createElement('div');
+								d.textContent = l;
+								frag.appendChild(d);
+							});
+							tooltip.innerHTML = '';
+							tooltip.appendChild(frag);
 							tooltip.style.display = 'block';
 							tooltip.style.left = (mx + 16) + 'px';
 							tooltip.style.top  = (my - 10) + 'px';
@@ -255,7 +270,7 @@ return view.extend({
 					});
 					canvas.addEventListener('mouseleave', function() { tooltip.style.display = 'none'; });
 				}
-			});
+			}).catch(function() {});
 		}, 5);
 
 		return root;
