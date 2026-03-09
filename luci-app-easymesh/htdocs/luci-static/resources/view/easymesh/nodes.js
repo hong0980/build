@@ -268,11 +268,11 @@ return view.extend({
 
 		/* Normalise response shapes */
 		var pending  = (pendingResp  && Array.isArray(pendingResp.nodes))  ? pendingResp.nodes  :
-		               Array.isArray(pendingResp)  ? pendingResp  : [];
+					   Array.isArray(pendingResp)  ? pendingResp  : [];
 		var approved = (approvedResp && Array.isArray(approvedResp.nodes)) ? approvedResp.nodes :
-		               Array.isArray(approvedResp) ? approvedResp : [];
+					   Array.isArray(approvedResp) ? approvedResp : [];
 		var neighbors = (neighborsResp && Array.isArray(neighborsResp.neighbors)) ?
-		               neighborsResp.neighbors : [];
+					   neighborsResp.neighbors : [];
 
 		/* ── Section 1: Pending approval cards ──────────────────────── */
 		if (pending.length) {
@@ -281,89 +281,84 @@ return view.extend({
 					'⚡ ' + pending.length + ' ' + _('device(s) requesting to join Mesh')),
 				E('p', { class: 'cbi-section-descr', style: 'margin-bottom:14px' },
 					_('Review and approve each device before it receives mesh configuration.')),
-				E('div', {}, pending.map(function(node) {
-					var approveBtn = E('button', {
-						class: 'cbi-button',
-						style: 'background:#2ea44f;color:#fff;border:none;' +
-						       'padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px',
-						click: ui.createHandlerFn(self, function(ev) {
-							var btn = ev.currentTarget;
-							btn.disabled    = true;
-							btn.textContent = _('Approving...');
-							return callMeshApprove(node.mac)
-								.then(function(res) {
-									if (res && res.error) {
-										ui.addNotification(null,
-											E('p', {}, _('Approval failed: ') + res.error), 'error');
-										btn.disabled    = false;
-										btn.textContent = '✓ ' + _('Allow to join');
-									} else {
-										ui.addNotification(null,
-											E('p', {}, _('Approved. Node will receive config shortly.')), 'info');
-									}
-								})
-								.catch(function(err) {
-									ui.addNotification(null,
-										E('p', {}, _('RPC error: ') + (err.message || String(err))), 'error');
-									btn.disabled    = false;
-									btn.textContent = '✓ ' + _('Allow to join');
-								});
-						})
-					}, '✓ ' + _('Allow to join'));
-
-					var rejectBtn = E('button', {
-						class: 'cbi-button',
-						style: 'background:transparent;color:#f85149;border:1px solid #f85149;' +
-						       'padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;margin-left:6px',
-						click: ui.createHandlerFn(self, function(ev) {
-							var btn = ev.currentTarget;
-							btn.disabled = true;
-							return callMeshReject(node.mac)
-								.catch(function() {})
-								.then(function() { btn.disabled = false; });
-						})
-					}, '✕ ' + _('Reject'));
-
-					return E('div', {
-						style: 'border:1px solid #e3b341;border-radius:10px;padding:16px;' +
-						       'background:rgba(210,153,34,.07);display:flex;align-items:center;' +
-						       'gap:14px;margin-bottom:10px;flex-wrap:wrap'
-					}, [
-						E('div', { style: 'font-size:28px;flex-shrink:0' },
-							node.source === 'wireless' ? '📶' : '🔌'),
-						E('div', { style: 'flex:1;min-width:160px' }, [
-							E('div', { style: 'font-weight:600;font-size:14px' },
-								node.hostname || _('Unknown device')),
-							E('div', { style: 'font-size:12px;color:#7d8590;font-family:monospace;margin-top:2px' },
-								(node.ip || '—') + ' · ' + (node.mac || '—')),
-							E('div', { style: 'font-size:11px;color:#7d8590;margin-top:2px' },
-								_('via ') + (node.source === 'wireless'
-									? '📶 ' + _('Wireless') : '🔌 ' + _('Wired')))
-						]),
-						approveBtn,
-						rejectBtn
-					]);
-				}))
+				E('div', { class: 'table' },
+					[E('div', { class: 'tr table-titles' }, [
+						E('div', { class: 'td' }, _('Hostname')),
+						E('div', { class: 'td' }, _('IP')),
+						E('div', { class: 'td' }, _('MAC')),
+						E('div', { class: 'td' }, _('Source')),
+						E('div', { class: 'td' }, _(''))
+					])].concat(pending.map(function(n) {
+						return E('div', { class: 'tr' }, [
+							E('div', { class: 'td' }, n.hostname || _('Unknown device')),
+							E('div', { class: 'td' }, n.ip|| '—'),
+							E('div', { class: 'td' }, n.mac || '—'),
+							E('div', { class: 'td' }, n.source === 'wireless' ? '📶 ' + _('Wireless') : '🔌 ' + _('Wired')),
+							E('div', { class: 'td' }, [
+								E('div', { style: 'display: flex; gap: 8px;' }, [
+									E('button', {
+										class: 'btn cbi-button-add',
+										click: ui.createHandlerFn(self, function(ev) {
+											var btn = ev.currentTarget;
+											btn.disabled    = true;
+											btn.textContent = _('Approving...');
+											return callMeshApprove(n.mac)
+												.then(function(res) {
+													if (res && res.error) {
+														ui.addNotification(null,
+															E('p', {}, _('Approval failed: ') + res.error), 'error');
+														btn.disabled    = false;
+														btn.textContent = '✓ ' + _('Allow to join');
+													} else {
+														ui.addNotification(null,
+															E('p', {}, _('Approved. Node will receive config shortly.')), 'info');
+													}
+												})
+												.catch(function(err) {
+													ui.addNotification(null,
+														E('p', {}, _('RPC error: ') + (err.message || String(err))), 'error');
+													btn.disabled    = false;
+													btn.textContent = '✓ ' + _('Allow to join');
+												});
+										})
+									}, _('Allow to join')),
+									E('button', {
+										class: 'btn cbi-button-remove',
+										click: ui.createHandlerFn(self, function(ev) {
+											var btn = ev.currentTarget;
+											btn.disabled = true;
+											return callMeshReject(n.mac)
+												.catch(function() {})
+												.then(function() { btn.disabled = false; });
+										})
+									}, _('Reject'))
+								])
+							])
+						]);
+					}))
+				),
 			]));
 		}
 
 		/* ── Section 2: Approved nodes list ─────────────────────────── */
 		if (approved.length) {
 			el.appendChild(E('div', { class: 'cbi-section' }, [
-				E('h3', {}, '✅ ' + _('Approved Nodes') + ' (' + approved.length + ')'),
+				E('h3', {}, _('Approved Nodes') + ' (' + approved.length + ')'),
 				E('div', { class: 'table' },
 					[E('div', { class: 'tr table-titles' }, [
-						E('div', { class: 'td', style: 'width:140px' }, _('Hostname')),
-						E('div', { class: 'td', style: 'width:140px;font-family:monospace' }, _('IP')),
-						E('div', { class: 'td', style: 'font-family:monospace' }, _('MAC')),
-						E('div', { class: 'td', style: 'width:80px' }, _('Source'))
+						E('div', { class: 'td' }, _('Hostname')),
+						E('div', { class: 'td' }, _('IP')),
+						E('div', { class: 'td' }, _('MAC')),
+						E('div', { class: 'td' }, _('Source'))
 					])].concat(approved.map(function(n) {
 						return E('div', { class: 'tr' }, [
 							E('div', { class: 'td' }, n.hostname || _('Unknown device')),
-							E('div', { class: 'td', style: 'font-family:monospace;color:#79c0ff' }, n.ip || '—'),
-							E('div', { class: 'td', style: 'font-family:monospace;color:#d2a8ff' }, n.mac || '—'),
-							E('div', { class: 'td' },
-								n.source === 'wireless' ? '📶 ' + _('Wireless') : '🔌 ' + _('Wired'))
+							E('div', { class: 'td' }, n.ip
+								? E('a', { href: `//${n.ip}`, target: '_blank' }, n.ip)
+								: '—'
+							),
+							E('div', { class: 'td' }, n.mac || '—'),
+							E('div', { class: 'td' }, n.source === 'wireless' ? '📶 ' + _('Wireless') : '🔌 ' + _('Wired'))
 						]);
 					}))
 				)
@@ -372,10 +367,8 @@ return view.extend({
 
 		/* ── Section 3: Mesh Status ──────────────────────────────────── */
 		var bat0Up     = topology && topology.bat0_up;
-		var links      = (topology && Array.isArray(topology.links)) ? topology.links : [];
 		var svc        = statusResp || {};
 		var daemonUp   = svc.daemon_running === true;
-		var kmodLoaded = svc.kmod_loaded   === true;
 		el.appendChild(E('div', { class: 'cbi-section' }, [
 			E('h3', {}, _('Mesh Status')),
 			E('div', { class: 'table' }, [
@@ -393,13 +386,6 @@ return view.extend({
 						: E('span', { style: 'background:#f85149;color:#fff;padding:2px 8px;border-radius:4px' }, _('Not running')))
 				]),
 				E('div', { class: 'tr' }, [
-					E('div', { class: 'td left' }, 'kmod-batman-adv'),
-					E('div', { class: 'td' }, kmodLoaded
-						? E('span', { style: 'background:#2ea44f;color:#fff;padding:2px 8px;border-radius:4px' }, _('Loaded'))
-						: E('span', { style: 'background:#f85149;color:#fff;padding:2px 8px;border-radius:4px' }, _('Not loaded')))
-					
-				]),
-				E('div', { class: 'tr' }, [
 					E('div', { class: 'td left' }, _('Neighbor nodes')),
 					E('div', { class: 'td' }, neighbors.length + ' ' + _('found'))
 				])
@@ -414,7 +400,6 @@ return view.extend({
 			neighbors.length === 0
 				? E('div', { class: 'alert-message' },
 					!daemonUp ? _('EasyMesh daemon is not running. Enable EasyMesh and restart the service.')
-					: !kmodLoaded ? _('kmod-batman-adv is not installed. Run: opkg install kmod-batman-adv')
 					: !bat0Up ? _('bat0 is not running. Try restarting the EasyMesh service.')
 					: _('No neighbors found. Verify all nodes share the same Mesh ID and password.'))
 				: E('div', { class: 'table' },
@@ -451,7 +436,7 @@ return view.extend({
 					_('No topology data yet. Waiting for mesh to form...'))
 				: E('div', {
 					style: 'background:#0d1117;border:1px solid #30363d;border-radius:12px;' +
-					       'padding:8px;overflow:hidden;position:relative'
+						   'padding:8px;overflow:hidden;position:relative'
 				}, [
 					E('canvas', {
 						id: 'easymesh-topo-canvas', width: '900', height: '400',
@@ -460,9 +445,9 @@ return view.extend({
 					E('div', {
 						id: 'easymesh-topo-tooltip',
 						style: 'display:none;position:absolute;background:rgba(22,27,34,.95);' +
-						       'border:1px solid #30363d;border-radius:8px;padding:10px 14px;' +
-						       'font-size:12px;color:#e6edf3;pointer-events:none;' +
-						       'font-family:monospace;line-height:1.7;max-width:220px'
+							   'border:1px solid #30363d;border-radius:8px;padding:10px 14px;' +
+							   'font-size:12px;color:#e6edf3;pointer-events:none;' +
+							   'font-family:monospace;line-height:1.7;max-width:220px'
 					})
 				]),
 			E('div', { style: 'display:flex;gap:20px;padding:10px 12px 4px;flex-wrap:wrap' },

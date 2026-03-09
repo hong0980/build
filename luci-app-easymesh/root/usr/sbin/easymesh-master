@@ -313,31 +313,28 @@ tune_batman() {
     batctl meshif "$MESH_IF" hop_penalty   "$BATMAN_HOP_PENALTY"  2>/dev/null
     local _bmode; _bmode=$(uci_get easymesh global backhaul 'wired')
     local _role; _role=$(get_role)
+
+    # 有线模式始终禁用 BLA/DAT（无论状态是否变化，幂等写入代价极低）
+    if [ "$_bmode" = "wired" ] && [ -d /sys/class/net/bat0/mesh ]; then
+        echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null
+        echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
+    fi
+
     # 只在状态真正改变时才写日志（避免每 30s 刷屏）
     local _state_key="${_bmode}:${_role}"
     local _last; _last=$(cat /tmp/easymesh_batman_state 2>/dev/null)
     if [ "$_state_key" != "$_last" ]; then
-        if [ "$_bmode" = "wired" ]; then
-            if [ -d /sys/class/net/bat0/mesh ]; then
-                echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null
-                echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
-            fi
-            log "batman-adv: BLA=off DAT=off (wired mode)"
-        fi
+        [ "$_bmode" = "wired" ] && log "batman-adv: BLA=off DAT=off (wired mode)"
         if [ "$_role" = "master" ]; then
             batctl meshif "$MESH_IF" gw_mode server 2>/dev/null
             log "batman-adv: GW mode=server, OGM=%sms" "$BATMAN_OGM_INTERVAL"
         else
             batctl meshif "$MESH_IF" gw_mode "$BATMAN_GW_MODE" 2>/dev/null
-            log "batman-adv: GW 模式=%s，OGM=%sms" "$BATMAN_GW_MODE" "$BATMAN_OGM_INTERVAL"
+            log "batman-adv: GW mode=%s, OGM=%sms" "$BATMAN_GW_MODE" "$BATMAN_OGM_INTERVAL"
         fi
         printf '%s' "$_state_key" > /tmp/easymesh_batman_state
     else
         # 静默执行，不打日志
-        [ "$_bmode" = "wired" ] && [ -d /sys/class/net/bat0/mesh ] && {
-            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null
-            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
-        }
         [ "$_role" = "master" ] \
             && batctl meshif "$MESH_IF" gw_mode server 2>/dev/null \
             || batctl meshif "$MESH_IF" gw_mode "$BATMAN_GW_MODE" 2>/dev/null
@@ -421,8 +418,7 @@ setup_wired_backhaul() {
     fi
 
     # -- 4. bat0 加入 br-lan（仅无线回程需要）--
-    local _backhaul_mode; _backhaul_mode=$(uci_get easymesh global backhaul 'wired')
-    if [ "$_backhaul_mode" = "wired" ]; then
+    if [ "$backhaul" = "wired" ]; then
         # 有线回程：确保 bat0 不在 br-lan 里（防止 BLA 干扰）
         if ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan"; then
             ip link set "$MESH_IF" nomaster 2>/dev/null \
@@ -496,12 +492,12 @@ DISC_TIMEOUT=60
 
 discovery_server() {
     log "Discovery server listening on UDP %s" "$DISC_PORT"
-    local _spid=$!
-    echo $_spid > "${EM_PID_DIR}/disc_server.pid"
-    log "DBG disc_server: socat pid=%s listening UDP %s" "$_spid" "$DISC_PORT"
     # FIX1: 用绝对路径替代 $0，避免 agent 以 easymesh-agent 启动时 $0 指向错误
     socat UDP4-RECVFROM:${DISC_PORT},fork,reuseaddr \
         EXEC:"/usr/sbin/easymesh-master __handle_hello" 2>/dev/null &
+    local _spid=$!   # 必须在 & 之后立即取，才是 socat 的 PID
+    echo $_spid > "${EM_PID_DIR}/disc_server.pid"
+    log "DBG disc_server: socat pid=%s listening UDP %s" "$_spid" "$DISC_PORT"
 }
 
 __handle_hello() {
@@ -836,31 +832,20 @@ _diagnose_http_connection() {
         return 1
     fi
 
-    # -- 2. 检查端口：直接用 curl 请求 /ping（比 nc 更准确）--
-    log "DBG httpdiag: step 2 - checking if port $port is open..."
-    local port_check_resp
-    port_check_resp=$(curl -s -m 3 "http://${target_ip}:${port}/ping" 2>/dev/null)
-    if echo "$port_check_resp" | grep -q '"role"'; then
-        log "✓ httpdiag: port $port on $target_ip is OPEN (got ping response)"
-    else
-        log "✗ httpdiag: port $port on $target_ip is CLOSED or FILTERED"
-        return 1
-    fi
-
-    # -- 3. 尝试发送 HTTP 请求，详细输出 --
-    log "DBG httpdiag: step 3 - sending HTTP GET request..."
-    local response
+    # -- 2. 检查端口并获取响应（合并为一次 curl，同时验证端口和内容）--
+    log "DBG httpdiag: step 2 - checking port $port and sending HTTP GET..."
+    local response curl_ret
     response=$(curl -s -m 3 "http://${target_ip}:${port}/ping" 2>&1)
-    local curl_ret=$?
+    curl_ret=$?
 
-    if [ $curl_ret -eq 0 ]; then
+    if [ $curl_ret -eq 0 ] && echo "$response" | grep -q '"role"'; then
+        log "✓ httpdiag: port $port on $target_ip is OPEN"
         log "✓ httpdiag: HTTP request OK"
         log "  response: $response"
         return 0
     else
-        log "✗ httpdiag: HTTP request FAILED (curl exit: $curl_ret)"
+        log "✗ httpdiag: port $port on $target_ip CLOSED/FILTERED or bad response (curl exit: $curl_ret)"
         log "  response: $response"
-
         return 1
     fi
 }
@@ -903,6 +888,21 @@ _diagnose_network_improved() {
 
     log "=== NETWORK DIAGNOSIS END ==="
 }
+# -- Node DB iterator helper --
+# Usage: _iter_approved_nodes callback_fn
+# callback_fn is called as: callback_fn peer_ip peer_mac peer_file
+_iter_approved_nodes() {
+    local _cb="$1"
+    local _f _ip _mac
+    for _f in "$NODE_DB"/*.json; do
+        [ -f "$_f" ] || continue
+        _ip=$(jsonfilter -i "$_f" -e '@.ip'  2>/dev/null)
+        [ -z "$_ip" ] && continue
+        _mac=$(jsonfilter -i "$_f" -e '@.mac' 2>/dev/null)
+        "$_cb" "$_ip" "$_mac" "$_f"
+    done
+}
+
 ########################################
 # 7. NODE REGISTRATION
 ########################################
@@ -1311,13 +1311,13 @@ sync_neighbor_list() {
         local _nb_last; _nb_last=$(cat /tmp/easymesh_nb_hash 2>/dev/null)
         if [ "$_nb_hash" != "$_nb_last" ]; then
             printf '%s' "$_nb_hash" > /tmp/easymesh_nb_hash
-            for f in "$NODE_DB"/*.json; do
-                [ -f "$f" ] || continue
-                local peer_ip; peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
-                [ -z "$peer_ip" ] && continue
-                # 静默推送：不经 do_http_post，不产生重试日志
-                ( curl -s -m 5 -X POST -H "Content-Type: application/json"                     -d "$payload" "http://${peer_ip}:${MASTER_PORT}/roam/neighbors"                     >/dev/null 2>&1 ) &
-            done
+            _push_nb_to() {
+                local _ip="$1"
+                ( curl -s -m 5 -X POST -H "Content-Type: application/json" \
+                    -d "$payload" "http://${_ip}:${MASTER_PORT}/roam/neighbors" \
+                    >/dev/null 2>&1 ) &
+            }
+            _iter_approved_nodes _push_nb_to
         fi
     fi
 }
@@ -1381,19 +1381,18 @@ roam_watchdog() {
 pick_best_candidate() {
     local sta_mac="$1" cur_rssi="$2"
     local best_bssid="" best_rssi=-200
-    for f in "$NODE_DB"/*.json; do
-        [ -f "$f" ] || continue
-        local peer_ip; peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
-        [ -z "$peer_ip" ] && continue
+    _check_peer_signal() {
+        local _ip="$1"
         local resp; resp=$(curl -s -m 2 \
-        "http://${peer_ip}:${MASTER_PORT}/roam/signal?mac=${sta_mac}" 2>/dev/null)
+            "http://${_ip}:${MASTER_PORT}/roam/signal?mac=${sta_mac}" 2>/dev/null)
         local peer_rssi; peer_rssi=$(echo "$resp"  | grep -o '"rssi":-\?[0-9]*' | cut -d: -f2)
         local peer_bssid; peer_bssid=$(echo "$resp" | grep -o '"bssid":"[^"]*"'  | cut -d'"' -f4)
-        [ -z "$peer_rssi" ] || [ -z "$peer_bssid" ] && continue
+        [ -z "$peer_rssi" ] || [ -z "$peer_bssid" ] && return
         if [ "$peer_rssi" -gt "$best_rssi" ] 2>/dev/null; then
             best_rssi="$peer_rssi"; best_bssid="$peer_bssid"
         fi
-    done
+    }
+    _iter_approved_nodes _check_peer_signal
     if [ -n "$best_bssid" ] && [ "$best_rssi" -gt $(( cur_rssi + ROAM_HYSTERESIS )) ] 2>/dev/null; then
         echo "$best_bssid"
     fi
@@ -1431,13 +1430,12 @@ handle_dfs_channel_change() {
     uci set "${rd}.channel=${new_chan}"; uci_commit wireless
     if [ "$(get_role)" = "master" ]; then
         local payload="{\"channel\":\"$new_chan\",\"reason\":\"dfs\"}"
-        for f in "$NODE_DB"/*.json; do
-            [ -f "$f" ] || continue
-            local peer_ip; peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
-            [ -z "$peer_ip" ] && continue
-            do_http_post "http://${peer_ip}:${MASTER_PORT}/channel/apply" "$payload" >/dev/null 2>&1 &
-            log "DFS: pushed channel %s to %s" "$new_chan" "$peer_ip"
-        done
+        _push_dfs_to() {
+            local _ip="$1"
+            do_http_post "http://${_ip}:${MASTER_PORT}/channel/apply" "$payload" >/dev/null 2>&1 &
+            log "DFS: pushed channel %s to %s" "$new_chan" "$_ip"
+        }
+        _iter_approved_nodes _push_dfs_to
     fi
 }
 
@@ -1469,12 +1467,10 @@ optimize_channel() {
     log "ACS: channel %s -> %s (occupancy: %s APs)" "$cur" "$best_ch" "$best_count"
     uci set "${rd}.channel=$best_ch"; uci_commit wireless && wifi reload
     local payload="{\"channel\":\"$best_ch\",\"reason\":\"acs\"}"
-    for f in "$NODE_DB"/*.json; do
-        [ -f "$f" ] || continue
-        local peer_ip; peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
-        [ -z "$peer_ip" ] && continue
-        do_http_post "http://${peer_ip}:${MASTER_PORT}/channel/apply" "$payload" >/dev/null 2>&1 &
-    done
+    _push_acs_to() {
+        do_http_post "http://${1}:${MASTER_PORT}/channel/apply" "$payload" >/dev/null 2>&1 &
+    }
+    _iter_approved_nodes _push_acs_to
 }
 
 setup_dedicated_backhaul() {
@@ -1650,16 +1646,15 @@ HAPD
 ########################################
 _handle_approval_signal() {
     log "USR1: node approved — pushing profile to all approved agents"
-    # 主动推送 profile 给所有已批准节点，不等 agent 的 10 秒轮询
     local profile; profile=$(cat "$PROFILE_FILE" 2>/dev/null)
     [ -z "$profile" ] && { log "WARN USR1: no profile file, agent will get it on next poll"; return; }
-    for f in "$NODE_DB"/*.json; do
-        [ -f "$f" ] || continue
-        local peer_ip; peer_ip=$(jsonfilter -i "$f" -e '@.ip' 2>/dev/null)
-        [ -z "$peer_ip" ] && continue
-        ( curl -s -m 5 -X POST             -H "Content-Type: application/json"             -d "$profile"             "http://${peer_ip}:${MASTER_PORT}/profile/push" >/dev/null 2>&1 ) &
-        log "USR1: pushed profile to agent %s" "$peer_ip"
-    done
+    _push_profile_to() {
+        local _ip="$1"
+        ( curl -s -m 5 -X POST -H "Content-Type: application/json" \
+            -d "$profile" "http://${_ip}:${MASTER_PORT}/profile/push" >/dev/null 2>&1 ) &
+        log "USR1: pushed profile to agent %s" "$_ip"
+    }
+    _iter_approved_nodes _push_profile_to
 }
 
 main_loop() {
