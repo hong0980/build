@@ -82,10 +82,6 @@ translate() {
     [ $# -gt 0 ] && printf "$translated" "$@" || printf '%s' "$translated"
 }
 
-# _t: 只翻译不格式化，返回翻译后的模板字符串
-# 用于把翻译结果存入变量再格式化
-_t() { translate "$1"; }
-
 _dbg_export() {
     local raw="$1"
     local key; key=$(printf '%s' "$raw" | tr -cd 'a-zA-Z0-9' | cut -c1-40)
@@ -267,6 +263,9 @@ elect_role() {
         return 0
     fi
 
+    # NOTE: cannot use _iter_approved_nodes here — we need early-return on WAN
+    # discovery and mutation of best_mac/best_ip across iterations, both of which
+    # require in-shell execution (not a callback subshell).
     local best_mac="$mymac" best_ip="$myip"
     mkdir -p "$NODE_DB"
     for f in "$NODE_DB"/*.json; do
@@ -320,10 +319,15 @@ tune_batman() {
         echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
     fi
 
-    # 只在状态真正改变时才写日志（避免每 30s 刷屏）
-    local _state_key="${_bmode}:${_role}"
+    # routing_algo: 只在 bat0 刚创建时（state 改变）写入，运行中切换算法会导致 bat0 短暂重置
+    local _algo; _algo=$(uci_get easymesh global routing_algo 'BATMAN_IV')
+    local _state_key="${_bmode}:${_role}:${_algo}"
     local _last; _last=$(cat /tmp/easymesh_batman_state 2>/dev/null)
     if [ "$_state_key" != "$_last" ]; then
+        # 写入 routing algorithm（仅在状态变化时，避免运行中重置）
+        batctl meshif "$MESH_IF" routing_algo "$_algo" 2>/dev/null \
+            && log "batman-adv: routing_algo=%s" "$_algo" \
+            || logw "batman-adv: routing_algo=%s not supported (kernel module may not have it)" "$_algo"
         [ "$_bmode" = "wired" ] && log "batman-adv: BLA=off DAT=off (wired mode)"
         if [ "$_role" = "master" ]; then
             batctl meshif "$MESH_IF" gw_mode server 2>/dev/null
@@ -487,9 +491,6 @@ teardown_batman() {
 ########################################
 # 5. UDP BROADCAST DISCOVERY
 ########################################
-DISC_HELLO_INTERVAL=5
-DISC_TIMEOUT=60
-
 discovery_server() {
     log "Discovery server listening on UDP %s" "$DISC_PORT"
     # FIX1: 用绝对路径替代 $0，避免 agent 以 easymesh-agent 启动时 $0 指向错误
@@ -1270,7 +1271,7 @@ check_routing_paths() {
     local cur_gw
     cur_gw=$(batctl meshif "$MESH_IF" gwl 2>/dev/null | awk '/===>/{print $2}' | head -1)
     if [ -n "$cur_gw" ] && [ "$cur_gw" != "$prev_gw" ]; then
-        log "Self-healing: gateway path changed -> %s (was: %s)" "$cur_gw" "${prev_gw:-none}"
+        logh "Self-healing: gateway path changed -> %s (was: %s)" "$cur_gw" "${prev_gw:-none}"
         prev_gw="$cur_gw"
         sync_neighbor_list
     fi
@@ -1400,7 +1401,7 @@ pick_best_candidate() {
 
 dfs_watchdog() {
     local ap_iface; ap_iface=$(get_ap_iface)
-    log "DFS watchdog started on %s" "$ap_iface"
+    logd "DFS watchdog started on %s" "$ap_iface"
     cat > /tmp/easymesh_dfs_action.sh << 'SH'
 #!/bin/sh
 event="$2"
@@ -1425,7 +1426,7 @@ SH
 
 handle_dfs_channel_change() {
     local new_chan="$1"
-    log "DFS: mesh-wide channel change -> %s" "$new_chan"
+    logd "DFS: mesh-wide channel change -> %s" "$new_chan"
     local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
     uci set "${rd}.channel=${new_chan}"; uci_commit wireless
     if [ "$(get_role)" = "master" ]; then
@@ -1433,7 +1434,7 @@ handle_dfs_channel_change() {
         _push_dfs_to() {
             local _ip="$1"
             do_http_post "http://${_ip}:${MASTER_PORT}/channel/apply" "$payload" >/dev/null 2>&1 &
-            log "DFS: pushed channel %s to %s" "$new_chan" "$_ip"
+            logd "DFS: pushed channel %s to %s" "$new_chan" "$_ip"
         }
         _iter_approved_nodes _push_dfs_to
     fi
@@ -1464,7 +1465,7 @@ optimize_channel() {
     [ -z "$best_ch" ] && return
     local cur; cur=$(uci get "${rd}.channel" 2>/dev/null)
     [ "$cur" = "$best_ch" ] && return
-    log "ACS: channel %s -> %s (occupancy: %s APs)" "$cur" "$best_ch" "$best_count"
+    logd "ACS: channel %s -> %s (occupancy: %s APs)" "$cur" "$best_ch" "$best_count"
     uci set "${rd}.channel=$best_ch"; uci_commit wireless && wifi reload
     local payload="{\"channel\":\"$best_ch\",\"reason\":\"acs\"}"
     _push_acs_to() {

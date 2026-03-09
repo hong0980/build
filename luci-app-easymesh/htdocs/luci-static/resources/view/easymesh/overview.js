@@ -192,13 +192,6 @@ return view.extend({
 		o.default = '0';
 		o.depends({ enabled: '1', role: 'master' });
 
-		o = s.taboption('advanced', form.ListValue, 'backhaul_band',
-			_('Backhaul Radio Band'));
-		o.value('5g_2', _('Second 5 GHz radio (recommended)'));
-		o.value('5g_1', _('First 5 GHz radio'));
-		o.default = '5g_2';
-		o.depends({ enabled: '1', role: 'master', dedicated_backhaul: '1' });
-
 		o = s.taboption('advanced', form.Value, 'backhaul_channel',
 			_('Backhaul Channel'),
 			_('Fixed channel for dedicated backhaul radio. 149/153/157/161 recommended.'));

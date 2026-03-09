@@ -59,14 +59,6 @@ cleanup_wireless() {
     uci commit wireless
 }
 
-# ============================================================================
-# Agent 启动准备
-#
-# IP 唯一性策略：用本机 MAC 后3字节哈希派生固定偏移量 → .100-.197 范围
-# 同一硬件重启后得到同一IP，不同路由器因MAC不同大概率不碰撞。
-# 只在末段是 .1（与主路由冲突）时才执行。
-# 极小概率碰撞时：ping探测后线性往后找空闲IP兜底。
-# ============================================================================
 _agent_prepare() {
     local my_ip prefix suffix new_ip
 
@@ -116,7 +108,6 @@ _agent_prepare() {
     uci commit system
     /etc/init.d/network reload
 
-    # 等待新IP生效（最多20秒）
     local _w=0
     while [ $_w -lt 20 ]; do
         my_ip=$(ip -4 addr show dev br-lan 2>/dev/null \
@@ -127,14 +118,6 @@ _agent_prepare() {
     log "agent_prepare: done. br-lan IP=%s" "$my_ip"
 }
 
-# ── 配置 UCI wireless + dummy network.mesh section ───────────────────────────
-#   master 配置 ssid/key，initd 在所有可用 radio 上各创建一个同名 AP，
-#   实现 2.4G + 5G 合并同一 SSID（Band Steering 由客户端自动选频）。
-#   agent 收到 master profile push 后也执行同样逻辑，配置完全一致。
-#   mesh0（802.11s 回程）放在 backhaul 频段 radio 上；
-#   backhaul=wired 时 mesh0 禁用，backhaul=wireless/auto 时启用。
-# ─────────────────────────────────────────────────────────────────────────────
-# radio 分类辅助函数（被 config_foreach _classify_radio wifi-device 调用）
 _classify_radio() {
     local _n="$1" _b
     config_get _b "$_n" band
@@ -211,12 +194,10 @@ apply_mesh_config() {
 
     cleanup_wireless
 
-    # ── 找出所有可用 radio，分类为 2.4G 和 5G ────────────────────────────────
     local radio_2g="" radio_5g="" radio_5g2=""
     local _seen5g=0
     config_load wireless
     config_foreach _classify_radio wifi-device
-    # 回程 radio：优先使用 mesh_band 对应的那个
     local radio_mesh
     if [ "$mesh_band" = "2g" ]; then
         radio_mesh="$radio_2g"
@@ -232,8 +213,6 @@ apply_mesh_config() {
     uci commit network
 
     # ── 无线 mesh 回程（802.11s）─────────────────────────────────────────────
-    # backhaul=wired → disabled=1（禁用，节省空口）
-    # backhaul=wireless/auto → disabled=0（启用，作为 mesh 回程）
     uci set wireless.mesh0=wifi-iface
     uci set wireless.mesh0.device="$radio_mesh"
     uci set wireless.mesh0.mode='mesh'
@@ -254,19 +233,13 @@ apply_mesh_config() {
     if [ "$role" = "master" ]; then
         uci -q del dhcp.lan.ignore
         log "Role: master — DHCP enabled"
-    elif [ "$backhaul" = "wired" ]; then
-        uci -q del dhcp.lan.ignore
-        log "Role: agent (wired) — DHCP kept enabled"
     else
         uci set dhcp.lan.ignore='1'
-        log "Role: agent (wireless) — DHCP disabled"
+        log "Role: agent — DHCP disabled (master handles all address allocation)"
     fi
     uci commit dhcp
 
     # ── 客户端 AP（双频合并）───────────────────────────────
-    # 所有可用频段均创建同名 AP，客户端自动选择 2.4G/5G（BSS 由 802.11k/v 辅助）
-    # 5G 优先：5G radio 上创建 easymesh_ap（主 AP，用于 rpcd 统计）
-    # 2.4G radio 上创建 easymesh_ap_2g（覆盖补充）
     local _ap_idx=0
     # 5G AP（主）
     if [ -n "$radio_5g" ]; then
@@ -292,8 +265,6 @@ apply_mesh_config() {
     uci commit wireless
     log "apply_mesh_config done (%s AP(s) created)" "$_ap_idx"
 }
-
-
 
 # ── procd ─────────────────────────────────────────────────────────────────────
 _open_firewall_ports() {
@@ -323,7 +294,6 @@ start_service() {
     config_get backhaul global backhaul 'wired'
     log "EasyMesh starting (role=%s)" "$role"
 
-    # 首次以 agent 模式启动时保存原始 IP 和 hostname，供 WPS 按钮恢复使用
     [ "$role" = "agent" -a ! -f /etc/easymesh_agent ] && {
         local ipaddr; ipaddr=$(uci_get network lan ipaddr '192.168.1.1')
         local hostname; hostname=$(uci_get system @system[0] hostname openwrt)
@@ -337,7 +307,6 @@ start_service() {
         _agent_prepare
     fi
 
-    # ── 开放防火墙端口（iptables + nftables 双支持）────────────────────────
     _open_firewall_ports
 
     # ── 等待 br-lan IP 就绪（最多 20 秒）────────────────────────────────────
@@ -366,8 +335,20 @@ start_service() {
     procd_close_instance
 }
 
+_close_firewall_ports() {
+    if command -v iptables >/dev/null 2>&1; then
+        while iptables -C INPUT -p tcp --dport 4304 -j ACCEPT 2>/dev/null; do
+            iptables -D INPUT -p tcp --dport 4304 -j ACCEPT 2>/dev/null || break
+        done
+        while iptables -C INPUT -p udp --dport 4305 -j ACCEPT 2>/dev/null; do
+            iptables -D INPUT -p udp --dport 4305 -j ACCEPT 2>/dev/null || break
+        done
+    fi
+}
+
 stop_service() {
     log "EasyMesh stopping..."
+
     for pid in $(pgrep -f "easymesh-(master|agent)" 2>/dev/null); do
         [ "$pid" != "$$" ] && kill "$pid" 2>/dev/null || true
     done
@@ -381,6 +362,7 @@ stop_service() {
     fi
     iw dev easymesh-pair0 del 2>/dev/null || true
 
+    _close_firewall_ports
     cleanup_wireless
 
     uci -q del dhcp.lan.ignore

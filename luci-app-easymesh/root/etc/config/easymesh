@@ -12,10 +12,10 @@ config easymesh 'global'
 	option ieee80211k '1'
 	option ieee80211v '1'
 	option wireless_onboard '0'
-	option wireless_onboard_ssid ''
 	# Dedicated backhaul radio (tri-band: use second 5GHz radio for backhaul only)
 	option dedicated_backhaul '0'
-	option backhaul_band '5g_2'
+	option backhaul_channel '149'
 	# DFS/ACS
 	option dfs_enable '1'
-
+	# batman-adv routing algorithm: BATMAN_IV (default) or BATMAN_V
+	option routing_algo 'BATMAN_IV'
