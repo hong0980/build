@@ -8,12 +8,16 @@
 return view.extend({
 	load: function () {
 		return Promise.all([
-			fs.stat('/etc/config/wireless').catch(() => null),
-			uci.load('wizard').then((data) => {
+			fs.stat('/etc/config/wireless').catch(function () { return null; }),
+			uci.load('wizard').then(function (data) {
 				if (!uci.get(data, 'default', 'wan_proto')) {
-					return fs.exec('/bin/sh', ['/etc/init.d/wizard', 'reconfig']);
+					return fs.exec_direct('/etc/init.d/wizard', ['reconfig'])
+						.then(function () {
+							uci.unload('wizard');
+							return uci.load('wizard');
+						});
 				}
-				return null;
+				return data;
 			})
 		]);
 	},

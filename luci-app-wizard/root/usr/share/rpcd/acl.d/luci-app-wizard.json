@@ -9,6 +9,7 @@
 				"/etc/config/*": [ "read" ],
 				"/etc/rc.local": [ "read" ],
 				"/etc/dnsmasq.conf": [ "read" ],
+				"/etc/init.d/wizard": [ "exec" ],
 				"/etc/crontabs/root": [ "read" ]
 			},
 			"ubus": {
