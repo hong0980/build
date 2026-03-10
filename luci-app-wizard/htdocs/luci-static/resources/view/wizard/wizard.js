@@ -22,11 +22,11 @@ return view.extend({
 		var stat = data[0];
 		var m, s, o;
 		var dnsOptions = [
-			{ value: '223.5.5.5', label: _('AliDNS: 223.5.5.5') },
-			{ value: '223.6.6.6', label: _('AliDNS: 223.6.6.6') },
-			{ value: '101.226.4.6', label: _('DNSPod: 101.226.4.6') },
-			{ value: '218.30.118.6', label: _('DNSPod: 218.30.118.6') },
-			{ value: '180.76.76.76', label: _('BaiduDNS: 180.76.76.76') },
+			{ value: '223.5.5.5',       label: _('AliDNS: 223.5.5.5') },
+			{ value: '223.6.6.6',       label: _('AliDNS: 223.6.6.6') },
+			{ value: '101.226.4.6',     label: _('DNSPod: 101.226.4.6') },
+			{ value: '218.30.118.6',    label: _('DNSPod: 218.30.118.6') },
+			{ value: '180.76.76.76',    label: _('BaiduDNS: 180.76.76.76') },
 			{ value: '114.114.114.114', label: _('114DNS: 114.114.114.114') },
 			{ value: '114.114.115.115', label: _('114DNS: 114.114.115.115') }
 		];
@@ -65,7 +65,6 @@ return view.extend({
 
 		o = s.taboption('wansetup', form.ListValue, 'ppp_ipv6', _('Obtain IPv6 address'),
 			_('Enable IPv6 negotiation on the PPP link'));
-		o.ucioption = 'ipv6';
 		o.depends('wan_proto', 'pppoe');
 		o.value('auto', _('Automatic'));
 		o.value('0', _('Disabled'));

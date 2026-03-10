@@ -46,7 +46,15 @@ return view.extend({
 					class: 'cbi-input-select', style: 'width: 180px;',
 					change: ui.createHandlerFn(this, (ev) => {
 						const filepath = ev.target.value;
+						if (!filepath) {
+							this.dom.path = '';
+							return;
+						}
 						const config = data.find((c) => c.path === filepath);
+						if (!config) {
+							notify(null, E('p', _('Error: File configuration not found.')), 3000, 'warning');
+							return;
+						}
 						fs.read(filepath).then((content) => {
 							this.dom.path = filepath;
 							this.dom.cmd = config.cmd;
@@ -63,7 +71,7 @@ return view.extend({
 				]),
 				E('div', { style: 'color: red;' }, _('Readonly')),
 				E('input', {
-					type: 'checkbox', checked: 'true',
+					type: 'checkbox', checked: true,
 					change: ui.createHandlerFn(this, (ev) => {
 						const isChecked = ev.target.checked;
 						this.dom.textarea.readOnly = isChecked;

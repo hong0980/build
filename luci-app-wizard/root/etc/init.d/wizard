@@ -28,12 +28,13 @@ uci_changes() {
 }
 
 set_dns() {
+	uci_remove network wan peerdns >/dev/null 2>&1
+
 	for cfg in wan lan; do
 		eval dns_list=\$${cfg}_dns
 		[ -z "$dns_list" ] && continue
 
 		uci_remove network "$cfg" dns >/dev/null 2>&1
-		uci_remove network wan peerdns >/dev/null 2>&1
 
 		for dns in $dns_list; do
 			uci_add_list network "$cfg" dns "$dns"
@@ -75,18 +76,16 @@ set_wireless() {
 
 		uci_set wireless "$cfg" ssid "$wifi_ssid"
 		uci_set wireless "$cfg" key "$wifi_key"
-		uci_set wireless "$cfg" encryption 'psk2'
 
 		config_get band "$device" band
 
 		if [ "$band" = "6g" ]; then
-			uci_set wireless "$cfg" ocv '0'
-			uci_set wireless "$cfg" ssid "${wifi_ssid}_6G"
 			uci_set wireless "$cfg" encryption 'sae'
 			uci_remove wireless "$cfg" ft_psk_generate_local
 
-			uci_set wireless "$device" country 'DE'
-			uci_set wireless "$device" channel '21'
+			uci_set wireless "$cfg" ssid "${wifi_ssid}_6G"
+		else
+			uci_set wireless "$cfg" encryption 'psk2'
 		fi
 
 		wifi_updated=1
@@ -130,9 +129,10 @@ reconfig() {
 
 	local wifi_cmd="delete wizard.default.wifi_ssid; delete wizard.default.wifi_key"
 	if [ "$found" -eq 1 ] && [ -n "$ssid" ]; then
-		local esc_ssid="${ssid//\'/\\\'}"
-		local esc_key="${key//\'/\\\'}"
-		wifi_cmd="set wizard.default.wifi_ssid='${esc_ssid}'; set wizard.default.wifi_key='${esc_key}'"
+		local safe_ssid="${ssid//\'/\'\\\'\'}"
+		local safe_key="${key//\'/\'\\\'\'}"
+
+		wifi_cmd="set wizard.default.wifi_ssid='${safe_ssid}'; set wizard.default.wifi_key='${safe_key}'"
 	fi
 
 	local dhcp_cmd="delete wizard.default.dhcp"
@@ -295,20 +295,27 @@ add_wizard() {
 	set_wireless
 	set_dns
 
-	local need_reload=0
+	local need_reload=0 reload_network=0 reload_dhcp=0 reload_wireless=0 reload_firewall=0
 	for config in network dhcp firewall wireless wizard; do
 		if uci_changes "$config"; then
 			need_reload=1
 			case "$config" in
-				wireless) wifi reload & ;;
-				dhcp) /etc/init.d/dnsmasq reload & ;;
-				network) /etc/init.d/network reload & ;;
-				firewall) /etc/init.d/firewall reload & ;;
+				network) reload_network=1 ;;
+				dhcp) reload_dhcp=1 ;;
+				firewall) reload_firewall=1 ;;
+				wireless) reload_wireless=1 ;;
 			esac
 		fi
 	done
 
-	[ "$need_reload" = "1" ] && log_msg "Configuration applied and services reloading."
+	if [ "$need_reload" = "1" ]; then
+		[ "$reload_network" = "1" ] && /etc/init.d/network reload
+		[ "$reload_firewall" = "1" ] && /etc/init.d/firewall reload
+		[ "$reload_dhcp" = "1" ] && /etc/init.d/dnsmasq reload
+		[ "$reload_wireless" = "1" ] && wifi reload
+
+		log_msg "Configuration applied and all services reloaded successfully."
+	fi
 }
 
 start() {
