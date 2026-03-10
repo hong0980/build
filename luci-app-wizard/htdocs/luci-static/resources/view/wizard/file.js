@@ -99,7 +99,7 @@ return view.extend({
 				return cmd && fs.exec(cmd, ['reload']).then((res) =>
 					res.code === 0
 						? notify(null, E('p', _('Service %s reloaded successfully.').format(this.dom.cmd)), 3000, 'info')
-						: notify(null, E('p', _('Service reload failed: %s').format(e.message)), 5000, 'warning')
+						: notify(null, E('p', _('Service reload failed: %s').format(res.code)), 5000, 'warning')
 				);
 			}).catch((e) =>
 				notify(null, E('p', _('Unable to save contents: %s').format(e.message)), 5000, 'error')

@@ -240,7 +240,7 @@ add_wizard() {
 			;;
 		siderouter)
 			[ -n "$siderouter_local_ip" -a -n "$siderouter_netmask" -a \
-			  -n "$siderouter_wan_ip" -a -n "$siderouter_gateway" -a \
+			  -n "$siderouter_wan_ip"   -a -n "$siderouter_gateway" -a \
 			  -n "$siderouter_interfaces" ] || {
 				log_msg "Error: Missing parameters for Siderouter mode."
 				return 1
@@ -256,11 +256,10 @@ add_wizard() {
 			uci_remove network wan
 			uci_add network interface wan
 			uci_set network wan proto 'static'
-			uci_set network wan device "$siderouter_interfaces"
+			uci_set network wan ifname "$siderouter_interfaces"
 			uci_set network wan ipaddr "$siderouter_wan_ip"
 			uci_set network wan netmask "$siderouter_netmask"
 			uci_set network wan gateway "$siderouter_gateway"
-			uci_set network wan dns "$siderouter_gateway"
 
 			uci_set network lan proto 'static'
 			uci_set network lan ipaddr "$siderouter_local_ip"

@@ -6,6 +6,7 @@
 SEEN="${SEEN:-0}"
 LOCK="/var/run/wizard-restore.lock"
 . /lib/config/uci.sh
+
 led_blink() {
     local led=$(ls /sys/class/leds/*/trigger 2>/dev/null | head -1)
     led=${led%/trigger}
@@ -40,18 +41,13 @@ if [ "$SEEN" -ge 3 ] && [ "$SEEN" -lt 6 ]; then
 fi
 
 if [ "$SEEN" -ge 6 ]; then
-    if check_gateway; then
-        led_blink 200 200 0.5
-        exit 0
-    fi
-
     led_blink 100 100 5
 
     for file in dhcp network firewall wireless; do
         local bak_file="/etc/config/bk_$file"
         if [ -f "$bak_file" ]; then
-            uci -q import "$cfg" < "$bak_file"
-            uci -q commit "$cfg"
+            cp -f "$bak_file" "/etc/config/$file"
+            uci -q commit "$file"
         fi
     done
 
@@ -62,7 +58,9 @@ if [ "$SEEN" -ge 6 ]; then
     sleep 2
     /etc/init.d/firewall reload
     /etc/init.d/dnsmasq reload
-    wifi reload
+    wifi reload 2>/dev/null
+
+    logger -t wizard-restore "Configuration restored from backup"
 fi
 
 exit 0
