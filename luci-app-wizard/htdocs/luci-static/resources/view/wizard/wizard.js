@@ -1,15 +1,25 @@
 'use strict';
 'require fs';
+'require uci';
 'require view';
 'require form';
 'require tools.widgets as widgets';
 
 return view.extend({
 	load: function () {
-		return fs.stat('/etc/config/wireless').catch(() => '');
+		return Promise.all([
+			fs.stat('/etc/config/wireless').catch(() => null),
+			uci.load('wizard').then((data) => {
+				if (!uci.get(data, 'default', 'wan_proto')) {
+					return fs.exec('/bin/sh', ['/etc/init.d/wizard', 'reconfig']);
+				}
+				return null;
+			})
+		]);
 	},
 
-	render: function (stat) {
+	render: function (data) {
+		var stat = data[0];
 		var m, s, o;
 		var dnsOptions = [
 			{ value: '223.5.5.5', label: _('AliDNS: 223.5.5.5') },
@@ -88,9 +98,9 @@ return view.extend({
 		o = s.taboption('wansetup', form.ListValue, 'ap_dhcp', _('DHCP for AP mode'),
 			_("Disable DHCP to rely on the main router's DHCP server, or enable local DHCP service."));
 		o.depends('wan_proto', 'ap');
-		o.value('0', _('Disabled'));
-		o.value('1', _('Enabled'));
-		o.default = '0';
+		o.value('1', _('Disabled'));
+		o.value('0', _('Enabled'));
+		o.default = '1';
 
 		o = s.taboption('wansetup', widgets.DeviceSelect, 'ap_bridge_interfaces', _('Bridge interfaces'),
 			_('Select the network interfaces (e.g., LAN or wireless interfaces) to participate in bridging to connect to the main network.'));
@@ -98,7 +108,7 @@ return view.extend({
 		o.multiple = true;
 		o.noaliases = true;
 		o.filter = function (section_id, value) {
-			return !/^(@|docker0|veth|teq|br-[0-9a-f]+)/.test(value);
+			return !/^(@|docker0|veth|teq|br-[0-9a-f]+|wlan-ap)/.test(value);
 		};
 
 		o = s.taboption('wansetup', form.Value, 'siderouter_local_ip', _('Local IP address'),
@@ -124,12 +134,6 @@ return view.extend({
 		o.value('255.0.0.0');
 		o.rmempty = false;
 
-		o = s.taboption('wansetup', form.Value, 'siderouter_main_router_ip', _('Main router IP address'),
-			_('IP address of the main router to which the side router connects.'));
-		o.depends('wan_proto', 'siderouter');
-		o.datatype = 'ip4addr';
-		o.placeholder = '192.168.1.1';
-
 		o = s.taboption('wansetup', form.Value, 'siderouter_gateway', _('Gateway for side router'),
 			_('Default gateway address for the side router, typically the IP address of the main router.'));
 		o.depends('wan_proto', 'siderouter');
@@ -140,9 +144,9 @@ return view.extend({
 		o = s.taboption('wansetup', form.ListValue, 'siderouter_dhcp', _('DHCP for side router'),
 			_("Disable DHCP to rely on the main router's DHCP server, or enable local DHCP service."));
 		o.depends('wan_proto', 'siderouter');
-		o.value('0', _('Disabled'));
-		o.value('1', _('Enabled'));
-		o.default = '0';
+		o.value('1', _('Disabled'));
+		o.value('0', _('Enabled'));
+		o.default = '1';
 
 		o = s.taboption('wansetup', widgets.DeviceSelect, 'siderouter_interfaces', _('Connection interfaces'),
 			_('Select the interfaces (e.g., WAN or LAN ports) for the side router to connect to the main network.'));
@@ -150,7 +154,7 @@ return view.extend({
 		o.multiple = true;
 		o.noaliases = true;
 		o.filter = function (section_id, value) {
-			return !/^(@|docker0|veth|teq|br-[0-9a-f]+)/.test(value);
+			return !/^(@|docker0|veth|teq|br-[0-9a-f]+|wlan-ap)/.test(value);
 		};
 
 		o = s.taboption('wansetup', form.DynamicList, 'wan_dns', _('WAN DNS servers'),
@@ -158,6 +162,9 @@ return view.extend({
 		o.datatype = 'ip4addr';
 		o.ucioption = 'wan_dns';
 		o.default = '';
+		o.depends('wan_proto', 'dhcp');
+		o.depends('wan_proto', 'pppoe');
+
 		dnsOptions.forEach(opt => o.value(opt.value, opt.label));
 
 		o = s.taboption('lansetup', form.Value, 'lan_ipaddr', _('IPv4 address'),

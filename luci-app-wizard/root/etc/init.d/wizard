@@ -3,11 +3,140 @@
 START=99
 XBOOT=0
 extra_command "reconfig" ""
-. /lib/config/uci.sh
+
+log_msg() {
+	logger -p daemon.info -t "wizard" "$*"
+}
+
+get_config() {
+	local default="$1"; shift
+	for val in "$@"; do
+		config_get "$val" "$default" "$val" ""
+	done
+}
+
+validate_device() {
+	local dev=$1
+	[ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1 && return 0
+	return 1
+}
+
+uci_changes() {
+	local changes; changes=$(uci -q changes "$1")
+	[ -n "$changes" ] && uci_commit "$1" && return 0
+	return 1
+}
+
+set_dns() {
+	for cfg in wan lan; do
+		eval dns_list=\$${cfg}_dns
+		[ -z "$dns_list" ] && continue
+
+		uci_remove network "$cfg" dns >/dev/null 2>&1
+		uci_remove network wan peerdns >/dev/null 2>&1
+
+		for dns in $dns_list; do
+			uci_add_list network "$cfg" dns "$dns"
+		done
+
+		if [ "$cfg" = "lan" ]; then
+			uci_remove dhcp lan ra_slaac >/dev/null 2>&1
+		elif [ "$cfg" = "wan" ]; then
+			uci_set network wan peerdns '0'
+		fi
+	done
+}
+
+set_wireless() {
+	config_load wireless || return 1
+
+	[ -n "$wifi_ssid" -a -n "$wifi_key" ] || return 0
+
+	local old_ssid=$(uci_get wizard default wifi_ssid_old "")
+	local old_key=$(uci_get wizard default wifi_key_old "")
+
+	if [ "$wifi_ssid" = "$old_ssid" ] && [ "$wifi_key" = "$old_key" ]; then
+		return 0
+	else
+		uci_set wizard default wifi_key_old "$wifi_key"
+		uci_set wizard default wifi_ssid_old "$wifi_ssid"
+	fi
+
+	local wifi_updated=0
+
+	process_wifi_iface() {
+		local cfg="$1"
+		local mode device band
+
+		config_get mode "$cfg" mode
+		config_get device "$cfg" device
+
+		[ "$mode" = "ap" ] || return 0
+
+		uci_set wireless "$cfg" ssid "$wifi_ssid"
+		uci_set wireless "$cfg" key "$wifi_key"
+		uci_set wireless "$cfg" encryption 'psk2'
+
+		config_get band "$device" band
+
+		if [ "$band" = "6g" ]; then
+			uci_set wireless "$cfg" ocv '0'
+			uci_set wireless "$cfg" ssid "${wifi_ssid}_6G"
+			uci_set wireless "$cfg" encryption 'sae'
+			uci_remove wireless "$cfg" ft_psk_generate_local
+
+			uci_set wireless "$device" country 'DE'
+			uci_set wireless "$device" channel '21'
+		fi
+
+		wifi_updated=1
+	}
+
+	config_foreach process_wifi_iface wifi-iface
+
+	if [ "$wifi_updated" = "1" ]; then
+		uci_set wizard default wifi_ssid_old "$wifi_ssid"
+		uci_set wizard default wifi_key_old "$wifi_key"
+		return 0
+	else
+		log_msg "Warning: No active 'ap' interface found in wireless config."
+		return 1
+	fi
+}
 
 reconfig() {
-	local dhcp_action
-	[ "$(uci_get dhcp lan ignore)" ] && dhcp_action="set wizard.default.dhcp='0'" || dhcp_action="delete wizard.default.dhcp"
+	local ssid key dhcp_ignore found=0
+
+	_get_first_ap() {
+		local section="$1"
+		local mode disabled
+		[ "$found" -eq 1 ] && return 0
+
+		config_get mode "$section" mode
+		config_get disabled "$section" disabled "0"
+
+		if [ "$mode" = "ap" ] && [ "$disabled" = "0" ]; then
+			config_get ssid "$section" ssid
+			config_get key "$section" key ""
+			found=1
+		fi
+	}
+
+	config_load wireless 2>/dev/null
+	config_foreach _get_first_ap wifi-iface
+
+	config_load dhcp 2>/dev/null
+	config_get dhcp_ignore lan ignore "0"
+
+	local wifi_cmd="delete wizard.default.wifi_ssid; delete wizard.default.wifi_key"
+	if [ "$found" -eq 1 ] && [ -n "$ssid" ]; then
+		local esc_ssid="${ssid//\'/\\\'}"
+		local esc_key="${key//\'/\\\'}"
+		wifi_cmd="set wizard.default.wifi_ssid='${esc_ssid}'; set wizard.default.wifi_key='${esc_key}'"
+	fi
+
+	local dhcp_cmd="delete wizard.default.dhcp"
+	[ "$dhcp_ignore" = "1" ] && dhcp_cmd="set wizard.default.dhcp='0'"
 
 	uci -q batch <<-EOF >/dev/null
 		set wizard.default.wan_proto="$(uci_get network wan proto)"
@@ -24,110 +153,47 @@ reconfig() {
 		set wizard.default.ap_bridge_ip="$(uci_get network lan ipaddr)"
 		set wizard.default.ap_netmask="$(uci_get network lan netmask)"
 		set wizard.default.ap_gateway="$(uci_get network lan gateway)"
-		set wizard.default.ap_dhcp="$(uci_get dhcp lan ignore '0')"
+		set wizard.default.ap_dhcp="$dhcp_ignore"
 		set wizard.default.ap_bridge_interfaces="$(uci_get network lan ifname)"
 		set wizard.default.siderouter_local_ip="$(uci_get network lan ipaddr)"
 		set wizard.default.siderouter_netmask="$(uci_get network lan netmask)"
 		set wizard.default.siderouter_wan_ip="$(uci_get network wan ipaddr)"
 		set wizard.default.siderouter_gateway="$(uci_get network wan gateway)"
-		set wizard.default.siderouter_dhcp="$(uci_get dhcp lan ignore '0')"
+		set wizard.default.siderouter_dhcp="$dhcp_ignore"
 		set wizard.default.siderouter_interfaces="$(uci_get network wan ifname)"
-		$dhcp_action
+		$wifi_cmd
+		$dhcp_cmd
 		commit wizard
 	EOF
-}
-
-log_msg() {
-	logger -p daemon.info -t "wizard" "$*"
-}
-
-uci_changes() {
-	local changes=$(uci -q changes "$1")
-	[ -n "$changes" ] && uci_commit "$1" && return 0
-	return 1
-}
-
-get_config() {
-	local default="$1"
-	shift
-	for val in "$@"; do
-		config_get "$val" "$default" "$val" ""
-	done
-}
-
-validate_device() {
-	local dev=$1
-	[ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1 && return 0
-	return 1
-}
-
-set_dns() {
-	for cfg in wan lan; do
-		eval dns_list=\$${cfg}_dns
-		uci_remove network "$cfg" dns >/dev/null 2>&1
-		uci_remove network wan peerdns >/dev/null 2>&1
-		[ -z "$dns_list" ] && continue
-		for dns in $dns_list; do
-			uci_add_list network "$cfg" dns "$dns"
-		done
-
-		[ "$cfg" = "lan" ] && uci_remove dhcp lan ra_slaac
-		[ "$cfg" = "wan" ] && uci_set network wan peerdns '0'
-	done
-}
-
-set_wireless() {
-	uci_load wireless || return 1
-	[ -n "$wifi_ssid" -a -n "$wifi_key" ] && {
-		if [ "$wifi_ssid" != "$wifi_ssid_old" -o "$wifi_key" != "$wifi_key_old" ]; then
-			uci_set wizard default wifi_key_old "$wifi_key"
-			uci_set wizard default wifi_ssid_old "$wifi_ssid"
-			local wifi_updated=0
-			process_wifi_iface() {
-				local cfg="$1"
-				get_config "$cfg" mode
-				get_config "$cfg" device
-				[ "$mode" = "ap" ] || return 0
-				uci_set wireless "$cfg" ssid "$wifi_ssid"
-				uci_set wireless "$cfg" key "$wifi_key"
-				uci_set wireless "$cfg" encryption 'psk2'
-				get_config "$device" band
-				if [ "$band" = "6g" ]; then
-					uci_set wireless "$cfg" ocv '0'
-					uci_set wireless "$cfg" ssid "${wifi_ssid}_6G"
-					uci_set wireless "$cfg" encryption 'sae'
-					uci_remove wireless "$cfg" ft_psk_generate_local
-					uci_set wireless "$device" country 'DE'
-					uci_set wireless "$device" channel '21'
-				fi
-				wifi_updated=1
-			}
-			config_foreach process_wifi_iface wifi-iface
-			[ "$wifi_updated" = "1" ] || {
-				return 1
-			}
-		fi
-	}
 }
 
 add_wizard() {
 	[ "$XBOOT" = 1 ] && return 0
 
-	get_config default wan_proto wan_pppoe_user wan_pppoe_pass  \
+	get_config default \
+		wan_proto wan_pppoe_user wan_pppoe_pass \
 		wan_ipaddr wan_netmask wan_gateway wan_dns lan_dns ipv6 \
 		ap_bridge_ip ap_netmask ap_gateway ap_dhcp ap_bridge_interfaces \
 		siderouter_local_ip siderouter_netmask siderouter_wan_ip siderouter_gateway siderouter_dhcp siderouter_interfaces \
-		wifi_ssid wifi_key wifi_ssid_old wifi_key_old lan_ipaddr lan_netmask lan_ipaddr_old lan_netmask_old
+		wifi_ssid wifi_key wifi_ssid_old wifi_key_old \
+		lan_ipaddr lan_netmask lan_ipaddr_old lan_netmask_old
 
 	local device ifname
-	device=$(uci_get network wan device || uci_get bk_network wan device "")
+	device=$(uci_get network wan device 2>/dev/null || uci_get bk_network wan device "")
 	ifname=$(uci_get network wan ifname "")
-	validate_device "$device" || return 1
+
+	if [ "$wan_proto" != "ap" ] && [ "$wan_proto" != "siderouter" ]; then
+		validate_device "$device" || {
+			log_msg "Error: Device '$device' not found."
+			return 1
+		}
+	fi
 
 	case "$wan_proto" in
 		pppoe)
-			[ x"$(uci_get network wan username)" != x"$wan_pppoe_user" -o \
-			  z"$(uci_get network wan password)" != z"$wan_pppoe_pass" ] && {
+			local cur_user=$(uci_get network wan username "")
+			local cur_pass=$(uci_get network wan password "")
+			if [ "$cur_user" != "$wan_pppoe_user" ] || [ "$cur_pass" != "$wan_pppoe_pass" ]; then
 				uci_remove network wan
 				uci_add network interface wan
 				uci_set network wan proto pppoe
@@ -136,7 +202,7 @@ add_wizard() {
 				uci_set network wan password "$wan_pppoe_pass"
 				uci_set network wan ipv6 "$ipv6"
 				[ -n "$ifname" ] && uci_set network wan ifname "$ifname"
-			}
+			fi
 			;;
 		dhcp)
 			uci_remove network wan
@@ -146,58 +212,93 @@ add_wizard() {
 			[ -n "$ifname" ] && uci_set network wan ifname "$ifname"
 			;;
 		ap)
-			[ -n "$ap_bridge_ip" -a -n "$ap_netmask" \
-				-a -n "$ap_gateway" -a -n "$ap_bridge_interfaces" ] || return 1
+			[ -n "$ap_bridge_ip" -a -n "$ap_netmask" -a -n "$ap_gateway" -a -n "$ap_bridge_interfaces" ] || {
+				log_msg "Error: Missing parameters for AP mode."
+				return 1
+			}
+
 			for iface in $ap_bridge_interfaces; do
-				validate_device "$iface" || return 1
+				validate_device "$iface" || {
+					log_msg "Error: Interface '$iface' not found."
+					return 1
+				}
 			done
+
 			uci_remove network wan
+
+			uci_set network lan proto 'static'
 			uci_set network lan ipaddr "$ap_bridge_ip"
 			uci_set network lan netmask "$ap_netmask"
 			uci_set network lan gateway "$ap_gateway"
 			uci_set network lan type 'bridge'
 			uci_set network lan ifname "$ap_bridge_interfaces"
+
 			uci_set dhcp lan ignore "$ap_dhcp"
-			# uci_remove dhcp lan ra
-			# uci_remove dhcp lan ra_slaac
-			# uci_remove dhcp lan ra_flags
-			# uci_remove dhcp lan dhcpv6
+			uci_set dhcp lan ra '0'
+			uci_set dhcp lan dhcpv6 '0'
+			uci_set dhcp lan ra_slaac '0'
 			;;
 		siderouter)
-			[ -n "$siderouter_local_ip" -a -n "$siderouter_netmask" \
-				-a -n "$siderouter_wan_ip" -a -n "$siderouter_gateway" \
-				-a -n "$siderouter_interfaces" ] || return 1
+			[ -n "$siderouter_local_ip" -a -n "$siderouter_netmask" -a \
+			  -n "$siderouter_wan_ip" -a -n "$siderouter_gateway" -a \
+			  -n "$siderouter_interfaces" ] || {
+				log_msg "Error: Missing parameters for Siderouter mode."
+				return 1
+			}
+
 			for iface in $siderouter_interfaces; do
-				validate_device "$iface" || return 1
+				validate_device "$iface" || {
+					log_msg "Error: Interface '$iface' not found."
+					return 1
+				}
 			done
+
 			uci_remove network wan
 			uci_add network interface wan
 			uci_set network wan proto 'static'
-			uci_set network lan ipaddr "$siderouter_local_ip"
-			uci_set network lan netmask "$siderouter_netmask"
+			uci_set network wan device "$siderouter_interfaces"
 			uci_set network wan ipaddr "$siderouter_wan_ip"
 			uci_set network wan netmask "$siderouter_netmask"
-			uci_set network wan ifname "$siderouter_interfaces"
 			uci_set network wan gateway "$siderouter_gateway"
+			uci_set network wan dns "$siderouter_gateway"
+
+			uci_set network lan proto 'static'
+			uci_set network lan ipaddr "$siderouter_local_ip"
+			uci_set network lan netmask "$siderouter_netmask"
+			uci_remove network lan gateway
+
 			uci_set dhcp lan ignore "$siderouter_dhcp"
+			uci_set dhcp lan ra '0'
+			uci_set dhcp lan dhcpv6 '0'
+			uci_set dhcp lan ra_slaac '0'
 			;;
 		*)
+			log_msg "Error: Unknown wan_proto '$wan_proto'."
 			return 1
 			;;
 	esac
 
-	[ -n "$lan_ipaddr" -a -n "$lan_netmask" -a \
-	  \( "$lan_ipaddr" != "$lan_ipaddr_old" -o "$lan_netmask" != "$lan_netmask_old" \) ] && {
-		uci_set network lan ipaddr "$lan_ipaddr"
-		uci_set network lan netmask "$lan_netmask"
-		uci_set wizard default lan_ipaddr_old "$lan_ipaddr"
-		uci_set wizard default lan_netmask_old "$lan_netmask"
-	}
+	if [ "$wan_proto" != "ap" ] && [ "$wan_proto" != "siderouter" ]; then
+		if [ -n "$lan_ipaddr" -a -n "$lan_netmask" ]; then
+			local cur_lan_ip=$(uci_get network lan ipaddr "")
+			local cur_lan_mask=$(uci_get network lan netmask "")
+
+			if [ "$lan_ipaddr" != "$cur_lan_ip" ] || [ "$lan_netmask" != "$cur_lan_mask" ]; then
+				uci_set network lan ipaddr "$lan_ipaddr"
+				uci_set network lan netmask "$lan_netmask"
+				uci_set wizard default lan_ipaddr_old "$lan_ipaddr"
+				uci_set wizard default lan_netmask_old "$lan_netmask"
+			fi
+		fi
+	fi
 
 	set_wireless
 	set_dns
+
+	local need_reload=0
 	for config in network dhcp firewall wireless wizard; do
 		if uci_changes "$config"; then
+			need_reload=1
 			case "$config" in
 				wireless) wifi reload & ;;
 				dhcp) /etc/init.d/dnsmasq reload & ;;
@@ -206,9 +307,17 @@ add_wizard() {
 			esac
 		fi
 	done
+
+	[ "$need_reload" = "1" ] && log_msg "Configuration applied and services reloading."
 }
 
 start() {
 	config_load wizard
 	config_foreach add_wizard wizard
+}
+
+boot() {
+	for file in dhcp network firewall wireless; do
+		[ -s /etc/config/$file -a ! -f /etc/config/bk_$file ] && cp /etc/config/$file /etc/config/bk_$file
+	done
 }

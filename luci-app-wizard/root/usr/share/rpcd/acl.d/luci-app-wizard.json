@@ -4,6 +4,7 @@
 		"read": {
 			"uci": [ "file" ],
 			"file": {
+				"/bin/sh": [ "exec" ],
 				"/etc/hosts": [ "read" ],
 				"/etc/config/*": [ "read" ],
 				"/etc/rc.local": [ "read" ],
