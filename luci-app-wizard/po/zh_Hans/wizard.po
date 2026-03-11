@@ -85,7 +85,7 @@ msgid "AP management IP"
 msgstr "AP 管理 IP 分配方式"
 
 msgid "In AP mode all ports are bridged to the main router. Choose \"Auto (DHCP)\" to let the main router assign a management IP automatically (recommended). Choose \"Static\" only if you need a fixed IP to access this device."
-msgstr "AP 模式下，本机将所有端口桥接到主路由器，不做路由和 NAT。\n推荐选"自动获取"：管理 IP 由主路由器自动分配，无需手动填写任何参数。\n仅在需要固定管理 IP 时才选"静态 IP"。"
+msgstr "AP 模式下，本机将所有端口桥接到主路由器，不做路由和 NAT。\\n推荐选\"自动获取\"：管理 IP 由主路由器自动分配，无需手动填写任何参数。\\n仅在需要固定管理 IP 时才选\"静态 IP\"。"
 
 msgid "Auto (DHCP) — recommended"
 msgstr "自动获取 (DHCP) — 推荐"
@@ -137,7 +137,7 @@ msgid "WAN IP address"
 msgstr "WAN 口静态 IP"
 
 msgid "Static IP for this router's WAN port on the main network (e.g. 192.168.1.2). Clients that want to use this router as gateway will point to this IP."
-msgstr "本机 WAN 口在主路由器网段内的静态 IP（如 192.168.1.2）。\n需要使用本机作为网关的客户端，将其默认网关设为此 IP。"
+msgstr "本机 WAN 口在主路由器网段内的静态 IP（如 192.168.1.2）。\\n需要使用本机作为网关的客户端，将其默认网关设为此 IP。"
 
 msgid "WAN netmask"
 msgstr "WAN 子网掩码"
@@ -155,7 +155,7 @@ msgid "LAN IP address"
 msgstr "本机 LAN IP"
 
 msgid "This router's LAN IP. Clients set their gateway to this address to route through this device. Must be in a different subnet from the main router (e.g. 192.168.2.1)."
-msgstr "本机 LAN 口的 IP 地址。需要使用旁路由功能的客户端，将其网关设为此地址。\n必须与主路由器在不同子网（例如主路由为 192.168.1.x，本机设 192.168.2.1）。"
+msgstr "本机 LAN 口的 IP 地址。需要使用旁路由功能的客户端，将其网关设为此地址。\\n必须与主路由器在不同子网（例如主路由为 192.168.1.x，本机设 192.168.2.1）。"
 
 msgid "The LAN IP must be in a different subnet from the main router IP (%s). Try e.g. 192.168.2.1."
 msgstr "LAN IP 必须与主路由器 IP（%s）处于不同子网。建议设为 192.168.2.1 等其他网段。"
@@ -170,7 +170,7 @@ msgid "LAN DHCP server"
 msgstr "LAN DHCP 服务"
 
 msgid "Enable to let this router assign IPs to its own LAN clients (recommended when clients connect directly to this router). Disable if clients are managed by the main router."
-msgstr "启用：本机为自己 LAN 段的客户端分配 IP（推荐）。\n禁用：由主路由器统一管理所有设备。"
+msgstr "启用：本机为自己 LAN 段的客户端分配 IP（推荐）。\\n禁用：由主路由器统一管理所有设备。"
 
 msgid "Enabled (recommended)"
 msgstr "启用（推荐）"

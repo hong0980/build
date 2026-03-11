@@ -107,11 +107,11 @@ reconfig() {
 		local mode disabled
 		[ "$found" -eq 1 ] && return 0
 
-		config_get mode "$section" mode
-		config_get disabled "$section" disabled "0"
+		config_get mode "$section" mode ''
+		config_get network "$section" network ''
 
-		if [ "$mode" = "ap" ] && [ "$disabled" = "0" ]; then
-			config_get ssid "$section" ssid
+		if [ "$mode" = "ap" -a "$network" = "lan" ]; then
+			config_get ssid "$section" ssid ""
 			config_get key "$section" key ""
 			found=1
 		fi
@@ -120,20 +120,15 @@ reconfig() {
 	config_load wireless 2>/dev/null
 	config_foreach _get_first_ap wifi-iface
 
+	if [ "$found" -eq 1 ]; then
+		uci_set wizard default wifi_key "$key"
+		uci_set wizard default wifi_ssid "$ssid"
+	fi
+
 	config_load dhcp 2>/dev/null
 	config_get dhcp_ignore lan ignore "0"
 
-	local wifi_cmd="delete wizard.default.wifi_ssid; delete wizard.default.wifi_key"
-	if [ "$found" -eq 1 ] && [ -n "$ssid" ]; then
-		local safe_ssid="${ssid//\'/\'\\\'\'}"
-		local safe_key="${key//\'/\'\\\'\'}"
-		wifi_cmd="set wizard.default.wifi_ssid='${safe_ssid}'; set wizard.default.wifi_key='${safe_key}'"
-	fi
-
-	local dhcp_cmd="delete wizard.default.ap_dhcp"
-	[ "$dhcp_ignore" = "1" ] && dhcp_cmd="set wizard.default.ap_dhcp='1'"
-
-	local lan_proto; lan_proto=$(uci_get network lan proto "static")
+	local lan_proto; lan_proto=$(uci_get network lan proto static)
 	local ap_ip_mode="static"
 	[ "$lan_proto" = "dhcp" ] && ap_ip_mode="dhcp"
 
@@ -158,8 +153,6 @@ reconfig() {
 		set wizard.default.siderouter_gateway="$(uci_get network wan gateway)"
 		set wizard.default.siderouter_dhcp="$(uci_get dhcp lan ignore "0")"
 		set wizard.default.siderouter_interfaces="$(uci_get network wan device "")"
-		$wifi_cmd
-		$dhcp_cmd
 		commit wizard
 	EOF
 }
@@ -168,8 +161,7 @@ add_wizard() {
 	[ "$XBOOT" = 1 ] && return 0
 
 	get_config default \
-		wan_proto wan_pppoe_user wan_pppoe_pass \
-		wan_dns lan_dns ipv6 \
+		wan_proto wan_pppoe_user wan_pppoe_pass wan_dns lan_dns ipv6 \
 		ap_ip_mode ap_bridge_ip ap_netmask ap_gateway ap_dhcp ap_bridge_interfaces \
 		siderouter_local_ip siderouter_lan_netmask siderouter_netmask \
 		siderouter_wan_ip siderouter_gateway siderouter_dhcp siderouter_interfaces \

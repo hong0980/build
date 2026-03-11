@@ -8,183 +8,183 @@ LOGFILE="/tmp/easymesh.log"
 EM_PID_DIR="/tmp/easymesh_pids"
 
 list() {
-    printf '{\n'
-    printf '  "pending":   {},\n'
-    printf '  "approved":  {},\n'
-    printf '  "topology":  {},\n'
-    printf '  "neighbors": {},\n'
-    printf '  "status":    {},\n'
-    printf '  "log":       { "lines": 0 },\n'
-    printf '  "approve":   { "mac": "" },\n'
-    printf '  "reject":    { "mac": "" }\n'
-    printf '}\n'
+	printf '{\n'
+	printf '  "pending":   {},\n'
+	printf '  "approved":  {},\n'
+	printf '  "topology":  {},\n'
+	printf '  "neighbors": {},\n'
+	printf '  "status":    {},\n'
+	printf '  "log":       { "lines": 0 },\n'
+	printf '  "approve":   { "mac": "" },\n'
+	printf '  "reject":    { "mac": "" }\n'
+	printf '}\n'
 }
 
 call() {
-    local method="$1"
-    local args
-    IFS= read -r -t 2 args 2>/dev/null
-    [ -z "$args" ] && args='{}'
-    case "$method" in
-        pending)   _pending ;;
-        approved)  _approved ;;
-        topology)  _topology ;;
-        log)
-            local lines
-            lines=$(printf '%s' "$args" | grep -o '"lines":[0-9]*' | grep -o '[0-9]*')
-            _log "${lines:-100}"
-            ;;
-        approve)
-            local mac
-            mac=$(printf '%s' "$args" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
-            _approve "$mac"
-            ;;
-        reject)
-            local mac
-            mac=$(printf '%s' "$args" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
-            _reject "$mac"
-            ;;
-        neighbors) _neighbors ;;
-        status)    _status ;;
-        *) printf '{"error":"unknown method: %s"}\n' "$method"; return 1 ;;
-    esac
+	local method="$1"
+	local args
+	IFS= read -r -t 2 args 2>/dev/null
+	[ -z "$args" ] && args='{}'
+	case "$method" in
+		pending)   _pending ;;
+		approved)  _approved ;;
+		topology)  _topology ;;
+		log)
+			local lines
+			lines=$(printf '%s' "$args" | grep -o '"lines":[0-9]*' | grep -o '[0-9]*')
+			_log "${lines:-100}"
+			;;
+		approve)
+			local mac
+			mac=$(printf '%s' "$args" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
+			_approve "$mac"
+			;;
+		reject)
+			local mac
+			mac=$(printf '%s' "$args" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
+			_reject "$mac"
+			;;
+		neighbors) _neighbors ;;
+		status)    _status ;;
+		*) printf '{"error":"unknown method: %s"}\n' "$method"; return 1 ;;
+	esac
 }
 
 _nodes_from_dir() {
-    local dir="$1" status="$2" f
-    json_init
-    json_add_array "nodes"
-    for f in "$dir"/*.json; do
-        [ -f "$f" ] || continue
-        local mac ip hostname source ts
-        mac=$(     jsonfilter -i "$f" -e '@.mac'      2>/dev/null || true)
-        ip=$(      jsonfilter -i "$f" -e '@.ip'       2>/dev/null || true)
-        hostname=$(jsonfilter -i "$f" -e '@.hostname' 2>/dev/null || true)
-        source=$(  jsonfilter -i "$f" -e '@.source'   2>/dev/null || true)
-        ts=$(      jsonfilter -i "$f" -e '@.ts'       2>/dev/null || echo 0)
-        [ -z "$mac" ] && continue
-        json_add_object
-        json_add_string "mac"      "$mac"
-        json_add_string "ip"       "${ip:-}"
-        json_add_string "hostname" "${hostname:-}"
-        json_add_string "source"   "${source:-wired}"
-        json_add_string "status"   "$status"
-        json_add_int    "ts"       "${ts:-0}"
-        json_close_object
-    done
-    json_close_array
-    json_dump
+	local dir="$1" status="$2" f
+	json_init
+	json_add_array "nodes"
+	for f in "$dir"/*.json; do
+		[ -f "$f" ] || continue
+		local mac ip hostname source ts
+		mac=$(     jsonfilter -i "$f" -e '@.mac'      2>/dev/null || true)
+		ip=$(      jsonfilter -i "$f" -e '@.ip'       2>/dev/null || true)
+		hostname=$(jsonfilter -i "$f" -e '@.hostname' 2>/dev/null || true)
+		source=$(  jsonfilter -i "$f" -e '@.source'   2>/dev/null || true)
+		ts=$(      jsonfilter -i "$f" -e '@.ts'       2>/dev/null || echo 0)
+		[ -z "$mac" ] && continue
+		json_add_object
+		json_add_string "mac"      "$mac"
+		json_add_string "ip"       "${ip:-}"
+		json_add_string "hostname" "${hostname:-}"
+		json_add_string "source"   "${source:-wired}"
+		json_add_string "status"   "$status"
+		json_add_int    "ts"       "${ts:-0}"
+		json_close_object
+	done
+	json_close_array
+	json_dump
 }
 
 _pending()  { _nodes_from_dir "$PENDING_DB" "pending";  }
 _approved() { _nodes_from_dir "$NODE_DB"    "approved"; }
 
 _neighbors() {
-    json_init
-    json_add_array "neighbors"
-    local MESH_IF="bat0"
-    # batctl orig 输出: MAC  last-seen  (TQ)  nexthop  [iface]
-    batctl meshif "$MESH_IF" orig 2>/dev/null | awk 'NR>2{print}' |     while IFS= read -r line; do
-        local mac tq nexthop iface last_seen_raw last_seen
-        mac=$(         printf '%s' "$line" | awk '{print $1}')
-        last_seen_raw=$(printf '%s' "$line" | awk '{print $2}')
-        tq=$(          printf '%s' "$line" | awk '{gsub(/[()]/,""); print $3}')
-        nexthop=$(     printf '%s' "$line" | awk '{print $4}')
-        iface=$(       printf '%s' "$line" | awk '{gsub(/[\[\]]/,""); print $5}')
-        [ -z "$mac" ] || [ "$mac" = "Originator" ] && continue
-        # 把 "0.600s" 转成整数秒
-        last_seen=$(printf '%s' "$last_seen_raw" | sed 's/s$//' | awk '{printf "%d", $1}')
-        json_add_object
-        json_add_string "mac"       "$mac"
-        json_add_int    "tq"        "${tq:-0}"
-        json_add_string "nexthop"   "${nexthop:-$mac}"
-        json_add_string "iface"     "${iface:-bat0}"
-        json_add_int    "last_seen" "${last_seen:-0}"
-        json_close_object
-    done
-    json_close_array
-    json_dump
+	json_init
+	json_add_array "neighbors"
+	local MESH_IF="bat0"
+	# batctl orig 输出: MAC  last-seen  (TQ)  nexthop  [iface]
+	batctl meshif "$MESH_IF" orig 2>/dev/null | awk 'NR>2{print}' |     while IFS= read -r line; do
+		local mac tq nexthop iface last_seen_raw last_seen
+		mac=$(         printf '%s' "$line" | awk '{print $1}')
+		last_seen_raw=$(printf '%s' "$line" | awk '{print $2}')
+		tq=$(          printf '%s' "$line" | awk '{gsub(/[()]/,""); print $3}')
+		nexthop=$(     printf '%s' "$line" | awk '{print $4}')
+		iface=$(       printf '%s' "$line" | awk '{gsub(/[\[\]]/,""); print $5}')
+		[ -z "$mac" ] || [ "$mac" = "Originator" ] && continue
+		# 把 "0.600s" 转成整数秒
+		last_seen=$(printf '%s' "$last_seen_raw" | sed 's/s$//' | awk '{printf "%d", $1}')
+		json_add_object
+		json_add_string "mac"       "$mac"
+		json_add_int    "tq"        "${tq:-0}"
+		json_add_string "nexthop"   "${nexthop:-$mac}"
+		json_add_string "iface"     "${iface:-bat0}"
+		json_add_int    "last_seen" "${last_seen:-0}"
+		json_close_object
+	done
+	json_close_array
+	json_dump
 }
 
 _status() {
-    local daemon_running="false" role="unknown" bat0_up="false"
-    ip link show bat0 2>/dev/null | grep -qE ',UP,|<UP|,UP>' && bat0_up="true"
+	local daemon_running="false" role="unknown" bat0_up="false"
+	ip link show bat0 2>/dev/null | grep -qE ',UP,|<UP|,UP>' && bat0_up="true"
 
-    local pid
-    for r in master agent; do
-        pid=$(cat "${EM_PID_DIR}/easymesh_${r}.pid" 2>/dev/null)
-        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            daemon_running="true"
-            role="$r"
-            break
-        fi
-    done
-    printf '{"daemon_running":%s,"role":"%s","bat0_up":%s}\n' "$daemon_running" "$role" "$bat0_up"
+	local pid
+	for r in master agent; do
+		pid=$(cat "${EM_PID_DIR}/easymesh_${r}.pid" 2>/dev/null)
+		if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+			daemon_running="true"
+			role="$r"
+			break
+		fi
+	done
+	printf '{"daemon_running":%s,"role":"%s","bat0_up":%s}\n' "$daemon_running" "$role" "$bat0_up"
 }
 
 _topology() {
-    if [ -f "$TOPO_FILE" ]; then
-        local now mtime age
-        now=$(date +%s)
-        mtime=$(date -r "$TOPO_FILE" +%s 2>/dev/null || echo 0)
-        age=$(( now - mtime ))
-        [ "$age" -lt 15 ] && { cat "$TOPO_FILE"; return; }
-    fi
-    local bat0_up="false"
-    ip link show bat0 2>/dev/null | grep -qE ',UP,|<UP|,UP>' && bat0_up="true"
-    printf '{"ts":%d,"nodes":[],"links":[],"bat0_up":%s}\n' "$(date +%s)" "$bat0_up"
+	if [ -f "$TOPO_FILE" ]; then
+		local now mtime age
+		now=$(date +%s)
+		mtime=$(date -r "$TOPO_FILE" +%s 2>/dev/null || echo 0)
+		age=$(( now - mtime ))
+		[ "$age" -lt 15 ] && { cat "$TOPO_FILE"; return; }
+	fi
+	local bat0_up="false"
+	ip link show bat0 2>/dev/null | grep -qE ',UP,|<UP|,UP>' && bat0_up="true"
+	printf '{"ts":%d,"nodes":[],"links":[],"bat0_up":%s}\n' "$(date +%s)" "$bat0_up"
 }
 
 _log() {
-    local n="${1:-100}"
-    json_init
-    json_add_array "lines"
-    local line
-    while IFS= read -r line; do
-        [ -n "$line" ] && json_add_string "" "$line"
-    done <<LOGEOF
+	local n="${1:-100}"
+	json_init
+	json_add_array "lines"
+	local line
+	while IFS= read -r line; do
+		[ -n "$line" ] && json_add_string "" "$line"
+	done <<LOGEOF
 $(tail -n "$n" "$LOGFILE" 2>/dev/null)
 LOGEOF
-    json_close_array
-    json_dump
+	json_close_array
+	json_dump
 }
 
 _approve() {
-    local mac="$1"
-    [ -z "$mac" ] && { printf '{"error":"mac required"}\n'; return 1; }
-    mac=$(printf '%s' "$mac" | tr 'A-F' 'a-f')
-    local safe; safe=$(printf '%s' "$mac" | tr ':' '_')
-    local src="${PENDING_DB}/${safe}.json"
-    local dst="${NODE_DB}/${safe}.json"
-    mkdir -p "$NODE_DB"
-    if [ -f "$src" ]; then
-        sed 's/"status":"pending"/"status":"approved"/' "$src" > "$dst" && rm -f "$src"
-        _signal_master
-        printf '{"status":"ok","mac":"%s"}\n' "$mac"
-    elif [ -f "$dst" ]; then
-        _signal_master
-        printf '{"status":"ok","msg":"already approved","mac":"%s"}\n' "$mac"
-    else
-        printf '{"error":"node not found","mac":"%s"}\n' "$mac"
-        return 1
-    fi
+	local mac="$1"
+	[ -z "$mac" ] && { printf '{"error":"mac required"}\n'; return 1; }
+	mac=$(printf '%s' "$mac" | tr 'A-F' 'a-f')
+	local safe; safe=$(printf '%s' "$mac" | tr ':' '_')
+	local src="${PENDING_DB}/${safe}.json"
+	local dst="${NODE_DB}/${safe}.json"
+	mkdir -p "$NODE_DB"
+	if [ -f "$src" ]; then
+		sed 's/"status":"pending"/"status":"approved"/' "$src" > "$dst" && rm -f "$src"
+		_signal_master
+		printf '{"status":"ok","mac":"%s"}\n' "$mac"
+	elif [ -f "$dst" ]; then
+		_signal_master
+		printf '{"status":"ok","msg":"already approved","mac":"%s"}\n' "$mac"
+	else
+		printf '{"error":"node not found","mac":"%s"}\n' "$mac"
+		return 1
+	fi
 }
 
 _reject() {
-    local mac="$1"
-    [ -z "$mac" ] && { printf '{"error":"mac required"}\n'; return 1; }
-    mac=$(printf '%s' "$mac" | tr 'A-F' 'a-f')
-    local safe; safe=$(printf '%s' "$mac" | tr ':' '_')
-    rm -f "${PENDING_DB}/${safe}.json" 2>/dev/null
-    printf '{"status":"ok","mac":"%s"}\n' "$mac"
+	local mac="$1"
+	[ -z "$mac" ] && { printf '{"error":"mac required"}\n'; return 1; }
+	mac=$(printf '%s' "$mac" | tr 'A-F' 'a-f')
+	local safe; safe=$(printf '%s' "$mac" | tr ':' '_')
+	rm -f "${PENDING_DB}/${safe}.json" 2>/dev/null
+	printf '{"status":"ok","mac":"%s"}\n' "$mac"
 }
 
 _signal_master() {
-    local pid; pid=$(cat "${EM_PID_DIR}/easymesh_master.pid" 2>/dev/null)
-    [ -n "$pid" ] && kill -USR1 "$pid" 2>/dev/null || true
+	local pid; pid=$(cat "${EM_PID_DIR}/easymesh_master.pid" 2>/dev/null)
+	[ -n "$pid" ] && kill -USR1 "$pid" 2>/dev/null || true
 }
 
 case "$1" in
-    list) list ;;
-    call) call "$2" ;;
+	list) list ;;
+	call) call "$2" ;;
 esac

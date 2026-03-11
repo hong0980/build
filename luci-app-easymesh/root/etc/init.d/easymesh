@@ -204,8 +204,8 @@ apply_mesh_config() {
     else
         radio_mesh="$radio_5g"
     fi
-    [ -z "$radio_mesh" ] && radio_mesh=$(uci show wireless 2>/dev/null         | awk -F= '/=wifi-device/{print $1}' | head -1 | sed 's/wireless\.//')
-    log "apply_mesh_config: role=%s backhaul=%s mesh_radio=%s 2g=%s 5g=%s"         "$role" "$backhaul" "$radio_mesh" "$radio_2g" "$radio_5g"
+    [ -z "$radio_mesh" ] && radio_mesh=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1 | sed 's/wireless\.//')
+    log "apply_mesh_config: role=%s backhaul=%s mesh_radio=%s 2g=%s 5g=%s" "$role" "$backhaul" "$radio_mesh" "$radio_2g" "$radio_5g"
 
     # ── network.mesh dummy section ────────────────────────────────────────────
     uci set network.mesh=interface
@@ -243,25 +243,25 @@ apply_mesh_config() {
     local _ap_idx=0
     # 5G AP（主）
     if [ -n "$radio_5g" ]; then
-        _setup_ap_iface easymesh_ap "$radio_5g" "$ssid" "$key"             "$ieee80211r" "$mobility_domain" "$ft_over_ds"             "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+        _setup_ap_iface easymesh_ap "$radio_5g" "$ssid" "$key" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
         _ap_idx=$((_ap_idx+1))
         log "AP created: easymesh_ap on %s (5G, ssid=%s)" "$radio_5g" "$ssid"
     fi
     # 2.4G AP（补充覆盖）
     if [ -n "$radio_2g" ]; then
-        _setup_ap_iface easymesh_ap_2g "$radio_2g" "$ssid" "$key"             "$ieee80211r" "$mobility_domain" "$ft_over_ds"             "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+        _setup_ap_iface easymesh_ap_2g "$radio_2g" "$ssid" "$key" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
         _ap_idx=$((_ap_idx+1))
         log "AP created: easymesh_ap_2g on %s (2.4G, ssid=%s)" "$radio_2g" "$ssid"
     fi
     # 兜底：如果没有识别到任何 radio，用 radio0
     if [ "$_ap_idx" -eq 0 ]; then
-        _setup_ap_iface easymesh_ap "radio0" "$ssid" "$key"             "$ieee80211r" "$mobility_domain" "$ft_over_ds"             "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+        _setup_ap_iface easymesh_ap "radio0" "$ssid" "$key" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
         log "AP created: easymesh_ap on radio0 (fallback)"
     fi
     # 确保相关 radio 设备本身不处于 disabled 状态
     [ -n "$radio_mesh" ] && uci -q del wireless.${radio_mesh}.disabled
-    [ -n "$radio_5g" ]  && uci -q del wireless.${radio_5g}.disabled
-    [ -n "$radio_2g" ]  && uci -q del wireless.${radio_2g}.disabled
+    [ -n "$radio_5g" ]   && uci -q del wireless.${radio_5g}.disabled
+    [ -n "$radio_2g" ]   && uci -q del wireless.${radio_2g}.disabled
     uci commit wireless
     log "apply_mesh_config done (%s AP(s) created)" "$_ap_idx"
 }
@@ -302,14 +302,12 @@ start_service() {
 
     apply_mesh_config
 
-    # ── agent 有线回程：启动守护进程之前先确保 IP 不与主路由冲突 ────────────
     if [ "$role" = "agent" ] && [ "$backhaul" = "wired" ]; then
         _agent_prepare
     fi
 
     _open_firewall_ports
 
-    # ── 等待 br-lan IP 就绪（最多 20 秒）────────────────────────────────────
     local _lip _lw=0
     while [ $_lw -lt 20 ]; do
         _lip=$(ip -4 addr show dev br-lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)

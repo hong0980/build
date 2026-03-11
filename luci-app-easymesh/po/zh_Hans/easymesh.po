@@ -48,12 +48,12 @@ msgid "Quick join shortcut: on the new node, press and hold the WPS button for 2
 msgstr "快速加入：在新节点上按住 WPS 按钮 2～10 秒松开，自动切换为 Agent 模式并开始发现主节点。然后在本页「节点状态」中批准即可。"
 
 msgid "Agent Mode — Joining Mesh"
-msgstr "从节点模式 — 正在加入 Mesh"
+msgstr "从节点模式 — 加入 Mesh"
 
 msgid "Connect a LAN cable from this node to the master router"
 msgstr "用网线将本节点的 LAN 口连接到主节点路由器"
 
-msgid "Enable EasyMesh below and set role to Agent, then Save & Apply"
+msgid "Enable EasyMesh below and set role to Agent, then Save \& Apply"
 msgstr "请在下方启用 EasyMesh 并将角色设为 Agent，然后保存并应用"
 
 msgid "This node will broadcast discovery packets to find the master"

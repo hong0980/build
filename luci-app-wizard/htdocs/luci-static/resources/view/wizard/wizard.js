@@ -215,8 +215,7 @@ return view.extend({
 		o.datatype = 'ip4addr';
 		o.ucioption = 'wan_dns';
 		o.default = '';
-		o.depends('wan_proto', 'dhcp');
-		o.depends('wan_proto', 'pppoe');
+		o.depends('wan_proto', /^(dhcp|pppoe)$/);
 		dnsOptions.forEach(opt => o.value(opt.value, opt.label));
 
 		o = s.taboption('lansetup', form.Value, 'lan_ipaddr', _('IPv4 address'),
