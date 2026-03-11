@@ -8,7 +8,7 @@
 				"uci": [ "get", "changes" ],
 				"network.wireless": [ "status" ],
 				"network.interface": [ "status", "dump" ],
-				"easymesh": [ "pending", "approved", "topology", "log_read", "neighbors", "status" ]
+				"easymesh": [ "pending", "approved", "topology", "log", "neighbors", "status" ]
 			},
 			"file": {
 				"/tmp/easymesh.log": [ "read", "write" ],
@@ -21,7 +21,7 @@
 			"uci": [ "easymesh", "wireless", "network", "batman-adv" ],
 			"ubus": {
 				"network.interface": [ "up", "down" ],
-				"easymesh": [ "approve", "reject", "log_clear" ],
+				"easymesh": [ "approve", "reject" ],
 				"uci": [ "add", "set", "delete", "apply", "confirm", "order" ]
 			},
 			"file": {

@@ -312,7 +312,7 @@ return view.extend({
 			if (self._paused) return;
 			return fs.read(LOGFILE).then(function (raw) {
 				var fresh = parseLog(raw || '');
-				var freshSig = fresh.length + (fresh[0] ? fresh[0].raw : '');
+				var freshSig = fresh.length + '|' + (fresh[0] ? fresh[0].raw : '') + '|' + (fresh[fresh.length-1] ? fresh[fresh.length-1].raw : '');
 				var prevSig  = self._lastCount + (self._entries[0] ? self._entries[0].raw : '');
 				if (freshSig !== prevSig) {
 					self._entries   = fresh;

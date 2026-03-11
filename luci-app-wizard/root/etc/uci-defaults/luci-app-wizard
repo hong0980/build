@@ -10,6 +10,8 @@ uci -q batch <<-EOF >/dev/null
 	commit wizard
 EOF
 
-chmod +x /etc/init.d/wizard 2>/dev/null
+chmod +x /etc/init.d/wizard
+chmod +x /etc/hotplug.d/button/99-wizard-restore
+
 rm -f /tmp/luci-*
 exit 0

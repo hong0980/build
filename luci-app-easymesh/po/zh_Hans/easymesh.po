@@ -53,8 +53,8 @@ msgstr "从节点模式 — 正在加入 Mesh"
 msgid "Connect a LAN cable from this node to the master router"
 msgstr "用网线将本节点的 LAN 口连接到主节点路由器"
 
-msgid "Make sure Enable EasyMesh is on and role is Agent, then Save & Apply"
-msgstr "确认已启用 EasyMesh 且角色为 Agent，然后保存并应用"
+msgid "Enable EasyMesh below and set role to Agent, then Save & Apply"
+msgstr "请在下方启用 EasyMesh 并将角色设为 Agent，然后保存并应用"
 
 msgid "This node will broadcast discovery packets to find the master"
 msgstr "本节点将通过 UDP 广播自动发现主节点"

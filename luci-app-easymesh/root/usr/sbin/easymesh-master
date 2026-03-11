@@ -50,7 +50,7 @@ AP_IF="wlan0"
 MESH_IF="bat0"
 export MESH_IF
 LOG_MAX_LINES=300
-_log_seq=0
+_LOG_SEQ_FILE="/tmp/em_logseq"
 export MASTER_PORT=4304
 export DISC_PORT=4305
 export DISC_REPLY_PORT=4306
@@ -123,8 +123,10 @@ _emlog() {
     (
         flock 200
         printf "%s [%-5s] [%-8s] %s\n" "$ts" "$level" "$tag" "$*" >> "$LOGFILE"
-        _log_seq=$(( _log_seq + 1 ))
-        if [ $(( _log_seq % 50 )) -eq 0 ]; then
+        local _seq
+        _seq=$(( $(cat "$_LOG_SEQ_FILE" 2>/dev/null || echo 0) + 1 ))
+        echo "$_seq" > "$_LOG_SEQ_FILE"
+        if [ $(( _seq % 50 )) -eq 0 ]; then
             local lc; lc=$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)
             if [ "$lc" -gt "$LOG_MAX_LINES" ]; then
                 local keep=$(( LOG_MAX_LINES * 4 / 5 ))
@@ -287,7 +289,7 @@ elect_role() {
             local peer_mac_hex best_mac_hex
             peer_mac_hex=$(echo "$peer_mac" | tr -d ':')
             best_mac_hex=$(echo "$best_mac" | tr -d ':')
-            [ "$peer_mac_hex" -lt "$best_mac_hex" ] 2>/dev/null && {
+            [ "$peer_mac_hex" \< "$best_mac_hex" ] && {
                 best_mac="$peer_mac"; best_ip="$peer_ip"
             }
         fi
@@ -1120,7 +1122,7 @@ poll_for_approval() {
 # 9. PROFILE GENERATE & APPLY
 ########################################
 generate_profile() {
-    uci_load easymesh
+    config_load easymesh
     local ssid key mesh_id mesh_key routing_algo channel
     local ieee80211r ieee80211k ieee80211v ft_over_ds mobility_domain backhaul
     config_get ssid             global ssid              'OpenWrt'
@@ -1287,7 +1289,7 @@ sync_neighbor_list() {
     [ -z "$ssid" ] && return
     local my_bssid; my_bssid=$(cat /sys/class/net/${ap_iface}/address 2>/dev/null)
     > "$NEIGHBOR_FILE"
-    iw dev "$AP_IF" scan 2>/dev/null | awk -v ssid="$ssid" '
+    iw dev "$ap_iface" scan 2>/dev/null | awk -v ssid="$ssid" '
         /^BSS /  { bssid=$2 }
         /freq:/  { freq=$2 }
         /DS Parameter set/ { chan=$NF }
@@ -1456,7 +1458,8 @@ optimize_channel() {
     local rd; rd=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
     local band; band=$(uci get "${rd}.band" 2>/dev/null || echo "5g")
     local candidates; case "$band" in 2g*|2.4*) candidates="$ch_24";; *) candidates="$ch_5";; esac
-    local scan_out; scan_out=$(iw dev "$AP_IF" scan 2>/dev/null)
+    local ap_iface; ap_iface=$(get_ap_iface)
+    local scan_out; scan_out=$(iw dev "$ap_iface" scan 2>/dev/null)
     local best_ch="" best_count=9999
     for ch in $candidates; do
         local count; count=$(echo "$scan_out" | grep -c "DS Parameter set: channel $ch")
@@ -1479,11 +1482,14 @@ setup_dedicated_backhaul() {
     [ "$enabled" != "1" ] && return
     local hw; hw=$(cat /tmp/easymesh_hw_type 2>/dev/null || echo "dual-band")
     [ "$hw" != "tri-band" ] && { log "Dedicated backhaul: skipped (hw=%s)" "$hw"; return 1; }
+    local bh_band; bh_band=$(uci_get easymesh global backhaul_band "5g_2")
+    local target_seen=2
+    [ "$bh_band" = "5g_1" ] && target_seen=1
     local backhaul_radio="" seen5g=0
-    for dev in $(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{gsub(/wireless\./,""); print $1}'); do
-        local b; b=$(uci_get wireless "${dev}" band)
-        case "$b" in 5g*|5GHz*) seen5g=$(( seen5g+1 ))
-            [ "$seen5g" -ge 2 ] && { backhaul_radio="$dev"; break; };; esac
+    for dev in $(uci show wireless ...); do
+        case "$b" in 5g*) seen5g=$(( seen5g+1 ))
+            [ "$seen5g" -ge "$target_seen" ] && { backhaul_radio="$dev"; break; }
+        ;; esac
     done
     [ -z "$backhaul_radio" ] && { log "Dedicated backhaul: no second 5GHz radio"; return 1; }
     log "Dedicated backhaul: %s reserved for mesh" "$backhaul_radio"
@@ -1499,7 +1505,7 @@ setup_dedicated_backhaul() {
     local bh_ch; bh_ch=$(uci_get easymesh global backhaul_channel 149)
     uci_set wireless "${backhaul_radio}" channel "${bh_ch}"
     uci_set wireless "${backhaul_radio}" htmode VHT80
-    uci_add wireless easymesh_bh wifi-iface
+    uci_add wireless wifi-iface easymesh_bh
     uci_set wireless easymesh_bh device "$backhaul_radio"
     uci_set wireless easymesh_bh mode mesh
     uci_set wireless easymesh_bh mesh_id $(uci_get easymesh global mesh_id)
