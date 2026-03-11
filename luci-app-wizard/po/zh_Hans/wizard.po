@@ -1,36 +1,19 @@
+# 中文翻译 — luci-app-wizard
+# 仅包含 wizard.js / file.js 中实际存在的字符串，以及菜单标题。
 
-msgid "%s Configuration File"
-msgstr "%s 配置文件"
-
-msgid "Contents of %s have been saved."
-msgstr "%s 内容已保存。"
-
-msgid "Service %s reloaded successfully."
-msgstr "%s 服务重载成功。"
-
-msgid "Service reload failed: %s"
-msgstr "服务重载失败: %s"
-
-msgid "Unable to save contents: %s"
-msgstr "无法保存内容: %s"
-
-msgid "This page contains the configuration file content for <code>%s</code>. After editing, click the <b><font color='red'>Save</font></b> button to apply changes immediately."
-msgstr "本页是<code>%s</code>的配置文件内容，编辑后点击<b><font color='red'> 保存 </font></b>按钮后立即生效"
-
-msgid "The configuration file is directly edited and saved! Unless you know what you are doing, please do not modify these configuration files. Incorrect configurations may cause issues such as failure to boot or network errors."
-msgstr "配置文件是直接编辑保存的！除非你知道在干什么，否则请不要修改这些配置文件。配置不正确可能会导致不能开机，联网等错误。"
-
-msgid "It is recommended to back up the file before making changes. Comments can be added by starting a line with #."
-msgstr "修改前建议先备份行再修改，注释可以在行首添加 ＃。"
-
+# ── 菜单 ──────────────────────────────────────────────────────────────────
 msgid "Wizard"
 msgstr "快捷设置"
 
-msgid "Files"
-msgstr "文件"
+msgid "Configuration"
+msgstr "基本设置"
 
+msgid "Files"
+msgstr "文件编辑"
+
+# ── wizard.js — 页面标题 ──────────────────────────────────────────────────
 msgid "Inital Router Setup"
-msgstr "初始路由器设置"
+msgstr "路由器初始设置"
 
 msgid "If you are using this router for the first time, please configure it here."
 msgstr "如果您是第一次使用此路由器，请在此进行配置。"
@@ -50,71 +33,172 @@ msgstr "无线设置"
 msgid "Set the router's wireless name and password. For more advanced settings, please go to the Network-Wireless page."
 msgstr "设置路由器的无线名称和密码。如需更高级的设置，请前往网络-无线页面。"
 
+# ── wizard.js — 协议选择 ──────────────────────────────────────────────────
+msgid "Protocol"
+msgstr "上网协议"
+
+msgid "Select the network access protocol to determine how the router connects to the Internet."
+msgstr "选择上网协议，决定路由器如何连接到互联网。"
+
 msgid "DHCP client"
-msgstr "DHCP 客户端"
+msgstr "DHCP 客户端（自动获取）"
 
 msgid "PPPoE"
-msgstr "PPPoE"
+msgstr "PPPoE 拨号"
 
-msgid "Static address"
-msgstr "静态地址"
+msgid "Access Point (AP)"
+msgstr "AP 模式（无线接入点）"
+
+msgid "Side Router"
+msgstr "旁路由"
+
+# ── wizard.js — PPPoE ─────────────────────────────────────────────────────
+msgid "PAP/CHAP username"
+msgstr "PPPoE 用户名"
+
+msgid "Username for PPPoE dial-up."
+msgstr "宽带拨号的用户名（由运营商提供）。"
+
+msgid "PAP/CHAP password"
+msgstr "PPPoE 密码"
+
+msgid "Password for PPPoE dial-up."
+msgstr "宽带拨号的密码（由运营商提供）。"
 
 msgid "Obtain IPv6 address"
 msgstr "获取 IPv6 地址"
 
 msgid "Enable IPv6 negotiation on the PPP link"
-msgstr "在 PPP 链接上启用 IPv6 协商"
+msgstr "在 PPP 链路上启用 IPv6 协商"
 
-msgid "IPv4 netmask"
-msgstr "IPv4 子网掩码"
+msgid "Automatic"
+msgstr "自动"
 
-msgid "IPv4 gateway"
-msgstr "IPv4 网关"
+msgid "Disabled"
+msgstr "禁用"
+
+msgid "Manual"
+msgstr "手动"
+
+# ── wizard.js — AP 模式 ───────────────────────────────────────────────────
+msgid "AP management IP"
+msgstr "AP 管理 IP 分配方式"
+
+msgid "In AP mode all ports are bridged to the main router. Choose \"Auto (DHCP)\" to let the main router assign a management IP automatically (recommended). Choose \"Static\" only if you need a fixed IP to access this device."
+msgstr "AP 模式下，本机将所有端口桥接到主路由器，不做路由和 NAT。\n推荐选"自动获取"：管理 IP 由主路由器自动分配，无需手动填写任何参数。\n仅在需要固定管理 IP 时才选"静态 IP"。"
+
+msgid "Auto (DHCP) — recommended"
+msgstr "自动获取 (DHCP) — 推荐"
+
+msgid "Static IP"
+msgstr "静态 IP"
 
 msgid "Bridge IP address"
-msgstr "桥接 IP 地址"
+msgstr "桥接管理 IP"
+
+msgid "Static management IP for this router in AP mode. Must be in the same subnet as the main router."
+msgstr "AP 模式下本机的静态管理 IP，须与主路由器在同一子网内（如 192.168.1.2）。"
 
 msgid "Bridge netmask"
 msgstr "桥接子网掩码"
 
+msgid "Subnet mask matching the main network (e.g. 255.255.255.0)."
+msgstr "与主路由器网络相同的子网掩码（如 255.255.255.0）。"
+
 msgid "Bridge gateway"
 msgstr "桥接网关"
 
-msgid "DHCP for AP mode"
-msgstr "接入点模式 DHCP"
+msgid "Main router IP address (e.g. 192.168.1.1). Used as default gateway for management traffic."
+msgstr "主路由器的 IP 地址（如 192.168.1.1），作为本机管理流量的默认网关。"
+
+msgid "DHCP server"
+msgstr "DHCP 服务"
+
+msgid "Should be disabled in AP mode — the main router handles DHCP for all clients."
+msgstr "AP 模式下应禁用本机 DHCP，由主路由器统一为所有设备分配 IP。"
+
+msgid "Disabled (recommended)"
+msgstr "禁用（推荐）"
+
+msgid "Enabled"
+msgstr "启用"
 
 msgid "Bridge interfaces"
 msgstr "桥接接口"
 
-msgid "Local IP address"
-msgstr "本地 IP 地址"
+msgid "Interfaces to include in the bridge (typically LAN ports and wireless interfaces). The WAN port connects to the main router."
+msgstr "加入桥接的接口（通常为 LAN 口和无线接口）。WAN 口用于连接主路由器。"
 
-msgid "Netmask for side router"
-msgstr "旁路路由器子网掩码"
+msgid "At least one interface must be selected"
+msgstr "至少需要选择一个接口"
 
-msgid "Main router IP address"
-msgstr "主路由器 IP 地址"
+# ── wizard.js — 旁路由模式 ────────────────────────────────────────────────
+msgid "WAN IP address"
+msgstr "WAN 口静态 IP"
 
-msgid "Gateway for side router"
-msgstr "旁路路由器网关"
+msgid "Static IP for this router's WAN port on the main network (e.g. 192.168.1.2). Clients that want to use this router as gateway will point to this IP."
+msgstr "本机 WAN 口在主路由器网段内的静态 IP（如 192.168.1.2）。\n需要使用本机作为网关的客户端，将其默认网关设为此 IP。"
 
-msgid "DHCP for side router"
-msgstr "旁路路由器 DHCP"
+msgid "WAN netmask"
+msgstr "WAN 子网掩码"
 
-msgid "Connection interfaces"
-msgstr "连接接口"
+msgid "Subnet mask of the main network."
+msgstr "与主路由器相同的子网掩码。"
 
+msgid "Main router IP"
+msgstr "主路由器 IP"
+
+msgid "IP address of the main router (e.g. 192.168.1.1). Used as the default gateway for upstream traffic."
+msgstr "主路由器的 IP 地址（如 192.168.1.1），本机将通过主路由器访问互联网。"
+
+msgid "LAN IP address"
+msgstr "本机 LAN IP"
+
+msgid "This router's LAN IP. Clients set their gateway to this address to route through this device. Must be in a different subnet from the main router (e.g. 192.168.2.1)."
+msgstr "本机 LAN 口的 IP 地址。需要使用旁路由功能的客户端，将其网关设为此地址。\n必须与主路由器在不同子网（例如主路由为 192.168.1.x，本机设 192.168.2.1）。"
+
+msgid "The LAN IP must be in a different subnet from the main router IP (%s). Try e.g. 192.168.2.1."
+msgstr "LAN IP 必须与主路由器 IP（%s）处于不同子网。建议设为 192.168.2.1 等其他网段。"
+
+msgid "LAN netmask"
+msgstr "LAN 子网掩码"
+
+msgid "This router's LAN segment subnet mask."
+msgstr "本机 LAN 网段的子网掩码。"
+
+msgid "LAN DHCP server"
+msgstr "LAN DHCP 服务"
+
+msgid "Enable to let this router assign IPs to its own LAN clients (recommended when clients connect directly to this router). Disable if clients are managed by the main router."
+msgstr "启用：本机为自己 LAN 段的客户端分配 IP（推荐）。\n禁用：由主路由器统一管理所有设备。"
+
+msgid "Enabled (recommended)"
+msgstr "启用（推荐）"
+
+msgid "WAN interface"
+msgstr "WAN 接口"
+
+msgid "The interface connected to the main router (typically the WAN port)."
+msgstr "连接到主路由器的接口（通常为 WAN 口）。"
+
+# ── wizard.js — DNS ───────────────────────────────────────────────────────
 msgid "WAN DNS servers"
 msgstr "WAN DNS 服务器"
+
+msgid "Custom DNS servers for the WAN interface. Leave empty to use the ISP-assigned DNS."
+msgstr "WAN 接口使用的自定义 DNS 服务器。留空则使用运营商自动下发的 DNS。"
 
 msgid "LAN DNS servers"
 msgstr "LAN DNS 服务器"
 
+msgid "DNS servers pushed to LAN clients via DHCP."
+msgstr "通过 DHCP 下发给局域网客户端的 DNS 服务器地址。"
+
 msgid "AliDNS: 223.5.5.5"
-msgstr "阿里DNS：223.5.5.5"
+msgstr "阿里 DNS：223.5.5.5"
 
 msgid "AliDNS: 223.6.6.6"
-msgstr "阿里DNS：223.6.6.6"
+msgstr "阿里 DNS：223.6.6.6"
 
 msgid "DNSPod: 101.226.4.6"
 msgstr "DNS派：101.226.4.6"
@@ -123,7 +207,7 @@ msgid "DNSPod: 218.30.118.6"
 msgstr "DNS派：218.30.118.6"
 
 msgid "BaiduDNS: 180.76.76.76"
-msgstr "百度DNS：180.76.76.76"
+msgstr "百度 DNS：180.76.76.76"
 
 msgid "114DNS: 114.114.114.114"
 msgstr "114DNS：114.114.114.114"
@@ -131,95 +215,68 @@ msgstr "114DNS：114.114.114.114"
 msgid "114DNS: 114.114.115.115"
 msgstr "114DNS：114.114.115.115"
 
-msgid "The local IP address should not be in the same subnet as the main router IP (%s). Try a different subnet, e.g., 192.168.2.x."
-msgstr "本地 IP 地址不应与主路由器 IP（%s）在同一子网内。请尝试使用不同的子网，例如 192.168.2.x。"
-
-msgid "<abbr title='Extended Service Set Identifier'>ESSID</abbr>"
-msgstr "<abbr title='扩展服务集标识符'>ESSID</abbr>"
-
-msgid "Key"
-msgstr "密钥"
-
-msgid "Select the network access protocol to determine how the router connects to the Internet."
-msgstr "选择网络接入协议，决定路由器如何连接到互联网。"
-
-msgid "Username for PPPoE dial-up."
-msgstr "PPPoE 拨号的用户名。"
-
-msgid "Password for PPPoE dial-up."
-msgstr "PPPoE 拨号的密码。"
-
-msgid "Subnet mask for static address mode."
-msgstr "静态地址模式的子网掩码。"
-
-msgid "Gateway address for static address mode."
-msgstr "静态地址模式的网关地址。"
-
-msgid "Static IP address assigned to the router in access point mode for connecting to the main network."
-msgstr "路由器在接入点模式下分配的静态 IP 地址，用于连接主网络。"
-
-msgid "Subnet mask for the router in access point mode, which should match the main network."
-msgstr "接入点模式下路由器的子网掩码，应与主网络一致。"
-
-msgid "Gateway address of the main network, typically the IP address of the main router."
-msgstr "主网络的网关地址，通常为主路由器的 IP 地址。"
-
-msgid "Disable DHCP to rely on the main router's DHCP server, or enable local DHCP service."
-msgstr "禁用 DHCP 以依赖主路由器的 DHCP 服务器，或启用本地 DHCP 服务。"
-
-msgid "Select the network interfaces (e.g., LAN or wireless interfaces) to participate in bridging to connect to the main network."
-msgstr "选择参与桥接的网络接口（如 LAN 或无线接口），以连接主网络。"
-
-msgid "IP address assigned to the side router in the main network, which should avoid conflicts with the main router's LAN subnet."
-msgstr "旁路路由器在主网络中分配的 IP 地址，应避免与主路由器 LAN 子网冲突。"
-
-msgid "Subnet mask for the side router, which should match the main network."
-msgstr "旁路路由器的子网掩码，应与主网络一致。"
-
-msgid "IP address of the main router to which the side router connects."
-msgstr "旁路路由器连接的主路由器的 IP 地址。"
-
-msgid "Default gateway address for the side router, typically the IP address of the main router."
-msgstr "旁路路由器的默认网关地址，通常为主路由器的 IP 地址。"
-
-msgid "Select the interfaces (e.g., WAN or LAN ports) for the side router to connect to the main network."
-msgstr "选择旁路路由器连接主网络的接口（如 WAN 或 LAN 端口）。"
-
-msgid "List of custom DNS servers for the WAN interface."
-msgstr "WAN 接口的自定义 DNS 服务器列表。"
+# ── wizard.js — LAN 设置 ──────────────────────────────────────────────────
+msgid "IPv4 address"
+msgstr "IPv4 地址"
 
 msgid "IPv4 address for the LAN interface."
-msgstr "LAN 接口的 IPv4 地址。"
+msgstr "路由器 LAN 口的 IPv4 地址。"
+
+msgid "IPv4 netmask"
+msgstr "子网掩码"
 
 msgid "Subnet mask for the LAN interface."
-msgstr "LAN 接口的子网掩码。"
+msgstr "路由器 LAN 接口的子网掩码。"
 
-msgid "List of custom DNS servers used by LAN clients (DHCP)."
-msgstr "LAN 客户端（DHCP）使用的自定义 DNS 服务器列表。"
+# ── wizard.js — 无线设置 ──────────────────────────────────────────────────
+msgid "<abbr title='Extended Service Set Identifier'>ESSID</abbr>"
+msgstr "<abbr title='无线网络名称'>ESSID</abbr>"
 
 msgid "SSID of the wireless network, with a maximum length of 32 characters."
-msgstr "无线网络的 SSID，长度不超过 32 个字符。"
+msgstr "无线网络名称（SSID），最长 32 个字符。"
+
+msgid "Key"
+msgstr "无线密码"
 
 msgid "Password for the wireless network, compliant with WPA key requirements."
-msgstr "无线网络的密码，符合 WPA 密钥要求。"
+msgstr "无线网络密码，需符合 WPA 密钥规范（至少 8 位）。"
 
-msgid "Access Point (AP)"
-msgstr "交换机 (AP)"
+# ── file.js ───────────────────────────────────────────────────────────────
+msgid "The configuration file is directly edited and saved! Unless you know what you are doing, please do not modify these configuration files. Incorrect configurations may cause issues such as failure to boot or network errors."
+msgstr "⚠️ 此处直接编辑并保存配置文件！除非您清楚自己在做什么，否则请勿随意修改。配置错误可能导致路由器无法启动或无法联网。"
 
-msgid "Side Router"
-msgstr "旁路由"
+msgid "It is recommended to back up the file before making changes. Comments can be added by starting a line with #."
+msgstr "修改前建议先备份原始文件。可以在行首添加 # 来注释掉某行。"
 
-msgid "IP address for the side router's WAN interface to connect to the main network."
-msgstr "旁路由 WAN 接口连接主网络的 IP 地址"
+msgid "Choose File"
+msgstr "选择文件"
 
-msgid "IPv4 address for static address mode."
-msgstr "静态地址模式的 IPv4 地址。"
+msgid "-- Please choose --"
+msgstr "-- 请选择 --"
 
-msgid "WAN IP address"
-msgstr "WAN IP 地址"
+msgid "Readonly"
+msgstr "只读"
 
-msgid "Enable editing"
-msgstr "启用编辑"
+msgid "Last modified: %s, Size: %s bytes"
+msgstr "最后修改：%s，文件大小：%s 字节"
+
+msgid "Error: File configuration not found."
+msgstr "错误：未找到对应的文件配置。"
+
+msgid "No modifications detected. The content remains unchanged."
+msgstr "未检测到修改，内容未发生变化。"
+
+msgid "Contents have been saved."
+msgstr "内容已保存。"
+
+msgid "Service %s reloaded successfully."
+msgstr "服务 %s 重载成功。"
+
+msgid "Service reload failed: %s"
+msgstr "服务重载失败：%s"
+
+msgid "Unable to save contents: %s"
+msgstr "无法保存内容：%s"
 
 msgid "Network configuration (network)"
 msgstr "网络配置（network）"
@@ -228,25 +285,22 @@ msgid "Firewall configuration (firewall)"
 msgstr "防火墙配置（firewall）"
 
 msgid "DHCP configuration (dhcp)"
-msgstr "DHCP配置（dhcp）"
+msgstr "DHCP 配置（dhcp）"
 
 msgid "DNS configuration (dnsmasq)"
-msgstr "DNS配置（dnsmasq）"
+msgstr "DNS 配置（dnsmasq）"
 
 msgid "Web server configuration (uhttpd)"
-msgstr "Web服务器配置（uhttpd）"
+msgstr "Web 服务器配置（uhttpd）"
 
 msgid "Wireless configuration (wireless)"
 msgstr "无线配置（wireless）"
 
 msgid "Host configuration (hosts)"
-msgstr "主机配置（hosts）"
-
-msgid "Startup script (rc.local)"
-msgstr "启动脚本（rc.local）"
+msgstr "主机名配置（hosts）"
 
 msgid "Scheduled tasks (crontabs)"
 msgstr "定时任务（crontabs）"
 
-msgid "At least one interface must be selected"
-msgstr "至少必须选择一个接口"
+msgid "Startup script (rc.local)"
+msgstr "开机启动脚本（rc.local）"

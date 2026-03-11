@@ -8,59 +8,71 @@ LOCK="/var/run/wizard-restore.lock"
 . /lib/config/uci.sh
 
 led_blink() {
-    local led=$(ls /sys/class/leds/*/trigger 2>/dev/null | head -1)
-    led=${led%/trigger}
-    [ -z "$led" ] && return
-    echo timer > $led/trigger
-    echo $1 > $led/delay_on
-    echo $2 > $led/delay_off
-    sleep $3
-    echo default-on > $led/trigger 2>/dev/null
+    local delay_on="$1" delay_off="$2" duration="$3"
+    local trigger_file
+    trigger_file=$(ls /sys/class/leds/*/trigger 2>/dev/null | head -1)
+    [ -z "$trigger_file" ] && return
+    local led="${trigger_file%/trigger}"
+
+    echo timer > "$led/trigger"
+    echo "$delay_on"  > "$led/delay_on"
+    echo "$delay_off" > "$led/delay_off"
+    sleep "$duration"
+    echo default-on > "$led/trigger" 2>/dev/null || \
+        echo none    > "$led/trigger" 2>/dev/null
 }
 
 check_gateway() {
-    local gw=$(uci_get network lan gateway "")
-    [ -z "$gw" ] && gw=$(uci_get network wan gateway "")
+    local gw
+    gw=$(uci_get network wan gateway "")
+    [ -z "$gw" ] && gw=$(uci_get network lan gateway "")
     [ -z "$gw" ] && return 1
-
     ping -c 1 -W 2 "$gw" >/dev/null 2>&1
-    return $?
 }
 
 [ -e "$LOCK" ] && exit 0
 touch "$LOCK"
-trap "rm -f '$LOCK'" EXIT
+trap "rm -f '$LOCK'" EXIT INT TERM
 
 if [ "$SEEN" -ge 3 ] && [ "$SEEN" -lt 6 ]; then
     if check_gateway; then
-        led_blink 200 200 0.5
+        led_blink 200 200 2
     else
-        led_blink 300 1000 3
+        led_blink 500 1500 3
     fi
     exit 0
 fi
 
 if [ "$SEEN" -ge 6 ]; then
-    led_blink 100 100 5
+    led_blink 100 100 3 &
 
+    local restore_ok=0
     for file in dhcp network firewall wireless; do
-        local bak_file="/etc/config/bk_$file"
-        if [ -f "$bak_file" ]; then
-            cp -f "$bak_file" "/etc/config/$file"
+        local bak="/etc/config/bk_${file}"
+        if [ -f "$bak" ]; then
+            cp -f "$bak" "/etc/config/${file}"
             uci -q commit "$file"
+            restore_ok=1
+        else
+            logger -t wizard-restore "Warning: backup file $bak not found, skipped."
         fi
     done
 
-    uci -q delete wizard.default.wan_proto 2>/dev/null
+    if [ "$restore_ok" = "0" ]; then
+        logger -t wizard-restore "Error: No backup files found. Restore aborted."
+        exit 1
+    fi
+
+    uci -q delete wizard.default.wan_proto
     uci -q commit wizard
 
     /etc/init.d/network reload
-    sleep 2
+    sleep 3
     /etc/init.d/firewall reload
     /etc/init.d/dnsmasq reload
     wifi reload 2>/dev/null
 
-    logger -t wizard-restore "Configuration restored from backup"
+    logger -t wizard-restore "Configuration successfully restored from backup."
 fi
 
 exit 0

@@ -58,9 +58,6 @@ set_wireless() {
 
 	if [ "$wifi_ssid" = "$old_ssid" ] && [ "$wifi_key" = "$old_key" ]; then
 		return 0
-	else
-		uci_set wizard default wifi_key_old "$wifi_key"
-		uci_set wizard default wifi_ssid_old "$wifi_ssid"
 	fi
 
 	local wifi_updated=0
@@ -82,7 +79,6 @@ set_wireless() {
 		if [ "$band" = "6g" ]; then
 			uci_set wireless "$cfg" encryption 'sae'
 			uci_remove wireless "$cfg" ft_psk_generate_local
-
 			uci_set wireless "$cfg" ssid "${wifi_ssid}_6G"
 		else
 			uci_set wireless "$cfg" encryption 'psk2'
@@ -131,12 +127,15 @@ reconfig() {
 	if [ "$found" -eq 1 ] && [ -n "$ssid" ]; then
 		local safe_ssid="${ssid//\'/\'\\\'\'}"
 		local safe_key="${key//\'/\'\\\'\'}"
-
 		wifi_cmd="set wizard.default.wifi_ssid='${safe_ssid}'; set wizard.default.wifi_key='${safe_key}'"
 	fi
 
-	local dhcp_cmd="delete wizard.default.dhcp"
-	[ "$dhcp_ignore" = "1" ] && dhcp_cmd="set wizard.default.dhcp='0'"
+	local dhcp_cmd="delete wizard.default.ap_dhcp"
+	[ "$dhcp_ignore" = "1" ] && dhcp_cmd="set wizard.default.ap_dhcp='1'"
+
+	local lan_proto; lan_proto=$(uci_get network lan proto "static")
+	local ap_ip_mode="static"
+	[ "$lan_proto" = "dhcp" ] && ap_ip_mode="dhcp"
 
 	uci -q batch <<-EOF >/dev/null
 		set wizard.default.wan_proto="$(uci_get network wan proto)"
@@ -144,23 +143,21 @@ reconfig() {
 		set wizard.default.wan_pppoe_pass="$(uci_get network wan password)"
 		set wizard.default.lan_ipaddr="$(uci_get network lan ipaddr)"
 		set wizard.default.lan_netmask="$(uci_get network lan netmask)"
-		set wizard.default.lan_gateway="$(uci_get network lan gateway)"
 		set wizard.default.lan_dns="$(uci_get network lan dns)"
-		set wizard.default.wan_ipaddr="$(uci_get network wan ipaddr)"
-		set wizard.default.wan_netmask="$(uci_get network wan netmask)"
-		set wizard.default.wan_gateway="$(uci_get network wan gateway)"
 		set wizard.default.wan_dns="$(uci_get network wan dns)"
+		set wizard.default.ap_ip_mode="$ap_ip_mode"
 		set wizard.default.ap_bridge_ip="$(uci_get network lan ipaddr)"
 		set wizard.default.ap_netmask="$(uci_get network lan netmask)"
 		set wizard.default.ap_gateway="$(uci_get network lan gateway)"
 		set wizard.default.ap_dhcp="$dhcp_ignore"
 		set wizard.default.ap_bridge_interfaces="$(uci_get network lan ifname)"
 		set wizard.default.siderouter_local_ip="$(uci_get network lan ipaddr)"
-		set wizard.default.siderouter_netmask="$(uci_get network lan netmask)"
+		set wizard.default.siderouter_lan_netmask="$(uci_get network lan netmask)"
 		set wizard.default.siderouter_wan_ip="$(uci_get network wan ipaddr)"
+		set wizard.default.siderouter_netmask="$(uci_get network wan netmask)"
 		set wizard.default.siderouter_gateway="$(uci_get network wan gateway)"
-		set wizard.default.siderouter_dhcp="$dhcp_ignore"
-		set wizard.default.siderouter_interfaces="$(uci_get network wan ifname)"
+		set wizard.default.siderouter_dhcp="$(uci_get dhcp lan ignore "0")"
+		set wizard.default.siderouter_interfaces="$(uci_get network wan device "")"
 		$wifi_cmd
 		$dhcp_cmd
 		commit wizard
@@ -172,9 +169,10 @@ add_wizard() {
 
 	get_config default \
 		wan_proto wan_pppoe_user wan_pppoe_pass \
-		wan_ipaddr wan_netmask wan_gateway wan_dns lan_dns ipv6 \
-		ap_bridge_ip ap_netmask ap_gateway ap_dhcp ap_bridge_interfaces \
-		siderouter_local_ip siderouter_netmask siderouter_wan_ip siderouter_gateway siderouter_dhcp siderouter_interfaces \
+		wan_dns lan_dns ipv6 \
+		ap_ip_mode ap_bridge_ip ap_netmask ap_gateway ap_dhcp ap_bridge_interfaces \
+		siderouter_local_ip siderouter_lan_netmask siderouter_netmask \
+		siderouter_wan_ip siderouter_gateway siderouter_dhcp siderouter_interfaces \
 		wifi_ssid wifi_key wifi_ssid_old wifi_key_old \
 		lan_ipaddr lan_netmask lan_ipaddr_old lan_netmask_old
 
@@ -184,7 +182,7 @@ add_wizard() {
 
 	if [ "$wan_proto" != "ap" ] && [ "$wan_proto" != "siderouter" ]; then
 		validate_device "$device" || {
-			log_msg "Error: Device '$device' not found."
+			log_msg "Error: WAN device '$device' not found."
 			return 1
 		}
 	fi
@@ -204,6 +202,7 @@ add_wizard() {
 				[ -n "$ifname" ] && uci_set network wan ifname "$ifname"
 			fi
 			;;
+
 		dhcp)
 			uci_remove network wan
 			uci_add network interface wan
@@ -211,9 +210,10 @@ add_wizard() {
 			uci_set network wan device "$device"
 			[ -n "$ifname" ] && uci_set network wan ifname "$ifname"
 			;;
+
 		ap)
-			[ -n "$ap_bridge_ip" -a -n "$ap_netmask" -a -n "$ap_gateway" -a -n "$ap_bridge_interfaces" ] || {
-				log_msg "Error: Missing parameters for AP mode."
+			[ -n "$ap_bridge_interfaces" ] || {
+				log_msg "Error: No bridge interfaces configured for AP mode."
 				return 1
 			}
 
@@ -226,10 +226,26 @@ add_wizard() {
 
 			uci_remove network wan
 
-			uci_set network lan proto 'static'
-			uci_set network lan ipaddr "$ap_bridge_ip"
-			uci_set network lan netmask "$ap_netmask"
-			uci_set network lan gateway "$ap_gateway"
+			if [ "${ap_ip_mode:-dhcp}" = "dhcp" ]; then
+				uci_set network lan proto 'dhcp'
+				uci_remove network lan ipaddr
+				uci_remove network lan netmask
+				uci_remove network lan gateway
+			else
+				[ -n "$ap_bridge_ip" -a -n "$ap_netmask" ] || {
+					log_msg "Error: ap_bridge_ip and ap_netmask required for AP static mode."
+					return 1
+				}
+				uci_set network lan proto 'static'
+				uci_set network lan ipaddr "$ap_bridge_ip"
+				uci_set network lan netmask "$ap_netmask"
+				if [ -n "$ap_gateway" ]; then
+					uci_set network lan gateway "$ap_gateway"
+				else
+					uci_remove network lan gateway
+				fi
+			fi
+
 			uci_set network lan type 'bridge'
 			uci_set network lan ifname "$ap_bridge_interfaces"
 
@@ -239,10 +255,10 @@ add_wizard() {
 			uci_set dhcp lan ra_slaac '0'
 			;;
 		siderouter)
-			[ -n "$siderouter_local_ip" -a -n "$siderouter_netmask" -a \
-			  -n "$siderouter_wan_ip"   -a -n "$siderouter_gateway" -a \
-			  -n "$siderouter_interfaces" ] || {
-				log_msg "Error: Missing parameters for Siderouter mode."
+			[ -n "$siderouter_wan_ip" -a -n "$siderouter_netmask" -a \
+			  -n "$siderouter_gateway"  -a -n "$siderouter_interfaces" -a \
+			  -n "$siderouter_local_ip" ] || {
+				log_msg "Error: Missing parameters for Side Router mode."
 				return 1
 			}
 
@@ -256,14 +272,15 @@ add_wizard() {
 			uci_remove network wan
 			uci_add network interface wan
 			uci_set network wan proto 'static'
-			uci_set network wan ifname "$siderouter_interfaces"
+			uci_set network wan device "$siderouter_interfaces"
 			uci_set network wan ipaddr "$siderouter_wan_ip"
 			uci_set network wan netmask "$siderouter_netmask"
 			uci_set network wan gateway "$siderouter_gateway"
 
+			local lan_mask="${siderouter_lan_netmask:-255.255.255.0}"
 			uci_set network lan proto 'static'
 			uci_set network lan ipaddr "$siderouter_local_ip"
-			uci_set network lan netmask "$siderouter_netmask"
+			uci_set network lan netmask "$lan_mask"
 			uci_remove network lan gateway
 
 			uci_set dhcp lan ignore "$siderouter_dhcp"
@@ -299,8 +316,8 @@ add_wizard() {
 		if uci_changes "$config"; then
 			need_reload=1
 			case "$config" in
-				network) reload_network=1 ;;
-				dhcp) reload_dhcp=1 ;;
+				network)  reload_network=1  ;;
+				dhcp)     reload_dhcp=1     ;;
 				firewall) reload_firewall=1 ;;
 				wireless) reload_wireless=1 ;;
 			esac
@@ -308,12 +325,11 @@ add_wizard() {
 	done
 
 	if [ "$need_reload" = "1" ]; then
-		[ "$reload_network" = "1" ] && /etc/init.d/network reload
+		[ "$reload_network"  = "1" ] && /etc/init.d/network reload
 		[ "$reload_firewall" = "1" ] && /etc/init.d/firewall reload
-		[ "$reload_dhcp" = "1" ] && /etc/init.d/dnsmasq reload
+		[ "$reload_dhcp"     = "1" ] && /etc/init.d/dnsmasq reload
 		[ "$reload_wireless" = "1" ] && wifi reload
-
-		log_msg "Configuration applied and all services reloaded successfully."
+		log_msg "Configuration applied and services reloaded."
 	fi
 }
 
@@ -324,6 +340,7 @@ start() {
 
 boot() {
 	for file in dhcp network firewall wireless; do
-		[ -s /etc/config/$file -a ! -f /etc/config/bk_$file ] && cp /etc/config/$file /etc/config/bk_$file
+		[ -s /etc/config/$file -a ! -f /etc/config/bk_$file ] && \
+			cp /etc/config/$file /etc/config/bk_$file
 	done
 }

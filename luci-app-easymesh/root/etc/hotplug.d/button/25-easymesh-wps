@@ -9,6 +9,7 @@ SEEN_TIME=${SEEN:-0}
 LOCK="/var/run/easymesh-restore.lock"
 [ -e "$LOCK" ] && exit 0
 touch "$LOCK"
+trap "rm -f '$LOCK'" EXIT
 
 role=$(uci_get easymesh global role master)
 enabled=$(uci_get easymesh global enabled 0)
@@ -35,7 +36,6 @@ elif [ "$enabled" = "1" ] && [ "$role" = "agent" ] && [ ! -f /etc/easymesh_agent
     uci_commit easymesh
     ( sleep 1; /etc/init.d/easymesh restart ) &
 else
-    rm -f "$LOCK"
     exit 0
 fi
 
@@ -75,8 +75,6 @@ fi
         sleep 3
         echo "default-on" > "${TARGET%/*}/trigger" 2>/dev/null || echo 1 > "$TARGET" 2>/dev/null
     fi
-
-    rm -f "$LOCK"
 ) > /dev/null 2>&1 &
 
 exit 0
