@@ -189,7 +189,7 @@ apply_mesh_config() {
     config_get reassociation_deadline global reassociation_deadline '1000'
     config_get ieee80211k             global ieee80211k            '1'
     config_get ieee80211v             global ieee80211v            '1'
-    config_get routing_algo           global routing_algo          'BATMAN_IV'
+    config_get routing_algo           global routing_algo          'BATMAN_V'
     config_get mesh_fwding            global mesh_fwding           '0'
 
     cleanup_wireless

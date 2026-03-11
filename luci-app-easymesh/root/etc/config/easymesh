@@ -18,4 +18,4 @@ config easymesh 'global'
 	# DFS/ACS
 	option dfs_enable '1'
 	# batman-adv routing algorithm: BATMAN_IV (default) or BATMAN_V
-	option routing_algo 'BATMAN_IV'
+	option routing_algo 'BATMAN_V'

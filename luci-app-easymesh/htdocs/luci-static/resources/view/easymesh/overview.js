@@ -158,7 +158,7 @@ return view.extend({
 		o = s.taboption('advanced', form.ListValue, 'routing_algo', _('batman-adv Routing Algorithm'));
 		o.value('BATMAN_IV', 'BATMAN IV ' + _('(default, best compatibility)'));
 		o.value('BATMAN_V',  'BATMAN V '  + _('(more accurate, requires kernel support)'));
-		o.default = 'BATMAN_IV';
+		o.default = 'BATMAN_V';
 		o.depends({ enabled: '1', role: 'master' });
 
 		o = s.taboption('advanced', form.Flag, 'mesh_fwding', _('802.11s Native Forwarding'),

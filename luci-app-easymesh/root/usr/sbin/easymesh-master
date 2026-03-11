@@ -306,13 +306,17 @@ tune_batman() {
         echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
     fi
 
-    local _algo; _algo=$(uci_get easymesh global routing_algo 'BATMAN_IV')
+    local _algo; _algo=$(uci_get easymesh global routing_algo 'BATMAN_V')
     local _state_key="${_bmode}:${_role}:${_algo}"
     local _last; _last=$(cat /tmp/easymesh_batman_state 2>/dev/null)
     if [ "$_state_key" != "$_last" ]; then
-        batctl meshif "$MESH_IF" routing_algo "$_algo" 2>/dev/null \
-            && log "batman-adv: routing_algo=%s" "$_algo" \
-            || logw "batman-adv: routing_algo=%s not supported (kernel module may not have it)" "$_algo"
+        if [ -f /sys/module/batman_adv/parameters/routing_algo ]; then
+            echo "$_algo" > /sys/module/batman_adv/parameters/routing_algo 2>/dev/null \
+                && log "batman-adv: routing_algo=%s (via sysfs)" "$_algo" \
+                || logw "batman-adv: routing_algo=%s not accepted by sysfs" "$_algo"
+        else
+            logw "batman-adv: sysfs routing_algo not found, algo=%s may not take effect" "$_algo"
+        fi
         [ "$_bmode" = "wired" ] && log "batman-adv: BLA=off DAT=off (wired mode)"
         if [ "$_role" = "master" ]; then
             batctl meshif "$MESH_IF" gw_mode server 2>/dev/null
@@ -1041,7 +1045,7 @@ generate_profile() {
     config_get key              global key               ''
     config_get mesh_id          global mesh_id           'OpenWrt-Mesh'
     config_get mesh_key         global mesh_key          ''
-    config_get routing_algo     global routing_algo      'BATMAN_IV'
+    config_get routing_algo     global routing_algo      'BATMAN_V'
     config_get ieee80211r       global ieee80211r        '1'
     config_get ieee80211k       global ieee80211k        '1'
     config_get ieee80211v       global ieee80211v        '1'
@@ -1091,7 +1095,7 @@ apply_profile() {
     uci_set easymesh global ssid "$ssid"
     uci_set easymesh global key "$key"
     uci_set easymesh global backhaul "${backhaul:-wired}"
-    uci_set easymesh global routing_algo "${routing_algo:-BATMAN_IV}"
+    uci_set easymesh global routing_algo "${routing_algo:-BATMAN_V}"
     [ -n "$ieee80211r" ]       && uci_set easymesh global ieee80211r       "$ieee80211r"
     [ -n "$ieee80211k" ]       && uci_set easymesh global ieee80211k       "$ieee80211k"
     [ -n "$ieee80211v" ]       && uci_set easymesh global ieee80211v       "$ieee80211v"
