@@ -145,7 +145,6 @@ function drawTopo(topo, canvas) {
 		ctx.beginPath(); ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
 		ctx.fillStyle = grad; ctx.fill();
 		ctx.strokeStyle = accent; ctx.lineWidth = isMaster ? 2.5 : 1.5; ctx.stroke();
-
 		ctx.font = (isMaster ? 18 : 14) + 'px serif';
 		ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 		ctx.fillText(isMaster ? '🌐' : '📡', pos.x, pos.y - 3);
@@ -179,11 +178,7 @@ function drawTopo(topo, canvas) {
 	return positions;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   VIEW
-   ═══════════════════════════════════════════════════════════════════════════ */
 return view.extend({
-
 	load: function() {
 		return Promise.all([
 			uci.load('easymesh'),
@@ -199,7 +194,6 @@ return view.extend({
 		var self = this;
 		var _positions = {};
 
-		/* EasyMesh disabled guard */
 		if (!uci.get_bool('easymesh', 'global', 'enabled')) {
 			return E('div', { class: 'cbi-section' }, [
 				E('div', { class: 'alert-message warning' }, [
@@ -212,7 +206,6 @@ return view.extend({
 		var root = E('div', { id: 'easymesh-nodes-root' });
 		root.appendChild(self._buildInner(data[1], data[2], data[3], data[4], data[5]));
 
-		/* Poll 1: refresh all data blocks every 5s */
 		poll.add(function() {
 			return Promise.all([
 				callMeshTopology(),
@@ -222,11 +215,9 @@ return view.extend({
 				callMeshStatus()
 			]).then(function(r) {
 				var topo = r[0];
-				/* 1. Rebuild inner DOM */
 				var old = document.getElementById('easymesh-nodes-inner');
 				if (old) old.replaceWith(self._buildInner(topo, r[1], r[2], r[3], r[4]));
 
-				/* 2. Redraw topology canvas using the same topo data — no extra RPC */
 				if (!topo || !topo.nodes) return;
 				var canvas  = document.getElementById('easymesh-topo-canvas');
 				var tooltip = document.getElementById('easymesh-topo-tooltip');
@@ -243,7 +234,6 @@ return view.extend({
 							if (Math.sqrt(dx*dx + dy*dy) < (p.radius || 24) * 1.4) hit = p.node;
 						});
 						if (hit) {
-							/* Fix: use DOM nodes instead of innerHTML to avoid XSS from hostname/mac */
 							var frag = document.createDocumentFragment();
 							var lines = [
 								(hit.role === 'master' ? '🌐 ' + _('Master') : '📡 ' + _('Agent')),
@@ -276,12 +266,9 @@ return view.extend({
 		return root;
 	},
 
-	/* _buildInner ───────────────────────────────────────────────────────── */
 	_buildInner: function(topology, pendingResp, approvedResp, neighborsResp, statusResp) {
 		var self = this;
 		var el   = E('div', { id: 'easymesh-nodes-inner' });
-
-		/* Normalise response shapes */
 		var pending  = (pendingResp  && Array.isArray(pendingResp.nodes))  ? pendingResp.nodes  :
 					   Array.isArray(pendingResp)  ? pendingResp  : [];
 		var approved = (approvedResp && Array.isArray(approvedResp.nodes)) ? approvedResp.nodes :
@@ -289,7 +276,6 @@ return view.extend({
 		var neighbors = (neighborsResp && Array.isArray(neighborsResp.neighbors)) ?
 					   neighborsResp.neighbors : [];
 
-		/* ── Section 1: Pending approval cards ──────────────────────── */
 		if (pending.length) {
 			el.appendChild(E('div', { class: 'cbi-section' }, [
 				E('h3', { style: 'color:#e3b341;margin-bottom:4px' },
@@ -355,7 +341,6 @@ return view.extend({
 			]));
 		}
 
-		/* ── Section 2: Approved nodes list ─────────────────────────── */
 		if (approved.length) {
 			el.appendChild(E('div', { class: 'cbi-section' }, [
 				E('h3', {}, _('Approved Nodes') + ' (' + approved.length + ')'),
@@ -380,7 +365,6 @@ return view.extend({
 			]));
 		}
 
-		/* ── Section 3: Mesh Status ──────────────────────────────────── */
 		var bat0Up     = topology && topology.bat0_up;
 		var svc        = statusResp || {};
 		var daemonUp   = svc.daemon_running === true;
@@ -407,7 +391,6 @@ return view.extend({
 			])
 		]));
 
-		/* ── Section 4: Mesh Neighbors table (real-time batctl orig) ─── */
 		el.appendChild(E('div', { class: 'cbi-section' }, [
 			E('h3', {}, _('Mesh Neighbors')),
 			E('p', { class: 'cbi-section-descr' },
@@ -419,17 +402,17 @@ return view.extend({
 					: _('No neighbors found. Verify all nodes share the same Mesh ID and password.'))
 				: E('div', { class: 'table' },
 					[E('div', { class: 'tr table-titles' }, [
-						E('div', { class: 'td', style: 'font-family:monospace;width:160px' }, _('MAC')),
+						E('div', { class: 'td', style: 'width:160px' }, _('MAC')),
 						E('div', { class: 'td', style: 'width:140px' }, _('Link Quality (TQ)')),
-						E('div', { class: 'td', style: 'font-family:monospace;width:160px' }, _('Next Hop')),
+						E('div', { class: 'td', style: 'width:160px' }, _('Next Hop')),
 						E('div', { class: 'td', style: 'width:80px' }, _('Interface')),
 						E('div', { class: 'td', style: 'width:80px' }, _('Last Seen'))
 					])].concat(neighbors.map(function(n) {
 						var isSameHop = n.mac === n.nexthop || !n.nexthop;
 						return E('div', { class: 'tr' }, [
-							E('div', { class: 'td', style: 'font-family:monospace;color:#d2a8ff' }, n.mac || '—'),
+							E('div', { class: 'td', style: 'color:#d2a8ff' }, n.mac || '—'),
 							E('div', { class: 'td' }, tqBar(n.tq || 0)),
-							E('div', { class: 'td', style: 'font-family:monospace;color:' +
+							E('div', { class: 'td', style: 'color:' +
 								(isSameHop ? '#7d8590' : '#79c0ff') },
 								n.nexthop || n.mac),
 							E('div', { class: 'td', style: 'color:#7d8590' }, n.iface || 'bat0'),
@@ -440,7 +423,6 @@ return view.extend({
 				)
 		]));
 
-		/* ── Section 5: Topology canvas ─────────────────────────────── */
 		var topoNodes = (topology && Array.isArray(topology.nodes)) ? topology.nodes : [];
 		el.appendChild(E('div', { class: 'cbi-section' }, [
 			E('h3', {}, '🌐 ' + _('Mesh Topology')),
@@ -462,7 +444,7 @@ return view.extend({
 						style: 'display:none;position:absolute;background:rgba(22,27,34,.95);' +
 							   'border:1px solid #30363d;border-radius:8px;padding:10px 14px;' +
 							   'font-size:12px;color:#e6edf3;pointer-events:none;' +
-							   'font-family:monospace;line-height:1.7;max-width:220px'
+							   'line-height:1.7;max-width:220px'
 					})
 				]),
 			E('div', { style: 'display:flex;gap:20px;padding:10px 12px 4px;flex-wrap:wrap' },
@@ -477,7 +459,6 @@ return view.extend({
 			)
 		]));
 
-		/* Draw topology on next tick (canvas must be in DOM first) */
 		if (topoNodes.length > 0) {
 			setTimeout(function() {
 				var canvas = document.getElementById('easymesh-topo-canvas');

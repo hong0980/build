@@ -1,11 +1,10 @@
 #!/bin/sh
-. /lib/config/uci.sh
-
 [ "$BUTTON" = "wps" ] || exit 0
 [ "$ACTION" = "released" ] || exit 0
 SEEN_TIME=${SEEN:-0}
 [ "$SEEN_TIME" -ge 2 ] && [ "$SEEN_TIME" -le 10 ] || exit 0
 
+. /lib/config/uci.sh
 LOCK="/var/run/easymesh-restore.lock"
 [ -e "$LOCK" ] && exit 0
 touch "$LOCK"

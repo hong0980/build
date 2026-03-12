@@ -54,10 +54,10 @@ function badge(tag) {
 	var c = CATEGORIES[tag] || { label: tag, icon: '·', color: '#7d8590' };
 	return E('span', {
 		style: 'display:inline-flex;align-items:center;gap:3px;white-space:nowrap;' +
-		       'padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;' +
-		       'letter-spacing:.3px;flex-shrink:0;' +
-		       'background:' + c.color + '1a;color:' + c.color + ';' +
-		       'border:1px solid ' + c.color + '44'
+			   'padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;' +
+			   'letter-spacing:.3px;flex-shrink:0;' +
+			   'background:' + c.color + '1a;color:' + c.color + ';' +
+			   'border:1px solid ' + c.color + '44'
 	}, c.icon + ' ' + c.label.toUpperCase());
 }
 
@@ -85,13 +85,11 @@ function highlight(msg) {
 
 function logRow(entry) {
 	return E('div', {
-		style: 'display:grid;' +
-		       'grid-template-columns:150px 36px 90px 1fr;' +
-		       'gap:0 10px;padding:4px 12px;' +
-		       'border-bottom:1px solid #21262d;' +
-		       'align-items:baseline;font-size:12px;line-height:1.7;' +
-		       (entry.level === 'ERROR' ? 'background:#f8514908;' :
-		        entry.level === 'WARN'  ? 'background:#e3b34106;' : ''),
+		style: 'display:grid;grid-template-columns:150px 36px 90px 1fr;' +
+			   'gap:0 10px;padding:4px 12px;border-bottom:1px solid #21262d;' +
+			   'align-items:baseline;font-size:12px;line-height:1.7;' +
+			   (entry.level === 'ERROR' ? 'background:#f8514908;' :
+				entry.level === 'WARN'  ? 'background:#e3b34106;' : ''),
 		onmouseenter: function() { this.style.background = '#161b22'; },
 		onmouseleave: function() {
 			this.style.background =
@@ -99,14 +97,13 @@ function logRow(entry) {
 				entry.level === 'WARN'  ? '#e3b34106' : '';
 		}
 	}, [
-		E('span', { style: 'color:#484f58;font-family:monospace;font-size:11px' }, entry.ts),
+		E('span', { style: 'color:#484f58;font-size:11px' }, entry.ts),
 		E('span', {
 		style: (LEVEL_STYLE[entry.level] || LEVEL_STYLE['INFO']) +
-		       ';font-size:10px;font-weight:700;font-family:monospace;' +
-		        'flex-shrink:0;width:36px;text-align:center'
+			   ';font-size:10px;font-weight:700;flex-shrink:0;width:36px;text-align:center'
 		}, entry.level),
 		badge(entry.tag),
-		E('span', { style: 'color:#c9d1d9;font-family:monospace;word-break:break-word' }, highlight(entry.msg))
+		E('span', { style: 'color:#c9d1d9;word-break:break-word' }, highlight(entry.msg))
 	]);
 }
 
@@ -120,7 +117,7 @@ return view.extend({
 
 	render: function(rawData) {
 		var self = this;
-		self._entries   = parseLog(rawData);
+		self._entries = parseLog(rawData);
 		self._lastCount = self._entries.length;
 
 		var catButtons = [{ key: 'all', label: _('All'), icon: '📋', color: '#7d8590' }]
@@ -132,11 +129,11 @@ return view.extend({
 				return E('button', {
 					'data-filter': def.key,
 					style: 'padding:4px 11px;border-radius:5px;font-size:12px;cursor:pointer;' +
-					       'border:1px solid ' + def.color + '55;' +
-					       'background:' + (def.key === 'all' ? def.color + '22' : def.color + '0d') + ';' +
-					       'color:' + def.color + ';transition:opacity .1s;' +
-					       'font-weight:' + (def.key === 'all' ? '700' : '400') + ';' +
-					       'opacity:' + (def.key === 'all' ? '1' : '0.65'),
+						   'border:1px solid ' + def.color + '55;' +
+						   'background:' + (def.key === 'all' ? def.color + '22' : def.color + '0d') + ';' +
+						   'color:' + def.color + ';transition:opacity .1s;' +
+						   'font-weight:' + (def.key === 'all' ? '700' : '400') + ';' +
+						   'opacity:' + (def.key === 'all' ? '1' : '0.65'),
 					click: ui.createHandlerFn(this, function() {
 						self._filter = def.key;
 						filterBar.querySelectorAll('[data-filter]').forEach(function(b) {
@@ -154,8 +151,8 @@ return view.extend({
 		var levelSelect = E('select', {
 			id: 'em-level-select',
 			style: 'background:#0d1117;border:1px solid #30363d;border-radius:5px;' +
-			       'color:#e6edf3;padding:4px 8px;font-size:12px;cursor:pointer',
-			onchange: function() {
+				   'color:#e6edf3;padding:4px 8px;font-size:12px;cursor:pointer',
+			change: function() {
 				self._levelFilter = this.value;
 				self._doRender();
 			}
@@ -168,15 +165,14 @@ return view.extend({
 
 		var searchBox = E('input', {
 			type: 'text', placeholder: _('Search…'),
-			style: 'flex:1;min-width:140px;background:#0d1117;' +
-			       'border:1px solid #30363d;border-radius:5px;' +
-			       'color:#e6edf3;padding:4px 10px;font-size:12px;font-family:monospace;outline:none',
-			oninput: function(ev) { self._search = (ev || window.event).target.value.toLowerCase(); self._doRender(); }
+			style: 'flex:1;min-width:140px;background:#0d1117;border:1px solid #30363d;' +
+				   'border-radius:5px;color:#e6edf3;padding:4px 10px;font-size:12px;outline:none',
+			change: function(ev) { self._search = (ev || window.event).target.value.toLowerCase(); self._doRender(); }
 		});
 
 		var pauseBtn = E('button', {
 			style: 'padding:4px 11px;border-radius:5px;font-size:12px;cursor:pointer;' +
-			       'border:1px solid #30363d;background:#161b22;color:#e6edf3',
+				   'border:1px solid #30363d;background:#161b22;color:#e6edf3',
 			click: ui.createHandlerFn(this, function() {
 				self._paused = !self._paused;
 				this.textContent = self._paused ? '▶ ' + _('Resume') : '⏸ ' + _('Pause');
@@ -187,7 +183,7 @@ return view.extend({
 
 		var exportBtn = E('button', {
 			style: 'padding:4px 11px;border-radius:5px;font-size:12px;cursor:pointer;' +
-			       'border:1px solid #30363d;background:#161b22;color:#7d8590',
+				   'border:1px solid #30363d;background:#161b22;color:#7d8590',
 			click: ui.createHandlerFn(this, function() {
 				var txt = self._entries.map(function(e) { return e.raw; }).join('\n');
 				var a   = document.createElement('a');
@@ -200,7 +196,7 @@ return view.extend({
 
 		var clearBtn = E('button', {
 			style: 'padding:4px 11px;border-radius:5px;font-size:12px;cursor:pointer;' +
-			       'border:1px solid #f8514933;background:#f8514908;color:#f85149',
+				   'border:1px solid #f8514933;background:#f8514908;color:#f85149',
 			click: ui.createHandlerFn(this, function() {
 				if (!window.confirm(_('Clear the log file on disk?'))) return;
 				fs.write(LOGFILE, '').then(function () {
@@ -219,14 +215,13 @@ return view.extend({
 
 		var filterBar = E('div', {
 			style: 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;' +
-			       'padding:10px 14px;border-bottom:1px solid #21262d;background:#0d1117'
+				   'padding:10px 14px;border-bottom:1px solid #21262d;background:#0d1117'
 		}, catButtons.concat([levelSelect, searchBox, pauseBtn, exportBtn, clearBtn, countEl]));
 
 		var header = E('div', {
-			style: 'display:grid;grid-template-columns:150px 36px 90px 1fr;' +
-			       'gap:0 10px;padding:4px 12px;border-bottom:1px solid #30363d;' +
-			       'font-size:10px;font-weight:700;color:#484f58;letter-spacing:.5px;' +
-			       'text-transform:uppercase;background:#0d1117'
+			style: 'display:grid;grid-template-columns:150px 36px 90px 1fr;gap:0 10px;padding:4px 12px;' +
+				   'border-bottom:1px solid #30363d;font-size:10px;font-weight:700;color:#484f58;letter-spacing:.5px;' +
+				   'text-transform:uppercase;background:#0d1117'
 		}, [_('Timestamp'), _('Lvl'), _('Category'), _('Message')].map(function(h) {
 			return E('span', {}, h);
 		}));
@@ -238,9 +233,8 @@ return view.extend({
 
 		var statusBar = E('div', {
 			id: 'em-log-status',
-			style: 'display:flex;gap:16px;flex-wrap:wrap;padding:6px 14px;' +
-			       'border-top:1px solid #21262d;background:#0d1117;' +
-			       'font-size:11px;color:#484f58;align-items:center'
+			style: 'display:flex;gap:16px;flex-wrap:wrap;padding:6px 14px;background:#0d1117;' +
+				   'border-top:1px solid #21262d;font-size:11px;color:#484f58;align-items:center'
 		});
 
 		self._doRender = function() {
@@ -301,7 +295,6 @@ return view.extend({
 					'⚠️ ' + _('Warnings') + ': ' + counts['_warn']));
 			statusBar.appendChild(E('span', { style: 'margin-left:auto' },
 				_('Updated: %s').format(new Date().toLocaleTimeString())));
-			// 确保 select 显示当前值（DOM 重用时 selected 属性不会自动更新）
 			var _ls = document.getElementById('em-level-select');
 			if (_ls) _ls.value = self._levelFilter;
 		};
@@ -325,8 +318,7 @@ return view.extend({
 		return E('div', {}, [
 			E('h3', {}, _('EasyMesh Log')),
 			E('div', {
-				style: 'background:#0d1117;border:1px solid #30363d;' +
-				       'border-radius:12px;overflow:hidden'
+				style: 'background:#0d1117;border:1px solid #30363d;border-radius:12px;overflow:hidden'
 			}, [filterBar, header, logList, statusBar])
 		]);
 	},

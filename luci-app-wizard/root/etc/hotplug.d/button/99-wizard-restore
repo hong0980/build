@@ -2,10 +2,14 @@
 
 [ "$BUTTON" = "reset" ] || exit 0
 [ "$ACTION" = "released" ] || exit 0
+SEEN_TIME="${SEEN:-0}"
+[ "$SEEN_TIME" -ge 5 ] && [ "$SEEN_TIME" -le 10 ] || exit 0
 
-SEEN="${SEEN:-0}"
-LOCK="/var/run/wizard-restore.lock"
 . /lib/config/uci.sh
+LOCK="/var/run/wizard-restore.lock"
+[ -e "$LOCK" ] && exit 0
+touch "$LOCK"
+trap "rm -f '$LOCK'" EXIT
 
 led_blink() {
     local delay_on="$1" delay_off="$2" duration="$3"
@@ -29,10 +33,6 @@ check_gateway() {
     [ -z "$gw" ] && return 1
     ping -c 1 -W 2 "$gw" >/dev/null 2>&1
 }
-
-[ -e "$LOCK" ] && exit 0
-touch "$LOCK"
-trap "rm -f '$LOCK'" EXIT INT TERM
 
 if [ "$SEEN" -ge 3 ] && [ "$SEEN" -lt 6 ]; then
     if check_gateway; then
