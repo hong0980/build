@@ -638,6 +638,8 @@ __http_handler() {
             push_ssid=$(echo "$body" | grep -o '"ssid":"[^"]*"' | cut -d'"' -f4)
             if [ -n "$push_ssid" ]; then
                 apply_profile "$body"
+                # 持久化sum，父进程 poll_for_approval 下次轮询时能读到，避免重复应用
+                printf '%s' "$body" | md5sum | cut -d' ' -f1 > "$_LAST_SUM_FILE"
                 _http_ok '{"status":"ok","msg":"profile applied"}'
                 log "Profile received via push from master"
             else
@@ -1010,19 +1012,25 @@ do_register() {
     log "Registered with master %s via %s (resp=%s)" "$mip" "$reg_source" "$resp"
 }
 
-_last_profile_sum=""
+# 用文件持久化上次应用的配置 checksum，避免子进程无法更新父进程全局变量的问题
+_LAST_SUM_FILE="/tmp/easymesh_last_sum"
+_save_sum()  { printf '%s' "$1" > "$_LAST_SUM_FILE"; }
+_load_sum()  { cat "$_LAST_SUM_FILE" 2>/dev/null; }
+
 poll_for_approval() {
     local mip; mip=$(master_ip)
     [ -z "$mip" ] && return 1
 
+    # 先从 master 取 checksum（轻量请求），与本地上次应用的 sum 比较
     local sum_resp remote_sum
     sum_resp=$(curl -s -m 3 \
         "http://${mip}:${MASTER_PORT}/profile/checksum?mac=$(get_mac)" 2>/dev/null)
     remote_sum=$(echo "$sum_resp" | grep -o '"sum":"[^"]*"' | cut -d'"' -f4)
+    local local_sum; local_sum=$(_load_sum)
 
-    if [ -n "$remote_sum" ] && [ -n "$_last_profile_sum" ] \
-            && [ "$remote_sum" = "$_last_profile_sum" ]; then
-        return 0
+    if [ -n "$remote_sum" ] && [ -n "$local_sum" ] \
+            && [ "$remote_sum" = "$local_sum" ]; then
+        return 0   # 配置未变，跳过
     fi
 
     local resp
@@ -1040,8 +1048,13 @@ poll_for_approval() {
         return 1
     fi
     if echo "$resp" | grep -q '"status":"approved"'; then
+        # 先算 sum，再比较一次（防止网络抖动导致同内容重复下发）
+        local new_sum; new_sum=$(printf '%s' "$resp" | md5sum | cut -d' ' -f1)
+        if [ "$new_sum" = "$local_sum" ]; then
+            return 0  # 内容相同，无需重复应用
+        fi
         apply_profile "$resp"
-        _last_profile_sum=$(echo "$resp" | md5sum | cut -d' ' -f1)
+        _save_sum "$new_sum"
         return 0
     fi
     return 1
@@ -1157,16 +1170,23 @@ apply_profile() {
         _ap_ssid_5g="${ssid_5g:-$ssid}"; _ap_key_5g="${key_5g:-$key}"
         _ap_ssid_2g="${ssid_2g:-$ssid}"; _ap_key_2g="${key_2g:-$key}"
     fi
-    local _upd_ap
-    for _upd_ap in easymesh_ap easymesh_ap_2g; do
+    # 找所有被 easymesh_managed=1 标记的 AP 接口，按 radio 频段分配 ssid/key
+    # 这样无论 init.d 标记的是 default_radio0 还是 easymesh_ap，都能正确更新
+    local _all_ifaces; _all_ifaces=$(uci show wireless 2>/dev/null \
+        | awk -F= '/\.easymesh_managed=.1/{sub(/wireless\./,""); sub(/\.easymesh_managed/,""); print $1}')
+    for _upd_ap in $_all_ifaces; do
+        # 跳过 mesh0（不是客户端AP）
+        [ "$_upd_ap" = "mesh0" ] && continue
         uci show wireless."${_upd_ap}" >/dev/null 2>&1 || continue
+        # 判断频段：读取接口绑定的 radio 的 band
+        local _ap_dev _ap_band _ap_ssid _ap_key
+        _ap_dev=$(uci get wireless.${_upd_ap}.device 2>/dev/null)
+        _ap_band=$(uci get wireless.${_ap_dev}.band 2>/dev/null | tr '[:upper:]' '[:lower:]')
+        case "$_ap_band" in
+            2g*|2.4*) _ap_ssid="$_ap_ssid_2g"; _ap_key="$_ap_key_2g" ;;
+            *)         _ap_ssid="$_ap_ssid_5g"; _ap_key="$_ap_key_5g" ;;
+        esac
         uci_set wireless ${_upd_ap} disabled 0
-        local _ap_ssid _ap_key
-        if [ "$_upd_ap" = "easymesh_ap_2g" ]; then
-            _ap_ssid="$_ap_ssid_2g"; _ap_key="$_ap_key_2g"
-        else
-            _ap_ssid="$_ap_ssid_5g"; _ap_key="$_ap_key_5g"
-        fi
         uci_set wireless ${_upd_ap} ssid "$_ap_ssid"
         if [ -n "$_ap_key" ]; then
             uci_set wireless ${_upd_ap} encryption 'psk2+ccmp'

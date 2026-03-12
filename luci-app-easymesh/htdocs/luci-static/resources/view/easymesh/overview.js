@@ -93,15 +93,33 @@ return view.extend({
 
 		/* ── WAN 口模式（仅 master）── */
 		o = s.taboption('basic', form.ListValue, 'wan_mode', _('WAN Port Mode'),
-			_('Router mode: WAN port connects to modem/ISP (PPPoE/DHCP). Switch mode: all ports become LAN (useful when uplink is through another router or when all ports are wired to mesh nodes).'));
-		o.value('router', _('Router (PPPoE / DHCP — WAN port separate)'));
-		o.value('switch', _('Switch (all ports as LAN — no separate WAN)'));
+			_('Router: WAN port connects to modem/ISP. Switch: all ports become LAN (uplink via another router).'));
+		o.value('router', _('Router (WAN port separate)'));
+		o.value('switch', _('Switch (all ports as LAN — no WAN)'));
 		o.default = 'router';
 		o.depends({ enabled:'1', role:'master' });
 
+		o = s.taboption('basic', form.ListValue, 'wan_proto', _('WAN Protocol'),
+			_('PPPoE: dial-up with username/password (ISP fiber). AP/DHCP: automatic address from upstream router.'));
+		o.value('dhcp',   _('DHCP (automatic — upstream router)'));
+		o.value('pppoe',  _('PPPoE (dial-up — ISP fiber/DSL)'));
+		o.default = 'dhcp';
+		o.depends({ enabled:'1', role:'master', wan_mode:'router' });
+
+		o = s.taboption('basic', form.Value, 'wan_pppoe_user', _('PPPoE Username'));
+		o.datatype = 'minlength(1)';
+		o.rmempty = false;
+		o.depends({ enabled:'1', role:'master', wan_mode:'router', wan_proto:'pppoe' });
+
+		o = s.taboption('basic', form.Value, 'wan_pppoe_pass', _('PPPoE Password'));
+		o.datatype = 'minlength(1)';
+		o.rmempty = false;
+		o.password = true;
+		o.depends({ enabled:'1', role:'master', wan_mode:'router', wan_proto:'pppoe' });
+
 		/* ── 双频合并 ── */
 		o = s.taboption('basic', form.Flag, 'band_merge', _('Dual-band Merge (same SSID/password)'),
-			_('Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz radios. ' +
+			_('Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz radios (recommended, like Mi/TP-Link routers). ' +
 			  'Disabled: set different SSID and password for each band.'));
 		o.default = '1';
 		o.rmempty = false;

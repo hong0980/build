@@ -48,15 +48,60 @@ get_radio() {
     eval "$_v='$_found'"
 }
 
-_del_managed() {
-    local _n="$1" _m
+_restore_managed() {
+    local _n="$1" _m _orig_ssid _orig_enc
     config_get _m "$_n" easymesh_managed
-    [ "$_m" = "1" ] && uci -q del wireless."$_n"
+    [ "$_m" != "1" ] && return
+    # mesh0 是 EasyMesh 专属创建的，直接删除
+    if [ "$_n" = "mesh0" ]; then
+        uci -q del wireless.mesh0
+        return
+    fi
+    _orig_ssid=$(cat "/tmp/em_orig_${_n}.ssid" 2>/dev/null)
+    _orig_enc=$(cat  "/tmp/em_orig_${_n}.enc"  2>/dev/null)
+    if [ -n "$_orig_ssid" ]; then
+        # 恢复原始接口属性
+        uci set wireless.${_n}.ssid="$_orig_ssid"
+        uci set wireless.${_n}.encryption="${_orig_enc:-none}"
+        uci -q del wireless.${_n}.key
+        uci -q del wireless.${_n}.ieee80211r
+        uci -q del wireless.${_n}.ieee80211k
+        uci -q del wireless.${_n}.ieee80211v
+        uci -q del wireless.${_n}.mobility_domain
+        uci -q del wireless.${_n}.ft_over_ds
+        uci -q del wireless.${_n}.ft_psk_generate_local
+        uci -q del wireless.${_n}.reassociation_deadline
+        uci -q del wireless.${_n}.rrm_neighbor_report
+        uci -q del wireless.${_n}.rrm_beacon_report
+        uci -q del wireless.${_n}.bss_transition
+        uci -q del wireless.${_n}.easymesh_managed
+        uci -q del wireless.${_n}.disabled
+        rm -f "/tmp/em_orig_${_n}.ssid" "/tmp/em_orig_${_n}.enc"
+    else
+        uci -q del wireless."$_n"
+    fi
 }
 cleanup_wireless() {
     config_load wireless
-    config_foreach _del_managed wifi-iface
+    config_foreach _restore_managed wifi-iface
     uci commit wireless
+}
+
+# 找指定 radio 下已有的 AP mode 接口 section 名（不含 mesh0）
+_found_iface=""; _target_radio=""
+_find_ap_iface() {
+    local _n="$1" _dev _mode
+    config_get _dev  "$_n" device
+    config_get _mode "$_n" mode
+    [ "$_dev" = "$_target_radio" ] && [ "$_mode" = "ap" ] && [ "$_n" != "mesh0" ] \
+        && [ -z "$_found_iface" ] && _found_iface="$_n"
+}
+_get_default_ap() {
+    # $1=varname_to_set $2=radio_dev_name
+    _found_iface=""; _target_radio="$2"
+    config_load wireless
+    config_foreach _find_ap_iface wifi-iface
+    eval "$1='$_found_iface'"
 }
 
 _agent_prepare() {
@@ -139,18 +184,34 @@ _setup_ap_iface() {
     local name="$1" radio="$2" ssid="$3" key="$4"
     local ieee80211r="$5" mobility_domain="$6" ft_over_ds="$7"
     local reassociation_deadline="$8" ieee80211k="$9" ieee80211v="${10}"
-    uci set wireless.${name}=wifi-iface
-    uci set wireless.${name}.device="$radio"
-    uci set wireless.${name}.mode='ap'
-    uci set wireless.${name}.ssid="$ssid"
-    uci set wireless.${name}.network='lan'
+
+    # 查找该 radio 下已有的 AP 接口（默认接口优先）
+    local existing_iface
+    _get_default_ap existing_iface "$radio"
+
+    if [ -n "$existing_iface" ]; then
+        # 修改已有接口：先备份原始值（只备份一次）
+        if [ ! -f "/tmp/em_orig_${existing_iface}.ssid" ]; then
+            local _orig_s _orig_e
+            config_load wireless
+            config_get _orig_s "$existing_iface" ssid        'OpenWrt'
+            config_get _orig_e "$existing_iface" encryption  'none'
+            printf '%s' "$_orig_s" > "/tmp/em_orig_${existing_iface}.ssid"
+            printf '%s' "$_orig_e" > "/tmp/em_orig_${existing_iface}.enc"
+        fi
+        # 用已有接口名（而不是 easymesh_ap）
+        name="$existing_iface"
+    fi
+
+    # 写入 EasyMesh 属性
     uci set wireless.${name}.easymesh_managed='1'
-    uci set wireless.${name}.disabled='0'
+    uci set wireless.${name}.ssid="$ssid"
     if [ -n "$key" ]; then
         uci set wireless.${name}.encryption='psk2+ccmp'
         uci set wireless.${name}.key="$key"
     else
         uci set wireless.${name}.encryption='none'
+        uci -q del wireless.${name}.key
     fi
     [ "$ieee80211r" = "1" ] && {
         uci set wireless.${name}.ieee80211r='1'
@@ -168,6 +229,8 @@ _setup_ap_iface() {
         uci set wireless.${name}.ieee80211v='1'
         uci set wireless.${name}.bss_transition='1'
     }
+    # 返回实际使用的接口名（调用方可用于日志）
+    _setup_iface_result="$name"
 }
 
 apply_mesh_config() {
@@ -189,6 +252,9 @@ apply_mesh_config() {
     config_get key_5g                 global key_5g                ''
     config_get key_2g                 global key_2g                ''
     config_get wan_mode               global wan_mode              'router'
+    config_get wan_proto              global wan_proto             'dhcp'
+    config_get wan_pppoe_user         global wan_pppoe_user        ''
+    config_get wan_pppoe_pass         global wan_pppoe_pass        ''
     # 非合并模式下用5G值填充ssid/key（兼容旧代码路径）
     if [ "$band_merge" != "1" ]; then
         [ -n "$ssid_5g" ] && ssid="$ssid_5g"
@@ -266,36 +332,43 @@ apply_mesh_config() {
             _ssid_2g="${ssid_2g:-$ssid}"; _key_2g="${key_2g:-$key}"
         fi
         if [ -n "$radio_5g" ]; then
-            _setup_ap_iface easymesh_ap "$radio_5g" "$_ssid_5g" "$_key_5g" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+            _setup_iface_result=""
+            _setup_ap_iface "_5g_" "$radio_5g" "$_ssid_5g" "$_key_5g" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+            uci -q del wireless.${_setup_iface_result}.disabled
             _ap_idx=$((_ap_idx+1))
             log "AP created: easymesh_ap on %s (5G, ssid=%s)" "$radio_5g" "$_ssid_5g"
         fi
         if [ -n "$radio_2g" ]; then
-            _setup_ap_iface easymesh_ap_2g "$radio_2g" "$_ssid_2g" "$_key_2g" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+            _setup_iface_result=""
+            _setup_ap_iface "_2g_" "$radio_2g" "$_ssid_2g" "$_key_2g" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+            uci -q del wireless.${_setup_iface_result}.disabled
             _ap_idx=$((_ap_idx+1))
             log "AP created: easymesh_ap_2g on %s (2.4G, ssid=%s)" "$radio_2g" "$_ssid_2g"
         fi
         if [ "$_ap_idx" -eq 0 ]; then
-            _setup_ap_iface easymesh_ap "radio0" "$_ssid_5g" "$_key_5g" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+            _setup_ap_iface "_fb_" "radio0" "$_ssid_5g" "$_key_5g" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+            uci -q del wireless.${_setup_iface_result}.disabled
             log "AP created: easymesh_ap on radio0 (fallback)"
         fi
     else
-        # Agent模式：建disabled占位，ssid留空，等待主路由推送
+        # Agent模式：修改已有接口但 disabled=1，等待主节点推送后由 apply_profile 启用
         if [ -n "$radio_5g" ]; then
-            _setup_ap_iface easymesh_ap "$radio_5g" "pending" "" "0" "" "" "" "0" "0"
-            uci set wireless.easymesh_ap.disabled=1
+            _setup_iface_result=""
+            _setup_ap_iface "_5g_" "$radio_5g" "pending" "" "0" "" "" "" "0" "0"
+            uci set wireless.${_setup_iface_result}.disabled='1'
             _ap_idx=$((_ap_idx+1))
             log "AP placeholder (disabled): easymesh_ap on %s (5G, awaiting master config push)" "$radio_5g"
         fi
         if [ -n "$radio_2g" ]; then
-            _setup_ap_iface easymesh_ap_2g "$radio_2g" "pending" "" "0" "" "" "" "0" "0"
-            uci set wireless.easymesh_ap_2g.disabled=1
+            _setup_iface_result=""
+            _setup_ap_iface "_2g_" "$radio_2g" "pending" "" "0" "" "" "" "0" "0"
+            uci set wireless.${_setup_iface_result}.disabled='1'
             _ap_idx=$((_ap_idx+1))
             log "AP placeholder (disabled): easymesh_ap_2g on %s (2.4G, awaiting master config push)" "$radio_2g"
         fi
         if [ "$_ap_idx" -eq 0 ]; then
-            _setup_ap_iface easymesh_ap "radio0" "pending" "" "0" "" "" "" "0" "0"
-            uci set wireless.easymesh_ap.disabled=1
+            _setup_ap_iface "_fb_" "radio0" "pending" "" "0" "" "" "" "0" "0"
+            uci set wireless.${_setup_iface_result}.disabled='1'
             log "AP placeholder (disabled): easymesh_ap on radio0 (fallback)"
         fi
     fi
@@ -316,8 +389,22 @@ apply_mesh_config() {
         else
             uci -q del network.wan.disabled
             uci -q del network.wan6.disabled
+            if [ "$wan_proto" = "pppoe" ] && [ -n "$wan_pppoe_user" ]; then
+                uci set network.wan.proto='pppoe'
+                uci set network.wan.username="$wan_pppoe_user"
+                uci set network.wan.password="$wan_pppoe_pass"
+                log "WAN mode: router PPPoE — user=%s" "$wan_pppoe_user"
+            else
+                # DHCP: 确保proto=dhcp，清理PPPoE残留
+                local _cur_proto; _cur_proto=$(uci get network.wan.proto 2>/dev/null)
+                if [ "$_cur_proto" = "pppoe" ]; then
+                    uci set network.wan.proto='dhcp'
+                    uci -q del network.wan.username
+                    uci -q del network.wan.password
+                fi
+                log "WAN mode: router DHCP — WAN port active"
+            fi
             uci commit network
-            log "WAN mode: router — WAN port active"
         fi
     fi
 }
