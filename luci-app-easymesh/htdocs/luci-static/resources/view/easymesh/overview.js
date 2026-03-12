@@ -11,6 +11,45 @@ var callGetWirelessDevices = rpc.declare({
 	expect: { '': {} }
 });
 
+function buildRoleGuide(isMaster) {
+	var accentColor = isMaster ? '#58a6ff' : '#3fb950';
+	var borderColor = isMaster ? '#2d5a8e' : '#2d6a40';
+	var bgColor     = isMaster ? 'rgba(31,58,95,.22)' : 'rgba(26,58,42,.22)';
+
+	var steps = isMaster ? [
+		_('Flash OpenWrt + install luci-app-easymesh on the new node'),
+		_('Set role to Agent in its EasyMesh config, then enable EasyMesh'),
+		_('Connect a LAN cable: this master LAN port ↔ new node LAN port'),
+		_('Wait ~30 seconds — agent auto-discovers this master via UDP broadcast'),
+		_('Go to the Nodes tab on this master and click Allow to join'),
+		'💡 ' + _('Quick join shortcut: on the new node, press and hold the WPS button for 2–10 seconds. It auto-sets Agent mode and starts discovery. Then approve in the Nodes tab here.')
+	] : [
+		_('Connect a LAN cable from this node to the master router'),
+		_('Enable EasyMesh below and set role to Agent, then Save \x26 Apply'),
+		_('This node will broadcast discovery packets to find the master'),
+		_('Master will show this node in its Nodes tab — approve it there'),
+		_('Once approved, master pushes WiFi config automatically')
+	];
+
+	return E('div', {
+		id: 'easymesh-role-guide',
+		style: 'padding:14px 16px 10px;border-radius:8px;margin-bottom:2px;' +
+		       'background:' + bgColor + ';border:1px solid ' + borderColor
+	}, [
+		E('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:8px' }, [
+			E('span', {
+				style: 'padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;' +
+					   'letter-spacing:.4px;color:' + accentColor + ';border:1px solid ' + borderColor
+			}, isMaster ? ('🌐 ' + _('Master')) : ('📡 ' + _('Agent'))),
+			E('span', { style: 'font-weight:700;font-size:14px' },
+				isMaster ? _('Add New Node (Master Mode)') : _('Agent Mode — Joining Mesh'))
+		]),
+		E('ol', { style: 'padding-left:20px;font-size:13px;line-height:2.1;margin:0;color:inherit' },
+			steps.map(function(s) { return E('li', {}, s); })
+		)
+	]);
+}
+
 return view.extend({
 	load: function () {
 		return Promise.all([
@@ -23,27 +62,13 @@ return view.extend({
 
 	render: function (data) {
 		var m, s, o;
-		var role = uci.get('easymesh', 'global', 'role') == 'master';
+		var initialRole = uci.get('easymesh', 'global', 'role') || 'master';
+
 		m = new form.Map('easymesh', _('EasyMesh Configuration'), [
-			E('div', { style: 'margin-bottom:12px;' }, _('Multi-node mesh using batman-adv routing over wired Ethernet or 802.11s wireless backhaul.')),
-			E('div', { style: 'font-weight:700;font-size:15px;' },
-				role ? ('➕ ' + _('Add New Node (Master Mode)')) : ('📡 ' + _('Agent Mode — Joining Mesh'))),
-			E('ol', { style: 'padding-left:20px;font-size:13px;line-height:2.4;color:#e6edf3;margin:0' },
-				role ? [
-				E('li', {}, _('Flash OpenWrt + install luci-app-easymesh on the new node')),
-				E('li', {}, _('Set role to Agent in its EasyMesh config, then enable EasyMesh')),
-				E('li', {}, _('Connect a LAN cable: this master LAN port ↔ new node LAN port')),
-				E('li', {}, _('Wait ~30 seconds — agent auto-discovers this master via UDP broadcast')),
-				E('li', {}, _('Go to the Nodes tab on this master and click Allow to join')),
-				E('li', {}, '💡 ' + _('Quick join shortcut: on the new node, press and hold the WPS button for 2–10 seconds. It auto-sets Agent mode and starts discovery. Then approve in the Nodes tab here.'))
-				] : [
-				E('li', {}, _('Connect a LAN cable from this node to the master router')),
-				E('li', {}, _('Enable EasyMesh below and set role to Agent, then Save & Apply')),
-				E('li', {}, _('This node will broadcast discovery packets to find the master')),
-				E('li', {}, _('Master will show this node in its Nodes tab — approve it there')),
-				E('li', {}, _('Once approved, master pushes WiFi config automatically'))
-			])
-		])
+			E('p', {}, _('Multi-node mesh using batman-adv routing over wired Ethernet or 802.11s wireless backhaul.')),
+			buildRoleGuide(initialRole !== 'agent')
+		]);
+
 		s = m.section(form.NamedSection, 'global', 'easymesh');
 		s.addremove = false;
 		s.anonymous = true;
@@ -183,6 +208,18 @@ return view.extend({
 		o.datatype = 'range(1,177)';
 		o.depends({ enabled: '1', role: 'master', dedicated_backhaul: '1' });
 
-		return m.render();
+		return m.render().then(function(node) {
+			var roleSelect = node.querySelector('select[data-name="role"], ' +
+											   'select[id*="cbid.easymesh.global.role"]');
+			if (roleSelect) {
+				roleSelect.addEventListener('change', function() {
+					var guide = document.getElementById('easymesh-role-guide');
+					if (!guide) return;
+					var newGuide = buildRoleGuide(roleSelect.value !== 'agent');
+					guide.parentNode.replaceChild(newGuide, guide);
+				});
+			}
+			return node;
+		});
 	},
 });

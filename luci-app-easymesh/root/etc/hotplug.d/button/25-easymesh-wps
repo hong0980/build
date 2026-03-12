@@ -1,7 +1,7 @@
 #!/bin/sh
 . /lib/config/uci.sh
 
-case "$BUTTON" in wps|reset|BTN_0|BTN_1|rfkill|wlan) ;; *) exit 0 ;; esac
+[ "$BUTTON" = "wps" ] || exit 0
 [ "$ACTION" = "released" ] || exit 0
 SEEN_TIME=${SEEN:-0}
 [ "$SEEN_TIME" -ge 2 ] && [ "$SEEN_TIME" -le 10 ] || exit 0
@@ -28,9 +28,11 @@ if [ "$enabled" = "1" ] && [ "$role" = "agent" ] && [ -f /etc/easymesh_agent ]; 
     fi
 
     uci_set easymesh global enabled 0
+    uci_remove easymesh global role
     uci_commit easymesh
+    ( sleep 1; /etc/init.d/easymesh restart ) &
     rm -f /etc/easymesh_agent
-elif [ "$enabled" = "1" ] && [ "$role" = "agent" ] && [ ! -f /etc/easymesh_agent ] ; then
+elif [ "$enabled" != "1" ] && [ "$role" != "agent" ] && [ ! -f /etc/easymesh_agent ] ; then
     uci_set easymesh global enabled 1
     uci_set easymesh global role agent
     uci_commit easymesh

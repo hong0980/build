@@ -53,7 +53,7 @@ msgstr "从节点模式 — 加入 Mesh"
 msgid "Connect a LAN cable from this node to the master router"
 msgstr "用网线将本节点的 LAN 口连接到主节点路由器"
 
-msgid "Enable EasyMesh below and set role to Agent, then Save \& Apply"
+msgid "Enable EasyMesh below and set role to Agent, then Save & Apply"
 msgstr "请在下方启用 EasyMesh 并将角色设为 Agent，然后保存并应用"
 
 msgid "This node will broadcast discovery packets to find the master"
@@ -100,8 +100,6 @@ msgstr "主节点（连接光猫/ISP）"
 msgid "Agent (Slave, extends coverage)"
 msgstr "从节点 Agent（扩展覆盖范围）"
 
-msgid "Agent configuration is managed by the Master"
-msgstr "Agent 的配置由 Master 统一管理"
 
 msgid "All Wi-Fi settings (SSID, password, channel, roaming, etc.) are automatically applied according to the master node's configuration once the agent is approved. No manual configuration required."
 msgstr "所有 Wi-Fi 设置（SSID、密码、信道、漫游等）在 Agent 被批准后，将自动按照主节点的配置应用，无需手动配置。"
@@ -170,8 +168,6 @@ msgstr "2.4GHz（穿墙好，速度慢）"
 msgid "5 GHz (faster, recommended)"
 msgstr "5GHz（速度快，推荐）"
 
-msgid "Wired backhaul active"
-msgstr "有线回程已启用"
 
 msgid "batman-adv routes mesh traffic over the LAN cable between nodes. No 802.11s configuration is needed — the wireless radio is fully available for client traffic."
 msgstr "batman-adv 通过节点间 LAN 网线转发 Mesh 流量。无需配置 802.11s，无线频段完全用于客户端接入。"
@@ -243,6 +239,26 @@ msgstr "专用回程频段（三频）"
 
 msgid "Reserve the second 5 GHz radio exclusively for node-to-node backhaul."
 msgstr "将第二块 5 GHz radio 专用于节点间回程通信，客户端不连接此 radio，保障回程带宽。仅对三频硬件有效（2.4G + 5G + 5G）。"
+
+msgid "Backhaul Radio Band"
+msgstr "回程频段"
+
+msgid "Second 5 GHz radio (recommended)"
+msgstr "第二个 5GHz 频段（推荐）"
+
+msgid "First 5 GHz radio"
+msgstr "第一个 5GHz 频段"
+
+
+msgid "Backhaul Radio Band"
+msgstr "回程频段"
+
+msgid "Second 5 GHz radio (recommended)"
+msgstr "第二个 5 GHz 频段（推荐）"
+
+msgid "First 5 GHz radio"
+msgstr "第一个 5 GHz 频段"
+
 
 msgid "Backhaul Channel"
 msgstr "回程信道"
@@ -613,11 +629,7 @@ msgstr "选举：%s 获胜 → 本机为从节点（主节点=%s）"
 # easymesh-master — batman-adv 调优
 # ══════════════════════════════════════════════════════════════════════════════
 
-msgid "batman-adv: routing_algo=%s"
-msgstr "batman-adv：路由算法=%s"
 
-msgid "batman-adv: routing_algo=%s not supported (kernel module may not have it)"
-msgstr "batman-adv：路由算法 %s 不支持（内核模块可能缺少此功能）"
 
 msgid "batman-adv: BLA=off DAT=off (wired mode)"
 msgstr "batman-adv：BLA=关 DAT=关（有线模式）"
@@ -870,6 +882,25 @@ msgstr "生成配置：ssid=%s 信道=%s 回程=%s"
 msgid "apply_profile: missing ssid"
 msgstr "应用配置失败：缺少 ssid 字段"
 
+msgid "Profile applied (config changed). Agent now mirrors master config (dual-band AP)."
+msgstr "配置已应用（有变更），从节点已同步主节点配置（双频 AP）。"
+
+msgid "Profile applied (no wireless change, skip wifi reload)."
+msgstr "配置已应用（无变更，跳过 wifi reload）。"
+
+msgid "Roam watchdog started on %s%s"
+msgstr "漫游监控已启动，接口：%s%s"
+
+msgid "batman-adv: routing_algo=%s (via sysfs)"
+msgstr "batman-adv：路由算法 %s（通过 sysfs）"
+
+msgid "batman-adv: routing_algo=%s not accepted by sysfs"
+msgstr "batman-adv：sysfs 不接受路由算法 %s"
+
+msgid "batman-adv: sysfs routing_algo not found, algo=%s may not take effect"
+msgstr "batman-adv：sysfs 路由算法节点未找到，算法 %s 可能不生效"
+
+
 msgid "Applying profile: ssid=%s channel=%s backhaul=%s"
 msgstr "正在应用配置：ssid=%s 信道=%s 回程=%s"
 
@@ -882,8 +913,25 @@ msgstr "应用配置：mesh0 已启用，mesh_id=%s"
 msgid "Profile received via push from master"
 msgstr "已从主节点接收推送的配置"
 
-msgid "Profile applied. Agent now mirrors master config (dual-band AP)."
-msgstr "配置已应用，从节点已同步主节点配置（双频 AP）。"
+msgid "Profile applied (config changed). Agent now mirrors master config (dual-band AP)."
+msgstr "配置已应用（配置有变更），从节点已同步主节点配置（双频 AP）。"
+
+msgid "Profile applied (no wireless change, skip wifi reload)."
+msgstr "配置已应用（无无线配置变更，跳过 wifi reload）。"
+
+msgid "Roam watchdog started on %s%s"
+msgstr "漫游监控已启动，接口：%s%s"
+
+msgid "batman-adv: routing_algo=%s (via sysfs)"
+msgstr "batman-adv：路由算法=%s（通过 sysfs）"
+
+msgid "batman-adv: routing_algo=%s not accepted by sysfs"
+msgstr "batman-adv：路由算法 %s 未被 sysfs 接受"
+
+msgid "batman-adv: sysfs routing_algo not found, algo=%s may not take effect"
+msgstr "batman-adv：sysfs 路由算法节点未找到，%s 可能不生效"
+
+
 
 msgid "Channel sync from master: ch=%s reason=%s"
 msgstr "来自主节点的信道同步：ch=%s reason=%s"

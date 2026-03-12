@@ -1,6 +1,6 @@
 #!/bin/sh
 
-[ "$BUTTON" = "reset" ] || [ "$BUTTON" = "wps" ] || exit 0
+[ "$BUTTON" = "reset" ] || exit 0
 [ "$ACTION" = "released" ] || exit 0
 
 SEEN="${SEEN:-0}"

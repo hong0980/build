@@ -41,7 +41,6 @@ ETH_IF=$(_get_eth_if)
 export ETH_IF
 BRIDGE_IF="br-lan"
 export BRIDGE_IF
-AP_IF="wlan0"
 MESH_IF="bat0"
 export MESH_IF
 LOG_MAX_LINES=300
@@ -142,7 +141,21 @@ get_role() { cat "$ROLE_FILE" 2>/dev/null || echo "agent"; }
 master_ip(){ cat "$MASTER_IP_FILE" 2>/dev/null; }
 wan_up()   { ubus call network.interface.wan status 2>/dev/null | grep -q '"up": true'; }
 get_ap_iface() {
-    uci_get wireless easymesh_ap ifname $(uci_get wireless @wifi-iface[0] ifname "$AP_IF")
+    local _if; _if=$(uci_get wireless easymesh_ap ifname "")
+    [ -n "$_if" ] && ip link show "$_if" >/dev/null 2>&1 && { echo "$_if"; return; }
+
+    local _radio; _radio=$(uci_get wireless easymesh_ap device "")
+    if [ -n "$_radio" ]; then
+        local _phy; _phy=$(echo "$_radio" | sed 's/radio/phy/')
+        local _apif; _apif=$(iw dev 2>/dev/null | awk \
+            '/^phy#/{p=($0 ~ /'"$_phy"'/)} p && /Interface/{i=$2} p && /type AP/{print i; exit}')
+        [ -n "$_apif" ] && ip link show "$_apif" >/dev/null 2>&1 && { echo "$_apif"; return; }
+    fi
+
+    local _any; _any=$(iw dev 2>/dev/null | awk '/Interface/{i=$2} /type AP/{print i; exit}')
+    [ -n "$_any" ] && { echo "$_any"; return; }
+
+    echo "wlan0"
 }
 
 roam_cooldown_key() { echo "$1" | tr ':' '_'; }
@@ -613,7 +626,7 @@ __http_handler() {
             if [ -f "${PENDING_DB}/${safe}.json" ]; then
                 _http_ok '{"status":"pending"}'
             elif [ -f "${NODE_DB}/${safe}.json" ] && [ -f "$PROFILE_FILE" ]; then
-                local sum; sum=$(md5sum "$PROFILE_FILE" | cut -d' ' -f1)
+                local sum; sum=$(tr -d '\n' < "$PROFILE_FILE" | md5sum | cut -d' ' -f1)
                 _http_ok "{\"sum\":\"$sum\"}"
             else
                 _http_ok '{"status":"unregistered"}'
@@ -1152,8 +1165,13 @@ apply_profile() {
     }
     uci_commit wireless
     setup_wired_backhaul
-    wifi reload
-    log "Profile applied. Agent now mirrors master config (dual-band AP)."
+    local _wchanges; _wchanges=$(uci changes wireless 2>/dev/null)
+    if [ -n "$_wchanges" ]; then
+        wifi reload
+        log "Profile applied (config changed). Agent now mirrors master config (dual-band AP)."
+    else
+        log "Profile applied (no wireless change, skip wifi reload)."
+    fi
 }
 
 ########################################
