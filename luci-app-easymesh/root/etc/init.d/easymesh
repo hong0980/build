@@ -183,6 +183,17 @@ apply_mesh_config() {
     config_get mesh_band              global mesh_band             '5g'
     config_get ssid                   global ssid                  'OpenWrt'
     config_get key                    global key                   ''
+    config_get band_merge             global band_merge            '1'
+    config_get ssid_5g                global ssid_5g               ''
+    config_get ssid_2g                global ssid_2g               ''
+    config_get key_5g                 global key_5g                ''
+    config_get key_2g                 global key_2g                ''
+    config_get wan_mode               global wan_mode              'router'
+    # 非合并模式下用5G值填充ssid/key（兼容旧代码路径）
+    if [ "$band_merge" != "1" ]; then
+        [ -n "$ssid_5g" ] && ssid="$ssid_5g"
+        [ -n "$key_5g"  ] && key="$key_5g"
+    fi
     config_get ieee80211r             global ieee80211r            '1'
     config_get mobility_domain        global mobility_domain       'aabb'
     config_get ft_over_ds             global ft_over_ds            '1'
@@ -239,24 +250,54 @@ apply_mesh_config() {
     fi
     uci commit dhcp
 
-    # ── 客户端 AP（双频合并）───────────────────────────────
+    # ── 客户端 AP ─────────────────────────────────────────────
+    # Master：立即用配置的ssid/key建AP并开启
+    # Agent：建disabled占位符，等主路由推送profile后由apply_profile启用
+    # 这样agent不会广播错误的ssid，收到推送后才开启正确的无线
     local _ap_idx=0
-    # 5G AP（主）
-    if [ -n "$radio_5g" ]; then
-        _setup_ap_iface easymesh_ap "$radio_5g" "$ssid" "$key" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
-        _ap_idx=$((_ap_idx+1))
-        log "AP created: easymesh_ap on %s (5G, ssid=%s)" "$radio_5g" "$ssid"
-    fi
-    # 2.4G AP（补充覆盖）
-    if [ -n "$radio_2g" ]; then
-        _setup_ap_iface easymesh_ap_2g "$radio_2g" "$ssid" "$key" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
-        _ap_idx=$((_ap_idx+1))
-        log "AP created: easymesh_ap_2g on %s (2.4G, ssid=%s)" "$radio_2g" "$ssid"
-    fi
-    # 兜底：如果没有识别到任何 radio，用 radio0
-    if [ "$_ap_idx" -eq 0 ]; then
-        _setup_ap_iface easymesh_ap "radio0" "$ssid" "$key" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
-        log "AP created: easymesh_ap on radio0 (fallback)"
+    if [ "$role" = "master" ]; then
+        # 双频合并=1：5G和2.4G同ssid/key；=0：独立配置
+        local _ssid_5g _key_5g _ssid_2g _key_2g
+        if [ "$band_merge" = "1" ]; then
+            _ssid_5g="$ssid"; _key_5g="$key"
+            _ssid_2g="$ssid"; _key_2g="$key"
+        else
+            _ssid_5g="${ssid_5g:-$ssid}"; _key_5g="${key_5g:-$key}"
+            _ssid_2g="${ssid_2g:-$ssid}"; _key_2g="${key_2g:-$key}"
+        fi
+        if [ -n "$radio_5g" ]; then
+            _setup_ap_iface easymesh_ap "$radio_5g" "$_ssid_5g" "$_key_5g" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+            _ap_idx=$((_ap_idx+1))
+            log "AP created: easymesh_ap on %s (5G, ssid=%s)" "$radio_5g" "$_ssid_5g"
+        fi
+        if [ -n "$radio_2g" ]; then
+            _setup_ap_iface easymesh_ap_2g "$radio_2g" "$_ssid_2g" "$_key_2g" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+            _ap_idx=$((_ap_idx+1))
+            log "AP created: easymesh_ap_2g on %s (2.4G, ssid=%s)" "$radio_2g" "$_ssid_2g"
+        fi
+        if [ "$_ap_idx" -eq 0 ]; then
+            _setup_ap_iface easymesh_ap "radio0" "$_ssid_5g" "$_key_5g" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
+            log "AP created: easymesh_ap on radio0 (fallback)"
+        fi
+    else
+        # Agent模式：建disabled占位，ssid留空，等待主路由推送
+        if [ -n "$radio_5g" ]; then
+            _setup_ap_iface easymesh_ap "$radio_5g" "pending" "" "0" "" "" "" "0" "0"
+            uci set wireless.easymesh_ap.disabled=1
+            _ap_idx=$((_ap_idx+1))
+            log "AP placeholder (disabled): easymesh_ap on %s (5G, awaiting master config push)" "$radio_5g"
+        fi
+        if [ -n "$radio_2g" ]; then
+            _setup_ap_iface easymesh_ap_2g "$radio_2g" "pending" "" "0" "" "" "" "0" "0"
+            uci set wireless.easymesh_ap_2g.disabled=1
+            _ap_idx=$((_ap_idx+1))
+            log "AP placeholder (disabled): easymesh_ap_2g on %s (2.4G, awaiting master config push)" "$radio_2g"
+        fi
+        if [ "$_ap_idx" -eq 0 ]; then
+            _setup_ap_iface easymesh_ap "radio0" "pending" "" "0" "" "" "" "0" "0"
+            uci set wireless.easymesh_ap.disabled=1
+            log "AP placeholder (disabled): easymesh_ap on radio0 (fallback)"
+        fi
     fi
     # 确保相关 radio 设备本身不处于 disabled 状态
     [ -n "$radio_mesh" ] && uci -q del wireless.${radio_mesh}.disabled
@@ -264,6 +305,21 @@ apply_mesh_config() {
     [ -n "$radio_2g" ]   && uci -q del wireless.${radio_2g}.disabled
     uci commit wireless
     log "apply_mesh_config done (%s AP(s) created)" "$_ap_idx"
+
+    # ── WAN口模式 ───────────────────────────────────────────────────────────
+    if [ "$role" = "master" ]; then
+        if [ "$wan_mode" = "switch" ]; then
+            uci -q set network.wan.disabled=1
+            uci -q set network.wan6.disabled=1
+            uci commit network
+            log "WAN mode: switch — WAN port disabled, all ports as LAN"
+        else
+            uci -q del network.wan.disabled
+            uci -q del network.wan6.disabled
+            uci commit network
+            log "WAN mode: router — WAN port active"
+        fi
+    fi
 }
 
 # ── procd ─────────────────────────────────────────────────────────────────────

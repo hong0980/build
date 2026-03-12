@@ -40,7 +40,10 @@ function drawTopo(topo, canvas) {
 	var ctx = canvas.getContext('2d');
 	var DPR = window.devicePixelRatio || 1;
 	var cssW = canvas.offsetWidth || 900;
-	var cssH = Math.round(cssW * (400 / 900));
+	/* 动态高度：1-2节点 min300，3-5节点 min400，6+节点 min500，节点多时更高 */
+	var nodeCount = ((topo && topo.nodes) ? topo.nodes : []).length;
+	var minH = nodeCount <= 2 ? 260 : nodeCount <= 5 ? 380 : nodeCount <= 8 ? 480 : 560;
+	var cssH = Math.max(minH, Math.round(cssW * 0.38));
 	if (canvas.width !== cssW * DPR || canvas.height !== cssH * DPR) {
 		canvas.width  = cssW * DPR;
 		canvas.height = cssH * DPR;

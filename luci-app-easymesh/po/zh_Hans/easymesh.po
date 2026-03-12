@@ -1060,3 +1060,54 @@ msgstr "角色切换：%s → %s"
 msgid "DBG main_loop iter=%s: master not found yet, will retry"
 msgstr "主循环第 %s 次：主节点尚未找到，继续重试"
 
+
+msgid "Dual-band Merge (same SSID/password)"
+msgstr "双频合并（使用相同 SSID 和密码）"
+
+msgid "Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz radios. Disabled: set different SSID and password for each band."
+msgstr "开启：2.4G 和 5G 使用同一 SSID 和密码。关闭：为每个频段单独设置。"
+
+msgid "5 GHz WiFi Name (SSID)"
+msgstr "5 GHz 无线名称（SSID）"
+
+msgid "5 GHz WiFi Password"
+msgstr "5 GHz 无线密码"
+
+msgid "2.4 GHz WiFi Name (SSID)"
+msgstr "2.4 GHz 无线名称（SSID）"
+
+msgid "2.4 GHz WiFi Password"
+msgstr "2.4 GHz 无线密码"
+
+msgid "WAN Port Mode"
+msgstr "WAN 口模式"
+
+msgid "Router mode: WAN port connects to modem/ISP (PPPoE/DHCP). Switch mode: all ports become LAN (useful when uplink is through another router or when all ports are wired to mesh nodes)."
+msgstr "路由模式：WAN口连接光猫/ISP（PPPoE/DHCP）。交换机模式：所有网口均作为LAN口（适合上级路由已有DHCP，或所有网口均接Mesh节点的场景）。"
+
+msgid "Router (PPPoE / DHCP — WAN port separate)"
+msgstr "路由模式（PPPoE / DHCP — WAN 口独立）"
+
+msgid "Switch (all ports as LAN — no separate WAN)"
+msgstr "交换机模式（所有网口作为 LAN — 无独立 WAN）"
+
+msgid "WAN mode: switch — WAN port disabled, all ports as LAN"
+msgstr "WAN 模式：交换机 — WAN 口已禁用，所有端口作为 LAN"
+
+msgid "WAN mode: router — WAN port active"
+msgstr "WAN 模式：路由 — WAN 口已启用"
+
+msgid "batman-adv originator table (batctl o). Neighbors appear when bat0 is running and at least one mesh backhaul link is active (wired LAN bridged, or 802.11s wireless mesh0). TQ 255=best link. Refreshes every 5s."
+msgstr "batman-adv 邻居表（batctl o）。bat0 运行且至少有一条回程链路激活（有线 LAN 桥接或 802.11s 无线 mesh0）时才会出现邻居。TQ 255=最佳链路。每 5 秒刷新。"
+
+msgid "Profile applied (config changed). Agent AP enabled with master ssid=%s."
+msgstr "配置已应用（配置有变更）。从节点 AP 已按主节点 SSID=%s 开启。"
+
+msgid "AP placeholder (disabled): easymesh_ap on %s (5G, awaiting master config push)"
+msgstr "AP 占位（已禁用）：easymesh_ap 在 %s（5G，等待主节点配置推送）"
+
+msgid "AP placeholder (disabled): easymesh_ap_2g on %s (2.4G, awaiting master config push)"
+msgstr "AP 占位（已禁用）：easymesh_ap_2g 在 %s（2.4G，等待主节点配置推送）"
+
+msgid "AP placeholder (disabled): easymesh_ap on radio0 (fallback, awaiting master config push)"
+msgstr "AP 占位（已禁用）：easymesh_ap 在 radio0（兜底，等待主节点配置推送）"

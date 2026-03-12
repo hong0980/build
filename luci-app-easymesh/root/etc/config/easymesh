@@ -19,3 +19,11 @@ config easymesh 'global'
 	option dfs_enable '1'
 	# batman-adv routing algorithm: BATMAN_IV (default) or BATMAN_V
 	option routing_algo 'BATMAN_V'
+	option band_merge '1'
+	# 非合并模式下的分频段配置（band_merge=0时生效）
+	#option ssid_5g 'HomeNetwork_5G'
+	#option ssid_2g 'HomeNetwork_2.4G'
+	#option key_5g 'password5g'
+	#option key_2g 'password2g'
+	# WAN口模式：router=正常路由（WAN口独立），switch=全部作为LAN口
+	option wan_mode 'router'

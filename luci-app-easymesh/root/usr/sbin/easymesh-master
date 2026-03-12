@@ -445,7 +445,7 @@ setup_wired_backhaul() {
 
     log "DBG backhaul: bat0 hardifs=[%s]" "$(batctl meshif bat0 if 2>/dev/null | tr '\n' ' ')"
     log "DBG backhaul: br-lan members=[%s]" \
-        "$(ip link show 2>/dev/null | awk '/master br-lan/{print $2}' | tr -d ':' | tr '\n' ' ')"
+        "$(ip link show 2>/dev/null | awk '/master br-lan/{print $2}' | tr -d ':' | grep -v '^phy' | tr '\n' ' ')"
     log "DBG backhaul: br-lan IP=%s" \
         "$(ip -4 addr show br-lan 2>/dev/null | awk '/inet /{print $2}')"
     log "Backhaul ready (role=%s)" "$(get_role)"
@@ -1052,10 +1052,15 @@ poll_for_approval() {
 ########################################
 generate_profile() {
     config_load easymesh
-    local ssid key mesh_id mesh_key routing_algo channel
+    local ssid key mesh_id mesh_key routing_algo channel band_merge ssid_5g ssid_2g key_5g key_2g
     local ieee80211r ieee80211k ieee80211v ft_over_ds mobility_domain backhaul
     config_get ssid             global ssid              'OpenWrt'
     config_get key              global key               ''
+    config_get band_merge       global band_merge        '1'
+    config_get ssid_5g          global ssid_5g           ''
+    config_get ssid_2g          global ssid_2g           ''
+    config_get key_5g           global key_5g            ''
+    config_get key_2g           global key_2g            ''
     config_get mesh_id          global mesh_id           'OpenWrt-Mesh'
     config_get mesh_key         global mesh_key          ''
     config_get routing_algo     global routing_algo      'BATMAN_V'
@@ -1072,7 +1077,7 @@ generate_profile() {
         radio_dev=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1)
     channel=$(uci get "${radio_dev}.channel" 2>/dev/null || echo 'auto')
     local new_profile
-    new_profile=$(printf '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211r":"%s","ieee80211k":"%s","ieee80211v":"%s","ft_over_ds":"%s","mobility_domain":"%s","backhaul":"%s"}' "$ssid" "$key" "$channel" "$mesh_id" "$mesh_key" "$routing_algo" "$ieee80211r" "$ieee80211k" "$ieee80211v" "$ft_over_ds" "$mobility_domain" "$backhaul")
+    new_profile=$(printf '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211r":"%s","ieee80211k":"%s","ieee80211v":"%s","ft_over_ds":"%s","mobility_domain":"%s","backhaul":"%s","band_merge":"%s","ssid_5g":"%s","ssid_2g":"%s","key_5g":"%s","key_2g":"%s"}' "$ssid" "$key" "$channel" "$mesh_id" "$mesh_key" "$routing_algo" "$ieee80211r" "$ieee80211k" "$ieee80211v" "$ft_over_ds" "$mobility_domain" "$backhaul" "$band_merge" "$ssid_5g" "$ssid_2g" "$key_5g" "$key_2g")
     local old_profile; old_profile=$(cat "$PROFILE_FILE" 2>/dev/null | tr -d '')
     if [ "$new_profile" != "$old_profile" ]; then
         printf '%s' "$new_profile" > "$PROFILE_FILE"
@@ -1098,6 +1103,12 @@ apply_profile() {
     ft_over_ds=$(     jsonfilter -i "$_pf" -e '@.ft_over_ds'      2>/dev/null)
     mobility_domain=$(jsonfilter -i "$_pf" -e '@.mobility_domain' 2>/dev/null)
     backhaul=$(       jsonfilter -i "$_pf" -e '@.backhaul'        2>/dev/null)
+    local band_merge ssid_5g ssid_2g key_5g key_2g
+    band_merge=$(     jsonfilter -i "$_pf" -e '@.band_merge'      2>/dev/null)
+    ssid_5g=$(        jsonfilter -i "$_pf" -e '@.ssid_5g'         2>/dev/null)
+    ssid_2g=$(        jsonfilter -i "$_pf" -e '@.ssid_2g'         2>/dev/null)
+    key_5g=$(         jsonfilter -i "$_pf" -e '@.key_5g'          2>/dev/null)
+    key_2g=$(         jsonfilter -i "$_pf" -e '@.key_2g'          2>/dev/null)
     rm -f "$_pf"
     [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
     log "Applying profile: ssid=%s channel=%s backhaul=%s" "$ssid" "$channel" "${backhaul:-wired}"
@@ -1108,6 +1119,11 @@ apply_profile() {
     uci_set easymesh global ssid "$ssid"
     uci_set easymesh global key "$key"
     uci_set easymesh global backhaul "${backhaul:-wired}"
+    [ -n "$band_merge" ] && uci_set easymesh global band_merge "$band_merge"
+    [ -n "$ssid_5g" ]   && uci_set easymesh global ssid_5g "$ssid_5g"
+    [ -n "$ssid_2g" ]   && uci_set easymesh global ssid_2g "$ssid_2g"
+    [ -n "$key_5g" ]    && uci_set easymesh global key_5g "$key_5g"
+    [ -n "$key_2g" ]    && uci_set easymesh global key_2g "$key_2g"
     uci_set easymesh global routing_algo "${routing_algo:-BATMAN_V}"
     [ -n "$ieee80211r" ]       && uci_set easymesh global ieee80211r       "$ieee80211r"
     [ -n "$ieee80211k" ]       && uci_set easymesh global ieee80211k       "$ieee80211k"
@@ -1131,16 +1147,34 @@ apply_profile() {
             fi
             log "apply_profile: mesh0 enabled, mesh_id=%s" "${mesh_id:-OpenWrt-Mesh}"
         fi
-        uci_commit wireless
+    fi
+    # 非合并模式下按频段分配ssid/key
+    local _ap_ssid_5g _ap_key_5g _ap_ssid_2g _ap_key_2g
+    if [ "${band_merge:-1}" = "1" ]; then
+        _ap_ssid_5g="$ssid"; _ap_key_5g="$key"
+        _ap_ssid_2g="$ssid"; _ap_key_2g="$key"
+    else
+        _ap_ssid_5g="${ssid_5g:-$ssid}"; _ap_key_5g="${key_5g:-$key}"
+        _ap_ssid_2g="${ssid_2g:-$ssid}"; _ap_key_2g="${key_2g:-$key}"
     fi
     local _upd_ap
     for _upd_ap in easymesh_ap easymesh_ap_2g; do
         uci show wireless."${_upd_ap}" >/dev/null 2>&1 || continue
-        uci_set wireless ${_upd_ap} ssid "$ssid"
-        [ -n "$key" ] && {
+        uci_set wireless ${_upd_ap} disabled 0
+        local _ap_ssid _ap_key
+        if [ "$_upd_ap" = "easymesh_ap_2g" ]; then
+            _ap_ssid="$_ap_ssid_2g"; _ap_key="$_ap_key_2g"
+        else
+            _ap_ssid="$_ap_ssid_5g"; _ap_key="$_ap_key_5g"
+        fi
+        uci_set wireless ${_upd_ap} ssid "$_ap_ssid"
+        if [ -n "$_ap_key" ]; then
             uci_set wireless ${_upd_ap} encryption 'psk2+ccmp'
-            uci_set wireless ${_upd_ap} key "$key"
-        }
+            uci_set wireless ${_upd_ap} key "$_ap_key"
+        else
+            uci_set wireless ${_upd_ap} encryption 'none'
+            uci -q del wireless.${_upd_ap}.key
+        fi
         [ "${ieee80211k:-1}" = "1" ] && {
             uci_set wireless ${_upd_ap} ieee80211k 1
             uci_set wireless ${_upd_ap} rrm_neighbor_report 1
@@ -1163,12 +1197,13 @@ apply_profile() {
             uci set "${rd}.channel=$channel"
         done
     }
+    # uci changes 必须在 commit 之前检查，commit后changes清空
+    local _wchanges; _wchanges=$(uci changes wireless 2>/dev/null)
     uci_commit wireless
     setup_wired_backhaul
-    local _wchanges; _wchanges=$(uci changes wireless 2>/dev/null)
     if [ -n "$_wchanges" ]; then
         wifi reload
-        log "Profile applied (config changed). Agent now mirrors master config (dual-band AP)."
+        log "Profile applied (config changed). Agent AP enabled with master ssid=%s." "$ssid"
     else
         log "Profile applied (no wireless change, skip wifi reload)."
     fi
