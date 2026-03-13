@@ -423,13 +423,20 @@ __handle_hello() {
     local safe; safe=$(echo "$mac" | tr ':' '_')
     local approved="${NODE_DB}/${safe}.json"
     local pending="${PENDING_DB}/${safe}.json"
+    local persistent="${PERSISTENT_NODE_DB}/${safe}.json"
     mkdir -p "$NODE_DB" "$PENDING_DB"
 
     if [ -f "$approved" ]; then
         _node_update "$approved" "$agent_ip"
+    elif [ -f "$persistent" ]; then
+        sed "s/\"ip\":\"[^\"]*\"/\"ip\":\"${agent_ip}\"/" "$persistent" | \
+        sed "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" > "$approved"
+        log "HELLO: Node recovered from persistent storage: %s"  "$mac"
+    elif [ -f "$pending" ]; then
+        _node_update "$pending" "$agent_ip"
     else
         printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"wired","status":"pending","ts":%s}\n' \
-            "$mac" "$agent_ip" "${host:-unknown}" "$(date +%s)" > "$pending"
+            "$mac" "$agent_ip" "${host:-}" "$(date +%s)" > "$pending"
         printf "%s [INFO ] [core    ] Pending node: %s (%s) via wired\n" \
             "$(date '+%Y-%m-%d %H:%M:%S')" "$mac" "${host:-unknown}" >> "$LOGFILE"
     fi
@@ -516,14 +523,16 @@ __http_handler() {
             [ -z "$req_mac" ] && req_mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
             req_mac=$(echo "$req_mac" | tr 'A-F' 'a-f')
             local safe; safe=$(echo "$req_mac" | tr ':' '_')
-            local pf="${PENDING_DB}/${safe}.json" af="${NODE_DB}/${safe}.json"
+            local pf="${PENDING_DB}/${safe}.json"
+            local af="${NODE_DB}/${safe}.json"
+            local persistent="${PERSISTENT_NODE_DB}/${safe}.json"
+
             if [ -f "$pf" ]; then
                 sed 's/"status":"pending"/"status":"approved"/' "$pf" > "$af" && rm -f "$pf"
-                # 持久化：主路由重启后不丢失已审批节点
                 mkdir -p "$PERSISTENT_NODE_DB"
-                cp "$af" "${PERSISTENT_NODE_DB}/${safe}.json" 2>/dev/null
+                cp "$af" "$persistent" 2>/dev/null || loge "Failed to persist node: $req_mac"
                 _http_ok '{"status":"ok","msg":"approved"}'
-                log "Node approved: %s" "$req_mac"
+                log "Node approved: %s (persisted to %s)" "$req_mac" "$persistent"
             elif [ -f "$af" ]; then
                 _http_ok '{"status":"ok","msg":"already approved"}'
             else
@@ -546,7 +555,7 @@ __http_handler() {
             [ -z "$new_chan" ] && { _http_ok '{"status":"ignored"}'; return; }
             log "Channel sync: ch=%s reason=%s" "$new_chan" "${reason:-?}"
             local rd
-            for rd in $(_wifi_devs); do uci set "${rd}.channel=${new_chan}"; done
+            for rd in $(_wifi_devs); do uci -q set "${rd}.channel=${new_chan}"; done
             uci_commit wireless; wifi reload &
             _http_ok "{\"status\":\"ok\",\"channel\":\"$new_chan\"}"
             ;;
@@ -618,11 +627,19 @@ register_node() {
     [ -z "$ip"  ] && { loge "register_node: missing ip";  return 1; }
     mac=$(echo "$mac" | tr 'A-F' 'a-f')
     local safe; safe=$(echo "$mac" | tr ':' '_')
-    mkdir -p "$NODE_DB" "$PENDING_DB"
-    local approved="${NODE_DB}/${safe}.json" pending="${PENDING_DB}/${safe}.json"
+    mkdir -p "$NODE_DB" "$PENDING_DB" "$PERSISTENT_NODE_DB"
+    local approved="${NODE_DB}/${safe}.json"
+    local pending="${PENDING_DB}/${safe}.json"
+    local persistent="${PERSISTENT_NODE_DB}/${safe}.json"
+
     if [ -f "$approved" ]; then
+        # 节点已在运行时数据库中
         _node_update "$approved" "${ip:-?}"
-        log "Node re-registered: %s (%s) ip=%s" "$mac" "${hostname:-?}" "$ip"
+        log "Node re-registered (approved): %s (%s) ip=%s" "$mac" "${hostname:-?}" "$ip"
+    elif [ -f "$persistent" ]; then
+        sed "s/\"ip\":\"[^\"]*\"/\"ip\":\"${ip}\"/" "$persistent" | \
+        sed "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" > "$approved"
+        log "Node recovered from persistent storage: %s (%s) ip=%s" "$mac" "${hostname:-?}" "$ip"
     else
         printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"%s","status":"pending","ts":%s}\n' \
             "$mac" "${ip:-?}" "${hostname:-?}" "${source:-wired}" "$(date +%s)" > "$pending"
@@ -897,7 +914,7 @@ apply_profile() {
 
     [ -n "$channel" ] && [ "$channel" != "auto" ] && {
         local rd
-        for rd in $(_wifi_devs); do uci set "${rd}.channel=$channel"; done
+        for rd in $(_wifi_devs); do uci -q set "${rd}.channel=$channel"; done
     }
 
     local wchanges; wchanges=$(uci changes wireless 2>/dev/null)
@@ -1083,7 +1100,7 @@ handle_dfs_channel_change() {
     local new_chan="$1"
     logd "DFS: mesh-wide channel -> %s" "$new_chan"
     local rd
-    for rd in $(_wifi_devs); do uci set "${rd}.channel=${new_chan}"; done
+    for rd in $(_wifi_devs); do uci -q set "${rd}.channel=${new_chan}"; done
     uci_commit wireless
     [ "$(get_role)" != "master" ] && return
     local payload="{\"channel\":\"$new_chan\",\"reason\":\"dfs\"}"
@@ -1120,7 +1137,7 @@ optimize_channel() {
     local cur; cur=$(uci -q get "${rd}.channel")
     [ "$cur" = "$best" ] && return
     logd "ACS: ch %s -> %s (occupancy %s)" "$cur" "$best" "$best_cnt"
-    uci set "${rd}.channel=$best"; uci_commit wireless && wifi reload
+    uci -q set "${rd}.channel=$best"; uci_commit wireless && wifi reload
     local payload="{\"channel\":\"$best\",\"reason\":\"acs\"}"
     _push_acs() { do_http_post "http://${1}:${MASTER_PORT}/channel/apply" "$payload" >/dev/null 2>&1 & }
     _iter_nodes _push_acs
@@ -1313,12 +1330,21 @@ _handle_approval_signal() {
 main_loop() {
     _stop_jobs
     mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR" "$EM_STATE_DIR" "$PERSISTENT_NODE_DB" 2>/dev/null
-    # 从持久存储恢复已审批节点（主路由重启后不需要重新审批）
-    for _pf in "$PERSISTENT_NODE_DB"/*.json; do
-        [ -f "$_pf" ] || continue
-        local _bn; _bn="${_pf##*/}"
-        [ ! -f "${NODE_DB}/${_bn}" ] && cp "$_pf" "${NODE_DB}/${_bn}"
-    done
+
+    if [ -d "$PERSISTENT_NODE_DB" ]; then
+        log "Recovering approved nodes from persistent storage..."
+        for _pf in "$PERSISTENT_NODE_DB"/*.json; do
+            [ -f "$_pf" ] || continue
+            local _bn; _bn="${_pf##*/}"
+            local _rt="${NODE_DB}/${_bn}"
+            if [ ! -f "$_rt" ]; then
+                sed "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" "$_pf" > "$_rt"
+                local _mac; _mac=$(jsonfilter -i "$_rt" -e '@.mac' 2>/dev/null)
+                log "Recovered node: %s" "${_mac:-unknown}"
+            fi
+        done
+    fi
+
     { printf "\n" >> "$LOGFILE" 2>/dev/null
       log "================================================"
       log "EasyMesh daemon starting (pid=%s)" "$$"
@@ -1353,25 +1379,37 @@ main_loop() {
     fi
     setup_dedicated_backhaul
 
-    local _registered=0 _iter=0
+    local _registered=0 _iter=0 _last_role="$role"
+
     while true; do
         if [ $(( _iter % (ELECTION_INTERVAL / 10) )) -eq 0 ]; then
-            local prev_role; prev_role=$(get_role)
-            elect_role; tune_batman
+            local prev_role; prev_role="$role"
+            elect_role
             role=$(get_role)
+
             if [ "$role" != "$prev_role" ]; then
+                tune_batman
                 _registered=0
                 log "Role switch: %s -> %s" "$prev_role" "$role"
                 rm -f "${EM_PID_DIR}/easymesh_${prev_role}.pid"
                 echo $$ > "${EM_PID_DIR}/easymesh_${role}.pid"
                 [ "$role" = "master" ] && { _bg disc_server discovery_server; generate_profile; }
             fi
+
+            if [ "$role" != "$_last_role" ]; then
+                local gw; gw=$(uci_get easymesh global wan_mode router)
+                log "batman-adv: role=%s gw=%s OGM=%sms" "$role" "$gw" "$BATMAN_OGM_INTERVAL"
+                _last_role="$role"
+            fi
         else
             role=$(get_role)
         fi
 
         if [ "$role" = "master" ]; then
-            generate_profile; optimize_channel; manage_wireless_onboard
+            if [ $(( _iter % 6 )) -eq 0 ]; then
+                optimize_channel
+                manage_wireless_onboard
+            fi
         else
             if [ "$_registered" = "0" ]; then
                 if find_master; then
@@ -1381,7 +1419,7 @@ main_loop() {
                 fi
             else
                 poll_for_approval
-                [ $? -eq 2 ] && _registered=0  # unregistered → 重新走注册流程
+                [ $? -eq 2 ] && _registered=0
             fi
         fi
 

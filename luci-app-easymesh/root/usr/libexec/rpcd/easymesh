@@ -3,6 +3,7 @@
 
 NODE_DB="/tmp/easymesh_nodes"
 PENDING_DB="/tmp/easymesh_pending"
+PERSISTENT_NODE_DB="/etc/easymesh_nodes"
 TOPO_FILE="/tmp/easymesh_topo.json"
 LOGFILE="/tmp/easymesh.log"
 EM_PID_DIR="/tmp/easymesh_pids"
@@ -156,13 +157,17 @@ _approve() {
     local safe; safe=$(printf '%s' "$mac" | tr ':' '_')
     local src="${PENDING_DB}/${safe}.json"
     local dst="${NODE_DB}/${safe}.json"
-    mkdir -p "$NODE_DB"
+    local persistent="${PERSISTENT_NODE_DB}/${safe}.json"
+    mkdir -p "$NODE_DB" "$PERSISTENT_NODE_DB"
+
     if [ -f "$src" ]; then
         sed 's/"status":"pending"/"status":"approved"/' "$src" > "$dst" && rm -f "$src"
+        cp "$dst" "$persistent" 2>/dev/null
         _signal_master
         printf '{"status":"ok","mac":"%s"}\n' "$mac"
     elif [ -f "$dst" ]; then
         _signal_master
+        cp "$dst" "$persistent" 2>/dev/null
         printf '{"status":"ok","msg":"already approved","mac":"%s"}\n' "$mac"
     else
         printf '{"error":"node not found","mac":"%s"}\n' "$mac"
