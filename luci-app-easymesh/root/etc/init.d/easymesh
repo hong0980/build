@@ -8,20 +8,15 @@ STOP=10
 
 UCI_APP=easymesh
 LOGFILE="/tmp/easymesh.log"
-lang=$(uci get luci.main.lang 2>/dev/null || echo "en")
+[ -z "$lang" ] && lang=$(uci_get luci main lang en)
 
 translate() {
     local tpl="$1"; shift
     local translated
     translated=$(lua -e "require \"luci.i18n\".setlanguage(\"${lang}\"); print(require \"luci.i18n\".translate([==[${tpl}]==]))" 2>/dev/null)
     [ -z "$translated" ] && translated="$tpl"
-    if [ $# -gt 0 ]; then
-        printf "$translated" "$@"
-    else
-        printf '%s' "$translated"
-    fi
+    [ $# -gt 0 ] && printf "$translated" "$@" || printf '%s' "$translated"
 }
-
 _emlog() {
     local level="$1" tag="$2"; shift 2
     local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
@@ -30,110 +25,81 @@ _emlog() {
 log()  { _emlog "INFO"  "initd" "$(translate "$@")"; }
 loge() { _emlog "ERROR" "initd" "$(translate "$@")"; }
 
-# ── 获取指定频段的 radio 设备名 ──────────────────────────────────────────────
-_band_target=""; _found=""
-_find_radio() {
-    local _n="$1" _b
-    config_get _b "$_n" band
-    case "$_b" in
-        2g|2.4GHz|bgn|bg|b) [ "$_band_target" = "2g" ] && _found="$_n" ;;
-        5g|5GHz|an|a)        [ "$_band_target" = "5g" ] && _found="$_n" ;;
-    esac
-}
-get_radio() {
-    local _v="$1" _b="$2"
-    _found=""; _band_target="$_b"
-    config_load wireless
-    config_foreach _find_radio wifi-device
-    eval "$_v='$_found'"
+_restore_iface() {
+    local iface="$1" managed
+    config_get managed "$iface" easymesh_managed
+    [ "$managed" != "1" ] && return
+
+    if [ "$iface" = "mesh0" ]; then
+        uci -q del wireless.mesh0; return
+    fi
+
+    local ssid_file="/tmp/em_orig_${iface}.ssid"
+    local enc_file="/tmp/em_orig_${iface}.enc"
+
+    if [ -f "$ssid_file" ]; then
+        uci -q set wireless.${iface}.ssid="$(cat "$ssid_file")"
+        uci -q set wireless.${iface}.encryption="$(cat "$enc_file" 2>/dev/null || echo none)"
+        for opt in key ieee80211r ieee80211k ieee80211v mobility_domain ft_over_ds \
+                   ft_psk_generate_local reassociation_deadline rrm_neighbor_report \
+                   rrm_beacon_report bss_transition easymesh_managed disabled; do
+            uci -q del wireless.${iface}.${opt}
+        done
+        rm -f "$ssid_file" "$enc_file"
+    else
+        uci -q del wireless."$iface"
+    fi
 }
 
-_restore_managed() {
-    local _n="$1" _m _orig_ssid _orig_enc
-    config_get _m "$_n" easymesh_managed
-    [ "$_m" != "1" ] && return
-    # mesh0 是 EasyMesh 专属创建的，直接删除
-    if [ "$_n" = "mesh0" ]; then
-        uci -q del wireless.mesh0
-        return
-    fi
-    _orig_ssid=$(cat "/tmp/em_orig_${_n}.ssid" 2>/dev/null)
-    _orig_enc=$(cat  "/tmp/em_orig_${_n}.enc"  2>/dev/null)
-    if [ -n "$_orig_ssid" ]; then
-        # 恢复原始接口属性
-        uci set wireless.${_n}.ssid="$_orig_ssid"
-        uci set wireless.${_n}.encryption="${_orig_enc:-none}"
-        uci -q del wireless.${_n}.key
-        uci -q del wireless.${_n}.ieee80211r
-        uci -q del wireless.${_n}.ieee80211k
-        uci -q del wireless.${_n}.ieee80211v
-        uci -q del wireless.${_n}.mobility_domain
-        uci -q del wireless.${_n}.ft_over_ds
-        uci -q del wireless.${_n}.ft_psk_generate_local
-        uci -q del wireless.${_n}.reassociation_deadline
-        uci -q del wireless.${_n}.rrm_neighbor_report
-        uci -q del wireless.${_n}.rrm_beacon_report
-        uci -q del wireless.${_n}.bss_transition
-        uci -q del wireless.${_n}.easymesh_managed
-        uci -q del wireless.${_n}.disabled
-        rm -f "/tmp/em_orig_${_n}.ssid" "/tmp/em_orig_${_n}.enc"
-    else
-        uci -q del wireless."$_n"
-    fi
-}
 cleanup_wireless() {
     config_load wireless
-    config_foreach _restore_managed wifi-iface
+    config_foreach _restore_iface wifi-iface
     uci commit wireless
 }
 
-# 找指定 radio 下已有的 AP mode 接口 section 名（不含 mesh0）
-_found_iface=""; _target_radio=""
-_find_ap_iface() {
-    local _n="$1" _dev _mode
-    config_get _dev  "$_n" device
-    config_get _mode "$_n" mode
-    [ "$_dev" = "$_target_radio" ] && [ "$_mode" = "ap" ] && [ "$_n" != "mesh0" ] \
-        && [ -z "$_found_iface" ] && _found_iface="$_n"
+_ap_iface_result=""
+_ap_target_radio=""
+_find_ap_cb() {
+    local n="$1" dev mode
+    config_get dev  "$n" device
+    config_get mode "$n" mode
+    [ "$dev" = "$_ap_target_radio" ] && [ "$mode" = "ap" ] && [ "$n" != "mesh0" ] \
+        && [ -z "$_ap_iface_result" ] && _ap_iface_result="$n"
 }
-_get_default_ap() {
-    # $1=varname_to_set $2=radio_dev_name
-    _found_iface=""; _target_radio="$2"
+_get_ap_iface() {
+    _ap_iface_result=""; _ap_target_radio="$1"
     config_load wireless
-    config_foreach _find_ap_iface wifi-iface
-    eval "$1='$_found_iface'"
+    config_foreach _find_ap_cb wifi-iface
+    echo "$_ap_iface_result"
 }
 
-_agent_prepare() {
-    local my_ip prefix suffix new_ip
+_agent_setup() {
+    [ "$1" != "agent" ] && return
+    local ip="$2" prefix="${2%.*}"
 
-    my_ip=$(ip -4 addr show dev br-lan 2>/dev/null \
-        | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
-    [ -z "$my_ip" ] && { log "agent_prepare: br-lan has no IP"; return 1; }
+    [ ! -f /etc/easymesh_agent ] && {
+        local hostname; hostname=$(uci_get system @system[0] hostname openwrt)
+        printf 'ipaddr=%s\nhostname=%s\n' "$ip" "$hostname" > /etc/easymesh_agent
+    }
 
-    suffix=$(echo "$my_ip" | cut -d. -f4)
-    if [ "$suffix" != "1" ]; then
-        log "agent_prepare: IP=%s (not .1, no change needed)" "$my_ip"
-        return 0
-    fi
+    [ "${ip##*.}" != "1" ] && return
 
-    prefix=$(echo "$my_ip" | cut -d. -f1-3)
-    log "agent_prepare: IP=%s (.1 conflict detected), computing stable IP..." "$my_ip"
+    local mac_raw=""
+    for _iface in br-lan eth0 bat0; do
+        [ -f "/sys/class/net/${_iface}/address" ] && {
+            mac_raw=$(cat "/sys/class/net/${_iface}/address" | tr -d ':')
+            break
+        }
+    done
+    mac_raw="${mac_raw:-000000aabbcc}"
 
-    # 用 br-lan MAC 后3字节 → 十六进制 → 十进制 → 模98 → 加100基准
-    local mac_raw
-    mac_raw=$(ip link show br-lan 2>/dev/null | awk '/ether/{print $2}' | tr -d ':')
-    [ -z "$mac_raw" ] && mac_raw=$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')
-    [ -z "$mac_raw" ] && mac_raw="000000aabbcc"
-    local mac_tail; mac_tail=$(printf '%s' "$mac_raw" | tail -c 6)
-    local mac_dec;  mac_dec=$(printf '%d' "0x${mac_tail}" 2>/dev/null || echo 0)
-    local offset;   offset=$(( mac_dec % 98 ))
+    local mac_tail; mac_tail=$(printf '%s' "$mac_raw" | cut -c7-12)
+    local offset; offset=$(printf '%d' "0x${mac_tail:-0}" 2>/dev/null || echo 0)
+    offset=$((offset % 98))
     local candidate="${prefix}.$((100 + offset))"
+    local new_ip="$candidate"
 
-    new_ip="$candidate"
-    # 碰撞检测：如果派生IP已被占用则线性扫描
     if ping -c 1 -W 1 -q "$candidate" >/dev/null 2>&1; then
-        log "agent_prepare: candidate %s busy, linear scan..." "$candidate"
         new_ip=""
         local i
         for i in $(seq 100 197); do
@@ -141,350 +107,225 @@ _agent_prepare() {
             ping -c 1 -W 1 -q "$c" >/dev/null 2>&1 || { new_ip="$c"; break; }
         done
         [ -z "$new_ip" ] && {
-            loge "agent_prepare: no free IP in .100-.197, keeping .1"
+            loge "agent_setup: no free IP in .100-.197, keeping .1"
             return 0
         }
     fi
 
-    log "agent_prepare: assigning %s -> %s" "$my_ip" "$new_ip"
-    uci set network.lan.ipaddr="$new_ip"
-    uci commit network
-    uci set system.@system[0].hostname="OpenWrt-Agent-$(echo "$new_ip" | cut -d. -f4)"
-    uci commit system
-    /etc/init.d/network reload
+    [ "$new_ip" != "$ip" ] && {
+        uci -q set network.lan.ipaddr="$new_ip"
+        uci -q set system.@system[0].hostname="OpenWrt-Agent-${new_ip##*.}"
+        uci -q commit network && uci -q commit system
+        /etc/init.d/network reload
+    }
+}
 
-    local _w=0
-    while [ $_w -lt 20 ]; do
-        my_ip=$(ip -4 addr show dev br-lan 2>/dev/null \
-            | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
-        [ "$my_ip" = "$new_ip" ] && break
-        sleep 1; _w=$((_w+1))
+_identify_radios() {
+    radio_2g=""; radio_5g=""; radio_5g2=""
+    config_load wireless
+    for radio in $(uci -q show wireless | awk -F= '/=wifi-device$/{sub(/wireless\./,""); print $1}'); do
+        case $(uci -q get "wireless.${radio}.band" 2>/dev/null) in
+            2g*|2.4*|bgn|bg|b) [ -z "$radio_2g" ] && radio_2g="$radio" ;;
+            5g*|5GHz*|an|a)
+                [ -z "$radio_5g" ] && radio_5g="$radio" || radio_5g2="$radio" ;;
+        esac
     done
-    log "agent_prepare: done. br-lan IP=%s" "$my_ip"
 }
 
-_classify_radio() {
-    local _n="$1" _b
-    config_get _b "$_n" band
-    case "$_b" in
-        2g*|2.4*|bgn|bg|b)
-            [ -z "$radio_2g" ] && radio_2g="$_n" ;;
-        5g*|5GHz*|an|a)
-            _seen5g=$((_seen5g+1))
-            if [ "$_seen5g" -eq 1 ]; then
-                [ -z "$radio_5g" ] && radio_5g="$_n"
-            else
-                [ -z "$radio_5g2" ] && radio_5g2="$_n"
-            fi
-            ;;
-    esac
-}
+_setup_iface_result=""
+_setup_ap() {
+    local name="$1" radio="$2" ssid="$3" key="$4" ft="$5" k="$6" v="$7" \
+          domain="$8" ft_ds="$9" deadline="${10}"
+    local existing; existing=$(_get_ap_iface "$radio")
 
-_setup_ap_iface() {
-    local name="$1" radio="$2" ssid="$3" key="$4"
-    local ieee80211r="$5" mobility_domain="$6" ft_over_ds="$7"
-    local reassociation_deadline="$8" ieee80211k="$9" ieee80211v="${10}"
-
-    # 查找该 radio 下已有的 AP 接口（默认接口优先）
-    local existing_iface
-    _get_default_ap existing_iface "$radio"
-
-    if [ -n "$existing_iface" ]; then
-        # 修改已有接口：先备份原始值（只备份一次）
-        if [ ! -f "/tmp/em_orig_${existing_iface}.ssid" ]; then
-            local _orig_s _orig_e
+    [ -n "$existing" ] && {
+        [ ! -f "/tmp/em_orig_${existing}.ssid" ] && {
+            local orig_ssid orig_enc
             config_load wireless
-            config_get _orig_s "$existing_iface" ssid        'OpenWrt'
-            config_get _orig_e "$existing_iface" encryption  'none'
-            printf '%s' "$_orig_s" > "/tmp/em_orig_${existing_iface}.ssid"
-            printf '%s' "$_orig_e" > "/tmp/em_orig_${existing_iface}.enc"
-        fi
-        # 用已有接口名（而不是 easymesh_ap）
-        name="$existing_iface"
-    fi
+            config_get orig_ssid "$existing" ssid 'OpenWrt'
+            config_get orig_enc  "$existing" encryption 'none'
+            printf '%s' "$orig_ssid" > "/tmp/em_orig_${existing}.ssid"
+            printf '%s' "$orig_enc"  > "/tmp/em_orig_${existing}.enc"
+        }
+        name="$existing"
+    }
 
-    # 写入 EasyMesh 属性
-    uci set wireless.${name}.easymesh_managed='1'
-    uci set wireless.${name}.ssid="$ssid"
+    uci -q set wireless.${name}.easymesh_managed=1
+    uci -q set wireless.${name}.ssid="$ssid"
+
     if [ -n "$key" ]; then
-        uci set wireless.${name}.encryption='psk2+ccmp'
-        uci set wireless.${name}.key="$key"
+        uci -q set wireless.${name}.encryption='psk2+ccmp'
+        uci -q set wireless.${name}.key="$key"
     else
-        uci set wireless.${name}.encryption='none'
+        uci -q set wireless.${name}.encryption='none'
         uci -q del wireless.${name}.key
     fi
-    [ "$ieee80211r" = "1" ] && {
-        uci set wireless.${name}.ieee80211r='1'
-        uci set wireless.${name}.mobility_domain="$mobility_domain"
-        uci set wireless.${name}.ft_over_ds="$ft_over_ds"
-        uci set wireless.${name}.ft_psk_generate_local='1'
-        uci set wireless.${name}.reassociation_deadline="$reassociation_deadline"
+
+    [ "$ft" = "1" ] && {
+        uci -q set wireless.${name}.ieee80211r=1
+        uci -q set wireless.${name}.mobility_domain="$domain"
+        uci -q set wireless.${name}.ft_over_ds="$ft_ds"
+        uci -q set wireless.${name}.ft_psk_generate_local=1
+        uci -q set wireless.${name}.reassociation_deadline="$deadline"
     }
-    [ "$ieee80211k" = "1" ] && {
-        uci set wireless.${name}.ieee80211k='1'
-        uci set wireless.${name}.rrm_neighbor_report='1'
-        uci set wireless.${name}.rrm_beacon_report='1'
+    [ "$k" = "1" ] && {
+        uci -q set wireless.${name}.ieee80211k=1
+        uci -q set wireless.${name}.rrm_neighbor_report=1
+        uci -q set wireless.${name}.rrm_beacon_report=1
     }
-    [ "$ieee80211v" = "1" ] && {
-        uci set wireless.${name}.ieee80211v='1'
-        uci set wireless.${name}.bss_transition='1'
+    [ "$v" = "1" ] && {
+        uci -q set wireless.${name}.ieee80211v=1
+        uci -q set wireless.${name}.bss_transition=1
     }
-    # 返回实际使用的接口名（调用方可用于日志）
     _setup_iface_result="$name"
 }
 
-apply_mesh_config() {
-    local role backhaul mesh_id mesh_key mesh_band ssid key
-    local ieee80211r mobility_domain ft_over_ds reassociation_deadline
-    local ieee80211k ieee80211v routing_algo mesh_fwding
-
-    config_load "$UCI_APP"
-    config_get role                   global role                  'master'
-    config_get backhaul               global backhaul              'wired'
-    config_get mesh_id                global mesh_id               'OpenWrt-Mesh'
-    config_get mesh_key               global mesh_key              ''
-    config_get mesh_band              global mesh_band             '5g'
-    config_get ssid                   global ssid                  'OpenWrt'
-    config_get key                    global key                   ''
-    config_get band_merge             global band_merge            '1'
-    config_get ssid_5g                global ssid_5g               ''
-    config_get ssid_2g                global ssid_2g               ''
-    config_get key_5g                 global key_5g                ''
-    config_get key_2g                 global key_2g                ''
-    config_get wan_mode               global wan_mode              'router'
-    config_get wan_proto              global wan_proto             'dhcp'
-    config_get wan_pppoe_user         global wan_pppoe_user        ''
-    config_get wan_pppoe_pass         global wan_pppoe_pass        ''
-    # 非合并模式下用5G值填充ssid/key（兼容旧代码路径）
-    if [ "$band_merge" != "1" ]; then
-        [ -n "$ssid_5g" ] && ssid="$ssid_5g"
-        [ -n "$key_5g"  ] && key="$key_5g"
-    fi
-    config_get ieee80211r             global ieee80211r            '1'
-    config_get mobility_domain        global mobility_domain       'aabb'
-    config_get ft_over_ds             global ft_over_ds            '1'
-    config_get reassociation_deadline global reassociation_deadline '1000'
-    config_get ieee80211k             global ieee80211k            '1'
-    config_get ieee80211v             global ieee80211v            '1'
-    config_get routing_algo           global routing_algo          'BATMAN_V'
-    config_get mesh_fwding            global mesh_fwding           '0'
-
-    cleanup_wireless
-
-    local radio_2g="" radio_5g="" radio_5g2=""
-    local _seen5g=0
-    config_load wireless
-    config_foreach _classify_radio wifi-device
-    local radio_mesh
-    if [ "$mesh_band" = "2g" ]; then
-        radio_mesh="$radio_2g"
-    else
-        radio_mesh="$radio_5g"
-    fi
-    [ -z "$radio_mesh" ] && radio_mesh=$(uci show wireless 2>/dev/null | awk -F= '/=wifi-device/{print $1}' | head -1 | sed 's/wireless\.//')
-    log "apply_mesh_config: role=%s backhaul=%s mesh_radio=%s 2g=%s 5g=%s" "$role" "$backhaul" "$radio_mesh" "$radio_2g" "$radio_5g"
-
-    # ── network.mesh dummy section ────────────────────────────────────────────
-    uci set network.mesh=interface
-    uci set network.mesh.proto='none'
-    uci commit network
-
-    # ── 无线 mesh 回程（802.11s）─────────────────────────────────────────────
-    uci set wireless.mesh0=wifi-iface
-    uci set wireless.mesh0.device="$radio_mesh"
-    uci set wireless.mesh0.mode='mesh'
-    uci set wireless.mesh0.mesh_id="$mesh_id"
-    uci set wireless.mesh0.mesh_fwding="$mesh_fwding"
-    uci set wireless.mesh0.mesh_rssi_threshold='-80'
-    uci set wireless.mesh0.network='mesh'
-    uci set wireless.mesh0.easymesh_managed='1'
-    if [ -n "$mesh_key" ]; then
-        uci set wireless.mesh0.encryption='sae'
-        uci set wireless.mesh0.key="$mesh_key"
-    else
-        uci set wireless.mesh0.encryption='none'
-    fi
-    uci set wireless.mesh0.disabled=$([ "$backhaul" = "wired" ] && echo '1' || echo '0')
-
-    # ── DHCP server 策略 ──────────────────────────────────────────────────────
-    if [ "$role" = "master" ]; then
-        uci -q del dhcp.lan.ignore
-        log "Role: master — DHCP enabled"
-    else
-        uci set dhcp.lan.ignore='1'
-        log "Role: agent — DHCP disabled (master handles all address allocation)"
-    fi
-    uci commit dhcp
-
-    # ── 客户端 AP ─────────────────────────────────────────────
-    # Master：立即用配置的ssid/key建AP并开启
-    # Agent：建disabled占位符，等主路由推送profile后由apply_profile启用
-    # 这样agent不会广播错误的ssid，收到推送后才开启正确的无线
-    local _ap_idx=0
-    if [ "$role" = "master" ]; then
-        # 双频合并=1：5G和2.4G同ssid/key；=0：独立配置
-        local _ssid_5g _key_5g _ssid_2g _key_2g
-        if [ "$band_merge" = "1" ]; then
-            _ssid_5g="$ssid"; _key_5g="$key"
-            _ssid_2g="$ssid"; _key_2g="$key"
-        else
-            _ssid_5g="${ssid_5g:-$ssid}"; _key_5g="${key_5g:-$key}"
-            _ssid_2g="${ssid_2g:-$ssid}"; _key_2g="${key_2g:-$key}"
-        fi
-        if [ -n "$radio_5g" ]; then
-            _setup_iface_result=""
-            _setup_ap_iface "_5g_" "$radio_5g" "$_ssid_5g" "$_key_5g" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
-            uci -q del wireless.${_setup_iface_result}.disabled
-            _ap_idx=$((_ap_idx+1))
-            log "AP created: easymesh_ap on %s (5G, ssid=%s)" "$radio_5g" "$_ssid_5g"
-        fi
-        if [ -n "$radio_2g" ]; then
-            _setup_iface_result=""
-            _setup_ap_iface "_2g_" "$radio_2g" "$_ssid_2g" "$_key_2g" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
-            uci -q del wireless.${_setup_iface_result}.disabled
-            _ap_idx=$((_ap_idx+1))
-            log "AP created: easymesh_ap_2g on %s (2.4G, ssid=%s)" "$radio_2g" "$_ssid_2g"
-        fi
-        if [ "$_ap_idx" -eq 0 ]; then
-            _setup_ap_iface "_fb_" "radio0" "$_ssid_5g" "$_key_5g" "$ieee80211r" "$mobility_domain" "$ft_over_ds" "$reassociation_deadline" "$ieee80211k" "$ieee80211v"
-            uci -q del wireless.${_setup_iface_result}.disabled
-            log "AP created: easymesh_ap on radio0 (fallback)"
-        fi
-    else
-        # Agent模式：修改已有接口但 disabled=1，等待主节点推送后由 apply_profile 启用
-        if [ -n "$radio_5g" ]; then
-            _setup_iface_result=""
-            _setup_ap_iface "_5g_" "$radio_5g" "pending" "" "0" "" "" "" "0" "0"
-            uci set wireless.${_setup_iface_result}.disabled='1'
-            _ap_idx=$((_ap_idx+1))
-            log "AP placeholder (disabled): easymesh_ap on %s (5G, awaiting master config push)" "$radio_5g"
-        fi
-        if [ -n "$radio_2g" ]; then
-            _setup_iface_result=""
-            _setup_ap_iface "_2g_" "$radio_2g" "pending" "" "0" "" "" "" "0" "0"
-            uci set wireless.${_setup_iface_result}.disabled='1'
-            _ap_idx=$((_ap_idx+1))
-            log "AP placeholder (disabled): easymesh_ap_2g on %s (2.4G, awaiting master config push)" "$radio_2g"
-        fi
-        if [ "$_ap_idx" -eq 0 ]; then
-            _setup_ap_iface "_fb_" "radio0" "pending" "" "0" "" "" "" "0" "0"
-            uci set wireless.${_setup_iface_result}.disabled='1'
-            log "AP placeholder (disabled): easymesh_ap on radio0 (fallback)"
-        fi
-    fi
-    # 确保相关 radio 设备本身不处于 disabled 状态
-    [ -n "$radio_mesh" ] && uci -q del wireless.${radio_mesh}.disabled
-    [ -n "$radio_5g" ]   && uci -q del wireless.${radio_5g}.disabled
-    [ -n "$radio_2g" ]   && uci -q del wireless.${radio_2g}.disabled
-    uci commit wireless
-    log "apply_mesh_config done (%s AP(s) created)" "$_ap_idx"
-
-    # ── WAN口模式 ───────────────────────────────────────────────────────────
-    if [ "$role" = "master" ]; then
-        if [ "$wan_mode" = "switch" ]; then
-            uci -q set network.wan.disabled=1
-            uci -q set network.wan6.disabled=1
-            uci commit network
-            log "WAN mode: switch — WAN port disabled, all ports as LAN"
-        else
-            uci -q del network.wan.disabled
-            uci -q del network.wan6.disabled
-            if [ "$wan_proto" = "pppoe" ] && [ -n "$wan_pppoe_user" ]; then
-                uci set network.wan.proto='pppoe'
-                uci set network.wan.username="$wan_pppoe_user"
-                uci set network.wan.password="$wan_pppoe_pass"
-                log "WAN mode: router PPPoE — user=%s" "$wan_pppoe_user"
-            else
-                # DHCP: 确保proto=dhcp，清理PPPoE残留
-                local _cur_proto; _cur_proto=$(uci get network.wan.proto 2>/dev/null)
-                if [ "$_cur_proto" = "pppoe" ]; then
-                    uci set network.wan.proto='dhcp'
-                    uci -q del network.wan.username
-                    uci -q del network.wan.password
-                fi
-                log "WAN mode: router DHCP — WAN port active"
-            fi
-            uci commit network
-        fi
-    fi
-}
-
-# ── procd ─────────────────────────────────────────────────────────────────────
-_open_firewall_ports() {
-    if command -v iptables >/dev/null 2>&1; then
-        iptables -C INPUT -p tcp --dport 4304 -j ACCEPT 2>/dev/null \
-            || iptables -I INPUT 1 -p tcp --dport 4304 -j ACCEPT 2>/dev/null
-        iptables -C INPUT -p udp --dport 4305 -j ACCEPT 2>/dev/null \
-            || iptables -I INPUT 1 -p udp --dport 4305 -j ACCEPT 2>/dev/null
-        log "Firewall: opened TCP/UDP 4304/4305 via iptables"
-    fi
-    if command -v nft >/dev/null 2>&1; then
-        nft insert rule inet fw4 input tcp dport 4304 accept 2>/dev/null \
-            || nft insert rule inet filter input tcp dport 4304 accept 2>/dev/null || true
-        nft insert rule inet fw4 input udp dport 4305 accept 2>/dev/null \
-            || nft insert rule inet filter input udp dport 4305 accept 2>/dev/null || true
-        log "Firewall: opened TCP/UDP 4304/4305 via nft"
-    fi
-}
-
 start_service() {
-    local enabled role backhaul
     config_load "$UCI_APP"
     config_get_bool enabled global enabled 0
     [ "$enabled" -eq 0 ] && return 0
 
-    config_get role     global role     'master'
-    config_get backhaul global backhaul 'wired'
+    config_get role        global  role                   master
+    config_get backhaul    global  backhaul               wired
+    config_get mesh_id     global  mesh_id                'OpenWrt-Mesh'
+    config_get mesh_key    global  mesh_key               ''
+    config_get mesh_band   global  mesh_band              5g
+    config_get ssid        global  ssid                   'OpenWrt'
+    config_get key         global  key                     ''
+    config_get band_merge  global  band_merge              1
+    config_get ssid_5g     global  ssid_5g                 ''
+    config_get ssid_2g     global  ssid_2g                 ''
+    config_get key_5g      global  key_5g                  ''
+    config_get key_2g      global  key_2g                  ''
+    config_get wan_mode    global  wan_mode                router
+    config_get wan_proto   global  wan_proto               dhcp
+    config_get wan_user    global  wan_pppoe_user          ''
+    config_get wan_pass    global  wan_pppoe_pass          ''
+    config_get ft          global  ieee80211r              1
+    config_get domain      global  mobility_domain         aabb
+    config_get ft_ds       global  ft_over_ds              1
+    config_get deadline    global  reassociation_deadline  1000
+    config_get k           global  ieee80211k              1
+    config_get v           global  ieee80211v              1
+
+    mkdir -p /etc/easymesh /etc/easymesh_nodes
     log "EasyMesh starting (role=%s)" "$role"
 
-    [ "$role" = "agent" -a ! -f /etc/easymesh_agent ] && {
-        local ipaddr; ipaddr=$(uci_get network lan ipaddr '192.168.1.1')
-        local hostname; hostname=$(uci_get system @system[0] hostname openwrt)
-        printf 'ipaddr=%s\nhostname=%s\n' "$ipaddr" "$hostname" > /etc/easymesh_agent
+    _agent_setup "$role" "$(uci_get network lan ipaddr)"
+    cleanup_wireless
+    _identify_radios
+    local mesh_radio="$radio_5g"
+    [ "$mesh_band" = "2g" ] && mesh_radio="$radio_2g"
+    [ -z "$mesh_radio" ] && mesh_radio=$(uci -q show wireless 2>/dev/null | \
+        awk -F= '/=wifi-device$/{sub(/wireless\./,""); print $1}' | head -1)
+
+    uci -q set network.mesh=interface
+    uci -q set network.mesh.proto=none
+    uci -q commit network
+
+    [ "$backhaul" != "wired" ] && {
+        uci -q set wireless.mesh0=wifi-iface
+        uci -q set wireless.mesh0.device="$mesh_radio"
+        uci -q set wireless.mesh0.mode=mesh
+        uci -q set wireless.mesh0.mesh_id="$mesh_id"
+        uci -q set wireless.mesh0.mesh_fwding=0
+        uci -q set wireless.mesh0.mesh_rssi_threshold=-80
+        uci -q set wireless.mesh0.network=mesh
+        uci -q set wireless.mesh0.easymesh_managed=1
+        if [ -n "$mesh_key" ]; then
+            uci -q set wireless.mesh0.encryption=sae
+            uci -q set wireless.mesh0.key="$mesh_key"
+        else
+            uci -q set wireless.mesh0.encryption=none
+        fi
     }
 
-    apply_mesh_config
-
-    if [ "$role" = "agent" ] && [ "$backhaul" = "wired" ]; then
-        _agent_prepare
-    fi
-
-    _open_firewall_ports
-
-    local _lip _lw=0
-    while [ $_lw -lt 20 ]; do
-        _lip=$(ip -4 addr show dev br-lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
-        [ -n "$_lip" ] && break
-        sleep 1; _lw=$((_lw+1))
-    done
-    if [ -z "$_lip" ]; then
-        log "WARN: br-lan has no IP after 20s, starting daemon anyway"
+    if [ "$role" = "master" ]; then
+        uci -q del dhcp.lan.ignore
     else
-        log "br-lan IP ready: %s" "$_lip"
+        uci -q set dhcp.lan.ignore=1
+    fi
+    uci -q commit dhcp
+
+    local idx=0
+    if [ "$role" = "master" ]; then
+        if [ "$band_merge" = "1" ]; then
+            ssid_5g="$ssid"; key_5g="$key"
+            ssid_2g="$ssid"; key_2g="$key"
+        else
+            ssid_5g="${ssid_5g:-$ssid}"; key_5g="${key_5g:-$key}"
+            ssid_2g="${ssid_2g:-$ssid}"; key_2g="${key_2g:-$key}"
+        fi
+
+        [ -n "$radio_5g" ] && {
+            _setup_ap "_5g_" "$radio_5g" "$ssid_5g" "$key_5g" "$ft" "$k" "$v" "$domain" "$ft_ds" "$deadline"
+            uci -q del wireless.${_setup_iface_result}.disabled
+            idx=$((idx+1))
+        }
+        [ -n "$radio_2g" ] && {
+            _setup_ap "_2g_" "$radio_2g" "$ssid_2g" "$key_2g" "$ft" "$k" "$v" "$domain" "$ft_ds" "$deadline"
+            uci -q del wireless.${_setup_iface_result}.disabled
+            idx=$((idx+1))
+        }
+        [ "$idx" -eq 0 ] && {
+            _setup_ap "_fb_" "${mesh_radio:-radio0}" "$ssid_5g" "$key_5g" "$ft" "$k" "$v" "$domain" "$ft_ds" "$deadline"
+            uci -q del wireless.${_setup_iface_result}.disabled
+        }
+    else
+        [ -n "$radio_5g" ] && {
+            _setup_ap "_5g_" "$radio_5g" "pending" "" "0" "0" "0" "" "" ""
+            uci -q set wireless.${_setup_iface_result}.disabled=1
+            idx=$((idx+1))
+        }
+        [ -n "$radio_2g" ] && {
+            _setup_ap "_2g_" "$radio_2g" "pending" "" "0" "0" "0" "" "" ""
+            uci -q set wireless.${_setup_iface_result}.disabled=1
+            idx=$((idx+1))
+        }
+        [ "$idx" -eq 0 ] && {
+            _setup_ap "_fb_" "${mesh_radio:-radio0}" "pending" "" "0" "0" "0" "" "" ""
+            uci -q set wireless.${_setup_iface_result}.disabled=1
+        }
     fi
 
-    log "Reloading wireless config..."
-    wifi reload
-    log "Wireless reload done"
+    [ -n "$mesh_radio" ] && uci -q del wireless.${mesh_radio}.disabled
+    [ -n "$radio_5g" ]   && uci -q del wireless.${radio_5g}.disabled
+    [ -n "$radio_2g" ]   && uci -q del wireless.${radio_2g}.disabled
 
-    log "Starting EasyMesh daemon..."
-    procd_open_instance "easymesh-${role}"
-    procd_set_param command /usr/sbin/easymesh-${role}
-    procd_set_param respawn 10 3 0
+    uci commit wireless
+
+    if [ "$role" = "master" ]; then
+        if [ "$wan_mode" = "switch" ]; then
+            uci -q set network.wan.disabled=1
+            uci -q set network.wan6.disabled=1
+        else
+            uci -q del network.wan.disabled
+            uci -q del network.wan6.disabled
+            [ "$wan_proto" = "pppoe" ] && [ -n "$wan_user" ] && {
+                uci -q set network.wan.proto=pppoe
+                uci -q set network.wan.username="$wan_user"
+                uci -q set network.wan.password="$wan_pass"
+            }
+        fi
+        uci -q commit network
+    fi
+
+    iptables -C INPUT -p tcp --dport 4304 -j ACCEPT 2>/dev/null || \
+        iptables -I INPUT 1 -p tcp --dport 4304 -j ACCEPT 2>/dev/null || true
+    iptables -C INPUT -p udp --dport 4305 -j ACCEPT 2>/dev/null || \
+        iptables -I INPUT 1 -p udp --dport 4305 -j ACCEPT 2>/dev/null || true
+    nft insert rule inet fw4 input tcp dport 4304 accept 2>/dev/null || true
+    nft insert rule inet fw4 input udp dport 4305 accept 2>/dev/null || true
+
+    wifi reload
+    sleep 2
+
+    procd_open_instance "easymesh"
+    procd_set_param command /usr/sbin/easymesh-"$role"
+    procd_set_param respawn
     procd_set_param stdout 1
     procd_set_param stderr 1
     procd_close_instance
-}
-
-_close_firewall_ports() {
-    if command -v iptables >/dev/null 2>&1; then
-        while iptables -C INPUT -p tcp --dport 4304 -j ACCEPT 2>/dev/null; do
-            iptables -D INPUT -p tcp --dport 4304 -j ACCEPT 2>/dev/null || break
-        done
-        while iptables -C INPUT -p udp --dport 4305 -j ACCEPT 2>/dev/null; do
-            iptables -D INPUT -p udp --dport 4305 -j ACCEPT 2>/dev/null || break
-        done
-    fi
 }
 
 stop_service() {
@@ -494,25 +335,25 @@ stop_service() {
         [ "$pid" != "$$" ] && kill "$pid" 2>/dev/null || true
     done
 
-    # 停止无线 onboard AP（临时开放热点）
-    if [ -f /tmp/easymesh_pair_hostapd.pid ]; then
-        kill "$(cat /tmp/easymesh_pair_hostapd.pid)" 2>/dev/null || true
-    fi
-    if [ -f /tmp/easymesh_pair_dnsmasq.pid ]; then
-        kill "$(cat /tmp/easymesh_pair_dnsmasq.pid)" 2>/dev/null || true
-    fi
+    [ -f /tmp/easymesh_pair_hostapd.pid ] && kill "$(cat /tmp/easymesh_pair_hostapd.pid)" 2>/dev/null
+    [ -f /tmp/easymesh_pair_dnsmasq.pid ] && kill "$(cat /tmp/easymesh_pair_dnsmasq.pid)" 2>/dev/null
     iw dev easymesh-pair0 del 2>/dev/null || true
 
-    _close_firewall_ports
+    while iptables -C INPUT -p tcp --dport 4304 -j ACCEPT 2>/dev/null; do
+        iptables -D INPUT -p tcp --dport 4304 -j ACCEPT || break
+    done
+    while iptables -C INPUT -p udp --dport 4305 -j ACCEPT 2>/dev/null; do
+        iptables -D INPUT -p udp --dport 4305 -j ACCEPT || break
+    done
+
     cleanup_wireless
-
     uci -q del dhcp.lan.ignore
-    uci commit dhcp
-
+    uci -q commit dhcp
     uci -q del network.mesh
-    uci commit network
+    uci -q commit network
+
     ( sleep 1; wifi reload ) &
-    rm -rf /tmp/easymesh* /tmp/em_* 2>/dev/null
+    rm -rf /tmp/easymesh_* /tmp/em_* 2>/dev/null
 }
 
 reload_service() {

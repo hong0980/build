@@ -1019,3 +1019,130 @@ msgstr "角色切换：%s → %s"
 
 msgid "DBG main_loop iter=%s: master not found yet, will retry"
 msgstr "主循环第 %s 次：主节点尚未找到，继续重试"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# easymesh-master daemon — 优化版新增日志条目
+# ══════════════════════════════════════════════════════════════════════════════
+
+msgid "ACS: ch %s -> %s (occupancy %s)"
+msgstr "ACS: 信道 %s -> %s（占用: %s 个 AP）"
+
+msgid "All nodes approved - stopping onboard AP"
+msgstr "所有节点已审批，停止入网热点"
+
+msgid "Backhaul ready (mode=%s role=%s)"
+msgstr "回程就绪（模式=%s 角色=%s）"
+
+msgid "Backhaul: FAILED to add bat0 to br-lan"
+msgstr "回程: bat0 加入 br-lan 失败"
+
+msgid "Backhaul: bat0 joined br-lan"
+msgstr "回程: bat0 已加入 br-lan"
+
+msgid "Backhaul: bat0 removed from br-lan"
+msgstr "回程: bat0 已从 br-lan 移除"
+
+msgid "Backhaul: failed to add %s to bat0"
+msgstr "回程: %s 加入 bat0 失败"
+
+msgid "Channel sync: ch=%s reason=%s"
+msgstr "信道同步: ch=%s 原因=%s"
+
+msgid "DFS: mesh-wide channel -> %s"
+msgstr "DFS: 全网信道切换 -> %s"
+
+msgid "DFS: pushed ch %s to %s"
+msgstr "DFS: 信道 %s 已推送至 %s"
+
+msgid "Dedicated backhaul: %s configured (ch=%s VHT80)"
+msgstr "专用回程: %s 已配置（信道=%s VHT80）"
+
+msgid "Failed to create bat0"
+msgstr "bat0 创建失败"
+
+msgid "Gateway dead - re-electing"
+msgstr "主节点无响应，重新选举"
+
+msgid "Gateway: master %s unreachable (%s/3)"
+msgstr "网关: 主节点 %s 无响应（%s/3）"
+
+msgid "HTTP POST retry %s/%s: %s"
+msgstr "HTTP POST 重试 %s/%s: %s"
+
+msgid "HTTP server failed to start on :%s"
+msgstr "HTTP 服务器启动失败，端口: %s"
+
+msgid "HTTP server listening on :%s"
+msgstr "HTTP 服务器已监听端口: %s"
+
+msgid "HTTP server starting on :%s"
+msgstr "HTTP 服务器正在启动，端口: %s"
+
+msgid "Master not at %s"
+msgstr "主节点不在 %s"
+
+msgid "No batman neighbour in 40s, continuing"
+msgstr "40 秒内未发现 batman-adv 邻居，继续执行"
+
+msgid "Node re-registered: %s (%s) ip=%s"
+msgstr "节点重新注册: %s (%s) ip=%s"
+
+msgid "Not registered, re-registering"
+msgstr "未注册，重新注册中"
+
+msgid "Profile applied (config changed, ssid=%s)"
+msgstr "配置已应用（配置已变更，ssid=%s）"
+
+msgid "Profile applied (no wireless change)"
+msgstr "配置已应用（无线配置无变化）"
+
+msgid "Profile updated: ssid=%s channel=%s backhaul=%s"
+msgstr "配置已更新: ssid=%s 信道=%s 回程=%s"
+
+msgid "Registered with master %s via %s"
+msgstr "已向主节点 %s 注册，方式: %s"
+
+msgid "SKIP: %s cooldown (%ss)"
+msgstr "跳过漫游: %s 冷却中（剩余 %s 秒）"
+
+msgid "Self-healing: gateway path %s -> %s"
+msgstr "自愈: 网关路径变更 %s -> %s"
+
+msgid "USR1: no profile, agents will poll"
+msgstr "USR1: 无配置文件，从节点将主动轮询"
+
+msgid "USR1: pushed profile to %s"
+msgstr "USR1: 已推送配置至 %s"
+
+msgid "USR1: pushing profile to all approved agents"
+msgstr "USR1: 正在向所有已审批从节点推送配置"
+
+msgid "Wired backhaul: %s -> bat0"
+msgstr "有线回程: %s -> bat0"
+
+msgid "bat0 missing after 15s - kmod-batman-adv?"
+msgstr "bat0 等待 15 秒仍不存在，请检查 kmod-batman-adv"
+
+msgid "batman neighbour after %ss"
+msgstr "等待 %s 秒后发现 batman-adv 邻居"
+
+msgid "batman-adv: BLA=off DAT=off (wired)"
+msgstr "batman-adv: BLA=关 DAT=关（有线模式）"
+
+msgid "batman-adv: role=agent gw=%s OGM=%sms"
+msgstr "batman-adv: 角色=从节点 网关=%s OGM间隔=%sms"
+
+msgid "batman-adv: role=master gw=server OGM=%sms"
+msgstr "batman-adv: 角色=主节点 网关=server OGM间隔=%sms"
+
+msgid "batman-adv: routing_algo=%s"
+msgstr "batman-adv: 路由算法=%s"
+
+msgid "batman-adv: routing_algo=%s rejected"
+msgstr "batman-adv: 路由算法 %s 设置被拒绝"
+
+msgid "register_node: missing ip"
+msgstr "注册节点: 缺少 IP 地址"
+
+msgid "register_node: missing mac"
+msgstr "注册节点: 缺少 MAC 地址"
