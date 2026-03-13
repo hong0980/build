@@ -129,8 +129,11 @@ get_ap_iface() {
     echo "$AP_IFACE_CACHE"
 }
 
+_WIFI_DEVS_CACHE=""
 _wifi_devs() {
-    uci -q show wireless | awk -F= '/=wifi-device$/{sub(/wireless\./,""); print $1}'
+    [ -n "$_WIFI_DEVS_CACHE" ] && { echo "$_WIFI_DEVS_CACHE"; return; }
+    _WIFI_DEVS_CACHE=$(uci -q show wireless | awk -F= '/=wifi-device$/{sub(/wireless\./,""); print $1}')
+    echo "$_WIFI_DEVS_CACHE"
 }
 
 _profile_sum() { md5sum < "$PROFILE_FILE" | cut -d' ' -f1; }
@@ -376,7 +379,7 @@ teardown_batman() {
         fi
     fi
     local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
-    [ "$backhaul" != "wired" ] && batctl meshif "$MESH_IF" interface del mesh0 2>/dev/null || true
+    { [ "$backhaul" != "wired" ] && batctl meshif "$MESH_IF" interface del mesh0 2>/dev/null; } || true
     ip link set "$MESH_IF" down 2>/dev/null || true
     log "batman-adv torn down"
 }
@@ -392,25 +395,16 @@ discovery_server() {
 }
 
 __handle_hello() {
-    [ -z "$NODE_DB"              ] && NODE_DB="/tmp/easymesh_nodes"
-    [ -z "$PENDING_DB"           ] && PENDING_DB="/tmp/easymesh_pending"
-    [ -z "$PERSISTENT_NODE_DB"   ] && PERSISTENT_NODE_DB="/etc/easymesh/easymesh_nodes"
-    [ -z "$LOGFILE"              ] && LOGFILE="/tmp/easymesh.log"
-    [ -z "$MASTER_PORT"          ] && MASTER_PORT=4304
-    [ -z "$DISC_REPLY_PORT"      ] && DISC_REPLY_PORT=4306
-    [ -z "$BRIDGE_IF"            ] && BRIDGE_IF="br-lan"
-
     local msg; IFS= read -r -t 5 msg 2>/dev/null
     [ -z "$msg" ] && return 0
 
     local cmd mac agent_ip host
-    cmd=$(      printf '%s' "$msg" | awk '{print $1}')
-    mac=$(      printf '%s' "$msg" | awk '{print $2}')
-    agent_ip=$( printf '%s' "$msg" | awk '{print $3}')
-    host=$(     printf '%s' "$msg" | awk '{print $4}')
+    read -r cmd mac agent_ip host <<EOF
+$msg
+EOF
 
     [ "$cmd" != "EASYMESH_HELLO" ] && return 0
-    [ -z "$mac" ] || [ -z "$agent_ip" ] && return 0
+    { [ -z "$mac" ] || [ -z "$agent_ip" ]; } && return 0
     echo "$mac" | grep -qiE '^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$' || return 0
     mac=$(echo "$mac" | tr 'A-F' 'a-f')
 
@@ -549,7 +543,7 @@ __http_handler() {
             [ -z "$new_chan" ] && { _http_ok '{"status":"ignored"}'; return; }
             log "Channel sync: ch=%s reason=%s" "$new_chan" "${reason:-?}"
             local rd
-            for rd in $(_wifi_devs); do uci -q set "${rd}.channel=${new_chan}"; done
+            for rd in $(_wifi_devs); do uci -q set "wireless.${rd}.channel=${new_chan}"; done
             uci_commit wireless; wifi reload &
             _http_ok "{\"status\":\"ok\",\"channel\":\"$new_chan\"}"
             ;;
@@ -902,7 +896,7 @@ apply_profile() {
 
     [ -n "$channel" ] && [ "$channel" != "auto" ] && {
         local rd
-        for rd in $(_wifi_devs); do uci -q set "${rd}.channel=$channel"; done
+        for rd in $(_wifi_devs); do uci -q set "wireless.${rd}.channel=$channel"; done
     }
 
     local wchanges; wchanges=$(uci changes wireless 2>/dev/null)
@@ -955,7 +949,7 @@ check_routing_paths() {
 ########################################
 sync_neighbor_list() {
     local ap; ap=$(get_ap_iface)
-    local ssid; ssid=$(uci_get wireless easymesh_ap ssid || uci_get wireless @wifi-iface[0] ssid)
+    local ssid; ssid=$(uci -q show wireless | awk -F= '/\.easymesh_managed=.1/{sub(/wireless\./,""); sub(/\.easymesh_managed.*/,""); iface=$1} iface && /\.ssid=/{sub(/.*=/,""); print; exit}')
     [ -z "$ssid" ] && return
     local my_bssid; my_bssid=$(cat /sys/class/net/${ap}/address 2>/dev/null)
     > "$NEIGHBOR_FILE"
@@ -1088,7 +1082,7 @@ handle_dfs_channel_change() {
     local new_chan="$1"
     logd "DFS: mesh-wide channel -> %s" "$new_chan"
     local rd
-    for rd in $(_wifi_devs); do uci -q set "${rd}.channel=${new_chan}"; done
+    for rd in $(_wifi_devs); do uci -q set "wireless.${rd}.channel=${new_chan}"; done
     uci_commit wireless
     [ "$(get_role)" != "master" ] && return
     local payload="{\"channel\":\"$new_chan\",\"reason\":\"dfs\"}"
@@ -1112,7 +1106,7 @@ optimize_channel() {
     local ch24="1 6 11" ch5="36 40 44 48 149 153 157 161 165"
     [ "$dfs" = "1" ] && ch5="$ch5 52 56 60 64 100 104 108 112 116 132 136 140"
     local rd; rd=$(_wifi_devs | head -1)
-    local band; band=$(uci -q get "${rd}.band" || echo "5g")
+    local band; band=$(uci -q get "wireless.${rd}.band" 2>/dev/null || echo "5g")
     local cands; case "$band" in 2g*|2.4*) cands="$ch24";; *) cands="$ch5";; esac
     local ap; ap=$(get_ap_iface)
     local scan; scan=$(iw dev "$ap" scan 2>/dev/null)
@@ -1125,7 +1119,7 @@ optimize_channel() {
     local cur; cur=$(uci -q get "wireless.${rd}.channel" 2>/dev/null)
     [ "$cur" = "$best" ] && return
     logd "ACS: ch %s -> %s (occupancy %s)" "$cur" "$best" "$best_cnt"
-    uci -q set "${rd}.channel=$best"; uci_commit wireless && wifi reload
+    uci -q set "wireless.${rd}.channel=$best"; uci_commit wireless && wifi reload
     local payload="{\"channel\":\"$best\",\"reason\":\"acs\"}"
     _push_acs() { do_http_post "http://${1}:${MASTER_PORT}/channel/apply" "$payload" >/dev/null 2>&1 & }
     _iter_nodes _push_acs
@@ -1207,7 +1201,7 @@ update_topology() {
     my_hostname=$(uci_get system @system[0] hostname 'OpenWrt')
     clients=$(iw dev "$(get_ap_iface)" station dump 2>/dev/null | grep -c "^Station")
     local nodes="{\"mac\":\"$my_mac\",\"ip\":\"$my_ip\",\"role\":\"$my_role\",\"hostname\":\"$my_hostname\",\"clients\":$clients}"
-    local links="" tmp="/tmp/em_orig_$$.txt"
+    local links="" tmp="/tmp/em_topo_$$.txt"
     batctl meshif "$MESH_IF" orig 2>/dev/null | awk 'NR>2{print}' > "$tmp"
     while read -r peer_mac _ tq _rest; do
         [ -z "$peer_mac" ] && continue
@@ -1365,7 +1359,7 @@ main_loop() {
     fi
     setup_dedicated_backhaul
 
-    local _registered=0 _iter=0 _last_role="$role"
+    local _registered=0 _iter=0
 
     while true; do
         if [ $(( _iter % (ELECTION_INTERVAL / 10) )) -eq 0 ]; then
@@ -1380,12 +1374,6 @@ main_loop() {
                 rm -f "${EM_PID_DIR}/easymesh_${prev_role}.pid"
                 echo $$ > "${EM_PID_DIR}/easymesh_${role}.pid"
                 [ "$role" = "master" ] && { _bg disc_server discovery_server; generate_profile; }
-            fi
-
-            if [ "$role" != "$_last_role" ]; then
-                local gw; gw=$(uci_get easymesh global wan_mode router)
-                log "batman-adv: role=%s gw=%s OGM=%sms" "$role" "$gw" "$BATMAN_OGM_INTERVAL"
-                _last_role="$role"
             fi
         else
             role=$(get_role)
