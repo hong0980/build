@@ -12,7 +12,7 @@ export EM_PID_DIR="/tmp/easymesh_pids"
 
 EM_STATE_DIR="/etc/easymesh"
 export MASTER_IP_FILE="${EM_STATE_DIR}/master_ip"
-export PERSISTENT_NODE_DB="/etc/easymesh_nodes"
+export PERSISTENT_NODE_DB="/etc/easymesh/easymesh_nodes"
 _LAST_SUM_FILE="${EM_STATE_DIR}/last_sum"
 
 _is_dsa() { ip link show 2>/dev/null | grep -qE 'lan[0-9]+@eth'; }
@@ -66,11 +66,7 @@ GW_WATCHDOG_INTERVAL=10
 HTTP_MAX_RETRIES=3
 HTTP_TIMEOUT=5
 
-########################################
-# I18N — 语言读一次后缓存到文件，所有子进程共享
-########################################
 [ -z "$lang" ] && lang=$(uci_get luci main lang en)
-
 translate() {
     local tpl="$1"; shift
     local translated
@@ -79,9 +75,6 @@ translate() {
     [ $# -gt 0 ] && printf "$translated" "$@" || printf '%s' "$translated"
 }
 
-########################################
-# LOGGING
-########################################
 _emlog() {
     local level="$1" tag="$2"; shift 2
     local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
@@ -110,8 +103,13 @@ loge() { _emlog "ERROR" "core"  "$(translate "$@")"; }
 ########################################
 # BASIC HELPERS
 ########################################
-get_mac()   { cat /sys/class/net/${BRIDGE_IF}/address 2>/dev/null ||
-              cat /sys/class/net/${ETH_IF}/address 2>/dev/null; }
+MAC_CACHE=""
+get_mac() {
+    [ -n "$MAC_CACHE" ] && { echo "$MAC_CACHE"; return; }
+    MAC_CACHE=$(cat /sys/class/net/${BRIDGE_IF}/address 2>/dev/null ||
+                 cat /sys/class/net/${ETH_IF}/address 2>/dev/null)
+    echo "$MAC_CACHE"
+}
 get_ip()    { ip -4 addr show dev "$BRIDGE_IF" 2>/dev/null |
               awk '/inet /{print $2}' | cut -d/ -f1 | head -1; }
 master_ip() { cat "$MASTER_IP_FILE" 2>/dev/null; }
@@ -123,12 +121,12 @@ get_role() {
 }
 _set_role() { _ROLE_CACHE="$1"; echo "$1" > "$ROLE_FILE"; }
 
-_AP_IFACE_CACHE=""
+AP_IFACE_CACHE=""
 get_ap_iface() {
-    [ -n "$_AP_IFACE_CACHE" ] && { echo "$_AP_IFACE_CACHE"; return; }
+    [ -n "$AP_IFACE_CACHE" ] && { echo "$AP_IFACE_CACHE"; return; }
     local iface; iface=$(iw dev 2>/dev/null | awk '/Interface/{i=$2} /type AP/{print i; exit}')
-    _AP_IFACE_CACHE="${iface:-wlan0}"
-    echo "$_AP_IFACE_CACHE"
+    AP_IFACE_CACHE="${iface:-wlan0}"
+    echo "$AP_IFACE_CACHE"
 }
 
 _wifi_devs() {
@@ -136,10 +134,8 @@ _wifi_devs() {
 }
 
 _profile_sum() { md5sum < "$PROFILE_FILE" | cut -d' ' -f1; }
-
 roam_cooldown_get() { cat "${ROAM_COOLDOWN_DIR}/${1}" 2>/dev/null || echo 0; }
-roam_cooldown_set() { mkdir -p "$ROAM_COOLDOWN_DIR"
-                      printf '%s\n' "$2" > "${ROAM_COOLDOWN_DIR}/${1}"; }
+roam_cooldown_set() { printf '%s\n' "$2" > "${ROAM_COOLDOWN_DIR}/${1}"; }
 
 do_http_post() {
     local url="$1" data="$2" retry=0 resp
@@ -164,7 +160,6 @@ _node_update() {
     local f="$1" ip="$2" ts; ts=$(date +%s)
     sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"${ip}\"/" "$f"
     sed -i "s/\"ts\":[0-9]*/\"ts\":${ts}/" "$f"
-    # 同步更新持久存储
     local _bn; _bn="${f##*/}"
     [ -f "${PERSISTENT_NODE_DB}/${_bn}" ] && cp "$f" "${PERSISTENT_NODE_DB}/${_bn}" 2>/dev/null
 }
@@ -215,7 +210,7 @@ _stop_jobs() {
     _pkill "socat.*:${DISC_PORT}"
 }
 
-_bg() { local name="$1"; shift; mkdir -p "$EM_PID_DIR"; "$@" & echo $! > "${EM_PID_DIR}/${name}.pid"; }
+_bg() { local name="$1"; shift; "$@" & echo $! > "${EM_PID_DIR}/${name}.pid"; }
 
 ########################################
 # 2. ROLE ELECTION
@@ -233,7 +228,6 @@ elect_role() {
         log "Election: WAN up -> master (%s)" "$mymac"; return 0
     fi
     local best_mac="$mymac" best_ip="$myip"
-    mkdir -p "$NODE_DB"
     for f in "$NODE_DB"/*.json; do
         [ -f "$f" ] || continue
         local peer_ip peer_mac
@@ -400,7 +394,7 @@ discovery_server() {
 __handle_hello() {
     [ -z "$NODE_DB"              ] && NODE_DB="/tmp/easymesh_nodes"
     [ -z "$PENDING_DB"           ] && PENDING_DB="/tmp/easymesh_pending"
-    [ -z "$PERSISTENT_NODE_DB"   ] && PERSISTENT_NODE_DB="/etc/easymesh_nodes"
+    [ -z "$PERSISTENT_NODE_DB"   ] && PERSISTENT_NODE_DB="/etc/easymesh/easymesh_nodes"
     [ -z "$LOGFILE"              ] && LOGFILE="/tmp/easymesh.log"
     [ -z "$MASTER_PORT"          ] && MASTER_PORT=4304
     [ -z "$DISC_REPLY_PORT"      ] && DISC_REPLY_PORT=4306
@@ -633,7 +627,6 @@ register_node() {
     local persistent="${PERSISTENT_NODE_DB}/${safe}.json"
 
     if [ -f "$approved" ]; then
-        # 节点已在运行时数据库中
         _node_update "$approved" "${ip:-?}"
         log "Node re-registered (approved): %s (%s) ip=%s" "$mac" "${hostname:-?}" "$ip"
     elif [ -f "$persistent" ]; then
@@ -752,8 +745,6 @@ poll_for_approval() {
             log "Waiting for master approval..."; return 1 ;;
         *'"status":"unregistered"'*)
             logw "Not registered, re-registering"
-            # 不删 MASTER_IP_FILE：master IP仍然有效，不必重新发现
-            # 返回2通知main_loop重置_registered，走重注册流程
             do_register || true; return 2 ;;
         *'"status":"approved"'*)
             apply_profile "$resp"
@@ -793,7 +784,7 @@ generate_profile() {
         case "$b" in 5g*|5GHz*) break ;; esac
     done
     [ -z "$rd" ] && rd=$(_wifi_devs | head -1)
-    channel=$(uci -q get "${rd}.channel" || echo 'auto')
+    channel=$(uci -q get "wireless.${rd}.channel" 2>/dev/null || echo 'auto')
     local new_prof
     new_prof=$(printf \
         '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211r":"%s","ieee80211k":"%s","ieee80211v":"%s","ft_over_ds":"%s","mobility_domain":"%s","backhaul":"%s","band_merge":"%s","ssid_5g":"%s","ssid_2g":"%s","key_5g":"%s","key_2g":"%s"}' \
@@ -814,22 +805,19 @@ apply_profile() {
     local ieee80211r ieee80211k ieee80211v ft_over_ds mobility_domain backhaul
     local band_merge ssid_5g ssid_2g key_5g key_2g
     eval "$(jsonfilter -i "$_pf" \
-        -e 'ssid=@.ssid'             -e 'key=@.key'               \
-        -e 'channel=@.channel'       -e 'mesh_id=@.mesh_id'       \
-        -e 'mesh_key=@.mesh_key'     -e 'routing_algo=@.routing_algo' \
-        -e 'ieee80211r=@.ieee80211r' -e 'ieee80211k=@.ieee80211k' \
-        -e 'ieee80211v=@.ieee80211v' -e 'ft_over_ds=@.ft_over_ds' \
-        -e 'mobility_domain=@.mobility_domain' -e 'backhaul=@.backhaul' \
-        -e 'band_merge=@.band_merge' -e 'ssid_5g=@.ssid_5g'      \
-        -e 'ssid_2g=@.ssid_2g'      -e 'key_5g=@.key_5g'         \
-        -e 'key_2g=@.key_2g'        2>/dev/null)"
+        -e 'ssid=@.ssid'                        -e 'key=@.key'                   \
+        -e 'channel=@.channel'                  -e 'mesh_id=@.mesh_id'           \
+        -e 'mesh_key=@.mesh_key'                -e 'routing_algo=@.routing_algo' \
+        -e 'ieee80211r=@.ieee80211r'            -e 'ieee80211k=@.ieee80211k'     \
+        -e 'ieee80211v=@.ieee80211v'            -e 'ft_over_ds=@.ft_over_ds'     \
+        -e 'mobility_domain=@.mobility_domain'  -e 'backhaul=@.backhaul'         \
+        -e 'band_merge=@.band_merge'            -e 'ssid_5g=@.ssid_5g'           \
+        -e 'ssid_2g=@.ssid_2g'                  -e 'key_5g=@.key_5g'             \
+        -e 'key_2g=@.key_2g'                    2>/dev/null)"
     rm -f "$_pf"
     [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
     log "Applying profile: ssid=%s channel=%s backhaul=%s" "$ssid" "$channel" "${backhaul:-wired}"
 
-    # 用 uci -q set/commit 而非 uci_set/uci_commit
-    # 原因：uci_commit easymesh 会通知 procd 触发 reload_service (service_triggers)
-    # 导致 daemon 重启 → agent 循环在 "Waiting for master approval" 中
     uci -q set easymesh.global.enabled=1
     uci -q set easymesh.global.role=agent
     uci -q set easymesh.global.ssid="$ssid"
@@ -1134,7 +1122,7 @@ optimize_channel() {
         [ "$cnt" -lt "$best_cnt" ] && { best_cnt=$cnt; best=$ch; }
     done
     [ -z "$best" ] && return
-    local cur; cur=$(uci -q get "${rd}.channel")
+    local cur; cur=$(uci -q get "wireless.${rd}.channel" 2>/dev/null)
     [ "$cur" = "$best" ] && return
     logd "ACS: ch %s -> %s (occupancy %s)" "$cur" "$best" "$best_cnt"
     uci -q set "${rd}.channel=$best"; uci_commit wireless && wifi reload
@@ -1331,19 +1319,17 @@ main_loop() {
     _stop_jobs
     mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR" "$EM_STATE_DIR" "$PERSISTENT_NODE_DB" 2>/dev/null
 
-    if [ -d "$PERSISTENT_NODE_DB" ]; then
-        log "Recovering approved nodes from persistent storage..."
-        for _pf in "$PERSISTENT_NODE_DB"/*.json; do
-            [ -f "$_pf" ] || continue
-            local _bn; _bn="${_pf##*/}"
-            local _rt="${NODE_DB}/${_bn}"
-            if [ ! -f "$_rt" ]; then
-                sed "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" "$_pf" > "$_rt"
-                local _mac; _mac=$(jsonfilter -i "$_rt" -e '@.mac' 2>/dev/null)
-                log "Recovered node: %s" "${_mac:-unknown}"
-            fi
-        done
-    fi
+    log "Recovering approved nodes from persistent storage..."
+    for _pf in "$PERSISTENT_NODE_DB"/*.json; do
+        [ -f "$_pf" ] || continue
+        local _bn; _bn="${_pf##*/}"
+        local _rt="${NODE_DB}/${_bn}"
+        if [ ! -f "$_rt" ]; then
+            sed "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" "$_pf" > "$_rt"
+            local _mac; _mac=$(jsonfilter -i "$_rt" -e '@.mac' 2>/dev/null)
+            log "Recovered node: %s" "${_mac:-unknown}"
+        fi
+    done
 
     { printf "\n" >> "$LOGFILE" 2>/dev/null
       log "================================================"

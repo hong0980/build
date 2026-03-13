@@ -8,6 +8,7 @@ STOP=10
 
 UCI_APP=easymesh
 LOGFILE="/tmp/easymesh.log"
+EM_BACKUP_DIR="/etc/easymesh/backup"
 [ -z "$lang" ] && lang=$(uci_get luci main lang en)
 
 translate() {
@@ -34,8 +35,8 @@ _restore_iface() {
         uci -q del wireless.mesh0; return
     fi
 
-    local ssid_file="/tmp/em_orig_${iface}.ssid"
-    local enc_file="/tmp/em_orig_${iface}.enc"
+    local ssid_file="${EM_BACKUP_DIR}/em_orig_${iface}.ssid"
+    local enc_file="${EM_BACKUP_DIR}/em_orig_${iface}.enc"
 
     if [ -f "$ssid_file" ]; then
         uci -q set wireless.${iface}.ssid="$(cat "$ssid_file")"
@@ -46,6 +47,7 @@ _restore_iface() {
             uci -q del wireless.${iface}.${opt}
         done
         rm -f "$ssid_file" "$enc_file"
+        uci -q del wireless.${iface}.easymesh_managed
     else
         uci -q del wireless."$iface"
     fi
@@ -77,9 +79,9 @@ _agent_setup() {
     [ "$1" != "agent" ] && return
     local ip="$2" prefix="${2%.*}"
 
-    [ ! -f /etc/easymesh_agent ] && {
+    [ ! -f ${EM_BACKUP_DIR}/easymesh_agent ] && {
         local hostname; hostname=$(uci_get system @system[0] hostname openwrt)
-        printf 'ipaddr=%s\nhostname=%s\n' "$ip" "$hostname" > /etc/easymesh_agent
+        printf 'ipaddr=%s\nhostname=%s\n' "$ip" "$hostname" > ${EM_BACKUP_DIR}/easymesh_agent
     }
 
     [ "${ip##*.}" != "1" ] && return
@@ -139,19 +141,19 @@ _setup_ap() {
     local existing; existing=$(_get_ap_iface "$radio")
 
     [ -n "$existing" ] && {
-        [ ! -f "/tmp/em_orig_${existing}.ssid" ] && {
+        [ ! -f "${EM_BACKUP_DIR}/em_orig_${existing}.ssid" ] && {
             local orig_ssid orig_enc
             config_load wireless
             config_get orig_ssid "$existing" ssid 'OpenWrt'
             config_get orig_enc  "$existing" encryption 'none'
-            printf '%s' "$orig_ssid" > "/tmp/em_orig_${existing}.ssid"
-            printf '%s' "$orig_enc"  > "/tmp/em_orig_${existing}.enc"
+            printf '%s' "$orig_ssid" > "${EM_BACKUP_DIR}/em_orig_${existing}.ssid"
+            printf '%s' "$orig_enc"  > "${EM_BACKUP_DIR}/em_orig_${existing}.enc"
         }
         name="$existing"
     }
 
     uci -q set wireless.${name}.easymesh_managed=1
-    uci -q set wireless.${name}.ssid="$ssid"
+    [ -n "$ssid" ] && uci -q set wireless.${name}.ssid="$ssid"
 
     if [ -n "$key" ]; then
         uci -q set wireless.${name}.encryption='psk2+ccmp'
@@ -208,7 +210,7 @@ start_service() {
     config_get k           global  ieee80211k              1
     config_get v           global  ieee80211v              1
 
-    mkdir -p /etc/easymesh /etc/easymesh_nodes
+    mkdir -p "$EM_BACKUP_DIR"
     log "EasyMesh starting (role=%s)" "$role"
 
     _agent_setup "$role" "$(uci_get network lan ipaddr)"
@@ -273,17 +275,17 @@ start_service() {
         }
     else
         [ -n "$radio_5g" ] && {
-            _setup_ap "_5g_" "$radio_5g" "pending" "" "0" "0" "0" "" "" ""
+            _setup_ap "_5g_" "$radio_5g" "" "" "0" "0" "0" "" "" ""
             uci -q set wireless.${_setup_iface_result}.disabled=1
             idx=$((idx+1))
         }
         [ -n "$radio_2g" ] && {
-            _setup_ap "_2g_" "$radio_2g" "pending" "" "0" "0" "0" "" "" ""
+            _setup_ap "_2g_" "$radio_2g" "" "" "0" "0" "0" "" "" ""
             uci -q set wireless.${_setup_iface_result}.disabled=1
             idx=$((idx+1))
         }
         [ "$idx" -eq 0 ] && {
-            _setup_ap "_fb_" "${mesh_radio:-radio0}" "pending" "" "0" "0" "0" "" "" ""
+            _setup_ap "_fb_" "${mesh_radio:-radio0}" "" "" "0" "0" "0" "" "" ""
             uci -q set wireless.${_setup_iface_result}.disabled=1
         }
     fi

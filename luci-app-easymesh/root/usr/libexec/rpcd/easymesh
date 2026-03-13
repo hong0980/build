@@ -3,10 +3,10 @@
 
 NODE_DB="/tmp/easymesh_nodes"
 PENDING_DB="/tmp/easymesh_pending"
-PERSISTENT_NODE_DB="/etc/easymesh_nodes"
 TOPO_FILE="/tmp/easymesh_topo.json"
 LOGFILE="/tmp/easymesh.log"
 EM_PID_DIR="/tmp/easymesh_pids"
+PERSISTENT_NODE_DB="/etc/easymesh/easymesh_nodes"
 
 list() {
     printf '{\n'
@@ -158,7 +158,6 @@ _approve() {
     local src="${PENDING_DB}/${safe}.json"
     local dst="${NODE_DB}/${safe}.json"
     local persistent="${PERSISTENT_NODE_DB}/${safe}.json"
-    mkdir -p "$NODE_DB" "$PERSISTENT_NODE_DB"
 
     if [ -f "$src" ]; then
         sed 's/"status":"pending"/"status":"approved"/' "$src" > "$dst" && rm -f "$src"
