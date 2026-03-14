@@ -1,11 +1,10 @@
 'use strict';
-'require view';
+'require ui';
 'require rpc';
 'require uci';
+'require view';
 'require poll';
-'require ui';
 
-/* ── RPC declarations ──────────────────────────────────────────────────── */
 var callMeshPending   = rpc.declare({ object: 'easymesh', method: 'pending'   });
 var callMeshApproved  = rpc.declare({ object: 'easymesh', method: 'approved'  });
 var callMeshTopology  = rpc.declare({ object: 'easymesh', method: 'topology'  });
@@ -14,7 +13,6 @@ var callMeshApprove   = rpc.declare({ object: 'easymesh', method: 'approve', par
 var callMeshReject    = rpc.declare({ object: 'easymesh', method: 'reject',  params: ['mac'] });
 var callMeshStatus    = rpc.declare({ object: 'easymesh', method: 'status'  });
 
-/* ── TQ helpers ─────────────────────────────────────────────────────────── */
 function tqColor(tq) {
 	return tq / 255 >= 0.70 ? '#2ea44f' : tq / 255 >= 0.40 ? '#e3b341' : '#f85149';
 }
@@ -22,7 +20,6 @@ function hexToRgb(hex) {
 	return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
 }
 
-/* ── TQ bar widget ─────────────────────────────────────────────────────── */
 function tqBar(tq) {
 	var pct   = Math.round(tq / 255 * 100);
 	var color = tqColor(tq);
@@ -34,13 +31,11 @@ function tqBar(tq) {
 	]);
 }
 
-/* ── Canvas topology ────────────────────────────────────────────────────── */
 function drawTopo(topo, canvas) {
 	if (!canvas) return {};
 	var ctx = canvas.getContext('2d');
 	var DPR = window.devicePixelRatio || 1;
 	var cssW = canvas.offsetWidth || 900;
-	/* 动态高度：1-2节点 min300，3-5节点 min400，6+节点 min500，节点多时更高 */
 	var nodeCount = ((topo && topo.nodes) ? topo.nodes : []).length;
 	var minH = nodeCount <= 2 ? 260 : nodeCount <= 5 ? 380 : nodeCount <= 8 ? 480 : 560;
 	var cssH = Math.max(minH, Math.round(cssW * 0.38));
@@ -53,17 +48,14 @@ function drawTopo(topo, canvas) {
 	var nodes = (topo && topo.nodes) ? topo.nodes : [];
 	var links = (topo && topo.links) ? topo.links : [];
 
-	/* Deduplicate nodes by MAC — batctl orig + NODE_DB may overlap */
 	var nodeMap = {};
 	nodes.forEach(function(n) {
 		if (!n.mac) return;
 		var k = n.mac.toLowerCase();
-		/* Prefer entries with more info (hostname/ip) */
 		if (!nodeMap[k] || (!nodeMap[k].hostname && n.hostname)) nodeMap[k] = n;
 	});
 	nodes = Object.keys(nodeMap).map(function(k) { return nodeMap[k]; });
 
-	/* Layout: 2 nodes → horizontal split; 3+ → master centre + agents on circle */
 	var positions = {};
 	var cx = W / 2, cy = H / 2, r = Math.min(W, H) * 0.33;
 	var master = null, others = [];
@@ -71,13 +63,11 @@ function drawTopo(topo, canvas) {
 		if (n.role === 'master') master = n; else others.push(n);
 	});
 	if (master && others.length <= 1) {
-		/* Horizontal layout: master left-centre, agent right-centre */
 		var lx = W * 0.30, rx = W * 0.70;
 		if (master) positions[master.mac.toLowerCase()] = { x: lx, y: cy, node: master };
 		if (others.length === 1)
 			positions[others[0].mac.toLowerCase()] = { x: rx, y: cy, node: others[0] };
 	} else {
-		/* Radial layout for 3+ nodes */
 		if (master) positions[master.mac.toLowerCase()] = { x: cx, y: cy, node: master };
 		others.forEach(function(n, i) {
 			var angle = (2 * Math.PI * i / Math.max(others.length, 1)) - Math.PI / 2;
@@ -89,7 +79,6 @@ function drawTopo(topo, canvas) {
 		});
 	}
 
-	/* Background + grid dots */
 	ctx.fillStyle = '#0d1117';
 	ctx.fillRect(0, 0, W, H);
 	ctx.fillStyle = 'rgba(48,54,61,0.4)';
@@ -98,7 +87,6 @@ function drawTopo(topo, canvas) {
 			ctx.beginPath(); ctx.arc(gx, gy, 1, 0, Math.PI * 2); ctx.fill();
 		}
 
-	/* Links */
 	links.forEach(function(link) {
 		var a = positions[(link.src||'').toLowerCase()];
 		var b = positions[(link.dst||'').toLowerCase()];
@@ -126,7 +114,6 @@ function drawTopo(topo, canvas) {
 		ctx.restore();
 	});
 
-	/* Nodes */
 	nodes.forEach(function(node) {
 		var pos = positions[(node.mac||'').toLowerCase()];
 		if (!pos) return;
@@ -152,7 +139,6 @@ function drawTopo(topo, canvas) {
 		ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 		ctx.fillText(isMaster ? '🌐' : '📡', pos.x, pos.y - 3);
 
-		/* Client badge */
 		if (node.clients > 0) {
 			ctx.save();
 			ctx.beginPath(); ctx.arc(pos.x + radius * 0.7, pos.y - radius * 0.7, 9, 0, Math.PI * 2);
@@ -163,7 +149,6 @@ function drawTopo(topo, canvas) {
 			ctx.restore();
 		}
 
-		/* Label */
 		var label = node.hostname || (node.mac ? node.mac.slice(-8) : '?');
 		ctx.save();
 		ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#e6edf3';
@@ -206,20 +191,14 @@ return view.extend({
 			]);
 		}
 
-		var root = E('div', { id: 'easymesh-nodes-root' });
+		var root = E('div');
 		root.appendChild(self._buildInner(data[1], data[2], data[3], data[4], data[5]));
 
 		poll.add(function() {
-			return Promise.all([
-				callMeshTopology(),
-				callMeshPending(),
-				callMeshApproved(),
-				callMeshNeighbors(),
-				callMeshStatus()
-			]).then(function(r) {
-				var topo = r[0];
+			return self.load().then(function (r) {
+				var topo = r[1];
 				var old = document.getElementById('easymesh-nodes-inner');
-				if (old) old.replaceWith(self._buildInner(topo, r[1], r[2], r[3], r[4]));
+				if (old) old.replaceWith(self._buildInner(topo, r[2], r[3], r[4], r[5]));
 
 				if (!topo || !topo.nodes) return;
 				var canvas  = document.getElementById('easymesh-topo-canvas');

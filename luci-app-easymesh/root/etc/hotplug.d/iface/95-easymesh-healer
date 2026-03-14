@@ -1,12 +1,8 @@
 #!/bin/sh
-# hotplug: wired backhaul link state → accelerate batman-adv convergence
-# Writes to /tmp/easymesh.log (same file as easymesh-master) so log.js shows it
-
-[ "$INTERFACE" = "lan" ] || exit 0
-
-LOGFILE="/tmp/easymesh.log"
+[ "$INTERFACE" = "lan" ] || [ "$INTERFACE" = "wan" ] || exit 0
 MESH_IF="bat0"
-BATMAN_OGM_NORMAL=500   # matches BATMAN_OGM_INTERVAL in easymesh-master
+BATMAN_OGM_NORMAL=500
+LOGFILE="/tmp/easymesh.log"
 
 _emlog() {
     local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
@@ -15,15 +11,11 @@ _emlog() {
 
 case "$ACTION" in
     ifdown)
-        # Wired link lost — shorten OGM interval for faster wireless failover
-        # NOTE: do NOT use "batctl ra BATMAN_IV" here — changing routing algorithm
-        # at runtime causes bat0 reset and a momentary network outage.
         batctl meshif "$MESH_IF" orig_interval 300 2>/dev/null
         _emlog "WARN" "heal" "LAN link down — OGM interval set to 300ms for fast wireless failover"
         logger -t EasyMesh "LAN link down, accelerating wireless failover" 2>/dev/null
         ;;
     ifup)
-        # Wired link restored — return to normal OGM interval
         batctl meshif "$MESH_IF" orig_interval "$BATMAN_OGM_NORMAL" 2>/dev/null
         _emlog "INFO" "heal" "LAN link up — OGM interval restored to ${BATMAN_OGM_NORMAL}ms"
         logger -t EasyMesh "LAN link restored, OGM interval back to normal" 2>/dev/null

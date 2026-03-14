@@ -384,6 +384,9 @@ msgstr "台"
 msgid "Mesh Neighbors"
 msgstr "Mesh 邻居节点"
 
+msgid "Real-time batman-adv originator table. TQ: 255 = best. Refreshes every 5 seconds."
+msgstr "实时 batman-adv 邻居表。TQ：255 为最佳。每 5 秒自动刷新。"
+
 msgid "batman-adv originator table (batctl o). Neighbors appear when bat0 is running and at least one mesh backhaul link is active (wired LAN bridged, or 802.11s wireless mesh0). TQ 255=best link. Refreshes every 5s."
 msgstr "batman-adv 邻居表（batctl o）。bat0 运行且至少有一条回程链路激活（有线 LAN 桥接或 802.11s 无线 mesh0）时才会出现邻居。TQ 255=最佳链路。每 5 秒刷新。"
 
