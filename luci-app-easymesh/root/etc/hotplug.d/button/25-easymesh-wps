@@ -2,7 +2,7 @@
 [ "$BUTTON" = "wps" ] || exit 0
 [ "$ACTION" = "released" ] || exit 0
 SEEN_TIME=${SEEN:-0}
-[ "$SEEN_TIME" -ge 2 -a "$SEEN_TIME" -le 10 ] || exit 0
+[ "$SEEN_TIME" -ge 2 ] && [ "$SEEN_TIME" -le 10 ] || exit 0
 
 . /lib/config/uci.sh
 LOCK="/var/run/easymesh-restore.lock"
@@ -11,9 +11,10 @@ touch "$LOCK"
 trap "rm -f '$LOCK'" EXIT
 
 EM_BACKUP_DIR=/etc/easymesh/backup
+mkdir -p "$EM_BACKUP_DIR"
 role=$(uci_get easymesh global role master)
 enabled=$(uci_get easymesh global enabled 0)
-if [ "$enabled" = "1" -a "$role" = "agent" -a -f ${EM_BACKUP_DIR}/easymesh_agent ]; then
+if [ "$enabled" = "1" ] && [ "$role" = "agent" ] && [ -f ${EM_BACKUP_DIR}/easymesh_agent ]; then
     original_ip=$(sed -n 's/^ipaddr=//p' ${EM_BACKUP_DIR}/easymesh_agent)
     original_hostname=$(sed -n 's/^hostname=//p' ${EM_BACKUP_DIR}/easymesh_agent)
     /etc/init.d/easymesh stop
@@ -32,7 +33,7 @@ if [ "$enabled" = "1" -a "$role" = "agent" -a -f ${EM_BACKUP_DIR}/easymesh_agent
     uci_commit easymesh
     ( sleep 1; /etc/init.d/easymesh restart ) &
     rm -f ${EM_BACKUP_DIR}/easymesh_agent
-elif [ "$enabled" != "1" -a "$role" != "agent" -a ! -f ${EM_BACKUP_DIR}/easymesh_agent] ; then
+elif [ "$enabled" != "1" ] && [ "$role" != "agent" ] && [ ! -f ${EM_BACKUP_DIR}/easymesh_agent ]; then
     uci_set easymesh global enabled 1
     uci_set easymesh global role agent
     uci_commit easymesh

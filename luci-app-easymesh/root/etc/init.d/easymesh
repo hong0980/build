@@ -6,9 +6,9 @@ STOP=10
 
 . /lib/functions/network.sh
 
-UCI_APP=easymesh
 LOGFILE="/tmp/easymesh.log"
 EM_BACKUP_DIR="/etc/easymesh/backup"
+wireless_backup="${EM_BACKUP_DIR}/wireless_backup.conf"
 [ -z "$lang" ] && lang=$(uci_get luci main lang en)
 
 translate() {
@@ -35,22 +35,7 @@ _restore_iface() {
         uci -q del wireless.mesh0; return
     fi
 
-    local ssid_file="${EM_BACKUP_DIR}/em_orig_${iface}.ssid"
-    local enc_file="${EM_BACKUP_DIR}/em_orig_${iface}.enc"
-
-    if [ -f "$ssid_file" ]; then
-        uci -q set wireless.${iface}.ssid="$(cat "$ssid_file")"
-        uci -q set wireless.${iface}.encryption="$(cat "$enc_file" 2>/dev/null || echo none)"
-        for opt in key ieee80211r ieee80211k ieee80211v mobility_domain ft_over_ds \
-                   ft_psk_generate_local reassociation_deadline rrm_neighbor_report \
-                   rrm_beacon_report bss_transition easymesh_managed disabled; do
-            uci -q del wireless.${iface}.${opt}
-        done
-        rm -f "$ssid_file" "$enc_file"
-        uci -q del wireless.${iface}.easymesh_managed
-    else
-        uci -q del wireless."$iface"
-    fi
+    [ -f "$wireless_backup" ] && uci import wireless < $wireless_backup
 }
 
 cleanup_wireless() {
@@ -77,14 +62,12 @@ _get_ap_iface() {
 
 _agent_setup() {
     [ "$1" != "agent" ] && return
-    local ip="$2" prefix="${2%.*}"
+    local ip="$2" prefix="${2%.*}" original_ip="$2"
 
-    [ ! -f ${EM_BACKUP_DIR}/easymesh_agent ] && {
-        local hostname; hostname=$(uci_get system @system[0] hostname openwrt)
-        printf 'ipaddr=%s\nhostname=%s\n' "$ip" "$hostname" > ${EM_BACKUP_DIR}/easymesh_agent
-    }
+    [ -f "${EM_BACKUP_DIR}"/easymesh_agent ] && \
+        original_ip=$(sed -n 's/^ipaddr=//p' "${EM_BACKUP_DIR}"/easymesh_agent)
 
-    [ "${ip##*.}" != "1" ] && return
+    [ "${ip##*.}" != "1" ] && [ "$original_ip" != "$ip" ] && return
 
     local mac_raw=""
     for _iface in br-lan eth0 bat0; do
@@ -119,6 +102,8 @@ _agent_setup() {
         uci -q set system.@system[0].hostname="OpenWrt-Agent-${new_ip##*.}"
         uci -q commit network && uci -q commit system
         /etc/init.d/network reload
+        local hostname; hostname=$(uci_get system @system[0] hostname openwrt)
+        printf 'ipaddr=%s\nhostname=%s\n' "$ip" "$hostname" > "${EM_BACKUP_DIR}"/easymesh_agent
     }
 }
 
@@ -128,8 +113,7 @@ _identify_radios() {
     for radio in $(uci -q show wireless | awk -F= '/=wifi-device$/{sub(/wireless\./,""); print $1}'); do
         case $(uci -q get "wireless.${radio}.band" 2>/dev/null) in
             2g*|2.4*|bgn|bg|b) [ -z "$radio_2g" ] && radio_2g="$radio" ;;
-            5g*|5GHz*|an|a)
-                [ -z "$radio_5g" ] && radio_5g="$radio" || radio_5g2="$radio" ;;
+            5g*|5GHz*|an|a)    [ -z "$radio_5g" ] && radio_5g="$radio" || radio_5g2="$radio" ;;
         esac
     done
 }
@@ -141,14 +125,7 @@ _setup_ap() {
     local existing; existing=$(_get_ap_iface "$radio")
 
     [ -n "$existing" ] && {
-        [ ! -f "${EM_BACKUP_DIR}/em_orig_${existing}.ssid" ] && {
-            local orig_ssid orig_enc
-            config_load wireless
-            config_get orig_ssid "$existing" ssid 'OpenWrt'
-            config_get orig_enc  "$existing" encryption 'none'
-            printf '%s' "$orig_ssid" > "${EM_BACKUP_DIR}/em_orig_${existing}.ssid"
-            printf '%s' "$orig_enc"  > "${EM_BACKUP_DIR}/em_orig_${existing}.enc"
-        }
+        [ ! -f "$wireless_backup" ] && uci export wireless > $wireless_backup
         name="$existing"
     }
 
@@ -183,7 +160,7 @@ _setup_ap() {
 }
 
 start_service() {
-    config_load "$UCI_APP"
+    config_load easymesh
     config_get_bool enabled global enabled 0
     [ "$enabled" -eq 0 ] && return 0
 
@@ -242,15 +219,9 @@ start_service() {
         fi
     }
 
-    if [ "$role" = "master" ]; then
-        uci -q del dhcp.lan.ignore
-    else
-        uci -q set dhcp.lan.ignore=1
-    fi
-    uci -q commit dhcp
-
     local idx=0
     if [ "$role" = "master" ]; then
+        uci -q del dhcp.lan.ignore
         if [ "$band_merge" = "1" ]; then
             ssid_5g="$ssid"; key_5g="$key"
             ssid_2g="$ssid"; key_2g="$key"
@@ -274,6 +245,7 @@ start_service() {
             uci -q del wireless.${_setup_iface_result}.disabled
         }
     else
+        uci -q set dhcp.lan.ignore=1
         [ -n "$radio_5g" ] && {
             _setup_ap "_5g_" "$radio_5g" "" "" "0" "0" "0" "" "" ""
             uci -q set wireless.${_setup_iface_result}.disabled=1
@@ -290,11 +262,12 @@ start_service() {
         }
     fi
 
+    [ -n "$radio_5g"   ] && uci -q del wireless.${radio_5g}.disabled
+    [ -n "$radio_2g"   ] && uci -q del wireless.${radio_2g}.disabled
     [ -n "$mesh_radio" ] && uci -q del wireless.${mesh_radio}.disabled
-    [ -n "$radio_5g" ]   && uci -q del wireless.${radio_5g}.disabled
-    [ -n "$radio_2g" ]   && uci -q del wireless.${radio_2g}.disabled
 
-    uci commit wireless
+    uci -q commit dhcp
+    uci -q commit wireless
 
     if [ "$role" = "master" ]; then
         if [ "$wan_mode" = "switch" ]; then
@@ -365,5 +338,5 @@ reload_service() {
 }
 
 service_triggers() {
-    procd_add_reload_trigger "$UCI_APP"
+    procd_add_reload_trigger easymesh
 }

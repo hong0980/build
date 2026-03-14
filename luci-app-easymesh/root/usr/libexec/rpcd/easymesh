@@ -1,11 +1,11 @@
 #!/bin/sh
 . /usr/share/libubox/jshn.sh
 
+LOGFILE="/tmp/easymesh.log"
+EM_PID_DIR="/tmp/easymesh_pids"
 NODE_DB="/tmp/easymesh_nodes"
 PENDING_DB="/tmp/easymesh_pending"
 TOPO_FILE="/tmp/easymesh_topo.json"
-LOGFILE="/tmp/easymesh.log"
-EM_PID_DIR="/tmp/easymesh_pids"
 PERSISTENT_NODE_DB="/etc/easymesh/easymesh_nodes"
 
 list() {
@@ -84,16 +84,14 @@ _neighbors() {
     json_init
     json_add_array "neighbors"
     local MESH_IF="bat0"
-    # batctl orig 输出: MAC  last-seen  (TQ)  nexthop  [iface]
-    batctl meshif "$MESH_IF" orig 2>/dev/null | awk 'NR>2{print}' |     while IFS= read -r line; do
+    batctl meshif "$MESH_IF" orig 2>/dev/null | awk 'NR>2{print}' | while IFS= read -r line; do
         local mac tq nexthop iface last_seen_raw last_seen
-        mac=$(         printf '%s' "$line" | awk '{print $1}')
+        mac=$(          printf '%s' "$line" | awk '{print $1}')
         last_seen_raw=$(printf '%s' "$line" | awk '{print $2}')
-        tq=$(          printf '%s' "$line" | awk '{gsub(/[()]/,""); print $3}')
-        nexthop=$(     printf '%s' "$line" | awk '{print $4}')
-        iface=$(       printf '%s' "$line" | awk '{gsub(/[\[\]]/,""); print $5}')
+        tq=$(           printf '%s' "$line" | awk '{gsub(/[()]/,""); print $3}')
+        nexthop=$(      printf '%s' "$line" | awk '{print $4}')
+        iface=$(        printf '%s' "$line" | awk '{gsub(/[\[\]]/,""); print $5}')
         [ -z "$mac" ] || [ "$mac" = "Originator" ] && continue
-        # 把 "0.600s" 转成整数秒
         last_seen=$(printf '%s' "$last_seen_raw" | sed 's/s$//' | awk '{printf "%d", $1}')
         json_add_object
         json_add_string "mac"       "$mac"
@@ -108,10 +106,9 @@ _neighbors() {
 }
 
 _status() {
-    local daemon_running="false" role="unknown" bat0_up="false"
+    local daemon_running="false" role="unknown" bat0_up="false" pid
     ip link show bat0 2>/dev/null | grep -qE ',UP,|<UP|,UP>' && bat0_up="true"
 
-    local pid
     for r in master agent; do
         pid=$(cat "${EM_PID_DIR}/easymesh_${r}.pid" 2>/dev/null)
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
@@ -153,10 +150,9 @@ LOGEOF
 _approve() {
     local mac="$1"
     [ -z "$mac" ] && { printf '{"error":"mac required"}\n'; return 1; }
-    mac=$(printf '%s' "$mac" | tr 'A-F' 'a-f')
-    local safe; safe=$(printf '%s' "$mac" | tr ':' '_')
-    local src="${PENDING_DB}/${safe}.json"
+    local safe; safe=$(printf '%s' "$mac" | tr 'A-F' 'a-f' | tr ':' '_')
     local dst="${NODE_DB}/${safe}.json"
+    local src="${PENDING_DB}/${safe}.json"
     local persistent="${PERSISTENT_NODE_DB}/${safe}.json"
 
     if [ -f "$src" ]; then
