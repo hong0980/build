@@ -1,5 +1,5 @@
 {
-	"admin/services/easymesh": {
+	"admin/network/easymesh": {
 		"title": "EasyMesh",
 		"action": {
 			"type": "view",
@@ -9,7 +9,7 @@
 			"acl": [ "luci-app-easymesh" ]
 		}
 	},
-	"admin/services/easymesh/overview": {
+	"admin/network/easymesh/overview": {
 		"title": "Overview & Config",
 		"order": 10,
 		"action": {
@@ -17,7 +17,7 @@
 			"path": "easymesh/overview"
 		}
 	},
-	"admin/services/easymesh/nodes": {
+	"admin/network/easymesh/nodes": {
 		"title": "Nodes",
 		"order": 20,
 		"action": {
@@ -25,7 +25,7 @@
 			"path": "easymesh/nodes"
 		}
 	},
-	"admin/services/easymesh/log": {
+	"admin/network/easymesh/log": {
 		"title": "Log",
 		"order": 30,
 		"action": {

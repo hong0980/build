@@ -159,6 +159,14 @@ _setup_ap() {
     _setup_iface_result="$name"
 }
 
+_check_mesh0() {
+    if uci -q get wireless.mesh0 >/dev/null 2>&1; then
+        log "mesh0 already exists, skipping creation"
+        return 0
+    fi
+    return 1
+}
+
 start_service() {
     config_load easymesh
     config_get_bool enabled global enabled 0
@@ -193,6 +201,7 @@ start_service() {
     _agent_setup "$role" "$(uci_get network lan ipaddr)"
     cleanup_wireless
     _identify_radios
+
     local mesh_radio="$radio_5g"
     [ "$mesh_band" = "2g" ] && mesh_radio="$radio_2g"
     [ -z "$mesh_radio" ] && mesh_radio=$(uci -q show wireless 2>/dev/null | \
@@ -200,9 +209,8 @@ start_service() {
 
     uci -q set network.mesh=interface
     uci -q set network.mesh.proto=none
-    uci -q commit network
 
-    [ "$backhaul" != "wired" ] && {
+    if [ "$backhaul" != "wired" ] && [ "$role" = "master" ] && ! _check_mesh0; then
         uci -q set wireless.mesh0=wifi-iface
         uci -q set wireless.mesh0.device="$mesh_radio"
         uci -q set wireless.mesh0.mode=mesh
@@ -217,7 +225,7 @@ start_service() {
         else
             uci -q set wireless.mesh0.encryption=none
         fi
-    }
+    fi
 
     local idx=0
     if [ "$role" = "master" ]; then
@@ -268,6 +276,7 @@ start_service() {
 
     uci -q commit dhcp
     uci -q commit wireless
+    uci -q commit network
 
     if [ "$role" = "master" ]; then
         if [ "$wan_mode" = "switch" ]; then
@@ -285,12 +294,13 @@ start_service() {
         uci -q commit network
     fi
 
-    iptables -C INPUT -p tcp --dport 4304 -j ACCEPT 2>/dev/null || \
-        iptables -I INPUT 1 -p tcp --dport 4304 -j ACCEPT 2>/dev/null || true
-    iptables -C INPUT -p udp --dport 4305 -j ACCEPT 2>/dev/null || \
-        iptables -I INPUT 1 -p udp --dport 4305 -j ACCEPT 2>/dev/null || true
-    nft insert rule inet fw4 input tcp dport 4304 accept 2>/dev/null || true
-    nft insert rule inet fw4 input udp dport 4305 accept 2>/dev/null || true
+    # ==================== 优化点5：使用循环简化防火墙规则 ====================
+    for port in 4304/tcp 4305/udp; do
+        p=${port%/*}; t=${port#*/}
+        iptables -C INPUT -p $t --dport $p -j ACCEPT 2>/dev/null || \
+            iptables -I INPUT 1 -p $t --dport $p -j ACCEPT 2>/dev/null || true
+        nft insert rule inet fw4 input $t dport $p accept 2>/dev/null || true
+    done
 
     wifi reload
     sleep 2
@@ -314,11 +324,11 @@ stop_service() {
     [ -f /tmp/easymesh_pair_dnsmasq.pid ] && kill "$(cat /tmp/easymesh_pair_dnsmasq.pid)" 2>/dev/null
     iw dev easymesh-pair0 del 2>/dev/null || true
 
-    while iptables -C INPUT -p tcp --dport 4304 -j ACCEPT 2>/dev/null; do
-        iptables -D INPUT -p tcp --dport 4304 -j ACCEPT || break
-    done
-    while iptables -C INPUT -p udp --dport 4305 -j ACCEPT 2>/dev/null; do
-        iptables -D INPUT -p udp --dport 4305 -j ACCEPT || break
+    for port in 4304/tcp 4305/udp; do
+        p=${port%/*}; t=${port#*/}
+        while iptables -C INPUT -p $t --dport $p -j ACCEPT 2>/dev/null; do
+            iptables -D INPUT -p $t --dport $p -j ACCEPT || break
+        done
     done
 
     cleanup_wireless

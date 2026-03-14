@@ -329,13 +329,12 @@ setup_wired_backhaul() {
     fi
 
     if [ "$backhaul" != "wired" ]; then
-        local mw=0
-        while ! ip link show mesh0 >/dev/null 2>&1 && [ $mw -lt 10 ]; do sleep 1; mw=$(( mw+1 )); done
-        if ip link show mesh0 >/dev/null 2>&1; then
-            if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -qw mesh0; then
-                ip link set mesh0 up 2>/dev/null
-                batctl meshif "$MESH_IF" interface add mesh0 2>/dev/null \
-                    && log "Wireless backhaul: mesh0 -> bat0"
+        local mesh_iface=$(iwinfo 2>/dev/null | awk '/mesh0/ && /ESSID/ {print $1}')
+        if [ -n "$mesh_iface" ]; then
+            if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -qw "$mesh_iface"; then
+                ip link set "$mesh_iface" up 2>/dev/null
+                batctl meshif "$MESH_IF" interface add "$mesh_iface" 2>/dev/null \
+                    && log "Wireless backhaul: $mesh_iface -> bat0"
             fi
         else
             [ "$backhaul" = "wireless" ] && logw "mesh0 not found, wireless backhaul failed"
@@ -379,7 +378,16 @@ teardown_batman() {
         fi
     fi
     local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
-    { [ "$backhaul" != "wired" ] && batctl meshif "$MESH_IF" interface del mesh0 2>/dev/null; } || true
+    [ "$backhaul" != "wired" ] && {
+        local mesh_iface=$(
+            batctl meshif "$MESH_IF" if 2>/dev/null | while read iface status; do
+            [ "$status" = "active" ] && ip link show "$iface" 2>/dev/null | grep -q "mode mesh" && echo "$iface"
+        done | head -1)
+
+        [ -z "$mesh_iface" ] && \
+            mesh_iface=$(iwinfo 2>/dev/null | awk '/ESSID/ && /Mesh/ {print $1}' | head -1)
+        [ -n "$mesh_iface" ] && batctl meshif "$MESH_IF" interface del "$mesh_iface" 2>/dev/null
+    }
     ip link set "$MESH_IF" down 2>/dev/null || true
     log "batman-adv torn down"
 }
