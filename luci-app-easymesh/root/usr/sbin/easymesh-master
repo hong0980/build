@@ -113,7 +113,7 @@ get_mac() {
 get_ip()    { ip -4 addr show dev "$BRIDGE_IF" 2>/dev/null |
               awk '/inet /{print $2}' | cut -d/ -f1 | head -1; }
 master_ip() { cat "$MASTER_IP_FILE" 2>/dev/null; }
-wan_up()    { ubus call network.interface.wan status 2>/dev/null | grep -q '"up": true'; }
+wan_up()    { [ "$(ubus call network.interface.wan status 2>/dev/null | jsonfilter -e '@.up')" = "true" ]; }
 
 _mesh_iface_cache=''
 get_mesh_iface() {
@@ -165,13 +165,17 @@ do_http_post() {
 }
 
 _ping_master() {
-    curl -s -m 3 "http://${1}:${MASTER_PORT}/ping" 2>/dev/null | grep -q '"role":"master"'
+    [ "$(curl -s -m 3 "http://${1}:${MASTER_PORT}/ping" 2>/dev/null | jsonfilter -e '@.role')" = "master" ]
 }
 
 _node_update() {
-    local f="$1" ip="$2" ts; ts=$(date +%s)
-    sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"${ip}\"/" "$f"
-    sed -i "s/\"ts\":[0-9]*/\"ts\":${ts}/" "$f"
+    local f="$1" ip="$2"
+    local mac; mac=$(jsonfilter -i "$f" -e '@.mac')
+    local host; host=$(jsonfilter -i "$f" -e '@.hostname')
+    local src; src=$(jsonfilter -i "$f" -e '@.source')
+    local status; status=$(jsonfilter -i "$f" -e '@.status')
+    printf '{"mac":"%s","ip":"%s","hostname":"%s","source":"%s","status":"%s","ts":%s}\n' \
+        "$mac" "$ip" "$host" "$src" "$status" "$(date +%s)" > "$f"
     local _bn; _bn="${f##*/}"
     [ -f "${PERSISTENT_NODE_DB}/${_bn}" ] && cp "$f" "${PERSISTENT_NODE_DB}/${_bn}" 2>/dev/null
 }
@@ -246,7 +250,8 @@ elect_role() {
         peer_ip=$(jsonfilter  -i "$f" -e '@.ip'  2>/dev/null)
         peer_mac=$(jsonfilter -i "$f" -e '@.mac' 2>/dev/null)
         [ -z "$peer_ip" ] && continue
-        if curl -s -m 3 "http://${peer_ip}:${MASTER_PORT}/wan" 2>/dev/null | grep -q '"wan":true'; then
+        if [ "$(curl -s -m 3 "http://${peer_ip}:${MASTER_PORT}/wan" 2>/dev/null | \
+            jsonfilter -e '@.wan')" = "true" ]; then
             _set_role "agent"; echo "$peer_ip" > "$MASTER_IP_FILE"
             log "Election: peer %s has WAN -> agent" "$peer_ip"; return 0
         fi
@@ -282,16 +287,11 @@ tune_batman() {
                 && log "batman-adv: routing_algo=%s" "$algo" \
                 || logw "batman-adv: routing_algo=%s rejected" "$algo"
         fi
-        if [ "$bmode" = "wired" ] && [ -d /sys/class/net/bat0/mesh ]; then
-            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null
-            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
+        if [ "$bmode" = "wired" ]; then
+            batctl meshif "$MESH_IF" bl 0 2>/dev/null
+            batctl meshif "$MESH_IF" dat 0 2>/dev/null
             log "batman-adv: BLA=off DAT=off (wired)"
         fi
-        # if [ "$bmode" = "wired" ]; then
-        #     batctl meshif "$MESH_IF" bl 0 2>/dev/null
-        #     batctl meshif "$MESH_IF" dat 0 2>/dev/null
-        #     log "batman-adv: BLA=off DAT=off (wired)"
-        # fi
         printf '%s' "$state" > /tmp/easymesh_batman_state
     fi
     if [ "$role" = "master" ]; then
@@ -361,12 +361,8 @@ setup_wired_backhaul() {
                 brctl delif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null || true
             log "Backhaul: bat0 removed from br-lan"
         }
-        [ -d /sys/class/net/bat0/mesh ] && {
-            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null
-            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
-        }
-        # batctl meshif "$MESH_IF" bl 0 2>/dev/null
-        # batctl meshif "$MESH_IF" dat 0 2>/dev/null
+        batctl meshif "$MESH_IF" bl 0 2>/dev/null
+        batctl meshif "$MESH_IF" dat 0 2>/dev/null
     else
         ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan" || {
             ip link set "$MESH_IF" master br-lan 2>/dev/null || \
@@ -507,7 +503,7 @@ __http_handler() {
             wan_up && _http_ok '{"wan":true}' || _http_ok '{"wan":false}'
             ;;
         /register)
-            local src; src=$(echo "$body" | grep -o '"source":"[^"]*"' | cut -d'"' -f4)
+            local src; src=$(echo "$body" | jsonfilter -e '@.source' 2>/dev/null)
             register_node "$body" "${src:-wired}"
             _http_ok '{"status":"ok","msg":"registered"}'
             ;;
@@ -515,7 +511,7 @@ __http_handler() {
         /profile)          _serve_profile "$query" "profile" ;;
         /profile/push)
             [ "$method" != "POST" ] && { _http_ok '{"status":"ignored"}'; return; }
-            local push_ssid; push_ssid=$(echo "$body" | grep -o '"ssid":"[^"]*"' | cut -d'"' -f4)
+            local push_ssid; push_ssid=$(echo "$body" | jsonfilter -e '@.ssid' 2>/dev/null)
             if [ -n "$push_ssid" ]; then
                 apply_profile "$body"
                 _save_sum "$(_profile_sum)"
@@ -527,7 +523,7 @@ __http_handler() {
             ;;
         /nodes/approve)
             local req_mac; req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
-            [ -z "$req_mac" ] && req_mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
+            [ -z "$req_mac" ] && req_mac=$(echo "$body" | jsonfilter -e '@.mac' 2>/dev/null)
             req_mac=$(echo "$req_mac" | tr 'A-F' 'a-f')
             local safe; safe=$(echo "$req_mac" | tr ':' '_')
             local pf="${PENDING_DB}/${safe}.json"
@@ -557,8 +553,8 @@ __http_handler() {
             ;;
         /channel/apply)
             local new_chan reason
-            new_chan=$(echo "$body" | grep -o '"channel":"[^"]*"' | cut -d'"' -f4)
-            reason=$(echo "$body"  | grep -o '"reason":"[^"]*"'  | cut -d'"' -f4)
+            new_chan=$(echo "$body" | jsonfilter -e '@.channel' 2>/dev/null)
+            reason=$(echo "$body"   | jsonfilter -e '@.reason' 2>/dev/null)
             [ -z "$new_chan" ] && { _http_ok '{"status":"ignored"}'; return; }
             log "Channel sync: ch=%s reason=%s" "$new_chan" "${reason:-?}"
             local rd
@@ -627,9 +623,10 @@ run_node_server() {
 register_node() {
     local body="$1" source="$2"
     local mac ip hostname
-    mac=$(      echo "$body" | grep -o '"mac":"[^"]*"'      | cut -d'"' -f4)
-    ip=$(       echo "$body" | grep -o '"ip":"[^"]*"'       | cut -d'"' -f4)
-    hostname=$( echo "$body" | grep -o '"hostname":"[^"]*"' | cut -d'"' -f4)
+    mac=$(echo "$body" | jsonfilter -e '@.mac' 2>/dev/null)
+    ip=$(echo "$body" | jsonfilter -e '@.ip' 2>/dev/null)
+    hostname=$(echo "$body" | jsonfilter -e '@.hostname' 2>/dev/null)
+
     [ -z "$mac" ] && { loge "register_node: missing mac"; return 1; }
     [ -z "$ip"  ] && { loge "register_node: missing ip";  return 1; }
     mac=$(echo "$mac" | tr 'A-F' 'a-f')
@@ -749,17 +746,18 @@ poll_for_approval() {
     local sum_resp remote_sum
     sum_resp=$(curl -s -m 3 \
         "http://${mip}:${MASTER_PORT}/profile/checksum?mac=$(get_mac)" 2>/dev/null)
-    remote_sum=$(echo "$sum_resp" | grep -o '"sum":"[^"]*"' | cut -d'"' -f4)
+    remote_sum=$(echo "$sum_resp" | jsonfilter -e '@.sum' 2>/dev/null)
     [ -n "$remote_sum" ] && [ "$remote_sum" = "$(_load_sum)" ] && return 0
     local resp
     resp=$(curl -s -m 5 "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
-    case "$resp" in
-        *'"status":"pending"'*)
+    local status; status=$(echo "$resp" | jsonfilter -e '@.status')
+    case "$status" in
+        pending)
             log "Waiting for master approval..."; return 1 ;;
-        *'"status":"unregistered"'*)
+        unregistered)
             logw "Not registered, re-registering"
             do_register || true; return 2 ;;
-        *'"status":"approved"'*)
+        approved)
             apply_profile "$resp"
             _save_sum "$(_profile_sum)"
             return 0 ;;
@@ -1001,7 +999,7 @@ sync_neighbor_list() {
 
 apply_neighbor_list() {
     local body="$1" ap; ap=$(get_ap_iface)
-    local ssid; ssid=$(echo "$body" | grep -o '"ssid":"[^"]*"' | cut -d'"' -f4)
+    local ssid; ssid=$(echo "$body" | jsonfilter -e '@.ssid' 2>/dev/null)
     [ -z "$ssid" ] && return
     echo "$body" | grep -o '"bssid":"[^"]*"' | cut -d'"' -f4 | while read -r bssid; do
         [ -z "$bssid" ] && continue
@@ -1061,8 +1059,8 @@ pick_best_candidate() {
     _check_peer() {
         local resp; resp=$(curl -s -m 2 \
             "http://${1}:${MASTER_PORT}/roam/signal?mac=${sta_mac}" 2>/dev/null)
-        local pr; pr=$(echo "$resp" | grep -o '"rssi":-\?[0-9]*' | cut -d: -f2)
-        local pb; pb=$(echo "$resp" | grep -o '"bssid":"[^"]*"'   | cut -d'"' -f4)
+        local pr; pr=$(echo "$resp" | jsonfilter -e '@.rssi' 2>/dev/null)
+        local pb; pb=$(echo "$resp" | jsonfilter -e '@.bssid' 2>/dev/null)
         [ -z "$pr" ] || [ -z "$pb" ] && return
         [ "$pr" -gt "$best_rssi" ] 2>/dev/null && { best_rssi="$pr"; best_bssid="$pb"; }
     }
