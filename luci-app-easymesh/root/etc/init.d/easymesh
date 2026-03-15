@@ -103,7 +103,8 @@ _agent_setup() {
         uci -q commit network && uci -q commit system
         /etc/init.d/network reload
         local hostname; hostname=$(uci_get system @system[0] hostname openwrt)
-        printf 'ipaddr=%s\nhostname=%s\n' "$ip" "$hostname" > "${EM_BACKUP_DIR}"/easymesh_agent
+        [ -s "${EM_BACKUP_DIR}"/easymesh_agent ] || \
+            printf 'ipaddr=%s\nhostname=%s\n' "$ip" "$hostname" > "${EM_BACKUP_DIR}"/easymesh_agent
     }
 }
 
@@ -159,14 +160,6 @@ _setup_ap() {
     _setup_iface_result="$name"
 }
 
-_check_mesh0() {
-    if uci -q get wireless.mesh0 >/dev/null 2>&1; then
-        log "mesh0 already exists, skipping creation"
-        return 0
-    fi
-    return 1
-}
-
 start_service() {
     config_load easymesh
     config_get_bool enabled global enabled 0
@@ -210,7 +203,7 @@ start_service() {
     uci -q set network.mesh=interface
     uci -q set network.mesh.proto=none
 
-    if [ "$backhaul" != "wired" ] && [ "$role" = "master" ] && ! _check_mesh0; then
+    if [ "$backhaul" != "wired" ] ; then
         uci -q set wireless.mesh0=wifi-iface
         uci -q set wireless.mesh0.device="$mesh_radio"
         uci -q set wireless.mesh0.mode=mesh
@@ -293,15 +286,8 @@ start_service() {
         fi
         uci -q commit network
     fi
-
-    # ==================== 优化点5：使用循环简化防火墙规则 ====================
-    for port in 4304/tcp 4305/udp; do
-        p=${port%/*}; t=${port#*/}
-        iptables -C INPUT -p $t --dport $p -j ACCEPT 2>/dev/null || \
-            iptables -I INPUT 1 -p $t --dport $p -j ACCEPT 2>/dev/null || true
-        nft insert rule inet fw4 input $t dport $p accept 2>/dev/null || true
-    done
-
+    nft insert rule inet fw4 input tcp dport 4304 accept comment EASYMESH_PORTS 2>/dev/null || true
+    nft insert rule inet fw4 input udp dport 4305 accept comment EASYMESH_PORTS 2>/dev/null || true
     wifi reload
     sleep 2
 
@@ -323,13 +309,7 @@ stop_service() {
     [ -f /tmp/easymesh_pair_hostapd.pid ] && kill "$(cat /tmp/easymesh_pair_hostapd.pid)" 2>/dev/null
     [ -f /tmp/easymesh_pair_dnsmasq.pid ] && kill "$(cat /tmp/easymesh_pair_dnsmasq.pid)" 2>/dev/null
     iw dev easymesh-pair0 del 2>/dev/null || true
-
-    for port in 4304/tcp 4305/udp; do
-        p=${port%/*}; t=${port#*/}
-        while iptables -C INPUT -p $t --dport $p -j ACCEPT 2>/dev/null; do
-            iptables -D INPUT -p $t --dport $p -j ACCEPT || break
-        done
-    done
+    nft -a list table inet fw4 | awk '/4304|4305/ {print $NF}' | xargs -n1 nft delete rule inet fw4 input handle
 
     cleanup_wireless
     uci -q del dhcp.lan.ignore
@@ -338,7 +318,7 @@ stop_service() {
     uci -q commit network
 
     ( sleep 1; wifi reload ) &
-    rm -rf /tmp/easymesh_* /tmp/em_* 2>/dev/null
+    rm -rf /tmp/easymesh* /tmp/em_* 2>/dev/null
 }
 
 reload_service() {

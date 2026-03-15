@@ -115,6 +115,15 @@ get_ip()    { ip -4 addr show dev "$BRIDGE_IF" 2>/dev/null |
 master_ip() { cat "$MASTER_IP_FILE" 2>/dev/null; }
 wan_up()    { ubus call network.interface.wan status 2>/dev/null | grep -q '"up": true'; }
 
+_mesh_iface_cache=''
+get_mesh_iface() {
+    [ -n "$_mesh_iface_cache" ] && { echo "$_mesh_iface_cache"; return; }
+    _mesh_iface_cache=$(ubus call network.interface.mesh status 2>/dev/null | jsonfilter -e '@.device' ||
+                        iw dev 2>/dev/null | awk '$1=="Interface" && $2~/mesh0/ {print $2}' ||
+                        iwinfo 2>/dev/null | awk '/mesh0/ && /ESSID/ {print $1}')
+    echo "$_mesh_iface_cache"
+}
+
 get_role() {
     [ -n "${_ROLE_CACHE:-}" ] && { echo "$_ROLE_CACHE"; return; }
     cat "$ROLE_FILE" 2>/dev/null || echo "agent"
@@ -273,9 +282,9 @@ tune_batman() {
                 && log "batman-adv: routing_algo=%s" "$algo" \
                 || logw "batman-adv: routing_algo=%s rejected" "$algo"
         fi
-        if [ "$bmode" = "wired" ] && [ -d /sys/class/net/bat0/mesh ]; then
-            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null
-            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
+        if [ "$bmode" = "wired" ]; then
+            batctl meshif "$MESH_IF" bl 0 2>/dev/null
+            batctl meshif "$MESH_IF" dat 0 2>/dev/null
             log "batman-adv: BLA=off DAT=off (wired)"
         fi
         printf '%s' "$state" > /tmp/easymesh_batman_state
@@ -329,12 +338,12 @@ setup_wired_backhaul() {
     fi
 
     if [ "$backhaul" != "wired" ]; then
-        local mesh_iface=$(iwinfo 2>/dev/null | awk '/mesh0/ && /ESSID/ {print $1}')
-        if [ -n "$mesh_iface" ]; then
+        local mesh_iface; mesh_iface=$(get_mesh_iface)
+        if ip link show "$mesh_iface" >/dev/null 2>&1; then
             if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -qw "$mesh_iface"; then
                 ip link set "$mesh_iface" up 2>/dev/null
                 batctl meshif "$MESH_IF" interface add "$mesh_iface" 2>/dev/null \
-                    && log "Wireless backhaul: $mesh_iface -> bat0"
+                    && log "Wireless backhaul: $mesh_iface -> $MESH_IF"
             fi
         else
             [ "$backhaul" = "wireless" ] && logw "mesh0 not found, wireless backhaul failed"
@@ -347,10 +356,8 @@ setup_wired_backhaul() {
                 brctl delif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null || true
             log "Backhaul: bat0 removed from br-lan"
         }
-        [ -d /sys/class/net/bat0/mesh ] && {
-            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null
-            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
-        }
+        batctl meshif "$MESH_IF" bl 0 2>/dev/null
+        batctl meshif "$MESH_IF" dat 0 2>/dev/null
     else
         ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan" || {
             ip link set "$MESH_IF" master br-lan 2>/dev/null || \
@@ -379,14 +386,9 @@ teardown_batman() {
     fi
     local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
     [ "$backhaul" != "wired" ] && {
-        local mesh_iface=$(
-            batctl meshif "$MESH_IF" if 2>/dev/null | while read iface status; do
-            [ "$status" = "active" ] && ip link show "$iface" 2>/dev/null | grep -q "mode mesh" && echo "$iface"
-        done | head -1)
-
-        [ -z "$mesh_iface" ] && \
-            mesh_iface=$(iwinfo 2>/dev/null | awk '/ESSID/ && /Mesh/ {print $1}' | head -1)
-        [ -n "$mesh_iface" ] && batctl meshif "$MESH_IF" interface del "$mesh_iface" 2>/dev/null
+        local mesh_iface; mesh_iface=$(get_mesh_iface)
+        [ -n "$mesh_iface" ] && \
+            batctl meshif "$MESH_IF" interface del "$mesh_iface" 2>/dev/null || true
     }
     ip link set "$MESH_IF" down 2>/dev/null || true
     log "batman-adv torn down"
@@ -1320,19 +1322,19 @@ _handle_approval_signal() {
 main_loop() {
     _stop_jobs
     mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR" "$EM_STATE_DIR" "$PERSISTENT_NODE_DB" 2>/dev/null
-
-    log "Recovering approved nodes from persistent storage..."
-    for _pf in "$PERSISTENT_NODE_DB"/*.json; do
-        [ -f "$_pf" ] || continue
-        local _bn; _bn="${_pf##*/}"
-        local _rt="${NODE_DB}/${_bn}"
-        if [ ! -f "$_rt" ]; then
-            sed "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" "$_pf" > "$_rt"
-            local _mac; _mac=$(jsonfilter -i "$_rt" -e '@.mac' 2>/dev/null)
-            log "Recovered node: %s" "${_mac:-unknown}"
-        fi
-    done
-
+    ls "$PERSISTENT_NODE_DB"/*.json >/dev/null 2>&1 && {
+        log "Recovering approved nodes from persistent storage..."
+        for _pf in "$PERSISTENT_NODE_DB"/*.json; do
+            [ -f "$_pf" ] || continue
+            local _bn; _bn="${_pf##*/}"
+            local _rt="${NODE_DB}/${_bn}"
+            if [ ! -f "$_rt" ]; then
+                sed "s/\"ts\":[0-9]*/\"ts\":$(date +%s)/" "$_pf" > "$_rt"
+                local _mac; _mac=$(jsonfilter -i "$_rt" -e '@.mac' 2>/dev/null)
+                log "Recovered node: %s" "${_mac:-unknown}"
+            fi
+        done
+    }
     { printf "\n" >> "$LOGFILE" 2>/dev/null
       log "================================================"
       log "EasyMesh daemon starting (pid=%s)" "$$"
