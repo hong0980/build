@@ -282,11 +282,16 @@ tune_batman() {
                 && log "batman-adv: routing_algo=%s" "$algo" \
                 || logw "batman-adv: routing_algo=%s rejected" "$algo"
         fi
-        if [ "$bmode" = "wired" ]; then
-            batctl meshif "$MESH_IF" bl 0 2>/dev/null
-            batctl meshif "$MESH_IF" dat 0 2>/dev/null
+        if [ "$bmode" = "wired" ] && [ -d /sys/class/net/bat0/mesh ]; then
+            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null
+            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
             log "batman-adv: BLA=off DAT=off (wired)"
         fi
+        # if [ "$bmode" = "wired" ]; then
+        #     batctl meshif "$MESH_IF" bl 0 2>/dev/null
+        #     batctl meshif "$MESH_IF" dat 0 2>/dev/null
+        #     log "batman-adv: BLA=off DAT=off (wired)"
+        # fi
         printf '%s' "$state" > /tmp/easymesh_batman_state
     fi
     if [ "$role" = "master" ]; then
@@ -356,8 +361,12 @@ setup_wired_backhaul() {
                 brctl delif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null || true
             log "Backhaul: bat0 removed from br-lan"
         }
-        batctl meshif "$MESH_IF" bl 0 2>/dev/null
-        batctl meshif "$MESH_IF" dat 0 2>/dev/null
+        [ -d /sys/class/net/bat0/mesh ] && {
+            echo 0 > /sys/class/net/bat0/mesh/bridge_loop_avoidance 2>/dev/null
+            echo 0 > /sys/class/net/bat0/mesh/distributed_arp_table  2>/dev/null
+        }
+        # batctl meshif "$MESH_IF" bl 0 2>/dev/null
+        # batctl meshif "$MESH_IF" dat 0 2>/dev/null
     else
         ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan" || {
             ip link set "$MESH_IF" master br-lan 2>/dev/null || \
