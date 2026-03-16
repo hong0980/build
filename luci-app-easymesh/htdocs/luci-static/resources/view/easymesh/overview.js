@@ -5,6 +5,7 @@
 'require form';
 'require uci';
 'require network';
+'require tools.widgets as widgets';
 
 var callGetWirelessDevices = rpc.declare({
 	object: 'network.wireless',
@@ -91,7 +92,6 @@ return view.extend({
 		o.rawhtml = true;
 		o.depends({ enabled:'1', role:'agent' });
 
-		/* ── WAN 口模式（仅 master）── */
 		o = s.taboption('basic', form.ListValue, 'wan_mode', _('WAN Port Mode'),
 			_('Router: WAN port connects to modem/ISP. Switch: all ports become LAN (uplink via another router).'));
 		o.value('router', _('Router (WAN port separate)'));
@@ -117,7 +117,6 @@ return view.extend({
 		o.password = true;
 		o.depends({ enabled:'1', role:'master', wan_mode:'router', wan_proto:'pppoe' });
 
-		/* ── 双频合并 ── */
 		o = s.taboption('basic', form.Flag, 'band_merge', _('Dual-band Merge (same SSID/password)'),
 			_('Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz radios (recommended, like Mi/TP-Link routers). ' +
 			  'Disabled: set different SSID and password for each band.'));
@@ -125,7 +124,6 @@ return view.extend({
 		o.rmempty = false;
 		o.depends({ enabled:'1', role:'master' });
 
-		/* 合并模式：单组 SSID/Key */
 		o = s.taboption('basic', form.Value, 'ssid', _('WiFi Name (SSID)'),
 			_('Applied to both 2.4 GHz and 5 GHz radios. Pushed to all agent nodes.'));
 		o.datatype = 'maxlength(32)';
@@ -138,7 +136,6 @@ return view.extend({
 		o.password = true;
 		o.depends({ enabled:'1', role:'master', band_merge:'1' });
 
-		/* 非合并模式：5G 单独 */
 		o = s.taboption('basic', form.Value, 'ssid_5g', _('5 GHz WiFi Name (SSID)'));
 		o.datatype = 'maxlength(32)';
 		o.placeholder = 'HomeNetwork_5G';
@@ -149,7 +146,6 @@ return view.extend({
 		o.password = true;
 		o.depends({ enabled:'1', role:'master', band_merge:'0' });
 
-		/* 非合并模式：2.4G 单独 */
 		o = s.taboption('basic', form.Value, 'ssid_2g', _('2.4 GHz WiFi Name (SSID)'));
 		o.datatype = 'maxlength(32)';
 		o.placeholder = 'HomeNetwork_2.4G';
@@ -165,7 +161,6 @@ return view.extend({
 		o.default = '0';
 		o.depends({ enabled:'1', role:'master' });
 
-		/* ── Mesh Backhaul ── */
 		o = s.taboption('backhaul', form.ListValue, 'backhaul', _('Backhaul Type'),
 			_('Wired: batman-adv over LAN cable (recommended). Wireless: dedicated 802.11s link.'));
 		o.value('wired',    _('Wired (recommended)'));
@@ -173,6 +168,16 @@ return view.extend({
 		o.value('auto',     _('Auto (wired preferred)'));
 		o.default = 'wired';
 		o.depends({ enabled:'1', role:'master' });
+
+		o = s.taboption('backhaul', widgets.DeviceSelect, 'backhaul_port', _('Wired Backhaul Port'));
+		o.nocreate  = true;
+		o.optional  = true;
+		o.multiple  = false;
+		o.noaliases = true;
+		o.depends({ enabled: '1', role: 'master', backhaul: /^(wired|auto)$/ });
+		o.filter = function(section_id, value) {
+			return /^(eth[0-9]+|lan[0-9]+|switch[0-9]+)$/.test(value);
+		};
 
 		o = s.taboption('backhaul', form.Value, 'mesh_id', _('802.11s Mesh ID'),
 			_('Internal mesh network name. Must be identical on all nodes.'));
@@ -192,7 +197,6 @@ return view.extend({
 		o.default = '5g';
 		o.depends({ enabled:'1', role:'master', backhaul:/^(wireless|auto)$/ });
 
-		/* ── Roaming ── */
 		o = s.taboption('roaming', form.Flag, 'ieee80211r', _('802.11r Fast BSS Transition'),
 			_('Reduces disconnect time when roaming between nodes. Recommended.'));
 		o.default = '1';
@@ -223,7 +227,6 @@ return view.extend({
 		o.placeholder = '1000';
 		o.depends({ enabled:'1', role:'master', ieee80211r:'1' });
 
-		/* ── Advanced ── */
 		o = s.taboption('advanced', form.Flag, 'dfs_enable', _('Enable DFS Channels'));
 		o.default = '1';
 		o.depends({ enabled:'1', role:'master' });
@@ -256,7 +259,6 @@ return view.extend({
 		o.datatype = 'range(1,177)';
 		o.depends({ enabled:'1', role:'master', dedicated_backhaul:'1' });
 
-		/* ── 渲染后：绑 role 下拉框 change 事件实时刷新引导块 ── */
 		return m.render().then(function(node) {
 			var roleSelect = node.querySelector('select[id*="cbid.easymesh.global.role"]') ||
 			                 node.querySelector('select[data-name="role"]');

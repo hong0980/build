@@ -26,21 +26,29 @@ _emlog() {
 log()  { _emlog "INFO"  "initd" "$(translate "$@")"; }
 loge() { _emlog "ERROR" "initd" "$(translate "$@")"; }
 
+# 修改点1: 修复恢复逻辑，避免重复导入
 _restore_iface() {
     local iface="$1" managed
     config_get managed "$iface" easymesh_managed
-    [ "$managed" != "1" ] && return
+    [ "$managed" != "1" ] && return 0  # 返回0表示不需要恢复
 
     if [ "$iface" = "mesh0" ]; then
-        uci -q del wireless.mesh0; return
+        uci -q del wireless.mesh0
+        return 0
     fi
-
-    [ -f "$wireless_backup" ] && uci import wireless < $wireless_backup
+    return 1  # 返回1表示需要恢复
 }
 
 cleanup_wireless() {
+    local need_restore=0
     config_load wireless
-    config_foreach _restore_iface wifi-iface
+    config_foreach _restore_iface wifi-iface && need_restore=1
+
+    [ "$need_restore" -eq 1 ] && [ -f "$wireless_backup" ] && {
+        log "Restoring wireless config from backup"
+        uci import wireless < "$wireless_backup" 2>/dev/null
+        rm -f "$wireless_backup"
+    }
     uci commit wireless
 }
 
@@ -60,6 +68,7 @@ _get_ap_iface() {
     echo "$_ap_iface_result"
 }
 
+# 修改点2: 修复IP地址冲突检测逻辑
 _agent_setup() {
     [ "$1" != "agent" ] && return
     local ip="$2" prefix="${2%.*}" original_ip="$2"
@@ -67,7 +76,14 @@ _agent_setup() {
     [ -f "${EM_BACKUP_DIR}"/easymesh_agent ] && \
         original_ip=$(sed -n 's/^ipaddr=//p' "${EM_BACKUP_DIR}"/easymesh_agent)
 
-    [ "${ip##*.}" != "1" ] && [ "$original_ip" != "$ip" ] && return
+    # 如果当前IP不是.1，检查是否冲突
+    if [ "${ip##*.}" != "1" ] && [ "$original_ip" != "$ip" ]; then
+        # 检查当前IP是否可用
+        if ! ping -c 2 -W 1 "$ip" >/dev/null 2>&1; then
+            log "Current IP $ip is available, keeping it"
+            return
+        fi
+    fi
 
     local mac_raw=""
     for _iface in br-lan eth0 bat0; do
@@ -82,17 +98,37 @@ _agent_setup() {
     local offset; offset=$(printf '%d' "0x${mac_tail:-0}" 2>/dev/null || echo 0)
     offset=$((offset % 98))
     local candidate="${prefix}.$((100 + offset))"
-    local new_ip="$candidate"
+    local new_ip=""
 
-    if ping -c 1 -W 1 -q "$candidate" >/dev/null 2>&1; then
-        new_ip=""
+    # 检查候选IP
+    if ! ping -c 1 -W 1 -q "$candidate" >/dev/null 2>&1; then
+        new_ip="$candidate"
+    else
+        # 在100-197范围内查找可用IP
         local i
         for i in $(seq 100 197); do
             local c="${prefix}.${i}"
-            ping -c 1 -W 1 -q "$c" >/dev/null 2>&1 || { new_ip="$c"; break; }
+            [ "$c" = "$candidate" ] && continue
+            if ! ping -c 1 -W 1 -q "$c" >/dev/null 2>&1; then
+                new_ip="$c"
+                break
+            fi
         done
+
         [ -z "$new_ip" ] && {
-            loge "agent_setup: no free IP in .100-.197, keeping .1"
+            # 扩展搜索范围到2-254（排除1）
+            for i in $(seq 2 254 | grep -v "^1$"); do
+                local c="${prefix}.${i}"
+                [ "$c" = "$candidate" ] && continue
+                if ! ping -c 1 -W 1 -q "$c" >/dev/null 2>&1; then
+                    new_ip="$c"
+                    break
+                fi
+            done
+        }
+
+        [ -z "$new_ip" ] && {
+            loge "agent_setup: no free IP in $prefix.0/24, keeping .1"
             return 0
         }
     fi
@@ -108,6 +144,7 @@ _agent_setup() {
     }
 }
 
+
 _identify_radios() {
     radio_2g=""; radio_5g=""; radio_5g2=""
     config_load wireless
@@ -120,44 +157,52 @@ _identify_radios() {
 }
 
 _setup_iface_result=""
+# 修改点3: 修复无线接口命名逻辑（最关键的修复）
 _setup_ap() {
-    local name="$1" radio="$2" ssid="$3" key="$4" ft="$5" k="$6" v="$7" \
+    local desired_name="$1" radio="$2" ssid="$3" key="$4" ft="$5" k="$6" v="$7" \
           domain="$8" ft_ds="$9" deadline="${10}"
     local existing; existing=$(_get_ap_iface "$radio")
+    local final_name="$desired_name"  # 使用新变量，不修改参数
 
     [ -n "$existing" ] && {
-        [ ! -f "$wireless_backup" ] && uci export wireless > $wireless_backup
-        name="$existing"
+        # 修改点4: 只在第一次调用时备份
+        [ ! -f "$wireless_backup" ] && uci export wireless > "$wireless_backup" 2>/dev/null
+        final_name="$existing"  # 使用已存在的接口名
     }
 
-    uci -q set wireless.${name}.easymesh_managed=1
-    [ -n "$ssid" ] && uci -q set wireless.${name}.ssid="$ssid"
+    uci -q set wireless.${final_name}.easymesh_managed=1
+    uci -q set wireless.${final_name}.device="$radio"
+    uci -q set wireless.${final_name}.network='lan'
+    uci -q set wireless.${final_name}.mode='ap'
+
+    [ -n "$ssid" ] && uci -q set wireless.${final_name}.ssid="$ssid"
 
     if [ -n "$key" ]; then
-        uci -q set wireless.${name}.encryption='psk2+ccmp'
-        uci -q set wireless.${name}.key="$key"
+        uci -q set wireless.${final_name}.encryption='psk2+ccmp'
+        uci -q set wireless.${final_name}.key="$key"
     else
-        uci -q set wireless.${name}.encryption='none'
-        uci -q del wireless.${name}.key
+        uci -q set wireless.${final_name}.encryption='none'
+        uci -q del wireless.${final_name}.key
     fi
 
     [ "$ft" = "1" ] && {
-        uci -q set wireless.${name}.ieee80211r=1
-        uci -q set wireless.${name}.mobility_domain="$domain"
-        uci -q set wireless.${name}.ft_over_ds="$ft_ds"
-        uci -q set wireless.${name}.ft_psk_generate_local=1
-        uci -q set wireless.${name}.reassociation_deadline="$deadline"
+        uci -q set wireless.${final_name}.ieee80211r=1
+        uci -q set wireless.${final_name}.mobility_domain="$domain"
+        uci -q set wireless.${final_name}.ft_over_ds="$ft_ds"
+        uci -q set wireless.${final_name}.ft_psk_generate_local=1
+        uci -q set wireless.${final_name}.reassociation_deadline="$deadline"
     }
     [ "$k" = "1" ] && {
-        uci -q set wireless.${name}.ieee80211k=1
-        uci -q set wireless.${name}.rrm_neighbor_report=1
-        uci -q set wireless.${name}.rrm_beacon_report=1
+        uci -q set wireless.${final_name}.ieee80211k=1
+        uci -q set wireless.${final_name}.rrm_neighbor_report=1
+        uci -q set wireless.${final_name}.rrm_beacon_report=1
     }
     [ "$v" = "1" ] && {
-        uci -q set wireless.${name}.ieee80211v=1
-        uci -q set wireless.${name}.bss_transition=1
+        uci -q set wireless.${final_name}.ieee80211v=1
+        uci -q set wireless.${final_name}.bss_transition=1
     }
-    _setup_iface_result="$name"
+
+    _setup_iface_result="$final_name"  # 返回实际使用的接口名
 }
 
 start_service() {
@@ -188,6 +233,14 @@ start_service() {
     config_get k           global  ieee80211k              1
     config_get v           global  ieee80211v              1
 
+    # 修改点5: 添加DSA架构和backhaul_port检查
+    config_get backhaul_port global backhaul_port ''
+    _is_dsa() { ip link show 2>/dev/null | grep -qE 'lan[0-9]+@eth'; }
+    if [ -n "$backhaul_port" ] && _is_dsa; then
+        logw "DSA架构检测到，忽略配置的backhaul_port: $backhaul_port"
+        backhaul_port=""
+    fi
+
     mkdir -p "$EM_BACKUP_DIR"
     log "EasyMesh starting (role=%s)" "$role"
 
@@ -199,6 +252,12 @@ start_service() {
     [ "$mesh_band" = "2g" ] && mesh_radio="$radio_2g"
     [ -z "$mesh_radio" ] && mesh_radio=$(uci -q show wireless 2>/dev/null | \
         awk -F= '/=wifi-device$/{sub(/wireless\./,""); print $1}' | head -1)
+
+    # 修改点6: 检查mesh radio是否存在
+    if [ -z "$mesh_radio" ] || ! uci -q get "wireless.$mesh_radio" >/dev/null; then
+        loge "Mesh radio not found, cannot create mesh0"
+        return 1
+    fi
 
     uci -q set network.mesh=interface
     uci -q set network.mesh.proto=none
@@ -286,8 +345,10 @@ start_service() {
         fi
         uci -q commit network
     fi
+
     nft insert rule inet fw4 input tcp dport 4304 accept comment EASYMESH_PORTS 2>/dev/null || true
     nft insert rule inet fw4 input udp dport 4305 accept comment EASYMESH_PORTS 2>/dev/null || true
+
     wifi reload
     sleep 2
 
@@ -296,6 +357,7 @@ start_service() {
     procd_set_param respawn
     procd_set_param stdout 1
     procd_set_param stderr 1
+    procd_set_param user nobody
     procd_close_instance
 }
 
@@ -309,7 +371,11 @@ stop_service() {
     [ -f /tmp/easymesh_pair_hostapd.pid ] && kill "$(cat /tmp/easymesh_pair_hostapd.pid)" 2>/dev/null
     [ -f /tmp/easymesh_pair_dnsmasq.pid ] && kill "$(cat /tmp/easymesh_pair_dnsmasq.pid)" 2>/dev/null
     iw dev easymesh-pair0 del 2>/dev/null || true
-    nft -a list table inet fw4 | awk '/4304|4305/ {print $NF}' | xargs -n1 nft delete rule inet fw4 input handle
+    nft -a list chain inet fw4 input 2>/dev/null | \
+        awk '/4304|4305/ {print $NF}' | \
+        while read handle; do
+            nft delete rule inet fw4 input handle "$handle"
+        done
 
     cleanup_wireless
     uci -q del dhcp.lan.ignore
