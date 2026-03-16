@@ -220,10 +220,10 @@ return view.extend({
 							var lines = [
 								(hit.role === 'master' ? '🌐 ' + _('Master') : '📡 ' + _('Agent')),
 								_('Hostname') + ': ' + (hit.hostname || '—'),
-								_('MAC') + ': ' + (hit.mac || '—'),
+								_('MAC') + ': ' + (hit.mac ? hit.mac.toUpperCase() : '—'),
 								_('IP')  + ': ' + (hit.ip  || '—'),
 								_('Clients') + ': ' + (hit.clients || 0),
-								_('Backhaul') + ': ' + (hit.backhaul || _('wired'))
+								_('Backhaul') + ': ' + (_(hit.backhaul) || _('wired'))
 							];
 							if (hit.tq) lines.push(_('TQ') + ': ' + Math.round(hit.tq / 255 * 100) + '%');
 							lines.forEach(function(l) {
@@ -275,7 +275,7 @@ return view.extend({
 						return E('div', { class: 'tr' }, [
 							E('div', { class: 'td' }, n.hostname || _('Unknown device')),
 							E('div', { class: 'td' }, n.ip|| '—'),
-							E('div', { class: 'td' }, n.mac || '—'),
+							E('div', { class: 'td' }, n.mac.toUpperCase() || '—'),
 							E('div', { class: 'td' }, n.source === 'wireless' ? '📶 ' + _('Wireless') : '🔌 ' + _('Wired')),
 							E('div', { class: 'td' }, [
 								E('div', { style: 'display: flex; gap: 8px;' }, [
@@ -339,7 +339,7 @@ return view.extend({
 								? E('a', { href: `//${n.ip}`, target: '_blank' }, n.ip)
 								: '—'
 							),
-							E('div', { class: 'td' }, n.mac || '—'),
+							E('div', { class: 'td' }, n.mac.toUpperCase() || '—'),
 							E('div', { class: 'td' }, n.source === 'wireless' ? '📶 ' + _('Wireless') : '🔌 ' + _('Wired'))
 						]);
 					}))
@@ -392,11 +392,11 @@ return view.extend({
 					])].concat(neighbors.map(function(n) {
 						var isSameHop = n.mac === n.nexthop || !n.nexthop;
 						return E('div', { class: 'tr' }, [
-							E('div', { class: 'td', style: 'color:#d2a8ff' }, n.mac || '—'),
+							E('div', { class: 'td', style: 'color:#d2a8ff' }, n.mac.toUpperCase() || '—'),
 							E('div', { class: 'td' }, tqBar(n.tq || 0)),
 							E('div', { class: 'td', style: 'color:' +
 								(isSameHop ? '#7d8590' : '#79c0ff') },
-								n.nexthop || n.mac),
+								n.nexthop || n.mac.toUpperCase()),
 							E('div', { class: 'td', style: 'color:#7d8590' }, n.iface || 'bat0'),
 							E('div', { class: 'td', style: 'color:#7d8590' },
 								(n.last_seen != null ? n.last_seen : '—') + 's')
