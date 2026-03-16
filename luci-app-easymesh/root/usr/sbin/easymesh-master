@@ -83,7 +83,7 @@ _emlog() {
         printf "%s [%-5s] [%-8s] %s\n" "$ts" "$level" "$tag" "$*" >> "$LOGFILE"
         local seq
         seq=$(( $(cat "$_LOG_SEQ_FILE" 2>/dev/null || echo 0) + 1 ))
-        echo "$seq" > "$_LOG_SEQ_FILE"
+        printf '%d\n' "$seq" > "$_LOG_SEQ_FILE"
         if [ $(( seq % 50 )) -eq 0 ]; then
             local lc; lc=$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)
             if [ "$lc" -gt "$LOG_MAX_LINES" ]; then
@@ -170,8 +170,14 @@ _ping_master() {
 
 _node_update() {
     local f="$1" ip="$2" ts; ts=$(date +%s)
-    sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"${ip}\"/" "$f"
-    sed -i "s/\"ts\":[0-9]*/\"ts\":${ts}/" "$f"
+    # if command -v jq >/dev/null 2>&1; then
+    #     jq --arg ip "$ip" --arg ts "$ts" \
+    #         '.ip = $ip | .ts = ($ts | tonumber)' "$f" > "${f}.tmp"
+    #     [ -s "${f}.tmp" ] && mv "${f}.tmp" "$f" || return 1
+    # else
+        sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"${ip}\"/" "$f"
+        sed -i "s/\"ts\":[0-9]*/\"ts\":${ts}/" "$f"
+    # fi
     local _bn; _bn="${f##*/}"
     [ -f "${PERSISTENT_NODE_DB}/${_bn}" ] && cp "$f" "${PERSISTENT_NODE_DB}/${_bn}" 2>/dev/null
 }
@@ -603,9 +609,10 @@ run_node_server() {
     sleep 1
     socat TCP4-LISTEN:${MASTER_PORT},fork,reuseaddr \
         EXEC:"/usr/sbin/easymesh-master __socat_http" 2>>"$LOGFILE" &
+    echo "$!" > "${EM_PID_DIR}/http_server.pid"
     sleep 1
     local ok=0
-    command -v ss     >/dev/null 2>&1 && ss     -tlnp 2>/dev/null | grep -q ":${MASTER_PORT}" && ok=1
+    command -v ss     >/dev/null 2>&1 && ss -tlnp 2>/dev/null | grep -q ":${MASTER_PORT}" && ok=1
     command -v netstat>/dev/null 2>&1 && [ "$ok" = "0" ] && \
         netstat -tlnp 2>/dev/null | grep -q ":${MASTER_PORT}" && ok=1
     [ "$ok" = "1" ] \
@@ -765,7 +772,7 @@ poll_for_approval() {
 generate_profile() {
     config_load easymesh
     local ssid key mesh_id mesh_key routing_algo channel band_merge
-    local ssid_5g ssid_2g key_5g key_2g
+    local ssid_5g ssid_2g key_5g key_2g backhaul_port backhaul_band
     local ieee80211r ieee80211k ieee80211v ft_over_ds mobility_domain backhaul
     config_get ssid            global ssid             'OpenWrt'
     config_get key             global key              ''
@@ -783,6 +790,8 @@ generate_profile() {
     config_get ft_over_ds      global ft_over_ds       '1'
     config_get mobility_domain global mobility_domain  'aabb'
     config_get backhaul        global backhaul         'wired'
+    config_get backhaul_port   global backhaul_port    ''
+    config_get backhaul_band   global backhaul_band    ''
     local rd
     for rd in $(_wifi_devs); do
         local b; b=$(uci -q get "wireless.${rd}.band")
@@ -790,12 +799,23 @@ generate_profile() {
     done
     [ -z "$rd" ] && rd=$(_wifi_devs | head -1)
     channel=$(uci -q get "wireless.${rd}.channel" 2>/dev/null || echo 'auto')
-    local new_prof
-    new_prof=$(printf \
-        '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211r":"%s","ieee80211k":"%s","ieee80211v":"%s","ft_over_ds":"%s","mobility_domain":"%s","backhaul":"%s","band_merge":"%s","ssid_5g":"%s","ssid_2g":"%s","key_5g":"%s","key_2g":"%s"}' \
+
+    local lan_ipaddr lan_netmask lan_dns mesh_proto mesh_ipaddr mesh_netmask
+    lan_ipaddr=$(uci_get network lan ipaddr)
+    lan_netmask=$(uci_get network lan netmask "255.255.255.0")
+    lan_dns=$(uci_get network lan dns '')
+    mesh_proto=$(uci_get network mesh proto "none")
+    mesh_ipaddr=$(uci_get network mesh ipaddr '')
+    mesh_netmask=$(uci_get network mesh netmask '')
+
+    local new_prof; new_prof=$(printf \
+        '{"wireless":{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211r":"%s","ieee80211k":"%s","ieee80211v":"%s","ft_over_ds":"%s","mobility_domain":"%s","band_merge":"%s","ssid_5g":"%s","ssid_2g":"%s","key_5g":"%s","key_2g":"%s"},"network":{"backhaul":"%s","backhaul_port":"%s","backhaul_band":"%s","lan":{"ipaddr":"%s","netmask":"%s","dns":"%s"},"mesh":{"proto":"%s","ipaddr":"%s","netmask":"%s"}}}' \
         "$ssid" "$key" "$channel" "$mesh_id" "$mesh_key" "$routing_algo" \
         "$ieee80211r" "$ieee80211k" "$ieee80211v" "$ft_over_ds" "$mobility_domain" \
-        "$backhaul" "$band_merge" "$ssid_5g" "$ssid_2g" "$key_5g" "$key_2g")
+        "$band_merge" "$ssid_5g" "$ssid_2g" "$key_5g" "$key_2g" "$backhaul" \
+        "$backhaul_port" "$backhaul_band" "$lan_ipaddr" "$lan_netmask" \
+        "$lan_dns" "$mesh_proto" "$mesh_ipaddr" "$mesh_netmask")
+
     local old_prof; old_prof=$(cat "$PROFILE_FILE" 2>/dev/null)
     if [ "$new_prof" != "$old_prof" ]; then
         printf '%s' "$new_prof" > "$PROFILE_FILE"
@@ -810,15 +830,19 @@ apply_profile() {
     local ieee80211r ieee80211k ieee80211v ft_over_ds mobility_domain backhaul
     local band_merge ssid_5g ssid_2g key_5g key_2g
     eval "$(jsonfilter -i "$_pf" \
-        -e 'ssid=@.ssid'                        -e 'key=@.key'                   \
-        -e 'channel=@.channel'                  -e 'mesh_id=@.mesh_id'           \
-        -e 'mesh_key=@.mesh_key'                -e 'routing_algo=@.routing_algo' \
-        -e 'ieee80211r=@.ieee80211r'            -e 'ieee80211k=@.ieee80211k'     \
-        -e 'ieee80211v=@.ieee80211v'            -e 'ft_over_ds=@.ft_over_ds'     \
-        -e 'mobility_domain=@.mobility_domain'  -e 'backhaul=@.backhaul'         \
-        -e 'band_merge=@.band_merge'            -e 'ssid_5g=@.ssid_5g'           \
-        -e 'ssid_2g=@.ssid_2g'                  -e 'key_5g=@.key_5g'             \
-        -e 'key_2g=@.key_2g'                    2>/dev/null)"
+        -e 'ssid=@.wireless.ssid'                        -e 'key=@.wireless.key'                   \
+        -e 'channel=@.wireless.channel'                  -e 'mesh_id=@.wireless.mesh_id'           \
+        -e 'mesh_key=@.wireless.mesh_key'                -e 'routing_algo=@.wireless.routing_algo' \
+        -e 'ieee80211r=@.wireless.ieee80211r'            -e 'ieee80211k=@.wireless.ieee80211k'     \
+        -e 'ieee80211v=@.wireless.ieee80211v'            -e 'ft_over_ds=@.wireless.ft_over_ds'     \
+        -e 'mobility_domain=@.wireless.mobility_domain'  -e 'band_merge=@.wireless.band_merge'     \
+        -e 'ssid_5g=@.wireless.ssid_5g'                  -e 'ssid_2g=@.wireless.ssid_2g'           \
+        -e 'key_5g=@.wireless.key_5g'                    -e 'key_2g=@.wireless.key_2g'             \
+        -e 'backhaul=@.network.backhaul'                 -e 'backhaul_port=@.network.backhaul_port' \
+        -e 'backhaul_band=@.network.backhaul_band'       -e 'lan_ipaddr=@.network.lan.ipaddr'       \
+        -e 'lan_netmask=@.network.lan.netmask'           -e 'lan_dns=@.network.lan.dns'             \
+        -e 'mesh_proto=@.network.mesh.proto'             -e 'mesh_ipaddr=@.network.mesh.ipaddr'     \
+        -e 'mesh_netmask=@.network.mesh.netmask'         2>/dev/null)"
     rm -f "$_pf"
     [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
     log "Applying profile: ssid=%s channel=%s backhaul=%s" "$ssid" "$channel" "${backhaul:-wired}"
@@ -926,20 +950,34 @@ apply_profile() {
 # 10. WATCHDOGS
 ########################################
 gateway_watchdog() {
-    local fail=0
+    local fail=0 last_action=0
     log "Gateway watchdog started"
     while true; do
         sleep "$GW_WATCHDOG_INTERVAL"
         local mip; mip=$(master_ip)
         [ -z "$mip" ] && continue
-        if curl -s -m 4 -o /dev/null "http://${mip}:${MASTER_PORT}/ping" 2>/dev/null; then
+
+        local http_ok=0 ping_ok=0
+        curl -s -m 2 "http://${mip}:${MASTER_PORT}/ping" >/dev/null 2>&1 && http_ok=1
+        ping -c 1 -W 1 "$mip" >/dev/null 2>&1 && ping_ok=1
+
+        if [ "$http_ok" -eq 1 ] || [ "$ping_ok" -eq 1 ]; then
             fail=0
         else
             fail=$(( fail + 1 ))
-            logw "Gateway: master %s unreachable (%s/3)" "$mip" "$fail"
+            logw "Gateway: master %s unreachable (%s/3, http=%d ping=%d)" "$mip" "$fail" "$http_ok" "$ping_ok"
             if [ "$fail" -ge 3 ]; then
+                local now; now=$(date +%s)
+                [ $(( now - last_action )) -lt 60 ] && { fail=0; continue; }
+
                 loge "Gateway dead - re-electing"
-                rm -f "$MASTER_IP_FILE"; elect_role; tune_batman; fail=0
+                last_action=$now
+                rm -f "$MASTER_IP_FILE"; elect_role; tune_batman
+
+                sleep "$GW_WATCHDOG_INTERVAL"
+                local new_role; new_role=$(get_role)
+                [ "$new_role" = "agent" ] && { find_master && do_register || true; }
+                fail=0
             fi
         fi
     done
@@ -1306,6 +1344,54 @@ HAPD
 }
 
 ########################################
+# CONFIG CHANGE DETECTION
+########################################
+_check_config_changes() {
+    local cfg_sum; cfg_sum=$(uci show easymesh 2>/dev/null | md5sum | cut -d' ' -f1)
+    local last_sum; last_sum=$(cat /tmp/em_cfg_sum 2>/dev/null)
+
+    if [ "$cfg_sum" != "$last_sum" ]; then
+        printf '%s' "$cfg_sum" > /tmp/em_cfg_sum
+        log "Easymesh config changed, regenerating profile"
+        generate_profile
+
+        local profile; profile=$(cat "$PROFILE_FILE" 2>/dev/null)
+        [ -n "$profile" ] && {
+            _push_prof_all() {
+                ( curl -s -m 5 -X POST -H "Content-Type: application/json" \
+                    -d "$profile" "http://${1}:${MASTER_PORT}/profile/push" >/dev/null 2>&1 ) &
+                log "Config pushed to agent %s" "$1"
+            }
+            _iter_nodes _push_prof_all
+        }
+    fi
+}
+
+########################################
+# BACKHAUL CHANGE DETECTION
+########################################
+_check_backhaul_change() {
+    local current_backhaul; current_backhaul=$(uci_get easymesh global backhaul 'wired')
+    local last_backhaul; last_backhaul=$(cat /tmp/em_last_backhaul 2>/dev/null)
+
+    if [ "$current_backhaul" != "$last_backhaul" ]; then
+        printf '%s' "$current_backhaul" > /tmp/em_last_backhaul
+        log "Backhaul mode changed: %s -> %s, syncing..." "$last_backhaul" "$current_backhaul"
+        generate_profile
+
+        # 推送到所有 Agent
+        local profile; profile=$(cat "$PROFILE_FILE" 2>/dev/null)
+        [ -n "$profile" ] && {
+            _push_prof_backhaul() {
+                ( curl -s -m 5 -X POST -H "Content-Type: application/json" \
+                    -d "$profile" "http://${1}:${MASTER_PORT}/profile/push" >/dev/null 2>&1 ) &
+            }
+            _iter_nodes _push_prof_backhaul
+        }
+    fi
+}
+
+########################################
 # MAIN
 ########################################
 _handle_approval_signal() {
@@ -1394,6 +1480,8 @@ main_loop() {
             if [ $(( _iter % 6 )) -eq 0 ]; then
                 optimize_channel
                 manage_wireless_onboard
+                check_config_changes
+                check_backhaul_change
             fi
         else
             if [ "$_registered" = "0" ]; then
