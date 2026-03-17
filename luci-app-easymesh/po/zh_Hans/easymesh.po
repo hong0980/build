@@ -566,6 +566,15 @@ msgstr "警告：br-lan 20 秒内无 IP，仍继续启动守护进程"
 msgid "br-lan IP ready: %s"
 msgstr "br-lan IP 就绪：%s"
 
+msgid "Config pushed to agent %s"
+msgstr "配置已推送到 %s"
+
+msgid "Backhaul mode changed: %s -> %s, syncing..."
+msgstr "回程模式已更改：%s -> %s，正在同步..."
+
+msgid "Easymesh config changed, regenerating profile"
+msgstr "Easymesh 配置已更改，正在重新生成配置文件"
+
 msgid "Reloading wireless config..."
 msgstr "正在重载无线配置..."
 

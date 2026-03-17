@@ -39,10 +39,8 @@ _get_eth_if() {
 ETH_IF=$(_get_eth_if)
 [ -z "$ETH_IF" ] && ETH_IF="eth0"
 export ETH_IF
-BRIDGE_IF="br-lan"
-export BRIDGE_IF
-MESH_IF="bat0"
-export MESH_IF
+export MESH_IF="bat0"
+export BRIDGE_IF="br-lan"
 
 LOG_MAX_LINES=300
 _LOG_SEQ_FILE="/tmp/em_logseq"
@@ -103,6 +101,21 @@ loge() { _emlog "ERROR" "core"  "$(translate "$@")"; }
 ########################################
 # BASIC HELPERS
 ########################################
+master_ip() { cat "$MASTER_IP_FILE" 2>/dev/null; }
+_save_sum() { printf '%s' "$1" > "$_LAST_SUM_FILE"; }
+_load_sum() { cat "$_LAST_SUM_FILE" 2>/dev/null; }
+get_ip()    { ip -4 addr show dev "$BRIDGE_IF" 2>/dev/null |
+              awk '/inet /{print $2}' | cut -d/ -f1 | head -1; }
+wan_up()    { [ "$(ubus call network.interface.wan status 2>/dev/null | jsonfilter -e '@.up')" = "true" ]; }
+_profile_sum() { md5sum < "$PROFILE_FILE" | cut -d' ' -f1; }
+roam_cooldown_get() { cat "${ROAM_COOLDOWN_DIR}/${1}" 2>/dev/null || echo 0; }
+roam_cooldown_set() { printf '%s\n' "$2" > "${ROAM_COOLDOWN_DIR}/${1}"; }
+_set_role() { _ROLE_CACHE="$1"; echo "$1" > "$ROLE_FILE"; }
+get_role() {
+    [ -n "${_ROLE_CACHE:-}" ] && { echo "$_ROLE_CACHE"; return; }
+    cat "$ROLE_FILE" 2>/dev/null || echo "agent"
+}
+
 MAC_CACHE=""
 get_mac() {
     [ -n "$MAC_CACHE" ] && { echo "$MAC_CACHE"; return; }
@@ -110,10 +123,6 @@ get_mac() {
                  cat /sys/class/net/${ETH_IF}/address 2>/dev/null)
     echo "$MAC_CACHE"
 }
-get_ip()    { ip -4 addr show dev "$BRIDGE_IF" 2>/dev/null |
-              awk '/inet /{print $2}' | cut -d/ -f1 | head -1; }
-master_ip() { cat "$MASTER_IP_FILE" 2>/dev/null; }
-wan_up()    { [ "$(ubus call network.interface.wan status 2>/dev/null | jsonfilter -e '@.up')" = "true" ]; }
 
 _mesh_iface_cache=''
 get_mesh_iface() {
@@ -123,12 +132,6 @@ get_mesh_iface() {
                         iwinfo 2>/dev/null | awk '/mesh0/ && /ESSID/ {print $1}')
     echo "$_mesh_iface_cache"
 }
-
-get_role() {
-    [ -n "${_ROLE_CACHE:-}" ] && { echo "$_ROLE_CACHE"; return; }
-    cat "$ROLE_FILE" 2>/dev/null || echo "agent"
-}
-_set_role() { _ROLE_CACHE="$1"; echo "$1" > "$ROLE_FILE"; }
 
 AP_IFACE_CACHE=""
 get_ap_iface() {
@@ -141,13 +144,9 @@ get_ap_iface() {
 _WIFI_DEVS_CACHE=""
 _wifi_devs() {
     [ -n "$_WIFI_DEVS_CACHE" ] && { echo "$_WIFI_DEVS_CACHE"; return; }
-    _WIFI_DEVS_CACHE=$(uci -q show wireless | awk -F= '/=wifi-device$/{sub(/wireless\./,""); print $1}')
+    _WIFI_DEVS_CACHE=$(uci -q show wireless | awk -F'[.=]' '/=wifi-device$/ {print $2}')
     echo "$_WIFI_DEVS_CACHE"
 }
-
-_profile_sum() { md5sum < "$PROFILE_FILE" | cut -d' ' -f1; }
-roam_cooldown_get() { cat "${ROAM_COOLDOWN_DIR}/${1}" 2>/dev/null || echo 0; }
-roam_cooldown_set() { printf '%s\n' "$2" > "${ROAM_COOLDOWN_DIR}/${1}"; }
 
 do_http_post() {
     local url="$1" data="$2" retry=0 resp
@@ -170,14 +169,8 @@ _ping_master() {
 
 _node_update() {
     local f="$1" ip="$2" ts; ts=$(date +%s)
-    # if command -v jq >/dev/null 2>&1; then
-    #     jq --arg ip "$ip" --arg ts "$ts" \
-    #         '.ip = $ip | .ts = ($ts | tonumber)' "$f" > "${f}.tmp"
-    #     [ -s "${f}.tmp" ] && mv "${f}.tmp" "$f" || return 1
-    # else
-        sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"${ip}\"/" "$f"
-        sed -i "s/\"ts\":[0-9]*/\"ts\":${ts}/" "$f"
-    # fi
+    sed -i "s/\"ip\":\"[^\"]*\"/\"ip\":\"${ip}\"/" "$f"
+    sed -i "s/\"ts\":[0-9]*/\"ts\":${ts}/" "$f"
     local _bn; _bn="${f##*/}"
     [ -f "${PERSISTENT_NODE_DB}/${_bn}" ] && cp "$f" "${PERSISTENT_NODE_DB}/${_bn}" 2>/dev/null
 }
@@ -192,9 +185,6 @@ _iter_nodes() {
         "$cb" "$ip" "$mac" "$f"
     done
 }
-
-_save_sum() { printf '%s' "$1" > "$_LAST_SUM_FILE"; }
-_load_sum() { cat "$_LAST_SUM_FILE" 2>/dev/null; }
 
 ########################################
 # 1. PROCESS MANAGEMENT
@@ -234,10 +224,13 @@ _bg() { local name="$1"; shift; "$@" & echo $! > "${EM_PID_DIR}/${name}.pid"; }
 # 2. ROLE ELECTION
 ########################################
 elect_role() {
-    local cfg_role; cfg_role=$(uci_get easymesh global role)
+    local cfg_role; cfg_role=$(uci_get easymesh global role '')
     if [ -n "$cfg_role" ]; then
         _set_role "$cfg_role"
-        [ "$cfg_role" = "master" ] && { local ip; ip=$(get_ip); [ -n "$ip" ] && echo "$ip" > "$MASTER_IP_FILE"; }
+        [ "$cfg_role" = "master" ] && [ ! -s "$MASTER_IP_FILE" ] && {
+            local ip; ip=$(get_ip)
+            [ -n "$ip" ] && echo "$ip" > "$MASTER_IP_FILE"
+        }
         return 0
     fi
     local mymac myip; mymac=$(get_mac); myip=$(get_ip)
@@ -323,10 +316,9 @@ setup_wired_backhaul() {
     fi
     ip link set "$MESH_IF" up 2>/dev/null
     local sw=0
-    while [ ! -d "/sys/class/net/$MESH_IF/mesh" ] && [ $sw -lt 2 ]; do sleep 1; sw=$(( sw+1 )); done
+    while [ ! -d "/sys/class/net/"$MESH_IF"/mesh" ] && [ $sw -lt 2 ]; do sleep 1; sw=$(( sw+1 )); done
 
     local backhaul; backhaul=$(uci_get easymesh global backhaul 'wired')
-
     if [ "$backhaul" = "wired" ] || [ "$backhaul" = "auto" ]; then
         if ! _is_dsa; then
             local bport; bport=$(uci_get easymesh global backhaul_port '')
@@ -369,7 +361,7 @@ setup_wired_backhaul() {
         ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan" || {
             ip link set "$MESH_IF" master br-lan 2>/dev/null || \
                 brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null
-            ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan" \
+            [ "$(ip -j link show "$MESH_IF" | jsonfilter -e '$[0].master')" = "br-lan" ] \
                 && log "Backhaul: bat0 joined br-lan" \
                 || loge "Backhaul: FAILED to add bat0 to br-lan"
         }
@@ -505,7 +497,7 @@ __http_handler() {
             wan_up && _http_ok '{"wan":true}' || _http_ok '{"wan":false}'
             ;;
         /register)
-            local src; src=$(echo "$body" | grep -o '"source":"[^"]*"' | cut -d'"' -f4)
+            local src; src=$(jsonfilter -s "$body" -e '@.source' 2>/dev/null)
             register_node "$body" "${src:-wired}"
             _http_ok '{"status":"ok","msg":"registered"}'
             ;;
@@ -513,7 +505,7 @@ __http_handler() {
         /profile)          _serve_profile "$query" "profile" ;;
         /profile/push)
             [ "$method" != "POST" ] && { _http_ok '{"status":"ignored"}'; return; }
-            local push_ssid; push_ssid=$(echo "$body" | grep -o '"ssid":"[^"]*"' | cut -d'"' -f4)
+            local push_ssid; push_ssid=$(jsonfilter -s "$body" -e '@.ssid' 2>/dev/null)
             if [ -n "$push_ssid" ]; then
                 apply_profile "$body"
                 _save_sum "$(_profile_sum)"
@@ -525,7 +517,7 @@ __http_handler() {
             ;;
         /nodes/approve)
             local req_mac; req_mac=$(echo "$query" | grep -o 'mac=[^&]*' | cut -d= -f2)
-            [ -z "$req_mac" ] && req_mac=$(echo "$body" | grep -o '"mac":"[^"]*"' | cut -d'"' -f4)
+            [ -z "$req_mac" ] && req_mac=$(jsonfilter -s "$query" -e '@.mac' 2>/dev/null)
             req_mac=$(echo "$req_mac" | tr 'A-F' 'a-f')
             local safe; safe=$(echo "$req_mac" | tr ':' '_')
             local pf="${PENDING_DB}/${safe}.json"
@@ -555,8 +547,8 @@ __http_handler() {
             ;;
         /channel/apply)
             local new_chan reason
-            new_chan=$(echo "$body" | grep -o '"channel":"[^"]*"' | cut -d'"' -f4)
-            reason=$(echo "$body"  | grep -o '"reason":"[^"]*"'  | cut -d'"' -f4)
+            new_chan=$(jsonfilter -s "$body" -e '@.channel' 2>/dev/null)
+            reason=$(jsonfilter -s "$body" -e '@.reason' 2>/dev/null)
             [ -z "$new_chan" ] && { _http_ok '{"status":"ignored"}'; return; }
             log "Channel sync: ch=%s reason=%s" "$new_chan" "${reason:-?}"
             local rd
@@ -626,9 +618,9 @@ run_node_server() {
 register_node() {
     local body="$1" source="$2"
     local mac ip hostname
-    mac=$(      echo "$body" | grep -o '"mac":"[^"]*"'      | cut -d'"' -f4)
-    ip=$(       echo "$body" | grep -o '"ip":"[^"]*"'       | cut -d'"' -f4)
-    hostname=$( echo "$body" | grep -o '"hostname":"[^"]*"' | cut -d'"' -f4)
+    mac=$(     jsonfilter -s "$body" -e '@.mac' 2>/dev/null)
+    ip=$(      jsonfilter -s "$body" -e '@.ip' 2>/dev/null)
+    hostname=$(jsonfilter -s "$body" -e '@.hostname' 2>/dev/null)
     [ -z "$mac" ] && { loge "register_node: missing mac"; return 1; }
     [ -z "$ip"  ] && { loge "register_node: missing ip";  return 1; }
     mac=$(echo "$mac" | tr 'A-F' 'a-f')
@@ -748,7 +740,7 @@ poll_for_approval() {
     local sum_resp remote_sum
     sum_resp=$(curl -s -m 3 \
         "http://${mip}:${MASTER_PORT}/profile/checksum?mac=$(get_mac)" 2>/dev/null)
-    remote_sum=$(echo "$sum_resp" | grep -o '"sum":"[^"]*"' | cut -d'"' -f4)
+    remote_sum=$(jsonfilter -s "$sum_resp" -e '@.sum' 2>/dev/null)
     [ -n "$remote_sum" ] && [ "$remote_sum" = "$(_load_sum)" ] && return 0
     local resp
     resp=$(curl -s -m 5 "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
@@ -799,23 +791,12 @@ generate_profile() {
     done
     [ -z "$rd" ] && rd=$(_wifi_devs | head -1)
     channel=$(uci -q get "wireless.${rd}.channel" 2>/dev/null || echo 'auto')
-
-    local lan_ipaddr lan_netmask lan_dns mesh_proto mesh_ipaddr mesh_netmask
-    lan_ipaddr=$(uci_get network lan ipaddr)
-    lan_netmask=$(uci_get network lan netmask "255.255.255.0")
-    lan_dns=$(uci_get network lan dns '')
-    mesh_proto=$(uci_get network mesh proto "none")
-    mesh_ipaddr=$(uci_get network mesh ipaddr '')
-    mesh_netmask=$(uci_get network mesh netmask '')
-
-    local new_prof; new_prof=$(printf \
-        '{"wireless":{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211r":"%s","ieee80211k":"%s","ieee80211v":"%s","ft_over_ds":"%s","mobility_domain":"%s","band_merge":"%s","ssid_5g":"%s","ssid_2g":"%s","key_5g":"%s","key_2g":"%s"},"network":{"backhaul":"%s","backhaul_port":"%s","backhaul_band":"%s","lan":{"ipaddr":"%s","netmask":"%s","dns":"%s"},"mesh":{"proto":"%s","ipaddr":"%s","netmask":"%s"}}}' \
+    local new_prof
+    new_prof=$(printf \
+        '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211r":"%s","ieee80211k":"%s","ieee80211v":"%s","ft_over_ds":"%s","mobility_domain":"%s","backhaul":"%s","band_merge":"%s","ssid_5g":"%s","ssid_2g":"%s","key_5g":"%s","key_2g":"%s","backhaul_port":"%s","backhaul_band":"%s"}' \
         "$ssid" "$key" "$channel" "$mesh_id" "$mesh_key" "$routing_algo" \
         "$ieee80211r" "$ieee80211k" "$ieee80211v" "$ft_over_ds" "$mobility_domain" \
-        "$band_merge" "$ssid_5g" "$ssid_2g" "$key_5g" "$key_2g" "$backhaul" \
-        "$backhaul_port" "$backhaul_band" "$lan_ipaddr" "$lan_netmask" \
-        "$lan_dns" "$mesh_proto" "$mesh_ipaddr" "$mesh_netmask")
-
+        "$backhaul" "$band_merge" "$ssid_5g" "$ssid_2g" "$key_5g" "$key_2g" "$backhaul_port" "$backhaul_band")
     local old_prof; old_prof=$(cat "$PROFILE_FILE" 2>/dev/null)
     if [ "$new_prof" != "$old_prof" ]; then
         printf '%s' "$new_prof" > "$PROFILE_FILE"
@@ -830,19 +811,16 @@ apply_profile() {
     local ieee80211r ieee80211k ieee80211v ft_over_ds mobility_domain backhaul
     local band_merge ssid_5g ssid_2g key_5g key_2g
     eval "$(jsonfilter -i "$_pf" \
-        -e 'ssid=@.wireless.ssid'                        -e 'key=@.wireless.key'                   \
-        -e 'channel=@.wireless.channel'                  -e 'mesh_id=@.wireless.mesh_id'           \
-        -e 'mesh_key=@.wireless.mesh_key'                -e 'routing_algo=@.wireless.routing_algo' \
-        -e 'ieee80211r=@.wireless.ieee80211r'            -e 'ieee80211k=@.wireless.ieee80211k'     \
-        -e 'ieee80211v=@.wireless.ieee80211v'            -e 'ft_over_ds=@.wireless.ft_over_ds'     \
-        -e 'mobility_domain=@.wireless.mobility_domain'  -e 'band_merge=@.wireless.band_merge'     \
-        -e 'ssid_5g=@.wireless.ssid_5g'                  -e 'ssid_2g=@.wireless.ssid_2g'           \
-        -e 'key_5g=@.wireless.key_5g'                    -e 'key_2g=@.wireless.key_2g'             \
-        -e 'backhaul=@.network.backhaul'                 -e 'backhaul_port=@.network.backhaul_port' \
-        -e 'backhaul_band=@.network.backhaul_band'       -e 'lan_ipaddr=@.network.lan.ipaddr'       \
-        -e 'lan_netmask=@.network.lan.netmask'           -e 'lan_dns=@.network.lan.dns'             \
-        -e 'mesh_proto=@.network.mesh.proto'             -e 'mesh_ipaddr=@.network.mesh.ipaddr'     \
-        -e 'mesh_netmask=@.network.mesh.netmask'         2>/dev/null)"
+        -e 'ssid=@.ssid'                        -e 'key=@.key'                   \
+        -e 'channel=@.channel'                  -e 'mesh_id=@.mesh_id'           \
+        -e 'mesh_key=@.mesh_key'                -e 'routing_algo=@.routing_algo' \
+        -e 'ieee80211r=@.ieee80211r'            -e 'ieee80211k=@.ieee80211k'     \
+        -e 'ieee80211v=@.ieee80211v'            -e 'ft_over_ds=@.ft_over_ds'     \
+        -e 'mobility_domain=@.mobility_domain'  -e 'backhaul=@.backhaul'         \
+        -e 'backhaul_band=@.backhaul_band'      -e 'band_merge=@.band_merge'     \
+        -e 'backhaul_port=@.backhaul_port'      -e 'ssid_5g=@.ssid_5g'           \
+        -e 'ssid_2g=@.ssid_2g'                  -e 'key_5g=@.key_5g'             \
+        -e 'key_2g=@.key_2g'                    2>/dev/null)"
     rm -f "$_pf"
     [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
     log "Applying profile: ssid=%s channel=%s backhaul=%s" "$ssid" "$channel" "${backhaul:-wired}"
@@ -865,6 +843,8 @@ apply_profile() {
     [ -n "$ieee80211v"      ] && uci -q set easymesh.global.ieee80211v="$ieee80211v"
     [ -n "$ft_over_ds"      ] && uci -q set easymesh.global.ft_over_ds="$ft_over_ds"
     [ -n "$mobility_domain" ] && uci -q set easymesh.global.mobility_domain="$mobility_domain"
+    [ -n "$backhaul_port"   ] && uci -q set easymesh.global.backhaul_port="$backhaul_port"
+    [ -n "$backhaul_band"   ] && uci -q set easymesh.global.backhaul_band="$backhaul_band"
     uci -q commit easymesh
 
     if uci show wireless.mesh0 >/dev/null 2>&1; then
@@ -1031,9 +1011,9 @@ sync_neighbor_list() {
 
 apply_neighbor_list() {
     local body="$1" ap; ap=$(get_ap_iface)
-    local ssid; ssid=$(echo "$body" | grep -o '"ssid":"[^"]*"' | cut -d'"' -f4)
+    local ssid; ssid=$(jsonfilter -s "$body" -e '@.ssid' 2>/dev/null)
     [ -z "$ssid" ] && return
-    echo "$body" | grep -o '"bssid":"[^"]*"' | cut -d'"' -f4 | while read -r bssid; do
+    jsonfilter -s "$body" -e '@.bssid' 2>/dev/null | while read -r bssid; do
         [ -z "$bssid" ] && continue
         ubus call "hostapd.${ap}" rrm_nr_set \
             "{\"list\":[{\"bssid\":\"$bssid\",\"ssid\":\"$ssid\",\"info\":\"$(echo "$bssid" | tr -d ':')0000000000\"}]}" \
@@ -1092,7 +1072,7 @@ pick_best_candidate() {
         local resp; resp=$(curl -s -m 2 \
             "http://${1}:${MASTER_PORT}/roam/signal?mac=${sta_mac}" 2>/dev/null)
         local pr; pr=$(echo "$resp" | grep -o '"rssi":-\?[0-9]*' | cut -d: -f2)
-        local pb; pb=$(echo "$resp" | grep -o '"bssid":"[^"]*"'   | cut -d'"' -f4)
+        local pb; pb=$(jsonfilter -s "$resp" -e '@.bssid' 2>/dev/null)
         [ -z "$pr" ] || [ -z "$pb" ] && return
         [ "$pr" -gt "$best_rssi" ] 2>/dev/null && { best_rssi="$pr"; best_bssid="$pb"; }
     }
@@ -1128,9 +1108,8 @@ dfs_watchdog() {
 }
 
 handle_dfs_channel_change() {
-    local new_chan="$1"
+    local new_chan="$1" rd
     logd "DFS: mesh-wide channel -> %s" "$new_chan"
-    local rd
     for rd in $(_wifi_devs); do uci -q set "wireless.${rd}.channel=${new_chan}"; done
     uci_commit wireless
     [ "$(get_role)" != "master" ] && return
@@ -1155,7 +1134,7 @@ optimize_channel() {
     local ch24="1 6 11" ch5="36 40 44 48 149 153 157 161 165"
     [ "$dfs" = "1" ] && ch5="$ch5 52 56 60 64 100 104 108 112 116 132 136 140"
     local rd; rd=$(_wifi_devs | head -1)
-    local band; band=$(uci -q get "wireless.${rd}.band" 2>/dev/null || echo "5g")
+    local band; band=$(uci_get wireless "${rd}" band "5g")
     local cands; case "$band" in 2g*|2.4*) cands="$ch24";; *) cands="$ch5";; esac
     local ap; ap=$(get_ap_iface)
     local scan; scan=$(iw dev "$ap" scan 2>/dev/null)
@@ -1165,10 +1144,10 @@ optimize_channel() {
         [ "$cnt" -lt "$best_cnt" ] && { best_cnt=$cnt; best=$ch; }
     done
     [ -z "$best" ] && return
-    local cur; cur=$(uci -q get "wireless.${rd}.channel" 2>/dev/null)
+    local cur; cur=$(uci_get wirelessm "${rd}" channel)
     [ "$cur" = "$best" ] && return
     logd "ACS: ch %s -> %s (occupancy %s)" "$cur" "$best" "$best_cnt"
-    uci -q set "wireless.${rd}.channel=$best"; uci_commit wireless && wifi reload
+    uci_set wireless "${rd}" channel "$best"; uci_commit wireless && wifi reload
     local payload="{\"channel\":\"$best\",\"reason\":\"acs\"}"
     _push_acs() { do_http_post "http://${1}:${MASTER_PORT}/channel/apply" "$payload" >/dev/null 2>&1 & }
     _iter_nodes _push_acs
@@ -1183,7 +1162,7 @@ setup_dedicated_backhaul() {
     local target=2; [ "$bh_band" = "5g_1" ] && target=1
     local bh_radio="" seen5g=0 dev
     for dev in $(_wifi_devs); do
-        local b; b=$(uci -q get "wireless.${dev}.band")
+        local b; b=$(uci_get wireless "${dev}" band)
         case "$b" in 5g*|5GHz*)
             seen5g=$(( seen5g+1 ))
             [ "$seen5g" -ge "$target" ] && { bh_radio="$dev"; break; } ;;
@@ -1194,7 +1173,7 @@ setup_dedicated_backhaul() {
     local iface
     for iface in $(uci -q show wireless | awk -F= '/=wifi-iface$/{sub(/wireless\./,""); print $1}'); do
         local d; d=$(uci_get wireless "$iface" device)
-        local m; m=$(uci -q get "wireless.${iface}.mode")
+        local m; m=$(uci_get wireless "$iface" mode)
         [ "$d" = "$bh_radio" ] && [ "$m" = "ap" ] && {
             uci del "wireless.${iface}"
             log "Dedicated backhaul: removed AP %s" "$iface"
@@ -1278,7 +1257,7 @@ update_topology() {
         nodes="${nodes},{\"mac\":\"$dm\",\"ip\":\"$dip\",\"role\":\"agent\",\"hostname\":\"$dh\",\"backhaul\":\"$ds\",\"clients\":0}"
     done
     local bat0_up
-    ip link show bat0 2>/dev/null | grep -qE ',UP,|<UP|,UP>' && bat0_up="true" || bat0_up="false"
+    ip link show "$MESH_IF" 2>/dev/null | grep -qE ',UP,|<UP|,UP>' && bat0_up="true" || bat0_up="false"
     printf '{"ts":%d,"nodes":[%s],"links":[%s],"bat0_up":%s}\n' \
         "$(date +%s)" "$nodes" "${links:-}" "$bat0_up" > "$TOPO_FILE"
 }
@@ -1299,7 +1278,7 @@ _stop_onboard_ap() {
 
 manage_wireless_onboard() {
     [ "$(get_role)" != "master" ] && return
-    local en; en=$(uci -q get easymesh.global.wireless_onboard || echo 0)
+    local en; en=$(uci_get easymesh global wireless_onboard 0)
     if [ "$en" != "1" ]; then
         [ -f /tmp/easymesh_pair_hostapd.pid ] && _stop_onboard_ap; return
     fi
@@ -1319,7 +1298,7 @@ manage_wireless_onboard() {
     local hex; hex=$(echo "$mac" | tr -d ':' | tr 'a-f' 'A-F')
     local oui="${hex%??????}"
     local ssid="EasyMesh-Setup-${oui}"
-    local phy; phy=$(iw phy 2>/dev/null | awk '/^phy/{print $1}' | head -1)
+    local phy; phy=$(iwinfo | awk '/PHY name:/ {print $NF; exit}')
     [ -z "$phy" ] && return
     iw phy "$phy" interface add easymesh-pair0 type __ap 2>/dev/null || true
     ip link set easymesh-pair0 up
@@ -1346,7 +1325,7 @@ HAPD
 ########################################
 # CONFIG CHANGE DETECTION
 ########################################
-_check_config_changes() {
+check_config_changes() {
     local cfg_sum; cfg_sum=$(uci show easymesh 2>/dev/null | md5sum | cut -d' ' -f1)
     local last_sum; last_sum=$(cat /tmp/em_cfg_sum 2>/dev/null)
 
@@ -1370,7 +1349,7 @@ _check_config_changes() {
 ########################################
 # BACKHAUL CHANGE DETECTION
 ########################################
-_check_backhaul_change() {
+check_backhaul_change() {
     local current_backhaul; current_backhaul=$(uci_get easymesh global backhaul 'wired')
     local last_backhaul; last_backhaul=$(cat /tmp/em_last_backhaul 2>/dev/null)
 
@@ -1379,7 +1358,6 @@ _check_backhaul_change() {
         log "Backhaul mode changed: %s -> %s, syncing..." "$last_backhaul" "$current_backhaul"
         generate_profile
 
-        # 推送到所有 Agent
         local profile; profile=$(cat "$PROFILE_FILE" 2>/dev/null)
         [ -n "$profile" ] && {
             _push_prof_backhaul() {
@@ -1427,9 +1405,8 @@ main_loop() {
       log "EasyMesh daemon starting (pid=%s)" "$$"
       log "================================================"; }
 
-    local count5g hw_type="dual-band"
-    count5g=$(uci -q show wireless | \
-        awk -F= '/=wifi-device/{d=$1} d && /\.band=/{b=$2; sub(/.*=/,"",b); if(b~/^5g|^5GHz/) n++} END{print n+0}')
+    local hw_type="dual-band"
+    local count5g; count5g=$(uci -q show wireless | grep -c "\.band='5g")
     [ "$count5g" -ge 2 ] && hw_type="tri-band"
     echo "$hw_type" > /tmp/easymesh_hw_type
     log "Hardware: %s" "$hw_type"
