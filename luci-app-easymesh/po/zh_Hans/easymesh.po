@@ -504,7 +504,7 @@ msgstr "暂无日志。请先启动 EasyMesh 服务。"
 msgid "No entries for this category."
 msgstr "该分类暂无日志。"
 
-msgid "No entries match the current filter."
+msgid "No log entries yet."
 msgstr "当前过滤条件无匹配条目。"
 
 msgid "Timestamp"
@@ -549,6 +549,9 @@ msgstr "回程模式已更改：%s -> %s，正在同步..."
 
 msgid "Easymesh config changed, regenerating profile"
 msgstr "Easymesh 配置已更改，正在重新生成配置文件"
+
+msgid "Master wireless synced (ieee80211r=%s k=%s v=%s)"
+msgstr "无线同步 (ieee80211r=%s k=%s v=%s)"
 
 msgid "agent_prepare: IP=%s (not .1, no change needed)"
 msgstr "agent_prepare：IP=%s（非 .1，无需更改）"
@@ -623,8 +626,8 @@ msgstr "15 秒内未找到 bat0，kmod-batman-adv 是否已安装？"
 msgid "Wired backhaul: dedicated port %s -> bat0"
 msgstr "有线回程：专用口 %s → bat0"
 
-msgid "Wireless backhaul: mesh0 -> bat0"
-msgstr "无线回程：mesh0 → bat0"
+msgid "Wireless backhaul: %s -> %s"
+msgstr "无线回程：%s -> %s"
 
 msgid "mesh0 not found, wireless backhaul failed"
 msgstr "mesh0 未找到，无线回程失败"
@@ -889,7 +892,7 @@ msgid "Profile applied (config changed, ssid=%s)"
 msgstr "配置已应用（配置已变更，ssid=%s）"
 
 msgid "Profile applied (no wireless change)"
-msgstr "配置已应用（无线配置无变化）"
+msgstr "配置已应用"
 
 msgid "Profile updated: ssid=%s channel=%s backhaul=%s"
 msgstr "配置已更新: ssid=%s 信道=%s 回程=%s"

@@ -76,21 +76,15 @@ translate() {
 
 _emlog() {
     local level="$1" tag="$2"; shift 2
-    local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
-    (
-        flock 200
-        printf "%s [%-5s] [%-8s] %s\n" "$ts" "$level" "$tag" "$*" >> "$LOGFILE"
-        local seq
-        seq=$(( $(cat "$_LOG_SEQ_FILE" 2>/dev/null || echo 0) + 1 ))
-        printf '%d\n' "$seq" > "$_LOG_SEQ_FILE"
-        if [ $(( seq % 50 )) -eq 0 ]; then
-            local lc; lc=$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)
-            if [ "$lc" -gt "$LOG_MAX_LINES" ]; then
-                local keep=$(( LOG_MAX_LINES * 4 / 5 ))
-                tail -n "$keep" "$LOGFILE" > "${LOGFILE}.tmp" && mv "${LOGFILE}.tmp" "$LOGFILE"
-            fi
-        fi
-    ) 200>>"${LOGFILE}.lock"
+    printf "%s [%-5s] [%-8s] %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "$level" "$tag" "$*" >> "$LOGFILE"
+    local seq; seq=$(( $(cat "$_LOG_SEQ_FILE" 2>/dev/null || echo 0) + 1 ))
+    printf '%d\n' "$seq" > "$_LOG_SEQ_FILE"
+    [ $(( seq % 50 )) -eq 0 ] && {
+        local lc; lc=$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)
+        [ "$lc" -gt "$LOG_MAX_LINES" ] && {
+            tail -n $(( LOG_MAX_LINES * 4 / 5 )) "$LOGFILE" > "${LOGFILE}.tmp"                 && mv "${LOGFILE}.tmp" "$LOGFILE"
+        }
+    }
 }
 log()  { _emlog "INFO"  "core"  "$(translate "$@")"; }
 logr() { _emlog "INFO"  "roam"  "$(translate "$@")"; }
@@ -217,13 +211,14 @@ _stop_jobs() {
     for f in "$EM_PID_DIR"/*.pid; do
         [ -f "$f" ] || continue
         pid=$(cat "$f" 2>/dev/null)
-        [ -z "$pid" ] && continue
-        kill "$pid" 2>/dev/null || true
-        local i=0
-        while [ $i -lt 3 ] && kill -0 "$pid" 2>/dev/null; do
-            sleep 1; i=$(( i + 1 ))
-        done
-        kill -9 "$pid" 2>/dev/null || true
+        [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+    done
+    sleep 2
+    for f in "$EM_PID_DIR"/*.pid; do
+        [ -f "$f" ] || continue
+        pid=$(cat "$f" 2>/dev/null)
+        [ -n "$pid" ] && kill -9 "$pid" 2>/dev/null || true
+        rm -f "$f"
     done
     _pkill "socat.*:${MASTER_PORT}"
     _pkill "socat.*:${DISC_PORT}"
@@ -261,11 +256,11 @@ elect_role() {
             _set_role "agent"; echo "$peer_ip" > "$MASTER_IP_FILE"
             log "Election: peer %s has WAN -> agent" "$peer_ip"; return 0
         fi
-        if [ -n "$peer_mac" ]; then
+        [ -n "$peer_mac" ] && {
             local pmh bmh
-            pmh=$(echo "$peer_mac" | tr -d ':'); bmh=$(echo "$best_mac" | tr -d ':')
+            pmh="${peer_mac//:}"; bmh="${best_mac//:}"
             [ "$pmh" \< "$bmh" ] && { best_mac="$peer_mac"; best_ip="$peer_ip"; }
-        fi
+        }
     done
     if [ "$best_mac" = "$mymac" ]; then
         _set_role "master"; echo "$myip" > "$MASTER_IP_FILE"
@@ -353,7 +348,7 @@ setup_wired_backhaul() {
             if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -qw "$mesh_iface"; then
                 ip link set "$mesh_iface" up 2>/dev/null
                 batctl meshif "$MESH_IF" interface add "$mesh_iface" 2>/dev/null \
-                    && log "Wireless backhaul: $mesh_iface -> $MESH_IF"
+                    && log "Wireless backhaul: %s -> %s" "$mesh_iface" "$MESH_IF"
             fi
         else
             [ "$backhaul" = "wireless" ] && logw "mesh0 not found, wireless backhaul failed"
@@ -684,13 +679,13 @@ find_master() {
     local cand="${prefix}.1"
     if [ "$cand" != "$my_ip" ]; then
         local t=0
-        while [ $t -lt 3 ]; do
-            if _ping_master "$cand"; then
-                echo "$cand" > "$MASTER_IP_FILE"
-                log "Master found at %s (wired direct)" "$cand"; return 0
-            fi
+        while [ $t -lt 3 ] && ! _ping_master "$cand"; do
             t=$(( t+1 )); sleep 3
         done
+        if [ $t -lt 3 ]; then
+            echo "$cand" > "$MASTER_IP_FILE"
+            log "Master found at %s (wired direct)" "$cand"; return 0
+        fi
         log "Master not at %s" "$cand"
     fi
 
@@ -728,15 +723,12 @@ do_register() {
     local mac; mac=$(get_mac)
     local hostname; hostname=$(uci_get system @system[0] hostname OpenWrt)
     local reg_source="wired" ip
-    echo "$mip" | grep -qE '\.250$' && reg_source="wireless"
-    if [ "$reg_source" = "wireless" ]; then
-        local wlan_ip mprefix
-        wlan_ip=$(ip -4 addr show 2>/dev/null | awk '/inet /{ip=$2} /wlan/{print ip; exit}' | cut -d/ -f1)
-        mprefix="${mip%.*}"
-        echo "$wlan_ip" | grep -q "^${mprefix}\." && ip="$wlan_ip" || ip=$(get_ip)
-    else
-        ip=$(get_ip)
-    fi
+    case "$mip" in
+        *.250) reg_source="wireless"
+               local wlan_ip; wlan_ip=$(ip -4 addr show 2>/dev/null                    | awk '/inet /{ip=$2} /wlan/{print ip; exit}' | cut -d/ -f1)
+               case "$wlan_ip" in "${mip%.*}."*) ip="$wlan_ip" ;; *) ip=$(get_ip) ;; esac ;;
+        *)     ip=$(get_ip) ;;
+    esac
     local resp
     resp=$(do_http_post \
         "http://${mip}:${MASTER_PORT}/register" \
@@ -917,8 +909,7 @@ apply_profile() {
             2g*|2.4*) ap_s="$ap_s2g"; ap_k="$ap_k2g" ;;
             *)        ap_s="$ap_s5g"; ap_k="$ap_k5g" ;;
         esac
-        uci_set wireless "$iface" disabled 0
-        uci_set wireless "$iface" ssid "$ap_s"
+        [ -n "$ap_s" ] && uci_set wireless "$iface" ssid "$ap_s"
         if [ -n "$ap_k" ]; then
             uci_set wireless "$iface" encryption 'psk2+ccmp'
             uci_set wireless "$iface" key "$ap_k"
@@ -926,22 +917,37 @@ apply_profile() {
             uci_set wireless "$iface" encryption 'none'
             uci -q del "wireless.${iface}.key"
         fi
-        [ "${ieee80211k:-1}" = "1" ] && {
+        if [ "${ieee80211k}" = "1" ]; then
             uci_set wireless "$iface" ieee80211k 1
             uci_set wireless "$iface" rrm_neighbor_report 1
             uci_set wireless "$iface" rrm_beacon_report 1
-        }
-        [ "${ieee80211v:-1}" = "1" ] && {
+        else
+            uci -q del "wireless.${iface}.ieee80211k"
+            uci -q del "wireless.${iface}.rrm_neighbor_report"
+            uci -q del "wireless.${iface}.rrm_beacon_report"
+        fi
+        # ieee80211v
+        if [ "${ieee80211v}" = "1" ]; then
             uci_set wireless "$iface" ieee80211v 1
             uci_set wireless "$iface" bss_transition 1
-        }
-        [ "${ieee80211r:-1}" = "1" ] && {
+        else
+            uci -q del "wireless.${iface}.ieee80211v"
+            uci -q del "wireless.${iface}.bss_transition"
+        fi
+        # ieee80211r + FT 参数
+        if [ "${ieee80211r}" = "1" ]; then
             uci_set wireless "$iface" ieee80211r 1
             uci_set wireless "$iface" ft_psk_generate_local 1
             [ -n "$mobility_domain"        ] && uci_set wireless "$iface" mobility_domain        "$mobility_domain"
             [ -n "$ft_over_ds"             ] && uci_set wireless "$iface" ft_over_ds             "$ft_over_ds"
             [ -n "$reassociation_deadline" ] && uci_set wireless "$iface" reassociation_deadline "$reassociation_deadline"
-        }
+        else
+            uci -q del "wireless.${iface}.ieee80211r"
+            uci -q del "wireless.${iface}.ft_psk_generate_local"
+            uci -q del "wireless.${iface}.mobility_domain"
+            uci -q del "wireless.${iface}.ft_over_ds"
+            uci -q del "wireless.${iface}.reassociation_deadline"
+        fi
     done
 
     local rd _band
@@ -978,15 +984,11 @@ gateway_watchdog() {
         local mip; mip=$(master_ip)
         [ -z "$mip" ] && continue
 
-        local http_ok=0 ping_ok=0
-        curl -s -m 2 "http://${mip}:${MASTER_PORT}/ping" >/dev/null 2>&1 && http_ok=1
-        ping -c 1 -W 1 "$mip" >/dev/null 2>&1 && ping_ok=1
-
-        if [ "$http_ok" -eq 1 ] || [ "$ping_ok" -eq 1 ]; then
+        if curl -s -m 2 "http://${mip}:${MASTER_PORT}/ping" >/dev/null 2>&1                 || ping -c 1 -W 1 "$mip" >/dev/null 2>&1; then
             fail=0
         else
             fail=$(( fail + 1 ))
-            logw "Gateway: master %s unreachable (%s/3, http=%d ping=%d)" "$mip" "$fail" "$http_ok" "$ping_ok"
+            logw "Gateway: master %s unreachable (%s/3)" "$mip" "$fail"
             if [ "$fail" -ge 3 ]; then
                 local now; now=$(date +%s)
                 [ $(( now - last_action )) -lt 60 ] && { fail=0; continue; }
@@ -1271,12 +1273,10 @@ update_topology() {
     my_hostname=$(uci_get system @system[0] hostname 'OpenWrt')
     clients=$(iw dev "$(get_ap_iface)" station dump 2>/dev/null | grep -c "^Station")
     local nodes="{\"mac\":\"$my_mac\",\"ip\":\"$my_ip\",\"role\":\"$my_role\",\"hostname\":\"$my_hostname\",\"clients\":$clients}"
-    local links="" tmp="/tmp/em_topo_$$.txt"
-    batctl meshif "$MESH_IF" orig 2>/dev/null | awk 'NR>2{print}' > "$tmp"
+    local links=""
     while read -r peer_mac _ tq _rest; do
         [ -z "$peer_mac" ] && continue
-        local pnorm; pnorm=$(printf '%s' "$peer_mac" | tr 'A-F' 'a-f')
-        local psafe; psafe=$(printf '%s' "$pnorm" | tr ':' '_')
+        local psafe; psafe=$(printf '%s' "$peer_mac" | tr 'A-F:' 'a-f_')
         local pf="${NODE_DB}/${psafe}.json"
         local ph="" pip=""
         [ -f "$pf" ] && {
@@ -1285,8 +1285,9 @@ update_topology() {
         }
         nodes="${nodes},{\"mac\":\"$peer_mac\",\"ip\":\"${pip}\",\"role\":\"agent\",\"hostname\":\"${ph}\",\"tq\":$tq,\"clients\":0}"
         links="${links:+$links,}{\"src\":\"$my_mac\",\"dst\":\"$peer_mac\",\"tq\":$tq}"
-    done < "$tmp"
-    rm -f "$tmp"
+    done << _ORIG_EOF
+$(batctl meshif "$MESH_IF" orig 2>/dev/null | awk 'NR>2')
+_ORIG_EOF
     for f in "$NODE_DB"/*.json; do
         [ -f "$f" ] || continue
         local dm; dm=$(jsonfilter -i "$f" -e '@.mac' 2>/dev/null)
@@ -1385,8 +1386,91 @@ check_config_changes() {
     fi
 
     generate_profile
+    _sync_master_wireless
     _push_profile_to_all
     log "Config pushed to all agents"
+}
+
+_sync_master_wireless() {
+    [ "$(get_role)" != "master" ] && return
+    local ieee80211r ieee80211k ieee80211v ft_over_ds mobility_domain
+    local reassociation_deadline band_merge ssid key ssid_5g ssid_2g key_5g key_2g
+    ieee80211r=$(uci_get easymesh global ieee80211r 1)
+    ieee80211k=$(uci_get easymesh global ieee80211k 1)
+    ieee80211v=$(uci_get easymesh global ieee80211v 1)
+    ft_over_ds=$(uci_get easymesh global ft_over_ds 1)
+    mobility_domain=$(uci_get easymesh global mobility_domain 'aabb')
+    reassociation_deadline=$(uci_get easymesh global reassociation_deadline 1000)
+    band_merge=$(uci_get easymesh global band_merge 1)
+    ssid=$(uci_get easymesh global ssid 'OpenWrt')
+    key=$(uci_get easymesh global key '')
+    ssid_5g=$(uci_get easymesh global ssid_5g '')
+    ssid_2g=$(uci_get easymesh global ssid_2g '')
+    key_5g=$(uci_get easymesh global key_5g '')
+    key_2g=$(uci_get easymesh global key_2g '')
+    local ap_s5g ap_k5g ap_s2g ap_k2g
+    if [ "${band_merge:-1}" = "1" ]; then
+        ap_s5g="$ssid"; ap_k5g="$key"; ap_s2g="$ssid"; ap_k2g="$key"
+    else
+        ap_s5g="${ssid_5g:-$ssid}"; ap_k5g="${key_5g:-$key}"
+        ap_s2g="${ssid_2g:-$ssid}"; ap_k2g="${key_2g:-$key}"
+    fi
+    local iface changed=0
+    for iface in $(uci -q show wireless | \
+            awk -F= '/\.easymesh_managed=.1/{sub(/wireless\./,""); sub(/\.easymesh_managed/,""); print $1}'); do
+        [ "$iface" = "mesh0" ] && continue
+        uci show "wireless.${iface}" >/dev/null 2>&1 || continue
+        local dev band ap_s ap_k
+        dev=$(uci -q get "wireless.${iface}.device")
+        band=$(uci -q get "wireless.${dev}.band" | tr '[:upper:]' '[:lower:]')
+        case "$band" in
+            2g*|2.4*) ap_s="$ap_s2g"; ap_k="$ap_k2g" ;;
+            *)        ap_s="$ap_s5g"; ap_k="$ap_k5g" ;;
+        esac
+        uci_set wireless "$iface" ssid "$ap_s"
+        if [ -n "$ap_k" ]; then
+            uci_set wireless "$iface" encryption 'psk2+ccmp'
+            uci_set wireless "$iface" key "$ap_k"
+        else
+            uci_set wireless "$iface" encryption 'none'
+            uci -q del "wireless.${iface}.key"
+        fi
+        if [ "${ieee80211k}" = "1" ]; then
+            uci_set wireless "$iface" ieee80211k 1
+            uci_set wireless "$iface" rrm_neighbor_report 1
+            uci_set wireless "$iface" rrm_beacon_report 1
+        else
+            uci -q del "wireless.${iface}.ieee80211k"
+            uci -q del "wireless.${iface}.rrm_neighbor_report"
+            uci -q del "wireless.${iface}.rrm_beacon_report"
+        fi
+        if [ "${ieee80211v}" = "1" ]; then
+            uci_set wireless "$iface" ieee80211v 1
+            uci_set wireless "$iface" bss_transition 1
+        else
+            uci -q del "wireless.${iface}.ieee80211v"
+            uci -q del "wireless.${iface}.bss_transition"
+        fi
+        if [ "${ieee80211r}" = "1" ]; then
+            uci_set wireless "$iface" ieee80211r 1
+            uci_set wireless "$iface" ft_psk_generate_local 1
+            uci_set wireless "$iface" mobility_domain "$mobility_domain"
+            uci_set wireless "$iface" ft_over_ds "$ft_over_ds"
+            uci_set wireless "$iface" reassociation_deadline "$reassociation_deadline"
+        else
+            uci -q del "wireless.${iface}.ieee80211r"
+            uci -q del "wireless.${iface}.ft_psk_generate_local"
+            uci -q del "wireless.${iface}.mobility_domain"
+            uci -q del "wireless.${iface}.ft_over_ds"
+            uci -q del "wireless.${iface}.reassociation_deadline"
+        fi
+        changed=1
+    done
+    if [ "$changed" = "1" ]; then
+        local wch; wch=$(uci changes wireless 2>/dev/null)
+        uci_commit wireless
+        [ -n "$wch" ] && { wifi reload; log "Master wireless synced (ieee80211r=%s k=%s v=%s)" "$ieee80211r" "$ieee80211k" "$ieee80211v"; }
+    fi
 }
 
 ########################################

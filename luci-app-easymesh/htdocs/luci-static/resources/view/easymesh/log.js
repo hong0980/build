@@ -183,7 +183,7 @@ return view.extend({
 			while (logList.firstChild) logList.removeChild(logList.firstChild);
 			if (!vis.length) {
 				logList.appendChild(E('div',{style:'padding:48px 20px;text-align:center;color:#484f58;font-size:13px'},
-					f==='all'&&lf==='all'&&!s ? '📭 '+_('No log entries yet.')
+					f==='all'&&lf==='all'&&!s ? '📭 '+_('No log entries yet. Start the EasyMesh service to see logs here.')
 					: f!=='all'&&!s ? '📂 '+_('No entries for this category.')
 					: '🔍 '+_('No entries match the filter.')));
 			} else {
