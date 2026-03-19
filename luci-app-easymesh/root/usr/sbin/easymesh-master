@@ -1,14 +1,15 @@
 #!/bin/sh
 . /lib/functions.sh
 
-PROFILE_FILE="/tmp/easymesh_profile.json"
-TOPO_FILE="/tmp/easymesh_topo.json"
-NEIGHBOR_FILE="/tmp/easymesh_neighbors.conf"
-ROAM_COOLDOWN_DIR="/tmp/em_cooldown"
-export ROLE_FILE="/tmp/easymesh_master_role"
-export NODE_DB="/tmp/easymesh_nodes"
-export PENDING_DB="/tmp/easymesh_pending"
-export EM_PID_DIR="/tmp/easymesh_pids"
+EM_RUN_DIR="/tmp/easymesh"
+PROFILE_FILE="${EM_RUN_DIR}/profile.json"
+TOPO_FILE="${EM_RUN_DIR}/topo.json"
+NEIGHBOR_FILE="${EM_RUN_DIR}/neighbors.conf"
+ROAM_COOLDOWN_DIR="${EM_RUN_DIR}/cooldown"
+export ROLE_FILE="${EM_RUN_DIR}/role"
+export NODE_DB="${EM_RUN_DIR}/nodes"
+export PENDING_DB="${EM_RUN_DIR}/pending"
+export EM_PID_DIR="${EM_RUN_DIR}/pids"
 
 EM_STATE_DIR="/etc/easymesh"
 export MASTER_IP_FILE="${EM_STATE_DIR}/master_ip"
@@ -43,7 +44,7 @@ export MESH_IF="bat0"
 export BRIDGE_IF="br-lan"
 
 LOG_MAX_LINES=300
-_LOG_SEQ_FILE="/tmp/em_logseq"
+_LOG_SEQ_FILE="${EM_RUN_DIR}/logseq"
 export MASTER_PORT=4304
 export DISC_PORT=4305
 export DISC_REPLY_PORT=4306
@@ -104,6 +105,17 @@ loge() { _emlog "ERROR" "core"  "$(translate "$@")"; }
 master_ip() { cat "$MASTER_IP_FILE" 2>/dev/null; }
 _save_sum() { printf '%s' "$1" > "$_LAST_SUM_FILE"; }
 _load_sum() { cat "$_LAST_SUM_FILE" 2>/dev/null; }
+
+# 向所有已审批节点推送 profile
+_push_profile_to_all() {
+    local profile; profile=$(cat "$PROFILE_FILE" 2>/dev/null)
+    [ -z "$profile" ] && return 1
+    _do_push() {
+        ( curl -s -m 5 -X POST -H "Content-Type: application/json" \
+            -d "$profile" "http://${1}:${MASTER_PORT}/profile/push" >/dev/null 2>&1 ) &
+    }
+    _iter_nodes _do_push
+}
 get_ip()    { ip -4 addr show dev "$BRIDGE_IF" 2>/dev/null |
               awk '/inet /{print $2}' | cut -d/ -f1 | head -1; }
 wan_up()    { [ "$(ubus call network.interface.wan status 2>/dev/null | jsonfilter -e '@.up')" = "true" ]; }
@@ -275,7 +287,7 @@ tune_batman() {
     local role;  role=$(get_role)
     local algo;  algo=$(uci_get easymesh global routing_algo 'BATMAN_V')
     local state="${bmode}:${role}:${algo}"
-    local last;  last=$(cat /tmp/easymesh_batman_state 2>/dev/null)
+    local last;  last=$(cat ${EM_RUN_DIR}/batman_state 2>/dev/null)
     if [ "$state" != "$last" ]; then
         if [ -f /sys/module/batman_adv/parameters/routing_algo ]; then
             echo "$algo" > /sys/module/batman_adv/parameters/routing_algo 2>/dev/null \
@@ -287,7 +299,7 @@ tune_batman() {
             batctl meshif "$MESH_IF" dat 0 2>/dev/null
             log "batman-adv: BLA=off DAT=off (wired)"
         fi
-        printf '%s' "$state" > /tmp/easymesh_batman_state
+        printf '%s' "$state" > ${EM_RUN_DIR}/batman_state
     fi
     if [ "$role" = "master" ]; then
         batctl meshif "$MESH_IF" gw_mode server 2>/dev/null
@@ -509,6 +521,7 @@ __http_handler() {
             if [ -n "$push_ssid" ]; then
                 apply_profile "$body"
                 _save_sum "$(_profile_sum)"
+                printf '%s' "$(date +%s)" > "${EM_RUN_DIR}/last_push_ts"
                 _http_ok '{"status":"ok","msg":"profile applied"}'
                 log "Profile received via push from master"
             else
@@ -737,6 +750,9 @@ do_register() {
 poll_for_approval() {
     local mip; mip=$(master_ip)
     [ -z "$mip" ] && return 1
+    # 如果10s内刚收到过push，跳过本次poll避免重复apply
+    local last_push; last_push=$(cat "${EM_RUN_DIR}/last_push_ts" 2>/dev/null || echo 0)
+    [ $(( $(date +%s) - last_push )) -lt 10 ] && return 0
     local sum_resp remote_sum
     sum_resp=$(curl -s -m 3 \
         "http://${mip}:${MASTER_PORT}/profile/checksum?mac=$(get_mac)" 2>/dev/null)
@@ -847,19 +863,36 @@ apply_profile() {
     [ -n "$backhaul_band"   ] && uci -q set easymesh.global.backhaul_band="$backhaul_band"
     uci -q commit easymesh
 
-    if uci show wireless.mesh0 >/dev/null 2>&1; then
-        if [ "${backhaul:-wired}" = "wired" ]; then
-            uci_set wireless mesh0 disabled 1
+    local _bh="${backhaul:-wired}"
+    if [ "$_bh" = "wired" ]; then
+        # 有线回程：mesh0 存在则 disable，不需要创建
+        uci show wireless.mesh0 >/dev/null 2>&1 && uci_set wireless mesh0 disabled 1
+    else
+        # 无线/auto 回程：mesh0 不存在则创建
+        if ! uci show wireless.mesh0 >/dev/null 2>&1; then
+            local _mesh_dev
+            for _mesh_dev in $(_wifi_devs); do
+                local _b; _b=$(uci -q get "wireless.${_mesh_dev}.band")
+                case "$_b" in 5g*|5GHz*) break ;; esac
+            done
+            [ -z "$_mesh_dev" ] && _mesh_dev=$(_wifi_devs | head -1)
+            uci -q set wireless.mesh0=wifi-iface
+            uci -q set wireless.mesh0.device="$_mesh_dev"
+            uci -q set wireless.mesh0.mode=mesh
+            uci -q set wireless.mesh0.mesh_fwding=0
+            uci -q set wireless.mesh0.mesh_rssi_threshold=-80
+            uci -q set wireless.mesh0.network=mesh
+            uci -q set wireless.mesh0.easymesh_managed=1
+            log "apply_profile: created mesh0 for wireless backhaul"
+        fi
+        uci_set wireless mesh0 disabled 0
+        [ -n "$mesh_id" ] && uci_set wireless mesh0 mesh_id "$mesh_id"
+        if [ -n "$mesh_key" ]; then
+            uci_set wireless mesh0 encryption sae
+            uci_set wireless mesh0 key "$mesh_key"
         else
-            uci_set wireless mesh0 disabled 0
-            [ -n "$mesh_id" ] && uci_set wireless mesh0 mesh_id "$mesh_id"
-            if [ -n "$mesh_key" ]; then
-                uci_set wireless mesh0 encryption sae
-                uci_set wireless mesh0 key "$mesh_key"
-            else
-                uci_set wireless mesh0 encryption none
-                uci -q del wireless.mesh0.key
-            fi
+            uci_set wireless mesh0 encryption none
+            uci -q del wireless.mesh0.key
         fi
     fi
 
@@ -999,9 +1032,9 @@ sync_neighbor_list() {
         "$NEIGHBOR_FILE" | sed 's/,$//')
     local payload="{\"ssid\":\"$ssid\",\"neighbors\":[$nb_json],\"my_bssid\":\"$my_bssid\"}"
     local hash; hash=$(printf '%s' "$payload" | md5sum | cut -c1-8)
-    local last; last=$(cat /tmp/easymesh_nb_hash 2>/dev/null)
+    local last; last=$(cat ${EM_RUN_DIR}/nb_hash 2>/dev/null)
     [ "$hash" = "$last" ] && return
-    printf '%s' "$hash" > /tmp/easymesh_nb_hash
+    printf '%s' "$hash" > ${EM_RUN_DIR}/nb_hash
     _push_nb() {
         ( curl -s -m 5 -X POST -H "Content-Type: application/json" \
             -d "$payload" "http://${1}:${MASTER_PORT}/roam/neighbors" >/dev/null 2>&1 ) &
@@ -1025,7 +1058,8 @@ apply_neighbor_list() {
 
 roam_watchdog() {
     local ap; ap=$(get_ap_iface)
-    local ap2g; ap2g=$(uci_get wireless easymesh_ap_2g ifname "")
+    # 找第二个 AP（2.4G），避免用不存在的 UCI 名
+    local ap2g; ap2g=$(iw dev 2>/dev/null | awk '/Interface/{i=$2} /type AP/{print i}' | grep -v "^${ap}$" | head -1)
     log "Roam watchdog started on %s%s" "$ap" "${ap2g:+ and $ap2g}"
     while true; do
         sleep "$ROAM_PROBE_INTERVAL"
@@ -1093,14 +1127,14 @@ dfs_watchdog() {
             *"channel switch started"*|*"radar detected"*)
                 sleep 2
                 local new_chan; new_chan=$(iw dev "$ap" info 2>/dev/null | awk '/channel/{print $2; exit}')
-                [ -n "$new_chan" ] && printf '%s\n' "$new_chan" > /tmp/easymesh_dfs_chan_change
+                [ -n "$new_chan" ] && printf '%s\n' "$new_chan" > ${EM_RUN_DIR}/dfs_chan_change
                 ;;
         esac
     done &
     while true; do
-        if [ -f /tmp/easymesh_dfs_chan_change ]; then
-            local new_chan; new_chan=$(cat /tmp/easymesh_dfs_chan_change)
-            rm -f /tmp/easymesh_dfs_chan_change
+        if [ -f ${EM_RUN_DIR}/dfs_chan_change ]; then
+            local new_chan; new_chan=$(cat ${EM_RUN_DIR}/dfs_chan_change)
+            rm -f ${EM_RUN_DIR}/dfs_chan_change
             [ -n "$new_chan" ] && handle_dfs_channel_change "$new_chan"
         fi
         sleep 2
@@ -1144,7 +1178,7 @@ optimize_channel() {
         [ "$cnt" -lt "$best_cnt" ] && { best_cnt=$cnt; best=$ch; }
     done
     [ -z "$best" ] && return
-    local cur; cur=$(uci_get wirelessm "${rd}" channel)
+    local cur; cur=$(uci -q get "wireless.${rd}.channel" 2>/dev/null)
     [ "$cur" = "$best" ] && return
     logd "ACS: ch %s -> %s (occupancy %s)" "$cur" "$best" "$best_cnt"
     uci_set wireless "${rd}" channel "$best"; uci_commit wireless && wifi reload
@@ -1156,7 +1190,7 @@ optimize_channel() {
 setup_dedicated_backhaul() {
     local enabled; enabled=$(uci_get easymesh global dedicated_backhaul 0)
     [ "$enabled" != "1" ] && return
-    local hw; hw=$(cat /tmp/easymesh_hw_type 2>/dev/null || echo "dual-band")
+    local hw; hw=$(cat ${EM_RUN_DIR}/hw_type 2>/dev/null || echo "dual-band")
     [ "$hw" != "tri-band" ] && { log "Dedicated backhaul: skipped (hw=%s)" "$hw"; return 1; }
     local bh_band; bh_band=$(uci_get easymesh global backhaul_band "5g_2")
     local target=2; [ "$bh_band" = "5g_1" ] && target=1
@@ -1201,7 +1235,7 @@ setup_dedicated_backhaul() {
 
 load_balance() {
     local ap; ap=$(get_ap_iface)
-    local ap2g; ap2g=$(uci_get wireless easymesh_ap_2g ifname "")
+    local ap2g; ap2g=$(iw dev 2>/dev/null | awk '/Interface/{i=$2} /type AP/{print i}' | grep -v "^${ap}$" | head -1)
     local total; total=$(iw dev "$ap" station dump 2>/dev/null | grep -c "^Station")
     [ -n "$ap2g" ] && [ "$ap2g" != "$ap" ] && {
         local cnt2; cnt2=$(iw dev "$ap2g" station dump 2>/dev/null | grep -c "^Station")
@@ -1326,47 +1360,26 @@ HAPD
 # CONFIG CHANGE DETECTION
 ########################################
 check_config_changes() {
+    [ "$(get_role)" != "master" ] && return
     local cfg_sum; cfg_sum=$(uci show easymesh 2>/dev/null | md5sum | cut -d' ' -f1)
-    local last_sum; last_sum=$(cat /tmp/em_cfg_sum 2>/dev/null)
+    local last_sum; last_sum=$(cat "${EM_RUN_DIR}/cfg_sum" 2>/dev/null)
+    [ "$cfg_sum" = "$last_sum" ] && return
 
-    if [ "$cfg_sum" != "$last_sum" ]; then
-        printf '%s' "$cfg_sum" > /tmp/em_cfg_sum
+    printf '%s' "$cfg_sum" > "${EM_RUN_DIR}/cfg_sum"
+
+    # 检测回程是否变化，用于更有针对性的日志
+    local cur_bh; cur_bh=$(uci_get easymesh global backhaul 'wired')
+    local last_bh; last_bh=$(cat "${EM_RUN_DIR}/last_backhaul" 2>/dev/null)
+    if [ "$cur_bh" != "$last_bh" ]; then
+        printf '%s' "$cur_bh" > "${EM_RUN_DIR}/last_backhaul"
+        log "Backhaul mode changed: %s -> %s, syncing..." "$last_bh" "$cur_bh"
+    else
         log "Easymesh config changed, regenerating profile"
-        generate_profile
-
-        local profile; profile=$(cat "$PROFILE_FILE" 2>/dev/null)
-        [ -n "$profile" ] && {
-            _push_prof_all() {
-                ( curl -s -m 5 -X POST -H "Content-Type: application/json" \
-                    -d "$profile" "http://${1}:${MASTER_PORT}/profile/push" >/dev/null 2>&1 ) &
-                log "Config pushed to agent %s" "$1"
-            }
-            _iter_nodes _push_prof_all
-        }
     fi
-}
 
-########################################
-# BACKHAUL CHANGE DETECTION
-########################################
-check_backhaul_change() {
-    local current_backhaul; current_backhaul=$(uci_get easymesh global backhaul 'wired')
-    local last_backhaul; last_backhaul=$(cat /tmp/em_last_backhaul 2>/dev/null)
-
-    if [ "$current_backhaul" != "$last_backhaul" ]; then
-        printf '%s' "$current_backhaul" > /tmp/em_last_backhaul
-        log "Backhaul mode changed: %s -> %s, syncing..." "$last_backhaul" "$current_backhaul"
-        generate_profile
-
-        local profile; profile=$(cat "$PROFILE_FILE" 2>/dev/null)
-        [ -n "$profile" ] && {
-            _push_prof_backhaul() {
-                ( curl -s -m 5 -X POST -H "Content-Type: application/json" \
-                    -d "$profile" "http://${1}:${MASTER_PORT}/profile/push" >/dev/null 2>&1 ) &
-            }
-            _iter_nodes _push_prof_backhaul
-        }
-    fi
+    generate_profile
+    _push_profile_to_all
+    log "Config pushed to all agents"
 }
 
 ########################################
@@ -1374,19 +1387,13 @@ check_backhaul_change() {
 ########################################
 _handle_approval_signal() {
     log "USR1: pushing profile to all approved agents"
-    local profile; profile=$(cat "$PROFILE_FILE" 2>/dev/null)
-    [ -z "$profile" ] && { logw "USR1: no profile, agents will poll"; return; }
-    _push_prof() {
-        ( curl -s -m 5 -X POST -H "Content-Type: application/json" \
-            -d "$profile" "http://${1}:${MASTER_PORT}/profile/push" >/dev/null 2>&1 ) &
-        log "USR1: pushed profile to %s" "$1"
-    }
-    _iter_nodes _push_prof
+    [ -f "$PROFILE_FILE" ] || { logw "USR1: no profile, agents will poll"; return; }
+    _push_profile_to_all
 }
 
 main_loop() {
     _stop_jobs
-    mkdir -p "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR" "$EM_STATE_DIR" "$PERSISTENT_NODE_DB" 2>/dev/null
+    mkdir -p "$EM_RUN_DIR" "$NODE_DB" "$PENDING_DB" "$ROAM_COOLDOWN_DIR" "$EM_PID_DIR" "$EM_STATE_DIR" "$PERSISTENT_NODE_DB" 2>/dev/null
     ls "$PERSISTENT_NODE_DB"/*.json >/dev/null 2>&1 && {
         log "Recovering approved nodes from persistent storage..."
         for _pf in "$PERSISTENT_NODE_DB"/*.json; do
@@ -1408,7 +1415,7 @@ main_loop() {
     local hw_type="dual-band"
     local count5g; count5g=$(uci -q show wireless | grep -c "\.band='5g")
     [ "$count5g" -ge 2 ] && hw_type="tri-band"
-    echo "$hw_type" > /tmp/easymesh_hw_type
+    echo "$hw_type" > ${EM_RUN_DIR}/hw_type
     log "Hardware: %s" "$hw_type"
 
     elect_role
@@ -1458,7 +1465,6 @@ main_loop() {
                 optimize_channel
                 manage_wireless_onboard
                 check_config_changes
-                check_backhaul_change
             fi
         else
             if [ "$_registered" = "0" ]; then

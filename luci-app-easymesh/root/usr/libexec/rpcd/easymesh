@@ -3,10 +3,12 @@
 
 MESH_IF="bat0"
 LOGFILE="/tmp/easymesh.log"
-EM_PID_DIR="/tmp/easymesh_pids"
-NODE_DB="/tmp/easymesh_nodes"
-PENDING_DB="/tmp/easymesh_pending"
-TOPO_FILE="/tmp/easymesh_topo.json"
+EM_RUN_DIR="/tmp/easymesh"
+EM_PID_DIR="${EM_RUN_DIR}/pids"
+NODE_DB="${EM_RUN_DIR}/nodes"
+PENDING_DB="${EM_RUN_DIR}/pending"
+TOPO_FILE="${EM_RUN_DIR}/topo.json"
+NEIGHBOR_FILE="${EM_RUN_DIR}/neighbors.conf"
 PERSISTENT_NODE_DB="/etc/easymesh/easymesh_nodes"
 
 list() {

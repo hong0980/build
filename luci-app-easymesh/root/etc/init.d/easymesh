@@ -6,6 +6,7 @@ STOP=10
 
 . /lib/functions/network.sh
 
+EM_RUN_DIR="/tmp/easymesh"
 LOGFILE="/tmp/easymesh.log"
 EM_BACKUP_DIR="/etc/easymesh/backup"
 wireless_backup="${EM_BACKUP_DIR}/wireless_backup.conf"
@@ -29,42 +30,38 @@ loge() { _emlog "ERROR" "initd" "$(translate "$@")"; }
 _restore_iface() {
     local iface="$1" managed
     config_get managed "$iface" easymesh_managed
-    [ "$managed" != "1" ] && return 0
-
-    if [ "$iface" = "mesh0" ]; then
-        uci -q del wireless.mesh0
-        return 0
-    fi
-    return 1
+    [ "$managed" != "1" ] && return
+    # 删除 easymesh 新建的接口（mesh0 及未对应原始接口的占位接口）
+    case "$iface" in mesh0|_5g_|_2g_|_fb_|_auto_) uci -q del wireless."$iface" ;; esac
 }
 
 cleanup_wireless() {
-    local need_restore=0
+    # 先删除 easymesh 新建的接口
     config_load wireless
-    config_foreach _restore_iface wifi-iface && need_restore=1
-
-    [ "$need_restore" -eq 1 ] && [ -f "$wireless_backup" ] && {
+    config_foreach _restore_iface wifi-iface
+    # 如果有 backup 则整体恢复原始配置
+    if [ -f "$wireless_backup" ]; then
         log "Restoring wireless config from backup"
-        uci import wireless < "$wireless_backup" 2>/dev/null
-        rm -f "$wireless_backup"
-    }
+        uci import wireless < "$wireless_backup" 2>/dev/null && rm -f "$wireless_backup"
+    fi
     uci commit wireless
 }
 
+# config_foreach 回调：找指定 radio 上的 AP 接口
 _ap_iface_result=""
 _ap_target_radio=""
 _find_ap_cb() {
     local n="$1" dev mode
     config_get dev  "$n" device
     config_get mode "$n" mode
-    [ "$dev" = "$_ap_target_radio" ] && [ "$mode" = "ap" ] && [ "$n" != "mesh0" ] \
-        && [ -z "$_ap_iface_result" ] && _ap_iface_result="$n"
+    [ "$dev" = "$_ap_target_radio" ] && [ "$mode" = "ap" ] && [ "$n" != "mesh0" ] &&
+        [ -z "$_ap_iface_result" ] && _ap_iface_result="$n"
 }
 _get_ap_iface() {
     _ap_iface_result=""; _ap_target_radio="$1"
     config_load wireless
     config_foreach _find_ap_cb wifi-iface
-    echo "$_ap_iface_result"
+    printf '%s' "$_ap_iface_result"
 }
 
 _agent_setup() {
@@ -115,15 +112,21 @@ _agent_setup() {
     }
 }
 
+# config_foreach 回调：识别各频段 radio
+_identify_radio_cb() {
+    local r="$1" band
+    config_get band "$r" band
+    case "$band" in
+        2g*|2.4*|bgn|bg|b)
+            [ -z "$radio_2g" ] && radio_2g="$r" ;;
+        5g*|5GHz*|an|a)
+            [ -z "$radio_5g" ] && radio_5g="$r" || radio_5g2="$r" ;;
+    esac
+}
 _identify_radios() {
     radio_2g=""; radio_5g=""; radio_5g2=""
     config_load wireless
-    for radio in $(uci -q show wireless | awk -F= '/=wifi-device$/{sub(/wireless\./,""); print $1}'); do
-        case $(uci -q get "wireless.${radio}.band" 2>/dev/null) in
-            2g*|2.4*|bgn|bg|b) [ -z "$radio_2g" ] && radio_2g="$radio" ;;
-            5g*|5GHz*|an|a)    [ -z "$radio_5g" ] && radio_5g="$radio" || radio_5g2="$radio" ;;
-        esac
-    done
+    config_foreach _identify_radio_cb wifi-device
 }
 
 _setup_iface_result=""
@@ -235,49 +238,54 @@ start_service() {
         fi
     fi
 
-    local idx=0
+    # DHCP 和 SSID 设置
     if [ "$role" = "master" ]; then
         uci -q del dhcp.lan.ignore
         if [ "$band_merge" = "1" ]; then
-            ssid_5g="$ssid"; key_5g="$key"
-            ssid_2g="$ssid"; key_2g="$key"
+            ssid_5g="$ssid"; key_5g="$key"; ssid_2g="$ssid"; key_2g="$key"
         else
             ssid_5g="${ssid_5g:-$ssid}"; key_5g="${key_5g:-$key}"
             ssid_2g="${ssid_2g:-$ssid}"; key_2g="${key_2g:-$key}"
         fi
+    else
+        uci -q set dhcp.lan.ignore=1
+    fi
 
+    # 不用 config_foreach 驱动 _setup_ap：_setup_ap 内部调用 _get_ap_iface
+    # → config_load → 破坏 config_foreach 迭代状态，导致第二个 radio 漏配。
+    # 直接用 _identify_radios 已识别的 radio_5g/radio_2g 显式判断，安全可靠。
+    local idx=0
+    if [ "$role" = "master" ]; then
         [ -n "$radio_5g" ] && {
             _setup_ap "_5g_" "$radio_5g" "$ssid_5g" "$key_5g" "$ft" "$k" "$v" "$domain" "$ft_ds" "$deadline"
             uci -q del wireless.${_setup_iface_result}.disabled
-            idx=$((idx+1))
+            idx=$(( idx + 1 ))
         }
         [ -n "$radio_2g" ] && {
             _setup_ap "_2g_" "$radio_2g" "$ssid_2g" "$key_2g" "$ft" "$k" "$v" "$domain" "$ft_ds" "$deadline"
             uci -q del wireless.${_setup_iface_result}.disabled
-            idx=$((idx+1))
+            idx=$(( idx + 1 ))
         }
         [ "$idx" -eq 0 ] && {
             _setup_ap "_fb_" "${mesh_radio:-radio0}" "$ssid_5g" "$key_5g" "$ft" "$k" "$v" "$domain" "$ft_ds" "$deadline"
             uci -q del wireless.${_setup_iface_result}.disabled
         }
     else
-        uci -q set dhcp.lan.ignore=1
         [ -n "$radio_5g" ] && {
             _setup_ap "_5g_" "$radio_5g" "" "" "0" "0" "0" "" "" ""
             uci -q set wireless.${_setup_iface_result}.disabled=1
-            idx=$((idx+1))
+            idx=$(( idx + 1 ))
         }
         [ -n "$radio_2g" ] && {
             _setup_ap "_2g_" "$radio_2g" "" "" "0" "0" "0" "" "" ""
             uci -q set wireless.${_setup_iface_result}.disabled=1
-            idx=$((idx+1))
+            idx=$(( idx + 1 ))
         }
         [ "$idx" -eq 0 ] && {
             _setup_ap "_fb_" "${mesh_radio:-radio0}" "" "" "0" "0" "0" "" "" ""
             uci -q set wireless.${_setup_iface_result}.disabled=1
         }
     fi
-
     [ -n "$radio_5g"   ] && uci -q del wireless.${radio_5g}.disabled
     [ -n "$radio_2g"   ] && uci -q del wireless.${radio_2g}.disabled
     [ -n "$mesh_radio" ] && uci -q del wireless.${mesh_radio}.disabled
@@ -325,8 +333,8 @@ stop_service() {
         [ "$pid" != "$$" ] && kill "$pid" 2>/dev/null || true
     done
 
-    [ -f /tmp/easymesh_pair_hostapd.pid ] && kill "$(cat /tmp/easymesh_pair_hostapd.pid)" 2>/dev/null
-    [ -f /tmp/easymesh_pair_dnsmasq.pid ] && kill "$(cat /tmp/easymesh_pair_dnsmasq.pid)" 2>/dev/null
+    [ -f ${EM_RUN_DIR}/pair_hostapd.pid ] && kill "$(cat ${EM_RUN_DIR}/pair_hostapd.pid)" 2>/dev/null
+    [ -f ${EM_RUN_DIR}/pair_dnsmasq.pid ] && kill "$(cat ${EM_RUN_DIR}/pair_dnsmasq.pid)" 2>/dev/null
     iw dev easymesh-pair0 del 2>/dev/null || true
     nft -a list chain inet fw4 input 2>/dev/null | \
         awk '/4304|4305/ {print $NF}' | \
@@ -341,7 +349,7 @@ stop_service() {
     uci -q commit network
 
     ( sleep 1; wifi reload ) &
-    rm -rf /tmp/easymesh* /tmp/em_* 2>/dev/null
+    rm -rf "$EM_RUN_DIR" /tmp/easymesh.log /tmp/easymesh.log.lock 2>/dev/null
 }
 
 reload_service() {

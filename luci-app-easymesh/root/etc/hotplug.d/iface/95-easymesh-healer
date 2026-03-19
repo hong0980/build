@@ -1,7 +1,10 @@
 #!/bin/sh
 [ "$INTERFACE" = "lan" ] || [ "$INTERFACE" = "wan" ] || exit 0
+ip link show bat0 >/dev/null 2>&1 || exit 0
+[ "$(uci -q get easymesh.global.enabled)" = "1" ] || exit 0
 MESH_IF="bat0"
 BATMAN_OGM_NORMAL=500
+EM_RUN_DIR="/tmp/easymesh"
 LOGFILE="/tmp/easymesh.log"
 
 _emlog() {

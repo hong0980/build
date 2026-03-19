@@ -215,6 +215,8 @@ msgstr "至少 8 位字符"
 
 msgid "802.11s Backhaul Band"
 msgstr "802.11s 回程频段"
+msgid "Wired Backhaul Port"
+msgstr "有线回程专用网口"
 
 msgid "2.4 GHz (better range, slower)"
 msgstr "2.4GHz（穿墙好，速度慢）"
@@ -539,33 +541,6 @@ msgstr "EasyMesh 启动中（角色=%s）"
 msgid "EasyMesh stopping..."
 msgstr "EasyMesh 正在停止..."
 
-msgid "Role: master — DHCP enabled"
-msgstr "角色：主节点 — DHCP 服务器已启用"
-
-msgid "Role: agent — DHCP disabled (master handles all address allocation)"
-msgstr "角色：从节点 — DHCP 已禁用（由主节点统一分配 IP）"
-
-msgid "apply_mesh_config: role=%s backhaul=%s mesh_radio=%s 2g=%s 5g=%s"
-msgstr "无线配置：角色=%s 回程=%s mesh频段=%s 2.4G=%s 5G=%s"
-
-msgid "AP created: easymesh_ap on %s (5G, ssid=%s)"
-msgstr "已配置 AP：5G 接口在 %s（SSID=%s）"
-
-msgid "AP created: easymesh_ap_2g on %s (2.4G, ssid=%s)"
-msgstr "已配置 AP：2.4G 接口在 %s（SSID=%s）"
-
-msgid "AP created: easymesh_ap on radio0 (fallback)"
-msgstr "已配置 AP：兜底接口在 radio0"
-
-msgid "apply_mesh_config done (%s AP(s) created)"
-msgstr "无线配置完成（已配置 %s 个 AP）"
-
-msgid "WARN: br-lan has no IP after 20s, starting daemon anyway"
-msgstr "警告：br-lan 20 秒内无 IP，仍继续启动守护进程"
-
-msgid "br-lan IP ready: %s"
-msgstr "br-lan IP 就绪：%s"
-
 msgid "Config pushed to agent %s"
 msgstr "配置已推送到 %s"
 
@@ -574,18 +549,6 @@ msgstr "回程模式已更改：%s -> %s，正在同步..."
 
 msgid "Easymesh config changed, regenerating profile"
 msgstr "Easymesh 配置已更改，正在重新生成配置文件"
-
-msgid "Reloading wireless config..."
-msgstr "正在重载无线配置..."
-
-msgid "Wireless reload done"
-msgstr "无线配置重载完成"
-
-msgid "Starting EasyMesh daemon..."
-msgstr "正在启动 EasyMesh 守护进程..."
-
-msgid "agent_prepare: br-lan has no IP"
-msgstr "agent_prepare：br-lan 没有 IP"
 
 msgid "agent_prepare: IP=%s (not .1, no change needed)"
 msgstr "agent_prepare：IP=%s（非 .1，无需更改）"
@@ -605,15 +568,6 @@ msgstr "agent_prepare：.100-.197 无空闲 IP，保持 .1"
 msgid "agent_prepare: done. br-lan IP=%s"
 msgstr "agent_prepare：完成，br-lan IP=%s"
 
-msgid "WAN mode: switch — WAN port disabled, all ports as LAN"
-msgstr "WAN 模式：交换机 — WAN 口已禁用，所有端口作为 LAN"
-
-msgid "WAN mode: router PPPoE — user=%s"
-msgstr "WAN 模式：路由 PPPoE — 用户名=%s"
-
-msgid "WAN mode: router DHCP — WAN port active"
-msgstr "WAN 模式：路由 DHCP — WAN 口已启用"
-
 msgid "AP placeholder (disabled): easymesh_ap on %s (5G, awaiting master config push)"
 msgstr "AP 占位（已禁用）：5G 接口在 %s（等待主节点配置推送）"
 
@@ -632,21 +586,6 @@ msgstr "HTTP POST 重试 %s/%s，等待 %s 秒：%s"
 
 msgid "HTTP POST failed after %s retries: %s"
 msgstr "HTTP POST 经 %s 次重试后失败，目标：%s"
-
-msgid "HTTP server starting on port %s (socat+TCP)"
-msgstr "HTTP 服务启动，端口 %s（socat+TCP）"
-
-msgid "✓ HTTP server successfully listening on port ${MASTER_PORT}"
-msgstr "✓ HTTP 服务器成功监听端口 ${MASTER_PORT}"
-
-msgid "✗ socat HTTP server failed to start on port ${MASTER_PORT}"
-msgstr "✗ socat HTTP 服务器端口 ${MASTER_PORT} 启动失败"
-
-msgid "Firewall: opened TCP/UDP 4304/4305 via iptables"
-msgstr "防火墙：已通过 iptables 开放 TCP/UDP 4304/4305"
-
-msgid "Firewall: opened TCP/UDP 4304/4305 via nft"
-msgstr "防火墙：已通过 nftables 开放 TCP/UDP 4304/4305"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # easymesh-master — 角色选举
@@ -668,15 +607,6 @@ msgstr "选举：%s 获胜 → 本机为从节点（主节点=%s）"
 # easymesh-master — batman-adv
 # ══════════════════════════════════════════════════════════════════════════════
 
-msgid "batman-adv: BLA=off DAT=off (wired mode)"
-msgstr "batman-adv：BLA=关 DAT=关（有线模式）"
-
-msgid "batman-adv: GW mode=server, OGM=%sms"
-msgstr "batman-adv：GW 模式=server，OGM=%sms"
-
-msgid "batman-adv: GW mode=%s, OGM=%sms"
-msgstr "batman-adv：GW 模式=%s，OGM=%sms"
-
 msgid "batman-adv torn down"
 msgstr "batman-adv 已清理"
 
@@ -684,35 +614,14 @@ msgstr "batman-adv 已清理"
 # easymesh-master — 回程设置
 # ══════════════════════════════════════════════════════════════════════════════
 
-msgid "DBG backhaul: ETH_IF=%s DSA=%s MESH_IF=%s role=%s"
-msgstr "回程诊断：ETH_IF=%s DSA=%s MESH_IF=%s 角色=%s"
-
 msgid "Failed to create bat0 interface"
 msgstr "bat0 接口创建失败"
 
 msgid "bat0 not found after 15s - kmod-batman-adv missing?"
 msgstr "15 秒内未找到 bat0，kmod-batman-adv 是否已安装？"
 
-msgid "DBG backhaul: bat0/mesh sysfs ready"
-msgstr "回程诊断：bat0/mesh sysfs 已就绪"
-
-msgid "DBG backhaul: bat0/mesh sysfs not present (normal for this batman-adv version)"
-msgstr "回程诊断：bat0/mesh sysfs 不存在（当前 batman-adv 版本正常）"
-
-msgid "DBG backhaul: mode=%s"
-msgstr "回程模式：%s"
-
-msgid "DBG backhaul: DSA hw, skipping batman-adv hardif (LAN-LAN direct bridge)"
-msgstr "回程：DSA 硬件，跳过 batman-adv 硬件接口（LAN 直连桥接）"
-
 msgid "Wired backhaul: dedicated port %s -> bat0"
 msgstr "有线回程：专用口 %s → bat0"
-
-msgid "DBG backhaul: failed to add %s to bat0"
-msgstr "回程：添加 %s 到 bat0 失败"
-
-msgid "DBG backhaul: non-DSA, no dedicated port, relying on br-lan L2"
-msgstr "回程：非 DSA 硬件，无专用口，依赖 br-lan 二层互通"
 
 msgid "Wireless backhaul: mesh0 -> bat0"
 msgstr "无线回程：mesh0 → bat0"
@@ -723,26 +632,8 @@ msgstr "mesh0 未找到，无线回程失败"
 msgid "Backhaul: bat0 removed from br-lan (wired mode, prevents BLA ARP drop)"
 msgstr "回程：bat0 已从 br-lan 移除（有线模式，防止 BLA 干扰 ARP）"
 
-msgid "DBG backhaul: bat0 not in br-lan (correct for wired mode)"
-msgstr "回程：bat0 不在 br-lan 中（有线模式正常）"
-
 msgid "Backhaul: bat0 joined br-lan (role=%s)"
 msgstr "回程：bat0 已加入 br-lan（角色=%s）"
-
-msgid "DBG backhaul: FAILED to add bat0 to br-lan"
-msgstr "回程：bat0 加入 br-lan 失败"
-
-msgid "DBG backhaul: bat0 already in br-lan"
-msgstr "回程：bat0 已在 br-lan 中"
-
-msgid "DBG backhaul: bat0 hardifs=[%s]"
-msgstr "回程：bat0 硬件接口=[%s]"
-
-msgid "DBG backhaul: br-lan members=[%s]"
-msgstr "回程：br-lan 成员=[%s]"
-
-msgid "DBG backhaul: br-lan IP=%s"
-msgstr "回程：br-lan IP=%s"
 
 msgid "Backhaul ready (role=%s)"
 msgstr "回程就绪（角色=%s）"
@@ -754,72 +645,6 @@ msgstr "回程就绪（角色=%s）"
 msgid "Discovery server listening on UDP %s"
 msgstr "发现服务正在监听 UDP %s"
 
-msgid "DBG disc_server: socat pid=%s listening UDP %s"
-msgstr "发现服务：socat pid=%s 监听 UDP %s"
-
-msgid "=== HTTP CONNECTION DIAGNOSTIC ==="
-msgstr "=== HTTP 连接诊断开始 ==="
-
-msgid "DBG httpdiag: target=$target_ip:$port"
-msgstr "HTTP 诊断：目标=$target_ip:$port"
-
-msgid "DBG httpdiag: step 1 - checking if $target_ip is reachable..."
-msgstr "HTTP 诊断 1：检查 $target_ip 可达性..."
-
-msgid "✓ httpdiag: ping $target_ip OK"
-msgstr "✓ HTTP 诊断：ping $target_ip 成功"
-
-msgid "✗ httpdiag: ping $target_ip FAILED"
-msgstr "✗ HTTP 诊断：ping $target_ip 失败"
-
-msgid "DBG httpdiag: step 2 - checking port $port and sending HTTP GET..."
-msgstr "HTTP 诊断 2：检查端口 $port 并发送 HTTP GET..."
-
-msgid "✓ httpdiag: port $port on $target_ip is OPEN"
-msgstr "✓ HTTP 诊断：$target_ip:$port 端口开放，响应正常"
-
-msgid "✗ httpdiag: port $port on $target_ip CLOSED/FILTERED or bad response (curl exit: $curl_ret)"
-msgstr "✗ HTTP 诊断：$target_ip:$port 端口关闭/被过滤或响应异常（curl 返回码: $curl_ret）"
-
-msgid "✓ httpdiag: HTTP request OK"
-msgstr "✓ HTTP 诊断：请求成功"
-
-msgid "  response: $response"
-msgstr "  响应：$response"
-
-msgid "=== NETWORK DIAGNOSIS START (role=$role, my_ip=$myip) ==="
-msgstr "=== 网络诊断开始（角色=$role，本机IP=$myip）==="
-
-msgid "DBG netdiag: checking br-lan interface..."
-msgstr "网络诊断：检查 br-lan 接口..."
-
-msgid "✓ netdiag: br-lan exists"
-msgstr "✓ 网络诊断：br-lan 存在"
-
-msgid "✗ netdiag: br-lan NOT found"
-msgstr "✗ 网络诊断：br-lan 不存在"
-
-msgid "DBG netdiag: checking br-lan IP..."
-msgstr "网络诊断：检查 br-lan IP..."
-
-msgid "✓ netdiag: br-lan IP = $br_ip"
-msgstr "✓ 网络诊断：br-lan IP = $br_ip"
-
-msgid "✗ netdiag: br-lan has NO IP"
-msgstr "✗ 网络诊断：br-lan 没有 IP"
-
-msgid "DBG netdiag: agent mode - testing connection to master $master_default..."
-msgstr "网络诊断：从节点模式，测试与主节点 $master_default 的连接..."
-
-msgid "=== NETWORK DIAGNOSIS END ==="
-msgstr "=== 网络诊断结束 ==="
-
-msgid "register_node: missing mac in body=[%s]"
-msgstr "注册失败：请求中缺少 mac 字段，body=[%s]"
-
-msgid "register_node: missing ip in body=[%s]"
-msgstr "注册失败：请求中缺少 ip 字段，body=[%s]"
-
 msgid "Node re-registered (approved): %s (%s) ip=%s"
 msgstr "节点重新上线（已审批）：%s (%s) ip=%s"
 
@@ -829,59 +654,23 @@ msgstr "待审批节点：%s (%s) ip=%s 来源=%s"
 msgid "Node approved: %s"
 msgstr "节点已审批：%s"
 
-msgid "DBG find_master: start my_ip=%s my_mac=%s"
-msgstr "发现主节点：开始，本机IP=%s MAC=%s"
-
-msgid "DBG find_master: waiting batman-adv (wireless)"
-msgstr "发现主节点：等待 batman-adv 邻居（无线）"
-
 msgid "batman neighbor after %ss"
 msgstr "batman-adv 邻居在 %ss 后发现"
 
 msgid "No batman neighbor in 40s, continuing"
 msgstr "40 秒内无 batman-adv 邻居，继续"
 
-msgid "DBG find_master: cached master OK at %s"
-msgstr "发现主节点：缓存的主节点 %s 响应正常"
-
-msgid "DBG find_master: wired direct - trying %s"
-msgstr "发现主节点：有线直连，尝试 %s"
-
 msgid "Master found at %s (wired direct)"
 msgstr "发现主节点：%s（有线直连）"
 
-msgid "DBG find_master: attempt %s/3 to %s failed, waiting 3s..."
-msgstr "发现主节点：第 %s/3 次尝试 %s 失败，等待 3s..."
-
-msgid "DBG find_master: wired direct .1 failed"
-msgstr "发现主节点：有线直连 .1 失败"
-
-msgid "DBG find_master: ping OK, curl=[%s]"
-msgstr "发现主节点：ping 成功，curl 响应=[%s]"
-
-msgid "DBG find_master: ping %s FAILED - no L3 link (check cable/VLAN)"
-msgstr "发现主节点：ping %s 失败，L3 不通（检查网线/VLAN）"
-
 msgid "Master found at %s (quick scan)"
 msgstr "发现主节点：%s（快速扫描）"
-
-msgid "DBG find_master: launching background full scan %s.0/24"
-msgstr "发现主节点：启动后台全子网扫描 %s.0/24"
-
-msgid "DBG do_register: to master=%s mac=%s ip=%s via=%s"
-msgstr "注册：目标主节点=%s 本机MAC=%s IP=%s 方式=%s"
-
-msgid "DBG do_register: onboard mode, using wlan IP=%s"
-msgstr "注册：无线配网模式，使用 wlan IP=%s"
 
 msgid "Failed to register with master %s"
 msgstr "向主节点 %s 注册失败"
 
 msgid "Registered with master %s via %s (resp=%s)"
 msgstr "已向主节点 %s 注册成功（方式=%s，响应=%s）"
-
-msgid "DBG poll_approval: resp=[%s]"
-msgstr "轮询审批：响应=[%s]"
 
 msgid "Waiting for master approval..."
 msgstr "等待主节点审批..."
@@ -1023,17 +812,8 @@ msgstr "已恢复的节点：%s"
 msgid "Starting as: %s"
 msgstr "以 %s 角色启动"
 
-msgid "DBG main: master ready, disc_server started, profile written"
-msgstr "主节点就绪，发现服务已启动，配置已写入"
-
-msgid "DBG main: agent starting find_master+register"
-msgstr "从节点：开始搜索主节点并注册"
-
 msgid "Role switch: %s -> %s"
 msgstr "角色切换：%s → %s"
-
-msgid "DBG main_loop iter=%s: master not found yet, will retry"
-msgstr "主循环第 %s 次：主节点尚未找到，继续重试"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # easymesh-master daemon — 优化版新增日志条目
@@ -1161,3 +941,31 @@ msgstr "注册节点: 缺少 IP 地址"
 
 msgid "register_node: missing mac"
 msgstr "注册节点: 缺少 MAC 地址"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 补充翻译
+# ══════════════════════════════════════════════════════════════════════════════
+
+msgid "Config pushed to all agents"
+msgstr "配置已推送到所有从节点"
+
+msgid "HELLO: Node recovered from persistent storage: %s"
+msgstr "HELLO：节点从持久存储恢复：%s"
+
+msgid "Node approved: %s (persisted to %s)"
+msgstr "节点已审批：%s（已持久化至 %s）"
+
+msgid "Node recovered from persistent storage: %s (%s) ip=%s"
+msgstr "节点从持久存储恢复：%s (%s) ip=%s"
+
+msgid "Wireless backhaul: %s -> %s"
+msgstr "无线回程：%s -> %s"
+
+msgid "apply_profile: created mesh0 for wireless backhaul"
+msgstr "apply_profile：为无线回程创建 mesh0"
+
+msgid "Gateway: master %s unreachable (%s/3, http=%d ping=%d)"
+msgstr "网关：主节点 %s 不可达（%s/3，http=%d ping=%d）"
+
+msgid "%s steer %s (%sdBm) -> %s"
+msgstr "%s 漫游引导 %s (%sdBm) → %s"

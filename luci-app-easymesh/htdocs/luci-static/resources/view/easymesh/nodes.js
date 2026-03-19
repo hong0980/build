@@ -35,7 +35,7 @@ function drawTopo(topo, canvas) {
 	if (!canvas) return {};
 	var ctx = canvas.getContext('2d');
 	var DPR = window.devicePixelRatio || 1;
-	var cssW = canvas.offsetWidth || 900;
+	var cssW = canvas.getBoundingClientRect().width || canvas.offsetWidth || 900;
 	var nodeCount = ((topo && topo.nodes) ? topo.nodes : []).length;
 	var minH = nodeCount <= 2 ? 260 : nodeCount <= 5 ? 380 : nodeCount <= 8 ? 480 : 560;
 	var cssH = Math.max(minH, Math.round(cssW * 0.38));
@@ -418,8 +418,8 @@ return view.extend({
 						   'padding:8px;overflow:hidden;position:relative'
 				}, [
 					E('canvas', {
-						id: 'easymesh-topo-canvas', width: '900', height: '400',
-						style: 'width:100%;display:block;border-radius:8px'
+						id: 'easymesh-topo-canvas',
+						style: 'width:100%;display:block;border-radius:8px;min-height:260px'
 					}),
 					E('div', {
 						id: 'easymesh-topo-tooltip',
@@ -444,8 +444,8 @@ return view.extend({
 		if (topoNodes.length > 0) {
 			setTimeout(function() {
 				var canvas = document.getElementById('easymesh-topo-canvas');
-				if (canvas) drawTopo(topology, canvas);
-			}, 50);
+				if (canvas) _positions = drawTopo(topology, canvas) || {};
+			}, 150);
 		}
 
 		return el;

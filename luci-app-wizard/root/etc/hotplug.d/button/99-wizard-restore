@@ -48,14 +48,11 @@ if [ "$SEEN" -ge 6 ]; then
 
     local restore_ok=0
     for file in dhcp network firewall wireless; do
-        local bak="/etc/config/bk_${file}"
-        if [ -f "$bak" ]; then
-            cp -f "$bak" "/etc/config/${file}"
-            uci -q commit "$file"
-            restore_ok=1
-        else
-            logger -t wizard-restore "Warning: backup file $bak not found, skipped."
-        fi
+        local bak="/etc/network_bk/bk_${file}"
+        [ -f "$bak" ] || continue
+        cp -f "$bak" "/etc/config/${file}"
+        uci -q commit "$file"
+        restore_ok=1
     done
 
     if [ "$restore_ok" = "0" ]; then

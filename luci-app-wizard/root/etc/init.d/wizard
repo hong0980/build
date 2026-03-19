@@ -331,8 +331,9 @@ start() {
 }
 
 boot() {
+	[ -d "/etc/network_bk" ] || mkdir -p "/etc/network_bk"
 	for file in dhcp network firewall wireless; do
-		[ -s /etc/config/$file -a ! -f /etc/config/bk_$file ] && \
-			cp /etc/config/$file /etc/config/bk_$file
+		[ -s /etc/config/$file -a ! -f /etc/network_bk/bk_$file ] && \
+			cp /etc/config/$file /etc/network_bk/bk_$file
 	done
 }
