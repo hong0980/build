@@ -225,6 +225,7 @@ start_service() {
         uci -q set wireless.mesh0.mesh_rssi_threshold=-80
         uci -q set wireless.mesh0.network=mesh
         uci -q set wireless.mesh0.easymesh_managed=1
+        uci -q set wireless.mesh0.mtu=1532
         if [ -n "$mesh_key" ]; then
             uci -q set wireless.mesh0.encryption=sae
             uci -q set wireless.mesh0.key="$mesh_key"

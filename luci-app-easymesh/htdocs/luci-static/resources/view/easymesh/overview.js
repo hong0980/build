@@ -118,7 +118,7 @@ return view.extend({
 		o.depends({ enabled:'1', role:'master', wan_mode:'router', wan_proto:'pppoe' });
 
 		o = s.taboption('basic', form.Flag, 'band_merge', _('Dual-band Merge (same SSID/password)'),
-			_('Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz radios (recommended, like Mi/TP-Link routers). ' +
+			_('Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz radios.' +
 			  'Disabled: set different SSID and password for each band.'));
 		o.default = '1';
 		o.rmempty = false;

@@ -146,8 +146,8 @@ msgstr "PPPoE 密码"
 msgid "Dual-band Merge (same SSID/password)"
 msgstr "双频合并（使用相同 SSID 和密码）"
 
-msgid "Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz radios (recommended, like Mi/TP-Link routers). Disabled: set different SSID and password for each band."
-msgstr "开启：2.4G 和 5G 使用同一 SSID 和密码（推荐，类似小米/TP-Link 路由器）。关闭：为每个频段单独设置。"
+msgid "Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz radios.Disabled: set different SSID and password for each band."
+msgstr "开启：2.4G 和 5G 使用同一 SSID 和密码。关闭：为每个频段单独设置。"
 
 msgid "WiFi Name (SSID)"
 msgstr "WiFi 名称（SSID）"

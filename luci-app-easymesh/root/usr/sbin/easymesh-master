@@ -175,7 +175,7 @@ do_http_post() {
 }
 
 _ping_master() {
-    [ "$(curl -s -m 3 "http://${1}:${MASTER_PORT}/ping" 2>/dev/null | jsonfilter -e '@.role')" = "master" ]
+    [ "$(curl -s -m 3 "http://${1}:${MASTER_PORT}/ping" 2>/dev/null | jsonfilter -e '@.role' 2>/dev/null)" = "master" ]
 }
 
 _node_update() {
@@ -253,7 +253,7 @@ elect_role() {
         peer_mac=$(jsonfilter -i "$f" -e '@.mac' 2>/dev/null)
         [ -z "$peer_ip" ] && continue
         if [ "$(curl -s -m 3 "http://${peer_ip}:${MASTER_PORT}/wan" 2>/dev/null | \
-            jsonfilter -e '@.wan')" = "true" ]; then
+            jsonfilter -e '@.wan' 2>/dev/null)" = "true" ]; then
             _set_role "agent"; echo "$peer_ip" > "$MASTER_IP_FILE"
             log "Election: peer %s has WAN -> agent" "$peer_ip"; return 0
         fi
@@ -348,8 +348,9 @@ setup_wired_backhaul() {
         if ip link show "$mesh_iface" >/dev/null 2>&1; then
             if ! batctl meshif "$MESH_IF" if 2>/dev/null | grep -qw "$mesh_iface"; then
                 ip link set "$mesh_iface" up 2>/dev/null
+                ip link set "$mesh_iface" mtu 1532 2>/dev/null || true
                 batctl meshif "$MESH_IF" interface add "$mesh_iface" 2>/dev/null \
-                    && log "Wireless backhaul: %s -> %s" "$mesh_iface" "$MESH_IF"
+                    && log "Wireless backhaul: $mesh_iface -> $MESH_IF (MTU=1532)"
             fi
         else
             [ "$backhaul" = "wireless" ] && logw "mesh0 not found, wireless backhaul failed"
@@ -368,7 +369,7 @@ setup_wired_backhaul() {
         ip link show "$MESH_IF" 2>/dev/null | grep -q "master br-lan" || {
             ip link set "$MESH_IF" master br-lan 2>/dev/null || \
                 brctl addif "$BRIDGE_IF" "$MESH_IF" 2>/dev/null
-            [ "$(ip -j link show "$MESH_IF" | jsonfilter -e '$[0].master')" = "br-lan" ] \
+            [ "$(ip -j link show "$MESH_IF" 2>/dev/null | jsonfilter -e '$[0].master' 2>/dev/null)" = "br-lan" ] \
                 && log "Backhaul: bat0 joined br-lan" \
                 || loge "Backhaul: FAILED to add bat0 to br-lan"
         }
@@ -751,6 +752,7 @@ poll_for_approval() {
     [ -n "$remote_sum" ] && [ "$remote_sum" = "$(_load_sum)" ] && return 0
     local resp
     resp=$(curl -s -m 5 "http://${mip}:${MASTER_PORT}/profile?mac=$(get_mac)" 2>/dev/null)
+    [ -z "$resp" ] && return 1
     case "$resp" in
         *'"status":"pending"'*)
             log "Waiting for master approval..."; return 1 ;;
@@ -820,7 +822,7 @@ apply_profile() {
     local ssid key channel channel_2g mesh_id mesh_key routing_algo
     local ieee80211r ieee80211k ieee80211v ft_over_ds mobility_domain backhaul
     local band_merge ssid_5g ssid_2g key_5g key_2g reassociation_deadline
-    eval "$(jsonfilter -i "$_pf" \
+    eval "$(jsonfilter -i "$_pf" 2>/dev/null \
         -e 'ssid=@.ssid'                        -e 'key=@.key'                   \
         -e 'channel=@.channel'                  -e 'mesh_id=@.mesh_id'           \
         -e 'mesh_key=@.mesh_key'                -e 'routing_algo=@.routing_algo' \
@@ -833,7 +835,7 @@ apply_profile() {
         -e 'key_2g=@.key_2g'                    -e 'channel_2g=@.channel_2g'     \
         -e 'reassociation_deadline=@.reassociation_deadline' 2>/dev/null)"
     rm -f "$_pf"
-    [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
+    [ -z "$ssid" ] && { loge "apply_profile: missing ssid (JSON truncated?)"; rm -f "$_pf"; return 1; }
     log "Applying profile: ssid=%s channel=%s backhaul=%s" "$ssid" "$channel" "${backhaul:-wired}"
 
     uci -q set easymesh.global.enabled=1
@@ -877,7 +879,8 @@ apply_profile() {
             uci -q set wireless.mesh0.mesh_rssi_threshold=-80
             uci -q set wireless.mesh0.network=mesh
             uci -q set wireless.mesh0.easymesh_managed=1
-            log "apply_profile: created mesh0 for wireless backhaul"
+            uci -q set wireless.mesh0.mtu=1532
+            log "apply_profile: created mesh0 for wireless backhaul (MTU=1532)"
         fi
         uci_set wireless mesh0 disabled 0
         [ -n "$mesh_id" ] && uci_set wireless mesh0 mesh_id "$mesh_id"
@@ -956,9 +959,9 @@ apply_profile() {
         _band=$(uci -q get "wireless.${rd}.band")
         case "$_band" in
             5g*|5GHz*)
-                [ -n "$channel" ] && [ "$channel" != "auto" ] && uci -q set "wireless.${rd}.channel=$channel" ;;
+                [ -n "$channel" ] && [ "$channel" != "auto" ] &&                     uci -q set "wireless.${rd}.channel=$channel" ;;
             2g*|2.4*)
-                [ -n "$channel_2g" ] && [ "$channel_2g" != "auto" ] && uci -q set "wireless.${rd}.channel=$channel_2g" ;;
+                [ -n "$channel_2g" ] && [ "$channel_2g" != "auto" ] &&                     uci -q set "wireless.${rd}.channel=$channel_2g" ;;
         esac
     done
 
