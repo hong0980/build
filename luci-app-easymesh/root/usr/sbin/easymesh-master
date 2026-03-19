@@ -76,15 +76,21 @@ translate() {
 
 _emlog() {
     local level="$1" tag="$2"; shift 2
-    printf "%s [%-5s] [%-8s] %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "$level" "$tag" "$*" >> "$LOGFILE"
-    local seq; seq=$(( $(cat "$_LOG_SEQ_FILE" 2>/dev/null || echo 0) + 1 ))
-    printf '%d\n' "$seq" > "$_LOG_SEQ_FILE"
-    [ $(( seq % 50 )) -eq 0 ] && {
-        local lc; lc=$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)
-        [ "$lc" -gt "$LOG_MAX_LINES" ] && {
-            tail -n $(( LOG_MAX_LINES * 4 / 5 )) "$LOGFILE" > "${LOGFILE}.tmp"                 && mv "${LOGFILE}.tmp" "$LOGFILE"
-        }
-    }
+    local ts; ts=$(date "+%Y-%m-%d %H:%M:%S")
+    (
+        flock 200
+        printf "%s [%-5s] [%-8s] %s\n" "$ts" "$level" "$tag" "$*" >> "$LOGFILE"
+        local seq
+        seq=$(( $(cat "$_LOG_SEQ_FILE" 2>/dev/null || echo 0) + 1 ))
+        printf '%d\n' "$seq" > "$_LOG_SEQ_FILE"
+        if [ $(( seq % 50 )) -eq 0 ]; then
+            local lc; lc=$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)
+            if [ "$lc" -gt "$LOG_MAX_LINES" ]; then
+                local keep=$(( LOG_MAX_LINES * 4 / 5 ))
+                tail -n "$keep" "$LOGFILE" > "${LOGFILE}.tmp" && mv "${LOGFILE}.tmp" "$LOGFILE"
+            fi
+        fi
+    ) 200>>"${LOGFILE}.lock"
 }
 log()  { _emlog "INFO"  "core"  "$(translate "$@")"; }
 logr() { _emlog "INFO"  "roam"  "$(translate "$@")"; }
@@ -212,14 +218,9 @@ _stop_jobs() {
         [ -f "$f" ] || continue
         pid=$(cat "$f" 2>/dev/null)
         [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
-    done
-    sleep 2
-    for f in "$EM_PID_DIR"/*.pid; do
-        [ -f "$f" ] || continue
-        pid=$(cat "$f" 2>/dev/null)
-        [ -n "$pid" ] && kill -9 "$pid" 2>/dev/null || true
         rm -f "$f"
     done
+    sleep 2
     _pkill "socat.*:${MASTER_PORT}"
     _pkill "socat.*:${DISC_PORT}"
 }
