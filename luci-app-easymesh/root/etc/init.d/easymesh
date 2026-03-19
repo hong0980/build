@@ -31,15 +31,12 @@ _restore_iface() {
     local iface="$1" managed
     config_get managed "$iface" easymesh_managed
     [ "$managed" != "1" ] && return
-    # 删除 easymesh 新建的接口（mesh0 及未对应原始接口的占位接口）
     case "$iface" in mesh0|_5g_|_2g_|_fb_|_auto_) uci -q del wireless."$iface" ;; esac
 }
 
 cleanup_wireless() {
-    # 先删除 easymesh 新建的接口
     config_load wireless
     config_foreach _restore_iface wifi-iface
-    # 如果有 backup 则整体恢复原始配置
     if [ -f "$wireless_backup" ]; then
         log "Restoring wireless config from backup"
         uci import wireless < "$wireless_backup" 2>/dev/null && rm -f "$wireless_backup"
@@ -47,7 +44,6 @@ cleanup_wireless() {
     uci commit wireless
 }
 
-# config_foreach 回调：找指定 radio 上的 AP 接口
 _ap_iface_result=""
 _ap_target_radio=""
 _find_ap_cb() {
@@ -112,7 +108,6 @@ _agent_setup() {
     }
 }
 
-# config_foreach 回调：识别各频段 radio
 _identify_radio_cb() {
     local r="$1" band
     config_get band "$r" band
@@ -238,7 +233,6 @@ start_service() {
         fi
     fi
 
-    # DHCP 和 SSID 设置
     if [ "$role" = "master" ]; then
         uci -q del dhcp.lan.ignore
         if [ "$band_merge" = "1" ]; then
@@ -251,9 +245,6 @@ start_service() {
         uci -q set dhcp.lan.ignore=1
     fi
 
-    # 不用 config_foreach 驱动 _setup_ap：_setup_ap 内部调用 _get_ap_iface
-    # → config_load → 破坏 config_foreach 迭代状态，导致第二个 radio 漏配。
-    # 直接用 _identify_radios 已识别的 radio_5g/radio_2g 显式判断，安全可靠。
     local idx=0
     if [ "$role" = "master" ]; then
         [ -n "$radio_5g" ] && {

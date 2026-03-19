@@ -106,7 +106,6 @@ master_ip() { cat "$MASTER_IP_FILE" 2>/dev/null; }
 _save_sum() { printf '%s' "$1" > "$_LAST_SUM_FILE"; }
 _load_sum() { cat "$_LAST_SUM_FILE" 2>/dev/null; }
 
-# 向所有已审批节点推送 profile
 _push_profile_to_all() {
     local profile; profile=$(cat "$PROFILE_FILE" 2>/dev/null)
     [ -z "$profile" ] && return 1
@@ -750,7 +749,6 @@ do_register() {
 poll_for_approval() {
     local mip; mip=$(master_ip)
     [ -z "$mip" ] && return 1
-    # 如果10s内刚收到过push，跳过本次poll避免重复apply
     local last_push; last_push=$(cat "${EM_RUN_DIR}/last_push_ts" 2>/dev/null || echo 0)
     [ $(( $(date +%s) - last_push )) -lt 10 ] && return 0
     local sum_resp remote_sum
@@ -798,21 +796,24 @@ generate_profile() {
     config_get ft_over_ds      global ft_over_ds       '1'
     config_get mobility_domain global mobility_domain  'aabb'
     config_get backhaul        global backhaul         'wired'
+    config_get deadline        global reassociation_deadline '1000'
     config_get backhaul_port   global backhaul_port    ''
     config_get backhaul_band   global backhaul_band    ''
+    local ch_5g="auto" ch_2g="auto"
     local rd
     for rd in $(_wifi_devs); do
         local b; b=$(uci -q get "wireless.${rd}.band")
-        case "$b" in 5g*|5GHz*) break ;; esac
+        case "$b" in
+            5g*|5GHz*) ch_5g=$(uci -q get "wireless.${rd}.channel" 2>/dev/null || echo 'auto') ;;
+            2g*|2.4*)  ch_2g=$(uci -q get "wireless.${rd}.channel" 2>/dev/null || echo 'auto') ;;
+        esac
     done
-    [ -z "$rd" ] && rd=$(_wifi_devs | head -1)
-    channel=$(uci -q get "wireless.${rd}.channel" 2>/dev/null || echo 'auto')
-    local new_prof
+    local channel="$ch_5g" new_prof
     new_prof=$(printf \
-        '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211r":"%s","ieee80211k":"%s","ieee80211v":"%s","ft_over_ds":"%s","mobility_domain":"%s","backhaul":"%s","band_merge":"%s","ssid_5g":"%s","ssid_2g":"%s","key_5g":"%s","key_2g":"%s","backhaul_port":"%s","backhaul_band":"%s"}' \
-        "$ssid" "$key" "$channel" "$mesh_id" "$mesh_key" "$routing_algo" \
+        '{"status":"approved","ssid":"%s","key":"%s","channel":"%s","channel_2g":"%s","mesh_id":"%s","mesh_key":"%s","routing_algo":"%s","ieee80211r":"%s","ieee80211k":"%s","ieee80211v":"%s","ft_over_ds":"%s","mobility_domain":"%s","backhaul":"%s","band_merge":"%s","ssid_5g":"%s","ssid_2g":"%s","key_5g":"%s","key_2g":"%s","backhaul_port":"%s","backhaul_band":"%s","reassociation_deadline":"%s"}' \
+        "$ssid" "$key" "$channel" "$ch_2g" "$mesh_id" "$mesh_key" "$routing_algo" \
         "$ieee80211r" "$ieee80211k" "$ieee80211v" "$ft_over_ds" "$mobility_domain" \
-        "$backhaul" "$band_merge" "$ssid_5g" "$ssid_2g" "$key_5g" "$key_2g" "$backhaul_port" "$backhaul_band")
+        "$backhaul" "$band_merge" "$ssid_5g" "$ssid_2g" "$key_5g" "$key_2g" "$backhaul_port" "$backhaul_band" "$deadline")
     local old_prof; old_prof=$(cat "$PROFILE_FILE" 2>/dev/null)
     if [ "$new_prof" != "$old_prof" ]; then
         printf '%s' "$new_prof" > "$PROFILE_FILE"
@@ -823,9 +824,9 @@ generate_profile() {
 apply_profile() {
     local body="$1" _pf="/tmp/em_profile_$$.json"
     printf '%s' "$body" > "$_pf"
-    local ssid key channel mesh_id mesh_key routing_algo
+    local ssid key channel channel_2g mesh_id mesh_key routing_algo
     local ieee80211r ieee80211k ieee80211v ft_over_ds mobility_domain backhaul
-    local band_merge ssid_5g ssid_2g key_5g key_2g
+    local band_merge ssid_5g ssid_2g key_5g key_2g reassociation_deadline
     eval "$(jsonfilter -i "$_pf" \
         -e 'ssid=@.ssid'                        -e 'key=@.key'                   \
         -e 'channel=@.channel'                  -e 'mesh_id=@.mesh_id'           \
@@ -836,7 +837,8 @@ apply_profile() {
         -e 'backhaul_band=@.backhaul_band'      -e 'band_merge=@.band_merge'     \
         -e 'backhaul_port=@.backhaul_port'      -e 'ssid_5g=@.ssid_5g'           \
         -e 'ssid_2g=@.ssid_2g'                  -e 'key_5g=@.key_5g'             \
-        -e 'key_2g=@.key_2g'                    2>/dev/null)"
+        -e 'key_2g=@.key_2g'                    -e 'channel_2g=@.channel_2g'     \
+        -e 'reassociation_deadline=@.reassociation_deadline' 2>/dev/null)"
     rm -f "$_pf"
     [ -z "$ssid" ] && { loge "apply_profile: missing ssid"; return 1; }
     log "Applying profile: ssid=%s channel=%s backhaul=%s" "$ssid" "$channel" "${backhaul:-wired}"
@@ -860,15 +862,14 @@ apply_profile() {
     [ -n "$ft_over_ds"      ] && uci -q set easymesh.global.ft_over_ds="$ft_over_ds"
     [ -n "$mobility_domain" ] && uci -q set easymesh.global.mobility_domain="$mobility_domain"
     [ -n "$backhaul_port"   ] && uci -q set easymesh.global.backhaul_port="$backhaul_port"
-    [ -n "$backhaul_band"   ] && uci -q set easymesh.global.backhaul_band="$backhaul_band"
+    [ -n "$backhaul_band"          ] && uci -q set easymesh.global.backhaul_band="$backhaul_band"
+    [ -n "$reassociation_deadline" ] && uci -q set easymesh.global.reassociation_deadline="$reassociation_deadline"
     uci -q commit easymesh
 
     local _bh="${backhaul:-wired}"
     if [ "$_bh" = "wired" ]; then
-        # 有线回程：mesh0 存在则 disable，不需要创建
         uci show wireless.mesh0 >/dev/null 2>&1 && uci_set wireless mesh0 disabled 1
     else
-        # 无线/auto 回程：mesh0 不存在则创建
         if ! uci show wireless.mesh0 >/dev/null 2>&1; then
             local _mesh_dev
             for _mesh_dev in $(_wifi_devs); do
@@ -937,15 +938,22 @@ apply_profile() {
         [ "${ieee80211r:-1}" = "1" ] && {
             uci_set wireless "$iface" ieee80211r 1
             uci_set wireless "$iface" ft_psk_generate_local 1
-            [ -n "$mobility_domain" ] && uci_set wireless "$iface" mobility_domain "$mobility_domain"
-            [ -n "$ft_over_ds"      ] && uci_set wireless "$iface" ft_over_ds      "$ft_over_ds"
+            [ -n "$mobility_domain"        ] && uci_set wireless "$iface" mobility_domain        "$mobility_domain"
+            [ -n "$ft_over_ds"             ] && uci_set wireless "$iface" ft_over_ds             "$ft_over_ds"
+            [ -n "$reassociation_deadline" ] && uci_set wireless "$iface" reassociation_deadline "$reassociation_deadline"
         }
     done
 
-    [ -n "$channel" ] && [ "$channel" != "auto" ] && {
-        local rd
-        for rd in $(_wifi_devs); do uci -q set "wireless.${rd}.channel=$channel"; done
-    }
+    local rd _band
+    for rd in $(_wifi_devs); do
+        _band=$(uci -q get "wireless.${rd}.band")
+        case "$_band" in
+            5g*|5GHz*)
+                [ -n "$channel" ] && [ "$channel" != "auto" ] && uci -q set "wireless.${rd}.channel=$channel" ;;
+            2g*|2.4*)
+                [ -n "$channel_2g" ] && [ "$channel_2g" != "auto" ] && uci -q set "wireless.${rd}.channel=$channel_2g" ;;
+        esac
+    done
 
     local wchanges; wchanges=$(uci changes wireless 2>/dev/null)
     uci_commit wireless
@@ -1367,7 +1375,6 @@ check_config_changes() {
 
     printf '%s' "$cfg_sum" > "${EM_RUN_DIR}/cfg_sum"
 
-    # 检测回程是否变化，用于更有针对性的日志
     local cur_bh; cur_bh=$(uci_get easymesh global backhaul 'wired')
     local last_bh; last_bh=$(cat "${EM_RUN_DIR}/last_backhaul" 2>/dev/null)
     if [ "$cur_bh" != "$last_bh" ]; then
