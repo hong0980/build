@@ -219,7 +219,7 @@ return view.extend({
 		o.depends({ enabled:'1', role:'master' });
 
 		o = s.taboption('roaming', form.Flag, 'ft_over_ds', _('FT over DS'));
-		o.default = '1';
+		o.default = '0';
 		o.depends({ enabled:'1', role:'master', ieee80211r:'1' });
 
 		o = s.taboption('roaming', form.Value, 'reassociation_deadline', _('Reassociation Deadline (ms)'));

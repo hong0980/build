@@ -1,0 +1,121 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Basic Settings"
+msgstr "基本设置"
+
+msgid "Ace Support"
+msgstr "Ace 编辑器"
+
+msgid "CodeMirror Support"
+msgstr "CodeMirror 编辑器"
+
+msgid "Save Path"
+msgstr "保存路径"
+
+msgid "Number of Texts"
+msgstr "文本数量"
+
+msgid "Text Type"
+msgstr "文本类型"
+
+msgid "Enable Ace Support"
+msgstr "启用 Ace 编辑器"
+
+msgid "Enable CodeMirror Support"
+msgstr "启用 CodeMirror 编辑器"
+
+msgid "Read-Only Mode"
+msgstr "只读模式"
+
+msgid "Theme"
+msgstr "主题"
+
+msgid "Font Size"
+msgstr "字体大小"
+
+msgid "Line Spacing"
+msgstr "行间距"
+
+msgid "Display Height"
+msgstr "显示高度"
+
+msgid "Note %s Settings"
+msgstr "笔记 %s 设置"
+
+msgid "Note %s"
+msgstr "笔记 %s"
+
+msgid "Type"
+msgstr "类型"
+
+msgid "Read-only"
+msgstr "只读"
+
+msgid "Syntax"
+msgstr "语法"
+
+msgid "Font"
+msgstr "字体"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Upload File"
+msgstr "上传文件"
+
+msgid "Download"
+msgstr "下载"
+
+msgid "Copy"
+msgstr "复制"
+
+msgid "Clear"
+msgstr "清空"
+
+msgid "wrap"
+msgstr "自动换行"
+
+msgid "close Wrap"
+msgstr "关闭换行"
+
+msgid "full screen"
+msgstr "全屏"
+
+msgid "Exit full screen"
+msgstr "退出全屏"
+
+msgid "Reload"
+msgstr "重载"
+
+msgid "Config saved, files updated"
+msgstr "配置已保存，文件已更新"
+
+msgid "保存成功"
+msgstr "保存成功"
+
+msgid "保存出错: %s"
+msgstr "保存出错: %s"
+
+msgid "替换成功"
+msgstr "替换成功"
+
+msgid "替换出错: %s"
+msgstr "替换出错: %s"
+
+msgid "内容为空"
+msgstr "内容为空"
+
+msgid "内容已复制"
+msgstr "内容已复制"
+
+msgid "复制出错"
+msgstr "复制出错"
+
+msgid "已重载"
+msgstr "已重载"
+
+msgid "重载失败: %s"
+msgstr "重载失败: %s"

@@ -395,6 +395,402 @@ return view.extend({
 		});
 	},
 
+	initEditors: function (note_sum, note_path, note_suffix, code_aceenable, code_cmenable, con) {
+		const self = this;
+		fs.stat(note_path)
+			.catch(() => fs.exec('/bin/mkdir', ['-p', note_path]))
+			.then(() => {
+				const currentCon = uci.get_first('luci', 'tinynote');
+				function svgIcon(name) {
+					const span = document.createElement('span');
+					span.innerHTML = (ICONS[name] || '').trim();
+					return span.querySelector('svg');
+				}
+				const fallbackToTextarea = () => {
+					for (let i = 1; i <= note_sum; i++) {
+						const useCustom = currentCon[`enablenote${i}`] === 'true';
+						const fileType = useCustom && currentCon[`model_note${i}`]
+							? currentCon[`model_note${i}`]
+							: note_suffix;
+						const filePath = `${note_path}/note${String(i).padStart(2, '0')}.${fileType}`;
+						const fileReadOnly = useCustom
+							? (currentCon[`only_note${i}`] === 'true')
+							: false;
+
+						setTimeout(() => {
+							const id = `editor-${i}`;
+							const el = document.getElementById(id);
+							if (!el) return;
+							const parentNode = el.parentNode;
+							const height = el.style.height || '300px';
+							const textarea = document.createElement('textarea');
+							textarea.style.cssText = `width:100%;height:${height};font-family:Consolas;background-color:#212121;color:#fff;font-size:13px;box-sizing:border-box;border:none;padding:8px;resize:vertical;border-radius:0px;white-space:nowrap;overflow-x:auto`;
+							textarea.readOnly = fileReadOnly;
+
+							const getEditor = () => ({
+								getValue: () => textarea.value,
+								setValue: (v) => { textarea.value = v; }
+							});
+							const updateStatus = () => {
+								const content = textarea.value;
+								const lines = content ? content.split('\n').length : 0;
+								document.getElementById(`${id}LineColumn`).textContent = `Line: ${lines}`;
+								document.getElementById(`${id}TextSize`).textContent = `Size: ${new Blob([content]).size} Bytes`;
+							};
+
+							const wrapperDiv = buildToolbar.call(self, i, getEditor, filePath, () => {}, currentCon);
+							wrapperDiv.appendChild(textarea);
+							wrapperDiv.appendChild(E('div', { class: 'statusBar' }, [
+								E('div', { class: 'status-left', id: `${id}LineColumn` }, 'Ln: 0 '),
+								E('div', { class: 'status-right', id: `${id}TextSize` }, 'Size: 0 Bytes')
+							]));
+							parentNode.innerHTML = '';
+							parentNode.appendChild(wrapperDiv);
+							if (!self.taEditors) self.taEditors = {};
+							self.taEditors[id] = getEditor();
+							textarea.addEventListener('input', updateStatus);
+
+							fs.read(filePath).then(content => {
+								textarea.value = content || '';
+								updateStatus();
+							}).catch(() => {});
+
+							const btn = buildButton(i, filePath, fileReadOnly);
+							if (btn) parentNode.appendChild(btn);
+						}, i * 100);
+					}
+				};
+				const buildButton = (i, filePath, fileReadOnly) => {
+					const id = `editor-${i}`;
+					return E('div', { style: 'margin-top:10px;padding:0 0 8px;' }, [
+						E('button', {
+							class: 'btn cbi-button-save', disabled: fileReadOnly ? '' : null,
+							click: ui.createHandlerFn(self, () => {
+								const editor = self.aceEditors[id] || self.cmEditors[id] || self.taEditors?.[id];
+								const content = editor?.getValue();
+								content && fs.write(filePath, content)
+									.then(() => self.showNotification(_('保存成功'), 3000, 'success'))
+									.catch(err => self.showNotification(_('保存出错: %s').format(err.message), 3000, 'error'));
+							})
+						}, _('Save') + ' ' + _('Note %s').format(String(i).padStart(2, '0'))),
+						E('button', {
+							class: 'btn cbi-button-reset', style: 'margin-left:5px;',
+							click: ui.createHandlerFn(self, () => {
+								const editor = self.aceEditors[id] || self.cmEditors[id] || self.taEditors?.[id];
+								fs.read(filePath).then(content => {
+									editor?.setValue(content || '', -1);
+									self.showNotification(_('已重载'), 3000, 'success');
+								}).catch(err => self.showNotification(_('重载失败: %s').format(err.message), 3000, 'error'));
+							})
+						}, _('Reload') + ' ' + _('Note %s').format(String(i).padStart(2, '0')))
+					]);
+				};
+				function buildToolbar(i, getEditor, filePath, resizeFn, currentCon) {
+					const id = `editor-${i}-wrapper`;
+					return E('div', { id: id }, [
+						E('div', { class: 'editorMenu' }, [
+							E('div', { class: 'inline-form-group status-left' }, [
+								(code_cmenable || code_aceenable)
+									? E('span', { class: 'inline-form-group' }, [
+										E('span', _('Syntax')),
+										E('select', {
+											change: ui.createHandlerFn(this, ev => {
+												const editor = getEditor();
+												const selected = ev.target.value;
+												if (code_aceenable) {
+													const mode = note_type_array[selected]?.aceMode ?? 'text';
+													editor?.session?.setMode('ace/mode/' + mode);
+												} else if (code_cmenable) {
+													const mode = note_type_array[selected]?.cmMode ?? null;
+													if (mode) {
+														self.loadCMResource('mode', mode).then(() => {
+															editor?.setOption('mode', mode);
+														});
+													} else {
+														editor?.setOption('mode', null);
+													}
+												}
+											})
+										}, Object.entries(note_type_array).map(([ext, { label }]) =>
+											E('option', { value: ext, selected: ext === (con[`model_note${i}`] || con.note_suffix || '') || undefined }, label)
+										)),
+										E('span', _('Theme')),
+										E('select', {
+											change: ui.createHandlerFn(this, ev => {
+												const editor = getEditor();
+												const val = ev.target.value;
+												if (code_aceenable) {
+													editor?.setTheme('ace/theme/' + val);
+												} else if (code_cmenable) {
+													self.loadCMResource('theme', val).then(() => {
+														editor?.setOption('theme', val);
+													});
+												}
+											})
+										}, (code_aceenable ? ace_theme_array : codemirror_theme_array).map(([val, name]) => E('option', { value: val, selected: val === (con.acetheme || con.cmtheme || 'monokai') || undefined }, name))
+										),
+									]) : '',
+								E('span', _('Font')),
+								E('select', {
+									change: ui.createHandlerFn(this, ev => {
+										const editor = getEditor();
+										const val = ev.target.value;
+										if (code_aceenable) {
+											editor?.setFontSize(val + 'px');
+										} else if (code_cmenable) {
+											const wrapper = editor?.getWrapperElement();
+											if (wrapper) wrapper.style.fontSize = val + 'px';
+											editor?.refresh();
+										} else {
+											const wrapperEl = document.getElementById(id);
+											const ta = wrapperEl?.querySelector('textarea');
+											if (ta) ta.style.fontSize = val + 'px';
+										}
+									})
+								}, ['12', '13', '14', '15', '16'].map(sz =>
+									E('option', { value: sz, selected: sz === (con.acefont_size || con.cmfont_size || '14') || undefined }, sz + 'px')
+								)),
+							]),
+							E('div', { class: 'icon status-right' }, [
+								E('a', {
+									click: ui.createHandlerFn(this, () => {
+										fs.write(filePath, getEditor().getValue())
+											.then(() => self.showNotification(_('保存成功'), 3000, 'success'))
+											.catch(err => self.showNotification(_('保存出错: %s').format(err.message), 3000, 'error'));
+									}), title: _('Save')
+								}, [svgIcon('save')]),
+								E('a', {
+									click: ui.createHandlerFn(this, () => {
+										const fileInput = document.createElement('input');
+										fileInput.type = 'file';
+										fileInput.onchange = (e) => {
+											const file = e.target.files[0];
+											if (!file) return;
+											const reader = new FileReader();
+											reader.readAsText(file, 'UTF-8');
+											reader.onload = (ev) => {
+												const content = ev.target.result;
+												getEditor().setValue(content, -1);
+												fs.write(filePath, content)
+													.then(() => self.showNotification(_('替换成功'), 3000, 'success'))
+													.catch(err => self.showNotification(_('替换出错: %s').format(err.message), 3000, 'error'));
+											};
+										};
+										fileInput.click();
+									}), title: _('Upload File')
+								}, [svgIcon('Upload')]),
+								E('a', {
+									click: ui.createHandlerFn(this, () => {
+										const content = getEditor().getValue().trim();
+										if (!content) return;
+										const a = document.createElement('a');
+										a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
+										a.download = filePath.split('/').pop();
+										a.click();
+										setTimeout(() => URL.revokeObjectURL(a.href), 100);
+									}), title: _('Download')
+								}, [svgIcon('download')]),
+								E('a', {
+									click: ui.createHandlerFn(this, () => {
+										const content = getEditor().getValue().trim();
+										if (!content) { self.showNotification(_('内容为空'), 3000, 'error'); return; }
+										const ta = document.createElement('textarea');
+										ta.value = content;
+										ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
+										document.body.appendChild(ta);
+										ta.select();
+										try {
+											document.execCommand('copy');
+											self.showNotification(_('内容已复制'), 3000, 'success');
+										} catch (e) {
+											self.showNotification(_('复制出错'), 3000, 'error');
+										} finally {
+											document.body.removeChild(ta);
+										}
+									}), title: _('Copy')
+								}, [svgIcon('copy')]),
+								E('a', { click: () => getEditor().setValue('', -1), title: _('Clear') }, [svgIcon('delete')]),
+								E('a', {
+									click: ui.createHandlerFn(this, ev => {
+										const editor = getEditor();
+										const btn = ev.currentTarget;
+
+										if (code_aceenable) {
+											const wrapped = editor.getSession().getUseWrapMode();
+											editor.getSession().setUseWrapMode(!wrapped);
+											btn.style.opacity = wrapped ? '0.45' : '1';
+											btn.title = wrapped ? _('wrap') : _('close Wrap');
+										} else if (code_cmenable) {
+											const wrapped = editor.getOption('lineWrapping');
+											editor.setOption('lineWrapping', !wrapped);
+											btn.style.opacity = wrapped ? '0.45' : '1';
+											btn.title = wrapped ? _('wrap') : _('close Wrap');
+										} else {
+											const wrapperEl = document.getElementById(id);
+											const ta = wrapperEl.querySelector('textarea');
+											const wrapped = ta.style.whiteSpace !== 'nowrap';
+											ta.style.whiteSpace = wrapped ? 'nowrap' : 'pre-wrap';
+											ta.style.overflowX = wrapped ? 'auto' : 'hidden';
+											btn.style.opacity = wrapped ? '0.45' : '1';
+											btn.title = wrapped ? _('wrap') : _('close Wrap');
+										}
+									}), title: _('wrap'), style: 'opacity:0.45'
+								}, [svgIcon('wrap')]),
+								E('a', {
+									click: ui.createHandlerFn(this, ev => {
+										const wrapper = document.getElementById(id);
+										const isFull = wrapper.classList.toggle('fullScreen');
+										const btn = ev.currentTarget;
+										btn.title = isFull ? _('Exit full screen') : _('full screen');
+										btn.innerHTML = ICONS[isFull ? 'close_fullscreen' : 'open_fullscreen'];
+										if (!isFull) {
+											const editorEl = wrapper.querySelector('.ace_editor, .CodeMirror, textarea');
+											Object.assign(editorEl.style, { height: (currentCon.aceheight || currentCon.cmheight || 300) + 'px', width: '100%' });
+											setTimeout(() => wrapper.scrollIntoView({ block: 'center' }), 0);
+										}
+										resizeFn();
+									}), title: _('full screen')
+								}, [svgIcon('open_fullscreen')])
+							]),
+						]),
+					]);
+				}
+				if (code_aceenable) {
+					return self.preloadAceEditor().then(() => {
+						for (let i = 1; i <= note_sum; i++) {
+							const useCustom = currentCon[`enablenote${i}`] === 'true';
+							const fileType = useCustom && currentCon[`model_note${i}`] ? currentCon[`model_note${i}`] : note_suffix;
+							const fileReadOnly = useCustom ? (currentCon[`only_note${i}`] === 'true') : (currentCon.aceonly === 'true');
+							const mode = note_type_array[fileType]?.aceMode ?? 'text';
+
+							setTimeout(() => {
+								const id = `editor-${i}`;
+								const el = document.getElementById(id);
+								if (!el) return;
+								const parentNode = el.parentNode;
+								const filePath = `${note_path}/note${String(i).padStart(2, '0')}.${fileType}`;
+								if (self.aceEditors[id]) self.aceEditors[id].destroy();
+								const editorDiv = E('div', { id: id + '_ace', class: 'editorBody', style: `height:${currentCon.aceheight || '300'}px;width:100%;` });
+								const wrapperDiv = buildToolbar.call(self, i, () => self.aceEditors[id], filePath, () => self.aceEditors[id].resize(), currentCon);
+								wrapperDiv.appendChild(editorDiv);
+								wrapperDiv.appendChild(E('div', { class: 'statusBar' }, [
+									E('div', { class: 'status-left', id: `${id}AceLine` }),
+									E('div', { class: 'status-right', id: `${id}TextSize` })
+								]));
+
+								parentNode.innerHTML = '';
+								parentNode.appendChild(wrapperDiv);
+								const btn = buildButton(i, filePath, fileReadOnly);
+								if (btn) parentNode.appendChild(btn);
+
+								const editor = ace.edit(editorDiv);
+								editor.setTheme(`ace/theme/${currentCon.acetheme || 'monokai'}`);
+								editor.session.setMode(`ace/mode/${mode}`);
+								editor.setFontSize(parseInt(currentCon.acefont_size) || 13);
+								editor.setReadOnly(fileReadOnly);
+								editor.setShowPrintMargin(false);
+								editor.container.style.lineHeight = currentCon.aceline_spacing || '1.2';
+								self.aceEditors[id] = editor;
+
+								const updateUIStatus = (ed, edId) => {
+									const pos = ed.getCursorPosition();
+									const content = ed.getValue();
+									document.getElementById(`${edId}AceLine`).textContent = `Ln: ${pos.row + 1}; Col: ${pos.column + 1}; Max Col: ${ed.session.getLine(pos.row)?.length || 0}`;
+									document.getElementById(`${edId}TextSize`).textContent = `Size: ${new Blob([content]).size} Bytes`;
+								};
+								fs.read(filePath).then(content => {
+									editor.setValue(content || '', -1);
+									updateUIStatus(editor, id);
+								});
+								editor.on('change', () => updateUIStatus(editor, id));
+								editor.selection.on('changeCursor', () => updateUIStatus(editor, id));
+							}, i * 100);
+						}
+					}).catch(() => fallbackToTextarea());
+				} else if (code_cmenable) {
+					return self.preloadCodeMirror().then(() => {
+						const themesToLoad = new Set();
+						const modesToLoad = new Set();
+
+						for (let i = 1; i <= note_sum; i++) {
+							const useCustom = currentCon[`enablenote${i}`] === 'true';
+							const fileType = useCustom && currentCon[`model_note${i}`]
+								? currentCon[`model_note${i}`]
+								: note_suffix;
+							const mode = note_type_array[fileType]?.cmMode ?? null;
+
+							themesToLoad.add(currentCon.cmtheme || 'monokai');
+							if (mode != null) modesToLoad.add(mode);
+						}
+
+						const loadPromises = [];
+						themesToLoad.forEach(theme => loadPromises.push(self.loadCMResource('theme', theme)));
+						modesToLoad.forEach(mode => loadPromises.push(self.loadCMResource('mode', mode)));
+
+						return Promise.all(loadPromises).then(() => {
+							for (let i = 1; i <= note_sum; i++) {
+								const useCustom = currentCon[`enablenote${i}`] === 'true';
+								const fileType = useCustom && currentCon[`model_note${i}`]
+									? currentCon[`model_note${i}`]
+									: note_suffix;
+								const fileReadOnly = useCustom
+									? (currentCon[`only_note${i}`] === 'true')
+									: (currentCon.only === 'true');
+								const mode = note_type_array[fileType]?.cmMode ?? null;
+
+								setTimeout(() => {
+									const id = `editor-${i}`;
+									const el = document.getElementById(id);
+									if (!el) return;
+									const parentNode = el.parentNode;
+									const filePath = `${note_path}/note${String(i).padStart(2, '0')}.${fileType}`;
+									const editorDiv = E('div', { id: id + '_cm', class: 'editorBody' });
+									const wrapperDiv = buildToolbar.call(self, i, () => self.cmEditors[id], filePath, () => self.cmEditors[id].refresh(), currentCon);
+									wrapperDiv.appendChild(editorDiv);
+									wrapperDiv.appendChild(E('div', { class: 'statusBar' }, [
+										E('div', { class: 'status-left', id: `${id}CmLine` }),
+										E('div', { class: 'status-right', id: `${id}TextSize` })
+									]));
+
+									parentNode.innerHTML = '';
+									parentNode.appendChild(wrapperDiv);
+
+									const btn = buildButton(i, filePath, fileReadOnly);
+									if (btn) parentNode.appendChild(btn);
+
+									const editor = CodeMirror(editorDiv, {
+										lineNumbers: true, mode: mode === 'null' ? null : mode,
+										theme: currentCon.cmtheme || 'monokai', readOnly: fileReadOnly,
+										lineWrapping: false, indentUnit: 4, tabSize: 4
+									});
+									editor.setSize(null, currentCon.cmheight || '300');
+									editor.getWrapperElement().style.fontSize = (currentCon.cmfont_size || '13') + 'px';
+									editor.getWrapperElement().style.fontFamily = "'Consolas', 'Monaco', 'Courier New', monospace";
+									editor.getWrapperElement().style.lineHeight = currentCon.cmline_spacing || '1.2';
+									editor.refresh();
+									self.cmEditors[id] = editor;
+
+									const updateUIStatus = (ed, edId) => {
+										const cursor = ed.getCursor();
+										const content = ed.getValue();
+										document.getElementById(`${edId}CmLine`).textContent = `Ln: ${cursor.line + 1}; Col: ${cursor.ch + 1}`;
+										document.getElementById(`${edId}TextSize`).textContent = `Size: ${new Blob([content]).size} Bytes`;
+									};
+									fs.read(filePath).then(content => {
+										editor.setValue(content || '');
+										updateUIStatus(editor, id);
+									}).catch(() => editor.setValue(''));
+									editor.on('change', () => updateUIStatus(editor, id));
+									editor.on('cursorActivity', () => updateUIStatus(editor, id));
+								}, i * 200);
+							}
+						});
+					}).catch(() => fallbackToTextarea());
+				} else fallbackToTextarea();
+			})
+			.catch(() => {});
+	},
+
 	render: function () {
 		// this.loadLibrary('jquery');
 		let m, s, o;
@@ -521,402 +917,17 @@ return view.extend({
 					]);
 				};
 			}
+		}
 
-			fs.stat(note_path)
-				.catch(() => fs.exec('/bin/mkdir', ['-p', note_path]))
-				.then(() => {
-					const currentCon = uci.get_first('luci', 'tinynote');
-					function svgIcon(name) {
-						const span = document.createElement('span');
-						span.innerHTML = (ICONS[name] || '').trim();
-						return span.querySelector('svg');
-					}
-					const fallbackToTextarea = () => {
-						for (let i = 1; i <= note_sum; i++) {
-							const useCustom = currentCon[`enablenote${i}`] === 'true';
-							const fileType = useCustom && currentCon[`model_note${i}`]
-								? currentCon[`model_note${i}`]
-								: note_suffix;
-							const filePath = `${note_path}/note${String(i).padStart(2, '0')}.${fileType}`;
-							const fileReadOnly = useCustom
-								? (currentCon[`only_note${i}`] === 'true')
-								: false;
-
-							setTimeout(() => {
-								const id = `editor-${i}`;
-								const el = document.getElementById(id);
-								if (!el) return;
-								const parentNode = el.parentNode;
-								const height = el.style.height || '300px';
-								const textarea = document.createElement('textarea');
-								textarea.style.cssText = `width:100%;height:${height};font-family:Consolas;background-color:#212121;color:#fff;font-size:13px;box-sizing:border-box;border:none;padding:8px;resize:vertical;border-radius:0px;white-space:nowrap;overflow-x:auto`;
-								textarea.readOnly = fileReadOnly;
-
-								const getEditor = () => ({
-									getValue: () => textarea.value,
-									setValue: (v) => { textarea.value = v; }
-								});
-								const updateStatus = () => {
-									const content = textarea.value;
-									const lines = content ? content.split('\n').length : 0;
-									document.getElementById(`${id}LineColumn`).textContent = `Line: ${lines}`;
-									document.getElementById(`${id}TextSize`).textContent = `Size: ${new Blob([content]).size} Bytes`;
-								};
-
-								const wrapperDiv = buildToolbar.call(this, i, getEditor, filePath, () => {}, currentCon);
-								wrapperDiv.appendChild(textarea);
-								wrapperDiv.appendChild(E('div', { class: 'statusBar' }, [
-									E('div', { class: 'status-left', id: `${id}LineColumn` }, 'Ln: 0 '),
-									E('div', { class: 'status-right', id: `${id}TextSize` }, 'Size: 0 Bytes')
-								]));
-								parentNode.innerHTML = '';
-								parentNode.appendChild(wrapperDiv);
-								if (!this.taEditors) this.taEditors = {};
-								this.taEditors[id] = getEditor();
-								textarea.addEventListener('input', updateStatus);
-
-								fs.read(filePath).then(content => {
-									textarea.value = content || '';
-									updateStatus();
-								}).catch(() => {});
-
-								const btn = buildButton(i, filePath, fileReadOnly);
-								if (btn) parentNode.appendChild(btn);
-							}, i * 100);
-						}
-					};
-					const buildButton = (i, filePath, fileReadOnly) => {
-						const id = `editor-${i}`;
-						return E('div', { style: 'margin-top:10px;padding:0 0 8px;' }, [
-							E('button', {
-								class: 'btn cbi-button-save', disabled: fileReadOnly ? '' : null,
-								click: ui.createHandlerFn(this, () => {
-									const editor = this.aceEditors[id] || this.cmEditors[id] || this.taEditors?.[id];
-									const content = editor?.getValue();
-									content && fs.write(filePath, content)
-										.then(() => this.showNotification(_('保存成功'), 3000, 'success'))
-										.catch(err => this.showNotification(_('保存出错: %s').format(err.message), 3000, 'error'));
-								})
-							}, _('Save') + ' ' + _('Note %s').format(String(i).padStart(2, '0'))),
-							E('button', {
-								class: 'btn cbi-button-reset', style: 'margin-left:5px;',
-								click: ui.createHandlerFn(this, () => {
-									const editor = this.aceEditors[id] || this.cmEditors[id] || this.taEditors?.[id];
-									fs.read(filePath).then(content => {
-										editor?.setValue(content || '', -1);
-										this.showNotification(_('已重载'), 3000, 'success');
-									}).catch(err => this.showNotification(_('重载失败: %s').format(err.message), 3000, 'error'));
-								})
-							}, _('Reload') + ' ' + _('Note %s').format(String(i).padStart(2, '0')))
-						]);
-					};
-					function buildToolbar(i, getEditor, filePath, resizeFn, currentCon) {
-						const id = `editor-${i}-wrapper`;
-						return E('div', { id: id }, [
-							E('div', { class: 'editorMenu' }, [
-								E('div', { class: 'inline-form-group status-left' }, [
-									(code_cmenable || code_aceenable)
-										? E('span', { class: 'inline-form-group' }, [
-											E('span', _('Syntax')),
-											E('select', {
-												change: ui.createHandlerFn(this, ev => {
-													const editor = getEditor();
-													const selected = ev.target.value;
-													if (code_aceenable) {
-														const mode = note_type_array[selected]?.aceMode ?? 'text';
-														editor?.session?.setMode('ace/mode/' + mode);
-													} else if (code_cmenable) {
-														const mode = note_type_array[selected]?.cmMode ?? null;
-														if (mode) {
-															this.loadCMResource('mode', mode).then(() => {
-																editor?.setOption('mode', mode);
-															});
-														} else {
-															editor?.setOption('mode', null);
-														}
-													}
-												})
-											}, Object.entries(note_type_array).map(([ext, { label }]) =>
-												E('option', { value: ext, selected: ext === (con[`model_note${i}`] || con.note_suffix || '') || undefined }, label)
-											)),
-											E('span', _('Theme')),
-											E('select', {
-												change: ui.createHandlerFn(this, ev => {
-													const editor = getEditor();
-													const val = ev.target.value;
-													if (code_aceenable) {
-														editor?.setTheme('ace/theme/' + val);
-													} else if (code_cmenable) {
-														this.loadCMResource('theme', val).then(() => {
-															editor?.setOption('theme', val);
-														});
-													}
-												})
-											}, (code_aceenable ? ace_theme_array : codemirror_theme_array).map(([val, name]) => E('option', { value: val, selected: val === (con.acetheme || con.cmtheme || 'monokai') || undefined }, name))
-											),
-										]) : '',
-									E('span', _('Font')),
-									E('select', {
-										change: ui.createHandlerFn(this, ev => {
-											const editor = getEditor();
-											const val = ev.target.value;
-											if (code_aceenable) {
-												editor?.setFontSize(val + 'px');
-											} else if (code_cmenable) {
-												const wrapper = editor?.getWrapperElement();
-												if (wrapper) wrapper.style.fontSize = val + 'px';
-												editor?.refresh();
-											} else {
-												const wrapperEl = document.getElementById(id);
-												const ta = wrapperEl?.querySelector('textarea');
-												if (ta) ta.style.fontSize = val + 'px';
-											}
-										})
-									}, ['12', '13', '14', '15', '16'].map(sz =>
-										E('option', { value: sz, selected: sz === (con.acefont_size || con.cmfont_size || '14') || undefined }, sz + 'px')
-									)),
-								]),
-								E('div', { class: 'icon status-right' }, [
-									E('a', {
-										click: ui.createHandlerFn(this, () => {
-											fs.write(filePath, getEditor().getValue())
-												.then(() => this.showNotification(_('保存成功'), 3000, 'success'))
-												.catch(err => this.showNotification(_('保存出错: %s').format(err.message), 3000, 'error'));
-										}), title: _('Save')
-									}, [svgIcon('save')]),
-									E('a', {
-										click: ui.createHandlerFn(this, () => {
-											const fileInput = document.createElement('input');
-											fileInput.type = 'file';
-											fileInput.onchange = (e) => {
-												const file = e.target.files[0];
-												if (!file) return;
-												const reader = new FileReader();
-												reader.readAsText(file, 'UTF-8');
-												reader.onload = (ev) => {
-													const content = ev.target.result;
-													getEditor().setValue(content, -1);
-													fs.write(filePath, content)
-														.then(() => this.showNotification(_('替换成功'), 3000, 'success'))
-														.catch(err => this.showNotification(_('替换出错: %s').format(err.message), 3000, 'error'));
-												};
-											};
-											fileInput.click();
-										}), title: _('Upload File')
-									}, [svgIcon('Upload')]),
-									E('a', {
-										click: ui.createHandlerFn(this, () => {
-											const content = getEditor().getValue().trim();
-											if (!content) return;
-											const a = document.createElement('a');
-											a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
-											a.download = filePath.split('/').pop();
-											a.click();
-											setTimeout(() => URL.revokeObjectURL(a.href), 100);
-										}), title: _('Download')
-									}, [svgIcon('download')]),
-									E('a', {
-										click: ui.createHandlerFn(this, () => {
-											const content = getEditor().getValue().trim();
-											if (!content) { this.showNotification(_('内容为空'), 3000, 'error'); return; }
-											const ta = document.createElement('textarea');
-											ta.value = content;
-											ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
-											document.body.appendChild(ta);
-											ta.select();
-											try {
-												document.execCommand('copy');
-												this.showNotification(_('内容已复制'), 3000, 'success');
-											} catch (e) {
-												this.showNotification(_('复制出错'), 3000, 'error');
-											} finally {
-												document.body.removeChild(ta);
-											}
-										}), title: _('Copy')
-									}, [svgIcon('copy')]),
-									E('a', { click: () => getEditor().setValue('', -1), title: _('Clear') }, [svgIcon('delete')]),
-									E('a', {
-										click: ui.createHandlerFn(this, ev => {
-											const editor = getEditor();
-											const btn = ev.currentTarget;
-
-											if (code_aceenable) {
-												const wrapped = editor.getSession().getUseWrapMode();
-												editor.getSession().setUseWrapMode(!wrapped);
-												btn.style.opacity = wrapped ? '0.45' : '1';
-												btn.title = wrapped ? _('wrap') : _('close Wrap');
-											} else if (code_cmenable) {
-												const wrapped = editor.getOption('lineWrapping');
-												editor.setOption('lineWrapping', !wrapped);
-												btn.style.opacity = wrapped ? '0.45' : '1';
-												btn.title = wrapped ? _('wrap') : _('close Wrap');
-											} else {
-												const wrapperEl = document.getElementById(id);
-												const ta = wrapperEl.querySelector('textarea');
-												const wrapped = ta.style.whiteSpace !== 'nowrap';
-												ta.style.whiteSpace = wrapped ? 'nowrap' : 'pre-wrap';
-												ta.style.overflowX = wrapped ? 'auto' : 'hidden';
-												btn.style.opacity = wrapped ? '0.45' : '1';
-												btn.title = wrapped ? _('wrap') : _('close Wrap');
-											}
-										}), title: _('wrap'), style: 'opacity:0.45'
-									}, [svgIcon('wrap')]),
-									E('a', {
-										click: ui.createHandlerFn(this, ev => {
-											const wrapper = document.getElementById(id);
-											const isFull = wrapper.classList.toggle('fullScreen');
-											const btn = ev.currentTarget;
-											btn.title = isFull ? _('Exit full screen') : _('full screen');
-											btn.innerHTML = ICONS[isFull ? 'close_fullscreen' : 'open_fullscreen'];
-											if (!isFull) {
-												const editorEl = wrapper.querySelector('.ace_editor, .CodeMirror, textarea');
-												Object.assign(editorEl.style, { height: (currentCon.aceheight || currentCon.cmheight || 300) + 'px', width: '100%' });
-												setTimeout(() => wrapper.scrollIntoView({ block: 'center' }), 0);
-											}
-											resizeFn();
-										}), title: _('full screen')
-									}, [svgIcon('open_fullscreen')])
-								]),
-							]),
-						]);
-					}
-					if (code_aceenable) {
-						return this.preloadAceEditor().then(() => {
-							for (let i = 1; i <= note_sum; i++) {
-								const useCustom = currentCon[`enablenote${i}`] === 'true';
-								const fileType = useCustom && currentCon[`model_note${i}`] ? currentCon[`model_note${i}`] : note_suffix;
-								const fileReadOnly = useCustom ? (currentCon[`only_note${i}`] === 'true') : (currentCon.aceonly === 'true');
-								const mode = note_type_array[fileType]?.aceMode ?? 'text';
-
-								setTimeout(() => {
-									const id = `editor-${i}`;
-									const el = document.getElementById(id);
-									if (!el) return;
-									const parentNode = el.parentNode;
-									const filePath = `${note_path}/note${String(i).padStart(2, '0')}.${fileType}`;
-									if (this.aceEditors[id]) this.aceEditors[id].destroy();
-									const editorDiv = E('div', { id: id + '_ace', class: 'editorBody', style: `height:${currentCon.aceheight || '300'}px;width:100%;` });
-									const wrapperDiv = buildToolbar.call(this, i, () => this.aceEditors[id], filePath, () => this.aceEditors[id].resize(), currentCon);
-									wrapperDiv.appendChild(editorDiv);
-									wrapperDiv.appendChild(E('div', { class: 'statusBar' }, [
-										E('div', { class: 'status-left', id: `${id}AceLine` }),
-										E('div', { class: 'status-right', id: `${id}TextSize` })
-									]));
-
-									parentNode.innerHTML = '';
-									parentNode.appendChild(wrapperDiv);
-									const btn = buildButton(i, filePath, fileReadOnly);
-									if (btn) parentNode.appendChild(btn);
-
-									const editor = ace.edit(editorDiv);
-									editor.setTheme(`ace/theme/${currentCon.acetheme || 'monokai'}`);
-									editor.session.setMode(`ace/mode/${mode}`);
-									editor.setFontSize(parseInt(currentCon.acefont_size) || 13);
-									editor.setReadOnly(fileReadOnly);
-									editor.setShowPrintMargin(false);
-									editor.container.style.lineHeight = currentCon.aceline_spacing || '1.2';
-									this.aceEditors[id] = editor;
-
-									const updateUIStatus = (ed, edId) => {
-										const pos = ed.getCursorPosition();
-										const content = ed.getValue();
-										document.getElementById(`${edId}AceLine`).textContent = `Ln: ${pos.row + 1}; Col: ${pos.column + 1}; Max Col: ${ed.session.getLine(pos.row)?.length || 0}`;
-										document.getElementById(`${edId}TextSize`).textContent = `Size: ${new Blob([content]).size} Bytes`;
-									};
-									fs.read(filePath).then(content => {
-										editor.setValue(content || '', -1);
-										updateUIStatus(editor, id);
-									});
-									editor.on('change', () => updateUIStatus(editor, id));
-									editor.selection.on('changeCursor', () => updateUIStatus(editor, id));
-								}, i * 100);
-							}
-						}).catch(() => fallbackToTextarea());
-					} else if (code_cmenable) {
-						return this.preloadCodeMirror().then(() => {
-							const themesToLoad = new Set();
-							const modesToLoad = new Set();
-
-							for (let i = 1; i <= note_sum; i++) {
-								const useCustom = currentCon[`enablenote${i}`] === 'true';
-								const fileType = useCustom && currentCon[`model_note${i}`]
-									? currentCon[`model_note${i}`]
-									: note_suffix;
-								const mode = note_type_array[fileType]?.cmMode ?? null;
-
-								themesToLoad.add(currentCon.cmtheme || 'monokai');
-								if (mode !== 'null') modesToLoad.add(mode);
-							}
-
-							const loadPromises = [];
-							themesToLoad.forEach(theme => loadPromises.push(this.loadCMResource('theme', theme)));
-							modesToLoad.forEach(mode => loadPromises.push(this.loadCMResource('mode', mode)));
-
-							return Promise.all(loadPromises).then(() => {
-								for (let i = 1; i <= note_sum; i++) {
-									const useCustom = currentCon[`enablenote${i}`] === 'true';
-									const fileType = useCustom && currentCon[`model_note${i}`]
-										? currentCon[`model_note${i}`]
-										: note_suffix;
-									const fileReadOnly = useCustom
-										? (currentCon[`only_note${i}`] === 'true')
-										: (currentCon.only === 'true');
-									const mode = note_type_array[fileType]?.cmMode ?? null;
-
-									setTimeout(() => {
-										const id = `editor-${i}`;
-										const el = document.getElementById(id);
-										if (!el) return;
-										const parentNode = el.parentNode;
-										const filePath = `${note_path}/note${String(i).padStart(2, '0')}.${fileType}`;
-										const editorDiv = E('div', { id: id + '_cm', class: 'editorBody' });
-										const wrapperDiv = buildToolbar.call(this, i, () => this.cmEditors[id], filePath, () => this.cmEditors[id].refresh(), currentCon);
-										wrapperDiv.appendChild(editorDiv);
-										wrapperDiv.appendChild(E('div', { class: 'statusBar' }, [
-											E('div', { class: 'status-left', id: `${id}CmLine` }),
-											E('div', { class: 'status-right', id: `${id}TextSize` })
-										]));
-
-										parentNode.innerHTML = '';
-										parentNode.appendChild(wrapperDiv);
-
-										const btn = buildButton(i, filePath, fileReadOnly);
-										if (btn) parentNode.appendChild(btn);
-
-										const editor = CodeMirror(editorDiv, {
-											lineNumbers: true, mode: mode === 'null' ? null : mode,
-											theme: currentCon.cmtheme || 'monokai', readOnly: fileReadOnly,
-											lineWrapping: false, indentUnit: 4, tabSize: 4
-										});
-										editor.setSize(null, currentCon.cmheight || '300');
-										editor.getWrapperElement().style.fontSize = (currentCon.cmfont_size || '13') + 'px';
-										editor.getWrapperElement().style.fontFamily = "'Consolas', 'Monaco', 'Courier New', monospace";
-										editor.getWrapperElement().style.lineHeight = currentCon.cmline_spacing || '1.2';
-										editor.refresh();
-										this.cmEditors[id] = editor;
-
-										const updateUIStatus = (ed, edId) => {
-											const cursor = ed.getCursor();
-											const content = ed.getValue();
-											document.getElementById(`${edId}CmLine`).textContent = `Ln: ${cursor.line + 1}; Col: ${cursor.ch + 1}`;
-											document.getElementById(`${edId}TextSize`).textContent = `Size: ${new Blob([content]).size} Bytes`;
-										};
-										fs.read(filePath).then(content => {
-											editor.setValue(content || '');
-											updateUIStatus(editor, id);
-										}).catch(() => editor.setValue(''));
-										editor.on('change', () => updateUIStatus(editor, id));
-										editor.on('cursorActivity', () => updateUIStatus(editor, id));
-									}, i * 200);
-								}
-							});
-						}).catch(() => fallbackToTextarea());
-					} else fallbackToTextarea();
-				})
-				.catch(() => {});
-		};
-
-		return m.render();
+		return m.render().then(L.bind(function (node) {
+			if (note_sum > 0) {
+				const cfg = this._buildCfg(uci.get_first('luci', 'tinynote'));
+				this._ensureFiles(cfg);
+				this.initEditors(note_sum, note_path, note_suffix,
+				                 code_aceenable, code_cmenable, con);
+			}
+			return node;
+		}, this));
 	},
 
 	showNotification(message, timeout = 3000, type = 'info') {
@@ -948,122 +959,93 @@ return view.extend({
 		};
 	},
 
-	handleSaveApply: function (ev, mode) {
-		const oldCon = uci.get_first('luci', 'tinynote');
-		const oldCfg = {
-			path: oldCon.note_path || '/etc/tinynote',
-			sum: parseInt(oldCon.note_sum) || 1,
-			suffix: oldCon.note_suffix || 'txt',
-			files: {}
+	_buildCfg: function (con) {
+		const cfg = {
+			path:   con.note_path   || '/etc/tinynote',
+			sum:    parseInt(con.note_sum) || 1,
+			suffix: con.note_suffix || 'txt',
+			files:  {}
 		};
-
-		for (let i = 1; i <= oldCfg.sum; i++) {
-			oldCfg.files[i] = {
-				enabled: oldCon[`enablenote${i}`] === 'true',
-				type: oldCon[`model_note${i}`] || oldCfg.suffix,
-				readonly: oldCon[`only_note${i}`] === 'true'
+		for (let i = 1; i <= cfg.sum; i++) {
+			cfg.files[i] = {
+				enabled:  con[`enablenote${i}`] === 'true',
+				type:     con[`model_note${i}`] || cfg.suffix,
+				readonly: con[`only_note${i}`]  === 'true'
 			};
 		}
+		return cfg;
+	},
 
-		return this.super('handleSaveApply', [ev, mode])
-			.then(() => uci.load('luci'))
+	_ensureFiles: function (cfg) {
+		return fs.stat(cfg.path)
+			.catch(() => fs.exec('/bin/mkdir', ['-p', cfg.path]))
 			.then(() => {
-				const newCon = uci.get_first('luci', 'tinynote');
-				const newCfg = {
-					path: newCon.note_path || '/etc/tinynote',
-					sum: parseInt(newCon.note_sum) || 1,
-					suffix: newCon.note_suffix || 'txt',
-					files: {}
-				};
-
-				for (let i = 1; i <= newCfg.sum; i++) {
-					newCfg.files[i] = {
-						enabled: newCon[`enablenote${i}`] === 'true',
-						type: newCon[`model_note${i}`] || newCfg.suffix,
-						readonly: newCon[`only_note${i}`] === 'true'
-					};
+				const tasks = [];
+				for (let i = 1; i <= cfg.sum; i++) {
+					const file = cfg.files[i];
+					const filePath = `${cfg.path}/note${String(i).padStart(2, '0')}.${file.type}`;
+					const perm = ['sh', 'lua', 'py'].includes(file.type) ? parseInt('755', 8) : parseInt('644', 8);
+					tasks.push(
+						fs.stat(filePath).catch(() => fs.write(filePath, templates[file.type] || '', perm))
+					);
 				}
-
-				// 情况1：全局路径改变 - 删除旧路径文件，新路径创建文件
-				if (oldCfg.path !== newCfg.path) {
-					return fs.list(oldCfg.path).then(files => {
-						if (!files) return;
-						return Promise.all(
-							files.filter(f => f.name.match(/^note\d{2}\./))
-								.map(f => fs.remove(`${oldCfg.path}/${f.name}`).catch(() => {}))
-						);
-					}).catch(() => {})
-						.then(() => fs.stat(newCfg.path).catch(() => fs.exec('/bin/mkdir', ['-p', newCfg.path])))
-						.then(() => {
-							const ensurePromises = [];
-							for (let i = 1; i <= newCfg.sum; i++) {
-								const newFile = newCfg.files[i];
-								const filePath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newFile.type}`;
-								const perm = ['sh', 'lua', 'py'].includes(newFile.type) ? parseInt('755', 8) : parseInt('644', 8);
-								ensurePromises.push(
-									fs.stat(filePath).catch(() => fs.write(filePath, templates[newFile.type] || '', perm))
-								);
-							}
-							return Promise.all(ensurePromises);
-						});
-				}
-				const cleanupPromises = [];
-
-				// 情况2：文件数量减少 - 删除多余文件
-				for (let i = 1; i <= Math.max(oldCfg.sum, newCfg.sum); i++) {
-					const oldFile = oldCfg.files[i];
-					const newFile = newCfg.files[i];
-
-					if (i > newCfg.sum && oldFile) {
-						const oldPath = `${oldCfg.path}/note${String(i).padStart(2, '0')}.${oldFile.type}`;
-						cleanupPromises.push(fs.remove(oldPath).catch(() => {}));
-						continue;
-					}
-
-					// 情况3：文件类型改变 - 迁移内容
-					if (oldFile && newFile && oldFile.type !== newFile.type && newFile.enabled) {
-						const oldPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${oldFile.type}`;
-						const newPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newFile.type}`;
-						cleanupPromises.push(
-							fs.read(oldPath).then(content =>
-								fs.write(newPath, content).then(() => fs.remove(oldPath).catch(() => {}))
-							).catch(() => {})
-						);
-					}
-				}
-
-				// 情况4：全局后缀改变 - 只影响未启用单独设置的文件
-				if (oldCfg.suffix !== newCfg.suffix) {
-					for (let i = 1; i <= newCfg.sum; i++) {
-						const newFile = newCfg.files[i];
-						if (!newFile.enabled) {
-							const oldPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${oldCfg.suffix}`;
-							const newPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newCfg.suffix}`;
-							cleanupPromises.push(
-								fs.read(oldPath).then(content =>
-									fs.write(newPath, content).then(() => fs.remove(oldPath).catch(() => {}))
-								).catch(() => {})
-							);
-						}
-					}
-				}
-
-				return Promise.all(cleanupPromises).then(() => {
-					const ensurePromises = [];
-					for (let i = 1; i <= newCfg.sum; i++) {
-						const newFile = newCfg.files[i];
-						const filePath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newFile.type}`;
-						const perm = ['sh', 'lua', 'py'].includes(newFile.type) ? parseInt('755', 8) : parseInt('644', 8);
-						ensurePromises.push(
-							fs.stat(filePath).catch(() => fs.write(filePath, templates[newFile.type] || '', perm))
-						);
-					}
-					return Promise.all(ensurePromises);
-				}).then(() =>
-					ui.addNotification(null, E('p', _('Config saved, files updated')), 'info')
-				);
-			}).catch(err => {
-				console.error('Save/Cleanup error:', err);
+				return Promise.all(tasks);
 			});
+	},
+
+	_cleanupFiles: function (oldCfg, newCfg) {
+		const tasks = [];
+
+		// 情况1：全局路径改变 - 删除旧路径所有 note 文件
+		if (oldCfg.path !== newCfg.path) {
+			return fs.list(oldCfg.path).then(files => {
+				if (!files) return;
+				return Promise.all(
+					files.filter(f => f.name.match(/^note\d{2}\./))
+						.map(f => fs.remove(`${oldCfg.path}/${f.name}`).catch(() => {}))
+				);
+			}).catch(() => {});
+		}
+
+		// 情况2：文件数量减少 - 删除多余文件
+		for (let i = newCfg.sum + 1; i <= oldCfg.sum; i++) {
+			const oldFile = oldCfg.files[i];
+			if (oldFile) {
+				const oldPath = `${oldCfg.path}/note${String(i).padStart(2, '0')}.${oldFile.type}`;
+				tasks.push(fs.remove(oldPath).catch(() => {}));
+			}
+		}
+
+		// 情况3：文件类型改变 - 迁移内容
+		for (let i = 1; i <= newCfg.sum; i++) {
+			const oldFile = oldCfg.files[i];
+			const newFile = newCfg.files[i];
+			if (oldFile && newFile && oldFile.type !== newFile.type && newFile.enabled) {
+				const oldPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${oldFile.type}`;
+				const newPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newFile.type}`;
+				tasks.push(
+					fs.read(oldPath).then(content =>
+						fs.write(newPath, content).then(() => fs.remove(oldPath).catch(() => {}))
+					).catch(() => {})
+				);
+			}
+		}
+
+		// 情况4：全局后缀改变 - 只影响未启用单独设置的文件
+		if (oldCfg.suffix !== newCfg.suffix) {
+			for (let i = 1; i <= newCfg.sum; i++) {
+				const newFile = newCfg.files[i];
+				if (!newFile.enabled) {
+					const oldPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${oldCfg.suffix}`;
+					const newPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newCfg.suffix}`;
+					tasks.push(
+						fs.read(oldPath).then(content =>
+							fs.write(newPath, content).then(() => fs.remove(oldPath).catch(() => {}))
+						).catch(() => {})
+					);
+				}
+			}
+		}
+		return Promise.all(tasks);
 	},
 });
