@@ -93,29 +93,29 @@ msgstr "重载"
 msgid "Config saved, files updated"
 msgstr "配置已保存，文件已更新"
 
-msgid "保存成功"
+msgid "Save successful"
 msgstr "保存成功"
 
-msgid "保存出错: %s"
+msgid "Save error: %s"
 msgstr "保存出错: %s"
 
-msgid "替换成功"
+msgid "Upload successful"
 msgstr "替换成功"
 
-msgid "替换出错: %s"
+msgid "Upload error: %s"
 msgstr "替换出错: %s"
 
-msgid "内容为空"
+msgid "Content is empty"
 msgstr "内容为空"
 
-msgid "内容已复制"
+msgid "Content copied"
 msgstr "内容已复制"
 
-msgid "复制出错"
+msgid "Copy failed"
 msgstr "复制出错"
 
-msgid "已重载"
+msgid "Reloaded"
 msgstr "已重载"
 
-msgid "重载失败: %s"
+msgid "Reload failed: %s"
 msgstr "重载失败: %s"

@@ -395,12 +395,172 @@ return view.extend({
 		});
 	},
 
-	initEditors: function (note_sum, note_path, note_suffix, code_aceenable, code_cmenable, con) {
+	render: function () {
+		// this.loadLibrary('jquery');
+		let m, s, o;
+
+		m = new form.Map('luci', '');
+		s = m.section(form.NamedSection, 'tinynote', 'tinynote', '');
+
+		s.tab("note", _('Basic Settings'));
+		s.tab("ace", _("Ace Support"));
+		s.tab("codemirror", _("CodeMirror Support"));
+
+		o = s.taboption("note", form.Value, 'note_path', _('Save Path'));
+		o.default = "/etc/tinynote";
+
+		o = s.taboption("note", form.Value, 'note_sum', _('Number of Texts'));
+		o.default = 1;
+		o.rmempty = false;
+		o.datatype = "range(1,20)";
+
+		o = s.taboption("note", form.Value, 'note_suffix', _('Text Type'));
+		o.default = 'txt';
+		Object.entries(note_type_array).forEach(([ext, { label }]) => o.value(ext, label));
+		// o.depends('cmenable', '1');
+		// o.depends('aceenable', '1');
+
+		let aceenable = s.taboption("note", form.Flag, 'aceenable', _('Enable Ace Support'));
+		aceenable.depends('cmenable', '0');
+		aceenable.depends('cmenable', null);
+
+		let cmenable = s.taboption("note", form.Flag, 'cmenable', _('Enable CodeMirror Support'));
+		cmenable.depends('aceenable', '0');
+		cmenable.depends('aceenable', null);
+
+		o = s.taboption("ace", form.Flag, 'aceonly', _('Read-Only Mode'));
+		o.depends('aceenable', '1');
+		o.enabled = 'true';
+		o.disabled = 'false';
+
+		o = s.taboption("ace", form.Value, 'acetheme', _('Theme'));
+		o.depends('aceenable', '1');
+		o.default = 'monokai';
+		ace_theme_array.forEach(([val, text]) => o.value(val, text));
+
+		o = s.taboption("ace", form.ListValue, 'acefont_size', _('Font Size'));
+		o.depends('aceenable', '1');
+		o.default = '13';
+		['10', '12', '13', '14', '15', '16'].forEach(size => o.value(size, size + 'px'));
+
+		o = s.taboption("ace", form.ListValue, 'aceline_spacing', _('Line Spacing'));
+		o.depends('aceenable', '1');
+		o.default = '1.2';
+		['1.0', '1.2', '1.3', '1.5'].forEach(v => o.value(v, v));
+
+		o = s.taboption("ace", form.Value, 'aceheight', _('Display Height'));
+		o.depends('aceenable', '1');
+		o.default = '300';
+		o.datatype = 'range(100,1000)';
+		['200', '250', '300', '350'].forEach(v => o.value(v, v));
+
+		o = s.taboption("codemirror", form.Flag, 'only', _('Read-Only Mode'));
+		o.depends('cmenable', '1');
+		o.enabled = 'true';
+		o.disabled = 'false';
+
+		o = s.taboption("codemirror", form.Value, 'cmtheme', _('Theme'));
+		o.depends('cmenable', '1');
+		o.default = 'monokai';
+		codemirror_theme_array.forEach(([val, text]) => o.value(val, text));
+
+		o = s.taboption("codemirror", form.ListValue, 'cmfont_size', _('Font Size'));
+		o.depends('cmenable', '1');
+		o.default = '13';
+		['10', '12', '13', '14', '15', '16'].forEach(size => o.value(size, size + 'px'));
+
+		o = s.taboption("codemirror", form.ListValue, 'cmline_spacing', _('Line Spacing'));
+		o.depends('cmenable', '1');
+		o.default = '1.2';
+		['1.0', '1.2', '1.3', '1.5'].forEach(v => o.value(v, v));
+
+		o = s.taboption("codemirror", form.Value, 'cmheight', _('Display Height'));
+		o.depends('cmenable', '1');
+		o.default = '300';
+		o.datatype = 'range(100,1000)';
+		['200', '250', '300', '350'].forEach(v => o.value(v, v));
+
+		this.con = this.con || uci.get_first('luci', 'tinynote');
+		const note_sum = parseInt(this.con.note_sum) || 0;
+		const code_aceenable = this.con.aceenable == '1';
+		if (note_sum > 0) {
+			s = m.section(form.NamedSection, 'tinynote', 'tinynote');
+			for (let i = 1; i <= note_sum; i++) {
+				const tabId = `file${i}`;
+				s.tab(tabId, _('Note %s').format(String(i).padStart(2, '0')));
+
+				o = s.taboption(tabId, form.Flag, `enablenote${i}`, _('Note %s Settings').format(String(i).padStart(2, '0')));
+				o.enabled = 'true';
+				o.disabled = 'false';
+				o.default = 'false';
+
+				o = s.taboption(tabId, form.ListValue, `model_note${i}`, _('Type'));
+				o.depends(`enablenote${i}`, 'true');
+				o.rmempty = true;
+				Object.entries(note_type_array).forEach(([ext, { label }]) => o.value(ext, label));
+
+				o = s.taboption(tabId, form.Flag, `only_note${i}`, _('Read-only'));
+				o.depends(`enablenote${i}`, 'true');
+				o.enabled = 'true';
+				o.disabled = 'false';
+				o.default = 'false';
+
+				o = s.taboption(tabId, form.DummyValue, `_editor${i}`);
+				o.rawhtml = true;
+				o.render = function () {
+					const id = `editor-${i}`;
+					const height = code_aceenable ? 'aceheight' : 'cmheight' || 300;
+					return E('div', {}, [
+						code_aceenable
+							? E('div', { id: id, style: `height:${height}px;border:1px solid #ccc;border-radius:4px;` })
+							: E('textarea', { id: id, style: `width:100%;height:${height}px;` }),
+					]);
+				};
+			}
+		}
+
+		return m.render().then(L.bind(function (node) {
+			const note_suffix = this.con.note_suffix || "txt";
+			const note_path = this.con.note_path || "/etc/tinynote";
+			const code_cmenable = this.con.cmenable == '1';
+			const cfg = {
+				path: note_path,
+				sum: parseInt(note_sum),
+				suffix: note_suffix,
+				files: {}
+			};
+			for (let i = 1; i <= cfg.sum; i++) {
+				cfg.files[i] = {
+					enabled: this.con[`enablenote${i}`] === 'true',
+					type: this.con[`model_note${i}`] || cfg.suffix,
+					readonly: this.con[`only_note${i}`] === 'true'
+				};
+			}
+			fs.stat(cfg.path)
+				.catch(() => fs.exec('/bin/mkdir', ['-p', cfg.path]))
+				.then(() => {
+					const tasks = [];
+					for (let i = 1; i <= cfg.sum; i++) {
+						const file = cfg.files[i];
+						const filePath = `${cfg.path}/note${String(i).padStart(2, '0')}.${file.type}`;
+						const perm = ['sh', 'lua', 'py'].includes(file.type) ? parseInt('755', 8) : parseInt('644', 8);
+						tasks.push(
+							fs.stat(filePath).catch(() => fs.write(filePath, templates[file.type] || '', perm))
+						);
+					}
+					return Promise.all(tasks);
+				});
+			this.initEditors(note_sum, note_path, note_suffix, code_aceenable, code_cmenable);
+			return node;
+		}, this));
+	},
+
+	initEditors: function (note_sum, note_path, note_suffix, code_aceenable, code_cmenable) {
 		const self = this;
 		fs.stat(note_path)
 			.catch(() => fs.exec('/bin/mkdir', ['-p', note_path]))
 			.then(() => {
-				const currentCon = uci.get_first('luci', 'tinynote');
+				const currentCon = this.con;
 				function svgIcon(name) {
 					const span = document.createElement('span');
 					span.innerHTML = (ICONS[name] || '').trim();
@@ -512,7 +672,7 @@ return view.extend({
 												}
 											})
 										}, Object.entries(note_type_array).map(([ext, { label }]) =>
-											E('option', { value: ext, selected: ext === (con[`model_note${i}`] || con.note_suffix || '') || undefined }, label)
+											E('option', { value: ext, selected: ext === (this.con[`model_note${i}`] || this.con.note_suffix || '') || undefined }, label)
 										)),
 										E('span', _('Theme')),
 										E('select', {
@@ -527,7 +687,7 @@ return view.extend({
 													});
 												}
 											})
-										}, (code_aceenable ? ace_theme_array : codemirror_theme_array).map(([val, name]) => E('option', { value: val, selected: val === (con.acetheme || con.cmtheme || 'monokai') || undefined }, name))
+										}, (code_aceenable ? ace_theme_array : codemirror_theme_array).map(([val, name]) => E('option', { value: val, selected: val === (this.con.acetheme || this.con.cmtheme || 'monokai') || undefined }, name))
 										),
 									]) : '',
 								E('span', _('Font')),
@@ -548,7 +708,7 @@ return view.extend({
 										}
 									})
 								}, ['12', '13', '14', '15', '16'].map(sz =>
-									E('option', { value: sz, selected: sz === (con.acefont_size || con.cmfont_size || '14') || undefined }, sz + 'px')
+									E('option', { value: sz, selected: sz === (this.con.acefont_size || this.con.cmfont_size || '14') || undefined }, sz + 'px')
 								)),
 							]),
 							E('div', { class: 'icon status-right' }, [
@@ -711,7 +871,6 @@ return view.extend({
 					return self.preloadCodeMirror().then(() => {
 						const themesToLoad = new Set();
 						const modesToLoad = new Set();
-
 						for (let i = 1; i <= note_sum; i++) {
 							const useCustom = currentCon[`enablenote${i}`] === 'true';
 							const fileType = useCustom && currentCon[`model_note${i}`]
@@ -791,145 +950,6 @@ return view.extend({
 			.catch(() => {});
 	},
 
-	render: function () {
-		// this.loadLibrary('jquery');
-		let m, s, o;
-		const con = uci.get_first('luci', 'tinynote');
-		const note_sum = parseInt(con.note_sum) || 0;
-		const note_suffix = con.note_suffix || "txt";
-		const note_path = con.note_path || "/etc/tinynote";
-		const code_cmenable = uci.get_bool('luci', 'tinynote', 'cmenable');
-		const code_aceenable = uci.get_bool('luci', 'tinynote', 'aceenable');
-
-		m = new form.Map('luci', '');
-		s = m.section(form.NamedSection, 'tinynote', 'tinynote', '');
-
-		s.tab("note", _('Basic Settings'));
-		s.tab("ace", _("Ace Support"));
-		s.tab("codemirror", _("CodeMirror Support"));
-
-		o = s.taboption("note", form.Value, 'note_path', _('Save Path'));
-		o.default = "/etc/tinynote";
-
-		o = s.taboption("note", form.Value, 'note_sum', _('Number of Texts'));
-		o.default = 1;
-		o.rmempty = false;
-		o.datatype = "range(1,20)";
-
-		o = s.taboption("note", form.Value, 'note_suffix', _('Text Type'));
-		o.default = 'txt';
-		Object.entries(note_type_array).forEach(([ext, { label }]) => o.value(ext, label));
-		// o.depends('cmenable', '1');
-		// o.depends('aceenable', '1');
-
-		let aceenable = s.taboption("note", form.Flag, 'aceenable', _('Enable Ace Support'));
-		aceenable.depends('cmenable', '0');
-		aceenable.depends('cmenable', null);
-
-		let cmenable = s.taboption("note", form.Flag, 'cmenable', _('Enable CodeMirror Support'));
-		cmenable.depends('aceenable', '0');
-		cmenable.depends('aceenable', null);
-
-		o = s.taboption("ace", form.Flag, 'aceonly', _('Read-Only Mode'));
-		o.depends('aceenable', '1');
-		o.enabled = 'true';
-		o.disabled = 'false';
-
-		o = s.taboption("ace", form.Value, 'acetheme', _('Theme'));
-		o.depends('aceenable', '1');
-		o.default = 'monokai';
-		ace_theme_array.forEach(([val, text]) => o.value(val, text));
-
-		o = s.taboption("ace", form.ListValue, 'acefont_size', _('Font Size'));
-		o.depends('aceenable', '1');
-		o.default = '13';
-		['10', '12', '13', '14', '15', '16'].forEach(size => o.value(size, size + 'px'));
-
-		o = s.taboption("ace", form.ListValue, 'aceline_spacing', _('Line Spacing'));
-		o.depends('aceenable', '1');
-		o.default = '1.2';
-		['1.0', '1.2', '1.3', '1.5'].forEach(v => o.value(v, v));
-
-		o = s.taboption("ace", form.Value, 'aceheight', _('Display Height'));
-		o.depends('aceenable', '1');
-		o.default = '300';
-		o.datatype = 'range(100,1000)';
-		['200', '250', '300', '350'].forEach(v => o.value(v, v));
-
-		o = s.taboption("codemirror", form.Flag, 'only', _('Read-Only Mode'));
-		o.depends('cmenable', '1');
-		o.enabled = 'true';
-		o.disabled = 'false';
-
-		o = s.taboption("codemirror", form.Value, 'cmtheme', _('Theme'));
-		o.depends('cmenable', '1');
-		o.default = 'monokai';
-		codemirror_theme_array.forEach(([val, text]) => o.value(val, text));
-
-		o = s.taboption("codemirror", form.ListValue, 'cmfont_size', _('Font Size'));
-		o.depends('cmenable', '1');
-		o.default = '13';
-		['10', '12', '13', '14', '15', '16'].forEach(size => o.value(size, size + 'px'));
-
-		o = s.taboption("codemirror", form.ListValue, 'cmline_spacing', _('Line Spacing'));
-		o.depends('cmenable', '1');
-		o.default = '1.2';
-		['1.0', '1.2', '1.3', '1.5'].forEach(v => o.value(v, v));
-
-		o = s.taboption("codemirror", form.Value, 'cmheight', _('Display Height'));
-		o.depends('cmenable', '1');
-		o.default = '300';
-		o.datatype = 'range(100,1000)';
-		['200', '250', '300', '350'].forEach(v => o.value(v, v));
-
-		if (note_sum > 0) {
-			s = m.section(form.NamedSection, 'tinynote', 'tinynote');
-			for (let i = 1; i <= note_sum; i++) {
-				const tabId = `file${i}`;
-				s.tab(tabId, _('Note %s').format(String(i).padStart(2, '0')));
-
-				o = s.taboption(tabId, form.Flag, `enablenote${i}`, _('Note %s Settings').format(String(i).padStart(2, '0')));
-				o.enabled = 'true';
-				o.disabled = 'false';
-				o.default = 'false';
-
-				o = s.taboption(tabId, form.ListValue, `model_note${i}`, _('Type'));
-				o.depends(`enablenote${i}`, 'true');
-				o.rmempty = true;
-				Object.entries(note_type_array).forEach(([ext, { label }]) => o.value(ext, label));
-
-				o = s.taboption(tabId, form.Flag, `only_note${i}`, _('Read-only'));
-				o.depends(`enablenote${i}`, 'true');
-				o.enabled = 'true';
-				o.disabled = 'false';
-				o.default = 'false';
-
-				o = s.taboption(tabId, form.DummyValue, `_editor${i}`);
-				o.rawhtml = true;
-				o.render = function () {
-					const id = `editor-${i}`;
-					const currentCon = uci.get_first('luci', 'tinynote');
-					const height = currentCon[code_aceenable ? 'aceheight' : 'cmheight'] || 300;
-					return E('div', {}, [
-						code_aceenable
-							? E('div', { id: id, style: `height:${height}px;border:1px solid #ccc;border-radius:4px;` })
-							: E('textarea', { id: id, style: `width:100%;height:${height}px;` }),
-					]);
-				};
-			}
-		}
-
-		return m.render().then(L.bind(function (node) {
-			if (note_sum > 0) {
-				const cfg = this._buildCfg(uci.get_first('luci', 'tinynote'));
-				this._ensureFiles(cfg);
-				this.initEditors(note_sum, note_path, note_suffix,
-				                 code_aceenable, code_cmenable, con);
-			}
-			return node;
-		}, this));
-	},
-
 	showNotification(message, timeout = 3000, type = 'info') {
 		if (!this._notificationQueue) this._notificationQueue = [];
 		if (document.querySelector('.file-notification')?.textContent === message) return;
@@ -959,93 +979,120 @@ return view.extend({
 		};
 	},
 
-	_buildCfg: function (con) {
-		const cfg = {
-			path:   con.note_path   || '/etc/tinynote',
-			sum:    parseInt(con.note_sum) || 1,
-			suffix: con.note_suffix || 'txt',
-			files:  {}
+	handleSaveApply: function (ev, mode) {
+		const oldCon = this.con;
+		const oldCfg = {
+			path: oldCon.note_path || '/etc/tinynote',
+			sum: parseInt(oldCon.note_sum) || 1,
+			suffix: oldCon.note_suffix || 'txt',
+			files: {}
 		};
-		for (let i = 1; i <= cfg.sum; i++) {
-			cfg.files[i] = {
-				enabled:  con[`enablenote${i}`] === 'true',
-				type:     con[`model_note${i}`] || cfg.suffix,
-				readonly: con[`only_note${i}`]  === 'true'
+
+		for (let i = 1; i <= oldCfg.sum; i++) {
+			oldCfg.files[i] = {
+				enabled: oldCon[`enablenote${i}`] === 'true',
+				type: oldCon[`model_note${i}`] || oldCfg.suffix,
+				readonly: oldCon[`only_note${i}`] === 'true'
 			};
 		}
-		return cfg;
-	},
 
-	_ensureFiles: function (cfg) {
-		return fs.stat(cfg.path)
-			.catch(() => fs.exec('/bin/mkdir', ['-p', cfg.path]))
+		return this.super('handleSaveApply', [ev, mode])
+			.then(() => uci.load('luci'))
 			.then(() => {
-				const tasks = [];
-				for (let i = 1; i <= cfg.sum; i++) {
-					const file = cfg.files[i];
-					const filePath = `${cfg.path}/note${String(i).padStart(2, '0')}.${file.type}`;
-					const perm = ['sh', 'lua', 'py'].includes(file.type) ? parseInt('755', 8) : parseInt('644', 8);
-					tasks.push(
-						fs.stat(filePath).catch(() => fs.write(filePath, templates[file.type] || '', perm))
-					);
+				const newCon = uci.get_first('luci', 'tinynote');
+				const newCfg = {
+					path: newCon.note_path || '/etc/tinynote',
+					sum: parseInt(newCon.note_sum) || 1,
+					suffix: newCon.note_suffix || 'txt',
+					files: {}
+				};
+
+				for (let i = 1; i <= newCfg.sum; i++) {
+					newCfg.files[i] = {
+						enabled: newCon[`enablenote${i}`] === 'true',
+						type: newCon[`model_note${i}`] || newCfg.suffix,
+						readonly: newCon[`only_note${i}`] === 'true'
+					};
 				}
-				return Promise.all(tasks);
-			});
-	},
 
-	_cleanupFiles: function (oldCfg, newCfg) {
-		const tasks = [];
+				// 情况1：全局路径改变 - 删除旧路径文件，新路径创建文件
+				if (oldCfg.path !== newCfg.path) {
+					return fs.list(oldCfg.path).then(files => {
+						if (!files) return;
+						return Promise.all(
+							files.filter(f => f.name.match(/^note\d{2}\./))
+								.map(f => fs.remove(`${oldCfg.path}/${f.name}`).catch(() => {}))
+						);
+					}).catch(() => {})
+						.then(() => fs.stat(newCfg.path).catch(() => fs.exec('/bin/mkdir', ['-p', newCfg.path])))
+						.then(() => {
+							const ensurePromises = [];
+							for (let i = 1; i <= newCfg.sum; i++) {
+								const newFile = newCfg.files[i];
+								const filePath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newFile.type}`;
+								const perm = ['sh', 'lua', 'py'].includes(newFile.type) ? parseInt('755', 8) : parseInt('644', 8);
+								ensurePromises.push(
+									fs.stat(filePath).catch(() => fs.write(filePath, templates[newFile.type] || '', perm))
+								);
+							}
+							return Promise.all(ensurePromises);
+						});
+				}
+				const cleanupPromises = [];
 
-		// 情况1：全局路径改变 - 删除旧路径所有 note 文件
-		if (oldCfg.path !== newCfg.path) {
-			return fs.list(oldCfg.path).then(files => {
-				if (!files) return;
-				return Promise.all(
-					files.filter(f => f.name.match(/^note\d{2}\./))
-						.map(f => fs.remove(`${oldCfg.path}/${f.name}`).catch(() => {}))
+				// 情况2：文件数量减少 - 删除多余文件
+				for (let i = 1; i <= Math.max(oldCfg.sum, newCfg.sum); i++) {
+					const oldFile = oldCfg.files[i];
+					const newFile = newCfg.files[i];
+
+					if (i > newCfg.sum && oldFile) {
+						const oldPath = `${oldCfg.path}/note${String(i).padStart(2, '0')}.${oldFile.type}`;
+						cleanupPromises.push(fs.remove(oldPath).catch(() => {}));
+						continue;
+					}
+
+					// 情况3：文件类型改变 - 迁移内容
+					if (oldFile && newFile && oldFile.type !== newFile.type && newFile.enabled) {
+						const oldPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${oldFile.type}`;
+						const newPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newFile.type}`;
+						cleanupPromises.push(
+							fs.read(oldPath).then(content =>
+								fs.write(newPath, content).then(() => fs.remove(oldPath).catch(() => {}))
+							).catch(() => {})
+						);
+					}
+				}
+
+				// 情况4：全局后缀改变 - 只影响未启用单独设置的文件
+				if (oldCfg.suffix !== newCfg.suffix) {
+					for (let i = 1; i <= newCfg.sum; i++) {
+						const newFile = newCfg.files[i];
+						if (!newFile.enabled) {
+							const oldPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${oldCfg.suffix}`;
+							const newPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newCfg.suffix}`;
+							cleanupPromises.push(
+								fs.read(oldPath).then(content =>
+									fs.write(newPath, content).then(() => fs.remove(oldPath).catch(() => {}))
+								).catch(() => {})
+							);
+						}
+					}
+				}
+
+				return Promise.all(cleanupPromises).then(() => {
+					const ensurePromises = [];
+					for (let i = 1; i <= newCfg.sum; i++) {
+						const newFile = newCfg.files[i];
+						const filePath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newFile.type}`;
+						const perm = ['sh', 'lua', 'py'].includes(newFile.type) ? parseInt('755', 8) : parseInt('644', 8);
+						ensurePromises.push(
+							fs.stat(filePath).catch(() => fs.write(filePath, templates[newFile.type] || '', perm))
+						);
+					}
+					return Promise.all(ensurePromises);
+				}).then(() =>
+					ui.addNotification(null, E('p', _('Config saved, files updated')), 'info')
 				);
 			}).catch(() => {});
-		}
-
-		// 情况2：文件数量减少 - 删除多余文件
-		for (let i = newCfg.sum + 1; i <= oldCfg.sum; i++) {
-			const oldFile = oldCfg.files[i];
-			if (oldFile) {
-				const oldPath = `${oldCfg.path}/note${String(i).padStart(2, '0')}.${oldFile.type}`;
-				tasks.push(fs.remove(oldPath).catch(() => {}));
-			}
-		}
-
-		// 情况3：文件类型改变 - 迁移内容
-		for (let i = 1; i <= newCfg.sum; i++) {
-			const oldFile = oldCfg.files[i];
-			const newFile = newCfg.files[i];
-			if (oldFile && newFile && oldFile.type !== newFile.type && newFile.enabled) {
-				const oldPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${oldFile.type}`;
-				const newPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newFile.type}`;
-				tasks.push(
-					fs.read(oldPath).then(content =>
-						fs.write(newPath, content).then(() => fs.remove(oldPath).catch(() => {}))
-					).catch(() => {})
-				);
-			}
-		}
-
-		// 情况4：全局后缀改变 - 只影响未启用单独设置的文件
-		if (oldCfg.suffix !== newCfg.suffix) {
-			for (let i = 1; i <= newCfg.sum; i++) {
-				const newFile = newCfg.files[i];
-				if (!newFile.enabled) {
-					const oldPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${oldCfg.suffix}`;
-					const newPath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newCfg.suffix}`;
-					tasks.push(
-						fs.read(oldPath).then(content =>
-							fs.write(newPath, content).then(() => fs.remove(oldPath).catch(() => {}))
-						).catch(() => {})
-					);
-				}
-			}
-		}
-		return Promise.all(tasks);
-	},
+	}
 });
