@@ -72,6 +72,7 @@ return view.extend({
 		s.addremove = false; s.anonymous = true;
 
 		s.tab('basic',    _('Basic'));
+		s.tab('network',  _('Network'));
 		s.tab('backhaul', _('Mesh Backhaul'));
 		s.tab('roaming',  _('Roaming'));
 		s.tab('advanced', _('Advanced'));
@@ -160,6 +161,61 @@ return view.extend({
 			_('Broadcast a temporary open SSID so new nodes can join without a cable.'));
 		o.default = '0';
 		o.depends({ enabled:'1', role:'master' });
+
+		o = s.taboption('network', form.DummyValue, '_net_info', ' ');
+		o.rawhtml = true;
+		o.cfgvalue = function() {
+			var curIp  = uci.get('network', 'lan', 'ipaddr')  || '—';
+			var curGw  = uci.get('network', 'lan', 'gateway') || '—';
+			var hasWan = uci.get('network', 'wan') !== null;
+			return '<div style="padding:10px 14px;border-radius:8px;' +
+			       'background:rgba(88,166,255,.08);border:1px solid #2d5a8e;' +
+			       'font-size:12px;color:#8b949e;line-height:2;font-family:monospace">' +
+			       '📍 ' + _('Current LAN IP') + ': <span style="color:#79c0ff">' + curIp + '</span><br>' +
+			       '🔀 ' + _('Current Gateway') + ': <span style="color:#79c0ff">' + curGw + '</span><br>' +
+			       '🔌 ' + _('WAN Interface') + ': <span style="color:' + (hasWan ? '#e3b341' : '#56d364') + '">' +
+			           (hasWan ? '⚠️ ' + _('exists (will be bridged if enabled)') : '✅ ' + _('already removed')) +
+			       '</span><br>' +
+			       '<span style="color:#484f58;font-size:11px">💡 ' +
+			       _('Settings here are applied automatically on every EasyMesh start. ' +
+			         'Works for both Master and Agent roles.') + '</span>' +
+			       '</div>';
+		};
+		o.depends('enabled', '1');
+
+		o = s.taboption('network', form.Flag, 'bridge_wan',
+			_('Bridge WAN port into LAN'),
+			_('Adds the WAN port into br-lan and removes the wan/wan6 interfaces. ' +
+			  'Required when this node connects to upstream via a LAN cable (AP/switch mode).'));
+		o.default = '0';
+		o.rmempty = false;
+		o.depends('enabled', '1');
+
+		o = s.taboption('network', form.Value, 'lan_ip',
+			_('Static LAN IP Address'),
+			_('Fixed IP for this node on the mesh network. Must be in the same subnet as the gateway. ' +
+			  'e.g. 192.168.2.2 for first node, 192.168.2.3 for second. Leave empty to keep current.'));
+		o.datatype = 'ip4addr';
+		o.placeholder = '192.168.2.2';
+		o.rmempty = true;
+		o.depends('enabled', '1');
+		o.load = function(section_id) {
+			return uci.get('easymesh', section_id, 'lan_ip') ||
+			       uci.get('network', 'lan', 'ipaddr') || '';
+		};
+
+		o = s.taboption('network', form.Value, 'lan_gateway',
+			_('Gateway / DNS'),
+			_('IP of the upstream router. Used as default route and DNS. ' +
+			  'e.g. 192.168.2.1 (your main router). Leave empty to keep current.'));
+		o.datatype = 'ip4addr';
+		o.placeholder = '192.168.2.1';
+		o.rmempty = true;
+		o.depends('enabled', '1');
+		o.load = function(section_id) {
+			return uci.get('easymesh', section_id, 'lan_gateway') ||
+			       uci.get('network', 'lan', 'gateway') || '';
+		};
 
 		o = s.taboption('backhaul', form.ListValue, 'backhaul', _('Backhaul Type'),
 			_('Wired: batman-adv over LAN cable (recommended). Wireless: dedicated 802.11s link.'));
