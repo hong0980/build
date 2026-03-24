@@ -1,16 +1,6 @@
 #!/bin/sh
 
-touch /etc/config/ddnsto
-uci -q batch <<-EOF >/dev/null
-	delete ucitrack.@ddnsto[-1]
-	add ucitrack ddnsto
-	set ucitrack.@ddnsto[-1].init=ddnsto
-	commit ucitrack
-
-	set ddnsto.default=ddnsto
-	commit ddnsto
-EOF
-
+echo "config ddnsto 'default'" > /etc/config/ddnsto
 chmod +x /etc/init.d/ddnsto 2>/dev/null
 rm -f /tmp/luci-*
 /etc/init.d/ddnsto enable

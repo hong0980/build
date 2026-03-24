@@ -90,57 +90,17 @@ msgstr "设备编号"
 msgid "If multiple devices have duplicate IDs, please modify this number"
 msgstr "如有多台设备id重复，请修改此编号"
 
-#: ddnsto.lua:90
-msgid "CPU Core Count"
-msgstr "CPU核心数"
+msgid "Custom Router ID"
+msgstr "自定义路由器ID"
 
-#: ddnsto.lua:93
-msgid "Auto Detect"
-msgstr "自动获取"
+msgid "Optional: Force a custom router ID. Leave empty to use auto-generated ID"
+msgstr "可选：指定自定义路由器ID，留空则自动生成"
 
-#: ddnsto.lua:93
-msgid "1 Thread"
-msgstr "1 线程"
+msgid "Device Name"
+msgstr "设备名称"
 
-#: ddnsto.lua:93
-msgid "2 Threads"
-msgstr "2 线程"
-
-#: ddnsto.lua:93
-msgid "4 Threads"
-msgstr "4 线程"
-
-#: ddnsto.lua:93
-msgid "8 Threads"
-msgstr "8 线程"
-
-#: ddnsto.lua:93
-msgid "16 Threads"
-msgstr "16 线程"
-
-#: ddnsto.lua:98
-msgid "Log"
-msgstr "日志"
-
-#: ddnsto.lua:100
-msgid "Log level, default is Warning"
-msgstr "日志级别，默认值是警告"
-
-#: ddnsto.lua:101
-msgid "Debug"
-msgstr "调试"
-
-#: ddnsto.lua:101
-msgid "Info"
-msgstr "信息"
-
-#: ddnsto.lua:101
-msgid "Warning"
-msgstr "警告"
-
-#: ddnsto.lua:101
-msgid "Error"
-msgstr "错误"
+msgid "name of your device, if not set, will use hostname"
+msgstr "设备名称（留空将使用系统主机名）"
 
 #: ddnsto.lua:122
 msgid "Extended Features"

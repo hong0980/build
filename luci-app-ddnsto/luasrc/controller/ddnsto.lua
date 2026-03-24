@@ -6,7 +6,6 @@ local fs    = require "nixio.fs"
 local http  = require "luci.http"
 local uci   = require "luci.model.uci".cursor()
 local cfg   = uci:get_all("ddnsto", "default")
-local sta   = sys.call("pidof ddnstod >/dev/null") == 0
 
 function index()
     if not fs.access("/etc/config/ddnsto") then return end
@@ -31,10 +30,10 @@ local trim = function(s)
 end
 
 local config = {
+    name = cfg.name and cfg.name ~= "" and cfg.name or sys.hostname(),
     token = cfg.token or "",
+    custom_id = cfg.custom_id or "",
     enabled = cfg.enabled == "1",
-    threads = cfg.threads or '0',
-    log_level = cfg.log_level or "2",
     index = tonumber(cfg.index) or 0,
     feat_enabled = cfg.feat_enabled == "1",
     feat_password = cfg.feat_password or "",
@@ -42,14 +41,15 @@ local config = {
     feat_port = tonumber(cfg.feat_port) or 3030,
     feat_disk_path_selected = cfg.feat_disk_path_selected or ""
 }
+local sta   = sys.call("pidof ddnstod >/dev/null") == 0
+local id = sta and sys.exec("/usr/sbin/ddnstod -x %s -id" %config.index) or ''
 local color_html = i18n.translatef("<b style='color:%s;font-weight:bolder'>%s</b>", "%s", "%s")
+
 function status_container()
     local is_enabled = sys.call("pidof ddwebdav >/dev/null") == 0
-
     return {
         title = i18n.translate("Service Status"),
         labels = (function()
-            local id = sys.exec("/usr/sbin/ddnstod -x %s -w | cut -d' ' -f2" %config.index)
             local enabled_html = color_html % {is_enabled and "green" or "red", is_enabled and i18n.translate("Enabled") or i18n.translate("Disabled")}
             local labels = {
                 {key = i18n.translate("Service Status:"), value = color_html %{sta and "green" or "red", sta and i18n.translate("Running") or i18n.translate("Not Running")}},
@@ -98,34 +98,26 @@ function main_container()
             },
             {
                 name = "index",
-                type = "interger",
+                type = "integer",
                 enum = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
                 title = i18n.translate("Device Number"),
                 ["ui:options"] = {description = i18n.translate("If multiple devices have duplicate IDs, please modify this number")}
             },
             {
-                name = "threads",
-                type = "interger",
-                enum = {0, 1, 2, 4, 8, 16},
-                title = i18n.translate("CPU Core Count"),
-                enumNames = { i18n.translate("Auto Detect"),
-                              i18n.translate("1 Thread"),
-                              i18n.translate("2 Threads"),
-                              i18n.translate("4 Threads"),
-                              i18n.translate("8 Threads"),
-                              i18n.translate("16 Threads")},
-                ["ui:options"] = {description = i18n.translate("CPU Core Count")}
+                name = "custom_id",
+                type = "string",
+                title = i18n.translate("Custom Router ID"),
+                ["ui:options"] = {
+                    description = i18n.translate("Optional: Force a custom router ID. Leave empty to use auto-generated ID")
+                }
             },
             {
-                name = "log_level",
-                type = "interger",
-                enum = {0, 1, 2, 3},
-                title = i18n.translate("Log"),
-                enumNames = { i18n.translate("Debug"),
-                              i18n.translate("Info"),
-                              i18n.translate("Warning"),
-                              i18n.translate("Error")},
-                ["ui:options"] = {description = i18n.translate("Log level, default is Warning")}
+                name = "name",
+                type = "string",
+                title = i18n.translate("Device Name"),
+                ["ui:options"] = {
+                    description = i18n.translate("name of your device, if not set, will use hostname")
+                }
             }
         }
     }
@@ -230,8 +222,8 @@ function ddnsto_submit()
         for k, v in pairs({
             token = trim(req.token or ""),
             index = req.index or '0',
-            threads = req.threads or '0',
-            log_level = req.log_level or '2',
+            name = req.name or '',
+            custom_id = trim(req.custom_id or ''),
             feat_port = req.feat_port or '3033',
             enabled = req.enabled and "1" or "0",
             feat_username = trim(req.feat_username or ""),

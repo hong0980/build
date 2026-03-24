@@ -972,3 +972,39 @@ msgstr "网关：主节点 %s 不可达（%s/3，http=%d ping=%d）"
 
 msgid "%s steer %s (%sdBm) -> %s"
 msgstr "%s 漫游引导 %s (%sdBm) → %s"
+
+msgid "Current LAN IP"
+msgstr "LAN IP"
+
+msgid "Current Gateway"
+msgstr "网关"
+
+msgid "WAN Interface"
+msgstr "WAN口"
+
+msgid "exists (will be bridged if enabled)"
+msgstr "存在（启用后桥接）"
+
+msgid "already removed"
+msgstr "已移除"
+
+msgid "Settings here are applied automatically on every EasyMesh start. Works for both Master and Agent roles."
+msgstr "设置将在EasyMesh启动时自动生效，主从节点通用。"
+
+msgid "Bridge WAN port into LAN"
+msgstr "WAN口桥接至LAN"
+
+msgid "Adds the WAN port into br-lan and removes the wan/wan6 interfaces. Required when this node connects to upstream via a LAN cable (AP/switch mode)."
+msgstr "将WAN口加入br-lan桥接并移除wan/wan6接口。当节点通过网线连接上级网络时（AP/交换机模式）需启用。"
+
+msgid "Static LAN IP Address"
+msgstr "静态LAN IP"
+
+msgid "Fixed IP for this node on the mesh network. Must be in the same subnet as the gateway. e.g. 192.168.2.2 for first node, 192.168.2.3 for second. Leave empty to keep current."
+msgstr "Mesh网络中本节点的固定IP，须与网关同网段。如：第一节点192.168.2.2，第二节点192.168.2.3。留空保持当前。"
+
+msgid "Gateway / DNS"
+msgstr "网关/DNS"
+
+msgid "IP of the upstream router. Used as default route and DNS. e.g. 192.168.2.1 (your main router). Leave empty to keep current."
+msgstr "上级路由IP，作为默认路由和DNS。如：192.168.2.1（主路由）。留空保持当前。"
