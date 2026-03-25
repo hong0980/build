@@ -139,8 +139,8 @@ _mesh_iface_cache=''
 get_mesh_iface() {
     [ -n "$_mesh_iface_cache" ] && { echo "$_mesh_iface_cache"; return; }
     _mesh_iface_cache=$(ubus call network.interface.mesh status 2>/dev/null | jsonfilter -e '@.device' ||
-                        iw dev 2>/dev/null | awk '$1=="Interface" && $2~/mesh0/ {print $2}' ||
-                        iwinfo 2>/dev/null | awk '/mesh0/ && /ESSID/ {print $1}')
+                        iw dev 2>/dev/null | awk '$1=="Interface" && $2~/mesh/ {print $2; exit}' ||
+                        iwinfo 2>/dev/null | awk '/mesh/ && /ESSID/ {print $1}')
     echo "$_mesh_iface_cache"
 }
 
@@ -727,8 +727,9 @@ do_register() {
     local reg_source="wired" ip
     case "$mip" in
         *.250) reg_source="wireless"
-               local wlan_ip; wlan_ip=$(ip -4 addr show 2>/dev/null                    | awk '/inet /{ip=$2} /wlan/{print ip; exit}' | cut -d/ -f1)
-               case "$wlan_ip" in "${mip%.*}."*) ip="$wlan_ip" ;; *) ip=$(get_ip) ;; esac ;;
+               local wlan_ip; wlan_ip=$(ip -4 addr show 2>/dev/null \
+                   | awk '/inet /{ip=$2} /wlan/{print ip; exit}' | cut -d/ -f1)
+               case "$wlan_ip" in "${mip%.*}.") ip="$wlan_ip" ;; *) ip=$(get_ip) ;; esac ;;
         *)     ip=$(get_ip) ;;
     esac
     local resp
@@ -835,7 +836,7 @@ apply_profile() {
         -e 'key_2g=@.key_2g'                    -e 'channel_2g=@.channel_2g'     \
         -e 'reassociation_deadline=@.reassociation_deadline' 2>/dev/null)"
     rm -f "$_pf"
-    [ -z "$ssid" ] && { loge "apply_profile: missing ssid (JSON truncated?)"; rm -f "$_pf"; return 1; }
+    [ -z "$ssid" ] && { loge "apply_profile: missing ssid (JSON truncated?)"; return 1; }
     log "Applying profile: ssid=%s channel=%s backhaul=%s" "$ssid" "$channel" "${backhaul:-wired}"
 
     uci -q set easymesh.global.enabled=1
@@ -876,7 +877,7 @@ apply_profile() {
             uci -q set wireless.mesh0.device="$_mesh_dev"
             uci -q set wireless.mesh0.mode=mesh
             uci -q set wireless.mesh0.mesh_fwding=0
-            uci -q set wireless.mesh0.mesh_rssi_threshold=-80
+            uci -q set wireless.mesh0.mesh_rssi_threshold=-65
             uci -q set wireless.mesh0.network=mesh
             uci -q set wireless.mesh0.easymesh_managed=1
             uci -q set wireless.mesh0.mtu=1532
@@ -934,9 +935,11 @@ apply_profile() {
         if [ "${ieee80211v}" = "1" ]; then
             uci_set wireless "$iface" ieee80211v 1
             uci_set wireless "$iface" bss_transition 1
+            uci_set wireless "$iface" wnm_sleep_mode 0
         else
             uci -q del "wireless.${iface}.ieee80211v"
             uci -q del "wireless.${iface}.bss_transition"
+            uci -q del "wireless.${iface}.wnm_sleep_mode"
         fi
         # ieee80211r + FT 参数
         if [ "${ieee80211r}" = "1" ]; then
@@ -959,9 +962,11 @@ apply_profile() {
         _band=$(uci -q get "wireless.${rd}.band")
         case "$_band" in
             5g*|5GHz*)
-                [ -n "$channel" ] && [ "$channel" != "auto" ] &&                     uci -q set "wireless.${rd}.channel=$channel" ;;
+                [ -n "$channel" ] && [ "$channel" != "auto" ] && \
+                    uci -q set "wireless.${rd}.channel=$channel" ;;
             2g*|2.4*)
-                [ -n "$channel_2g" ] && [ "$channel_2g" != "auto" ] &&                     uci -q set "wireless.${rd}.channel=$channel_2g" ;;
+                [ -n "$channel_2g" ] && [ "$channel_2g" != "auto" ] && \
+                    uci -q set "wireless.${rd}.channel=$channel_2g" ;;
         esac
     done
 
@@ -988,7 +993,8 @@ gateway_watchdog() {
         local mip; mip=$(master_ip)
         [ -z "$mip" ] && continue
 
-        if curl -s -m 2 "http://${mip}:${MASTER_PORT}/ping" >/dev/null 2>&1                 || ping -c 1 -W 1 "$mip" >/dev/null 2>&1; then
+        if curl -s -m 2 "http://${mip}:${MASTER_PORT}/ping" >/dev/null 2>&1 \
+                || ping -c 1 -W 1 "$mip" >/dev/null 2>&1; then
             fail=0
         else
             fail=$(( fail + 1 ))
@@ -1013,7 +1019,7 @@ gateway_watchdog() {
 prev_gw=""
 check_routing_paths() {
     local cur_gw
-    cur_gw=$(batctl meshif "$MESH_IF" gwl 2>/dev/null | awk '/===>/{print $2}' | head -1)
+    cur_gw=$(batctl meshif "$MESH_IF" gwl 2>/dev/null | awk '/===>/  {print $2}' | head -1)
     if [ -n "$cur_gw" ] && [ "$cur_gw" != "$prev_gw" ]; then
         logh "Self-healing: gateway path %s -> %s" "${prev_gw:-none}" "$cur_gw"
         prev_gw="$cur_gw"; sync_neighbor_list
@@ -1451,9 +1457,11 @@ _sync_master_wireless() {
         if [ "${ieee80211v}" = "1" ]; then
             uci_set wireless "$iface" ieee80211v 1
             uci_set wireless "$iface" bss_transition 1
+            uci_set wireless "$iface" wnm_sleep_mode 0
         else
             uci -q del "wireless.${iface}.ieee80211v"
             uci -q del "wireless.${iface}.bss_transition"
+            uci -q del "wireless.${iface}.wnm_sleep_mode"
         fi
         if [ "${ieee80211r}" = "1" ]; then
             uci_set wireless "$iface" ieee80211r 1
