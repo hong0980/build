@@ -1,0 +1,115 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "AP + Mesh Deployment"
+msgstr "AP + Mesh 部署"
+
+msgid "Network"
+msgstr "网络"
+
+msgid "Wireless"
+msgstr "无线"
+
+msgid "Miscellaneous"
+msgstr "其他"
+
+msgid "LAN Connection Mode"
+msgstr "LAN 接入方式"
+
+msgid "DHCP client"
+msgstr "DHCP 客户端"
+
+msgid "Static address"
+msgstr "静态地址"
+
+msgid "Node Static IP"
+msgstr "节点静态 IP"
+
+msgid "Each node must have a unique address, e.g. 192.168.2.2 / .3 / .4"
+msgstr "每台节点必须使用唯一地址，例如 192.168.2.2 / .3 / .4"
+
+msgid "Gateway / DNS Server"
+msgstr "上级网关 / DNS"
+
+msgid "Main router IP, also serves as DNS server"
+msgstr "主路由 IP，同时用作 DNS 服务器"
+
+msgid "WAN Protocol"
+msgstr "WAN 协议"
+
+msgid "Bridge to LAN"
+msgstr "桥接 LAN"
+
+msgid "PPPoE"
+msgstr "PPPoE"
+
+msgid "Unmanaged"
+msgstr "不管理"
+
+msgid "PPPoE Username"
+msgstr "PPPoE 用户名"
+
+msgid "PPPoE Password"
+msgstr "PPPoE 密码"
+
+msgid "DHCP Assigned IP"
+msgstr "DHCP 分配 IP"
+
+msgid "Auto-assigned by DHCP, unique for each node, for reference only"
+msgstr "DHCP 自动分配的地址，每台节点不同，仅供参考"
+
+msgid "2.4G SSID"
+msgstr "2.4G SSID"
+
+msgid "Must exactly match the main router for seamless roaming"
+msgstr "必须与主路由完全一致，才能实现无缝漫游"
+
+msgid "5G SSID"
+msgstr "5G SSID"
+
+msgid "Must exactly match the main router"
+msgstr "必须与主路由完全一致"
+
+msgid "WiFi Password"
+msgstr "WiFi 密码"
+
+msgid "Shared by 2.4G/5G, minimum 8 characters"
+msgstr "2.4G / 5G 共用，最短 8 位字符"
+
+msgid "Mesh ID"
+msgstr "Mesh ID"
+
+msgid "All nodes must have identical Mesh ID"
+msgstr "所有节点必须完全一致"
+
+msgid "Mesh Password"
+msgstr "Mesh 密码"
+
+msgid "SAE encryption, minimum 8 characters, identical on all nodes"
+msgstr "SAE 加密，最短 8 位字符，所有节点一致"
+
+msgid "Mesh Status"
+msgstr "Mesh 网络状态"
+
+msgid "View Mesh Status"
+msgstr "查看 Mesh 状态"
+
+msgid "Checking..."
+msgstr "查询中…"
+
+msgid "No mesh interface found. Please deploy and reboot the device first."
+msgstr "未发现 mesh 接口。请确认已执行部署并重启设备后再查看。"
+
+msgid "(no data)"
+msgstr "(无数据)"
+
+msgid "Execution failed: %s"
+msgstr "执行失败：%s"
+
+msgid "Hostname"
+msgstr "主机名"
+
+msgid "Disabled Services"
+msgstr "关闭服务"

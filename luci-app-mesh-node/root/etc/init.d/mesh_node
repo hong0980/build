@@ -1,0 +1,161 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=10
+
+do_network() {
+    local wan_dev; wan_dev=$(uci -q get network.wan.device 2>/dev/null \
+           || uci -q get network.wan.ifname 2>/dev/null)
+    [ -n "$wan_dev" ] || return 0
+
+    if [ "$bridge_wan" = 'pppoe' ]; then
+        local cur_user; cur_user=$(uci -q get network.wan.username)
+        local cur_pass; cur_pass=$(uci -q get network.wan.password)
+        config_get user main wan_pppoe_user
+        config_get pass main wan_pppoe_pass
+        if [ "$cur_user" != "$user" ] || [ "$cur_pass" != "$pass" ]; then
+            uci -q delete network.wan
+            uci -q set network.wan=interface
+            uci -q set network.wan.proto='pppoe'
+            uci -q set network.wan.device="$wan_dev"
+            uci -q set network.wan.username="$user"
+            uci -q set network.wan.password="$pass"
+        fi
+
+    elif [ "$bridge_wan" = 'bridge' ]; then
+        uci -q add_list network.@device[0].ports="$wan_dev"
+        uci -q delete network.wan
+        uci -q delete network.wan6
+    fi
+
+    if [ "$proto" = 'static' ]; then
+        uci -q set    network.lan.proto='static'
+        uci -q set    network.lan.ipaddr="$lan_ip"
+        uci -q set    network.lan.netmask='255.255.255.0'
+        uci -q set    network.lan.gateway="$gateway"
+        uci -q set    network.lan.stp='1'
+        uci -q delete network.lan.dns
+        uci -q add_list network.lan.dns="$gateway"
+        uci -q set    dhcp.lan.ignore='1'
+        uci -q delete dhcp.lan.ra_slaac
+        uci -q delete dhcp.lan.dhcpv6
+
+    elif [ "$proto" = 'dhcp' ]; then
+        uci -q set    network.lan.proto='dhcp'
+        uci -q delete network.lan.ipaddr
+        uci -q delete network.lan.netmask
+        uci -q delete network.lan.gateway
+        uci -q delete network.lan.dns
+        uci -q set    dhcp.lan.ignore='0'
+    fi
+}
+
+do_wireless() {
+    local iface_mac; iface_mac=$(cat /sys/class/net/br-lan/address | tr -d ':')
+    local timezone; timezone=$(uci -q get system.@system[0].timezone 2>/dev/null)
+    config_load wireless
+
+    wifi_iface() {
+        local iface="$1" dev band mode
+        config_get mode "$iface" mode
+        [ "$mode" = "ap" ] || return
+        config_get dev  "$iface" device
+        config_get band "$dev"   band
+
+        case "$band" in
+            5g|5GHz|a|an)   uci -q set wireless."$iface".ssid="$ssid_5g"  ;;
+            2g|2.4GHz|b|bg) uci -q set wireless."$iface".ssid="$ssid_24g" ;;
+        esac
+
+    uci -q batch <<EOF
+set wireless.${iface}.encryption='psk2+ccmp'
+set wireless.${iface}.key='${wifi_pass}'
+set wireless.${iface}.ieee80211k='1'
+set wireless.${iface}.ieee80211v='1'
+set wireless.${iface}.ieee80211r='1'
+set wireless.${iface}.ft_over_ds='1'
+set wireless.${iface}.proxy_arp='1'
+set wireless.${iface}.bss_transition='1'
+set wireless.${iface}.ft_psk_generate_local='1'
+set wireless.${iface}.mobility_domain='4f57'
+set wireless.${iface}.nasid='${iface_mac}'
+EOF
+    }
+
+    wifi_device() {
+        local dev="$1" band
+        config_get band "$dev" band
+        uci -q set wireless."$dev".cell_density='0'
+
+        case "$band" in 5g|5GHz|a|an) ;; *) return ;; esac
+
+    local mesh_iface="mesh_${dev}"
+    uci -q batch <<EOF
+delete wireless.${mesh_iface}
+set wireless.${mesh_iface}='wifi-iface'
+set wireless.${mesh_iface}.mode='mesh'
+set wireless.${mesh_iface}.disabled='0'
+set wireless.${mesh_iface}.network='lan'
+set wireless.${mesh_iface}.device='${dev}'
+set wireless.${mesh_iface}.mesh_fwding='1'
+set wireless.${mesh_iface}.encryption='sae'
+set wireless.${mesh_iface}.key='${mesh_pass}'
+set wireless.${mesh_iface}.mesh_id='${mesh_id}'
+set wireless.${mesh_iface}.mesh_rssi_threshold='-65'
+EOF
+    }
+
+    config_foreach wifi_iface  wifi-iface
+    config_foreach wifi_device wifi-device
+}
+
+do_services() {
+    for svc in $old_init; do
+        echo "$init" | grep -qw "$svc" && continue
+        /etc/init.d/$svc start 2>/dev/null
+        /etc/init.d/$svc enable 2>/dev/null
+        uci -q del_list mesh_node.main.old_init="$svc"
+    done
+
+    for svc in $init; do
+        echo "$old_init" | grep -qw "$svc" && continue
+        /etc/init.d/$svc running 2>/dev/null && /etc/init.d/$svc stop 2>/dev/null
+        /etc/init.d/$svc enabled 2>/dev/null && /etc/init.d/$svc disable 2>/dev/null
+        uci -q add_list mesh_node.main.old_init="$svc"
+    done
+    uci -q commit mesh_node
+}
+
+start() {
+    local lan_ip gateway ssid_24g ssid_5g wifi_pass mesh_id \
+        mesh_pass bridge_wan hostname proto init old_init
+    config_load mesh_node
+    config_get lan_ip     main lan_ip    ''
+    config_get gateway    main gateway   ''
+    config_get ssid_24g   main ssid_24g  ''
+    config_get ssid_5g    main ssid_5g   ''
+    config_get wifi_pass  main wifi_pass ''
+    config_get mesh_id    main mesh_id   HomeMesh
+    config_get mesh_pass  main mesh_pass ''
+    config_get bridge_wan main bridge_wan none
+    config_get hostname   main hostname  ''
+    config_get proto      main proto     ''
+    config_get init       main init      ''
+    config_get old_init   main old_init  ''
+
+    [ "$bridge_wan" != 'none' ] && do_network
+    do_wireless
+    [ -n "$hostname" ] && uci -q set system.@system[0].hostname="$hostname"
+    do_services
+
+    uci -q commit network
+    uci -q commit wireless
+    uci -q commit system
+    uci -q commit dhcp
+    /etc/init.d/network restart
+    sleep 3
+    wifi reload
+}
+
+stop() { :; }
+boot() { :; }
