@@ -28,7 +28,10 @@ return view.extend({
     load: function () {
         return Promise.all([callWirelessStatus(), callIfaceDump(), callNetdevs()])
             .then(function ([radios, ifaces, devs]) {
-                var info = {};
+                var info = {
+                    ssid_24g: '', ssid_5g: '', meshId: '', wifi_pass: '', mesh_pass: '',
+                    lanIp: '', lanMac: '', lanProto: '', wanIfname: '', wanMac: '', wanProto: ''
+                };
                 Object.keys(radios).forEach(function (radioName) {
                     var radio = radios[radioName],
                         band = radio.config.band;
@@ -55,9 +58,8 @@ return view.extend({
                 if (devs['br-lan']) info.lanMac = devs['br-lan'].mac;
                 if (devs.wan) {
                     info.wanMac = devs.wan.mac;
-                    info.wanIfname = 'wan';
+                    info.wanIfname = devs.wan.name;
                 }
-
                 return info;
             });
     },
@@ -65,7 +67,6 @@ return view.extend({
     render: function (info) {
         var m, s, o;
         m = new form.Map('mesh_node', _('AP + Mesh Deployment'));
-
         s = m.section(form.NamedSection, 'main');
         s.addremove = false;
         s.anonymous = true;
@@ -127,16 +128,18 @@ return view.extend({
             _('Shared by 2.4G/5G, minimum 8 characters'));
         o.datatype = 'wpakey';
         o.password = true;
+        o.rmempty = false;
         o.default = info.wifi_pass || '';
 
         o = s.taboption('wireless', form.Value, 'mesh_id', _('Mesh ID'),
             _('All nodes must have identical Mesh ID'));
-        o.default = info.meshId || '';
+        o.default = info.meshId || 'HomeMesh';
 
         o = s.taboption('wireless', form.Value, 'mesh_pass', _('Mesh Password'),
             _('SAE encryption, minimum 8 characters, identical on all nodes'));
         o.datatype = 'wpakey';
         o.password = true;
+        o.rmempty = false;
         o.default = info.mesh_pass || '';
 
         o = s.taboption('wireless', form.Button, 'node', _('Mesh Status'));
@@ -165,9 +168,7 @@ return view.extend({
                     var lines = (res || '').split('\n');
                     for (var i = 0; i < lines.length; i++) {
                         var match = lines[i].match(/Interface\s+(\S+)/);
-                        if (match && match[1].indexOf('mesh') !== -1) {
-                            ifaces.push(match[1]);
-                        }
+                        if (match && match[1].indexOf('mesh') !== -1) ifaces.push(match[1]);
                     }
 
                     if (!ifaces.length) {
@@ -216,14 +217,12 @@ return view.extend({
         fs.list('/etc/init.d').then(function (entries) {
             entries
                 .filter(function (e) {
-                    return e.name.charAt(0) !== '.' &&
-                        PROTECTED.indexOf(e.name) === -1;
+                    return e.name.charAt(0) !== '.' && PROTECTED.indexOf(e.name) === -1;
                 })
                 .map(function (e) { return e.name; })
                 .sort()
                 .forEach(function (name) { o.value(name, name); });
         });
-
         o.default = 'dnsmasq miniupnpd dawn odhcpd firewall';
 
         return m.render();
