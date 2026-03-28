@@ -75,46 +75,86 @@ return view.extend({
         s.tab('wireless', _('Wireless'));
         s.tab('miscellaneous', _('Miscellaneous'));
 
-        o = s.taboption('network', form.ListValue, 'proto', _('LAN Connection Mode'));
-        o.value('dhcp', _('DHCP client'));
-        o.value('static', _('Static address'));
-        o.default = info.lanProto || '';
-
-        o = s.taboption('network', form.Value, 'lan_ip', _('Node Static IP'),
-            _('Each node must have a unique address, e.g. 192.168.2.2 / .3 / .4'));
-        o.datatype = 'ip4addr';
-        o.placeholder = '192.168.2.2';
-        o.depends('proto', 'static');
-
-        o = s.taboption('network', form.Value, 'gateway', _('Gateway / DNS Server'),
-            _('Main router IP, also serves as DNS server'));
-        o.datatype = 'ip4addr';
-        o.placeholder = '192.168.2.1';
-        o.depends('proto', 'static');
-
         o = s.taboption('network', form.ListValue, 'bridge_wan', _('WAN Protocol'));
         o.rmempty = false;
         o.default = info.wanProto || 'bridge';
         o.value('bridge', _('Bridge to LAN'));
         o.value('pppoe', _('PPPoE'));
         o.value('none', _('Unmanaged'));
-        o.depends({ proto: /^(dhcp|static)$/ });
 
         o = s.taboption('network', form.Value, 'wan_pppoe_user', _('PPPoE Username'));
         o.datatype = 'minlength(1)';
         o.rmempty = false;
-        o.depends({ bridge_wan: 'pppoe' });
+        o.depends('bridge_wan', 'pppoe');
 
         o = s.taboption('network', form.Value, 'wan_pppoe_pass', _('PPPoE Password'));
         o.datatype = 'minlength(1)';
         o.rmempty = false;
         o.password = true;
-        o.depends({ bridge_wan: 'pppoe' });
+        o.depends('bridge_wan', 'pppoe');
+
+        o = s.taboption('network', form.ListValue, 'lan_proto', _('LAN Connection Mode'));
+        o.value('dhcp', _('DHCP client'));
+        o.value('static', _('Static address'));
+        o.value('none', _('Unmanaged'));
+        o.default = info.lanProto || '';
+        o.validate = function (section_id, value) {
+            const bw_val = this.map.lookupOption('bridge_wan', section_id)?.[0]
+                ?.formvalue(section_id) ?? 'bridge';
+            const isBridge = (bw_val === 'bridge');
+            const select = this.map.findElement('data-field', this.cbid(section_id))
+                ?.querySelector('select');
+            if (select) {
+                const staticOpt = select.querySelector('option[value="static"]');
+                if (staticOpt) {
+                    staticOpt.hidden = !isBridge;
+                    staticOpt.disabled = !isBridge;
+                }
+                if (!isBridge && select.value === 'static')
+                    select.value = 'dhcp';
+            }
+
+            return (isBridge || value !== 'static') ||
+                _('Static address requires WAN Protocol set to Bridge to LAN');
+        };
+        o.renderWidget = function (section_id, option_index, cfgvalue) {
+            const widget = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            const select = widget.querySelector('select');
+            if (select) {
+                const bw = this.map.lookupOption('bridge_wan', section_id);
+                const bw_val = bw?.[0]?.cfgvalue(section_id) ?? 'bridge';
+                const isBridge = (bw_val === 'bridge');
+
+                for (const opt of select.options) {
+                    if (opt.value === 'static') {
+                        opt.hidden = !isBridge;
+                        opt.disabled = !isBridge;
+                    }
+                }
+
+                if (!isBridge && select.value === 'static')
+                    select.value = 'dhcp';
+            }
+
+            return widget;
+        };
+
+        o = s.taboption('network', form.Value, 'lan_ip', _('Node Static IP'),
+            _('Each node must have a unique address, e.g. 192.168.2.2 / .3 / .4'));
+        o.datatype = 'ip4addr';
+        o.placeholder = '192.168.2.2';
+        o.depends({ lan_proto: 'static', bridge_wan: 'bridge' });
+
+        o = s.taboption('network', form.Value, 'gateway', _('Gateway / DNS Server'),
+            _('Main router IP, also serves as DNS server'));
+        o.datatype = 'ip4addr';
+        o.placeholder = '192.168.2.1';
+        o.depends({ lan_proto: 'static', bridge_wan: 'bridge' });
 
         o = s.taboption('network', form.Value, '_lan_ip', _('DHCP Assigned IP'),
             _('Auto-assigned by DHCP, unique for each node, for reference only'));
         o.default = info.lanIp || '';
-        o.depends('proto', 'dhcp');
+        o.depends('lan_proto', 'dhcp');
 
         o = s.taboption('wireless', form.Value, 'ssid_24g', _('2.4G SSID'),
             _('Must exactly match the main router for seamless roaming'));
