@@ -98,45 +98,18 @@ return view.extend({
         o.value('static', _('Static address'));
         o.value('none', _('Unmanaged'));
         o.default = info.lanProto || '';
-        o.validate = function (section_id, value) {
-            const bw_val = this.map.lookupOption('bridge_wan', section_id)?.[0]
-                ?.formvalue(section_id) ?? 'bridge';
-            const isBridge = (bw_val === 'bridge');
-            const select = this.map.findElement('data-field', this.cbid(section_id))
-                ?.querySelector('select');
-            if (select) {
-                const staticOpt = select.querySelector('option[value="static"]');
-                if (staticOpt) {
-                    staticOpt.hidden = !isBridge;
-                    staticOpt.disabled = !isBridge;
-                }
-                if (!isBridge && select.value === 'static')
-                    select.value = 'dhcp';
-            }
-
-            return (isBridge || value !== 'static') ||
-                _('Static address requires WAN Protocol set to Bridge to LAN');
+        o.proto_support = {
+            'bridge': { 'dhcp': true, 'static': true, 'none': true },
+            'pppoe': { 'dhcp': true, 'static': true, 'none': true },
+            'none': { 'dhcp': true, 'none': true }
         };
-        o.renderWidget = function (section_id, option_index, cfgvalue) {
-            const widget = form.ListValue.prototype.renderWidget.apply(this, arguments);
-            const select = widget.querySelector('select');
-            if (select) {
-                const bw = this.map.lookupOption('bridge_wan', section_id);
-                const bw_val = bw?.[0]?.cfgvalue(section_id) ?? 'bridge';
-                const isBridge = (bw_val === 'bridge');
-
-                for (const opt of select.options) {
-                    if (opt.value === 'static') {
-                        opt.hidden = !isBridge;
-                        opt.disabled = !isBridge;
-                    }
-                }
-
-                if (!isBridge && select.value === 'static')
-                    select.value = 'dhcp';
-            }
-
-            return widget;
+        o.validate = function (section_id, value) {
+            const bw_opt = this.map.lookupOption('bridge_wan', section_id)?.[0];
+            const bw_val = bw_opt?.formvalue(section_id)
+                || bw_opt?.cfgvalue(section_id)
+                || 'bridge';
+            return this.proto_support[bw_val]?.hasOwnProperty(value) ||
+                _('"%s" mode is incompatible with Static address').format(bw_val);
         };
 
         o = s.taboption('network', form.Value, 'lan_ip', _('Node Static IP'),
@@ -151,10 +124,11 @@ return view.extend({
         o.placeholder = '192.168.2.1';
         o.depends({ lan_proto: 'static', bridge_wan: 'bridge' });
 
-        o = s.taboption('network', form.Value, '_lan_ip', _('DHCP Assigned IP'),
+        o = s.taboption('network', form.DummyValue, '_lan_ip', _('DHCP Assigned IP'),
             _('Auto-assigned by DHCP, unique for each node, for reference only'));
         o.default = info.lanIp || '';
-        o.depends('lan_proto', 'dhcp');
+        o.depends({ lan_proto: 'dhcp', bridge_wan: 'bridge' });
+        o.depends({ lan_proto: 'dhcp', bridge_wan: 'pppoe' });
 
         o = s.taboption('wireless', form.Value, 'ssid_24g', _('2.4G SSID'),
             _('Must exactly match the main router for seamless roaming'));

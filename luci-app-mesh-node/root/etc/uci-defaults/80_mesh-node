@@ -1,4 +1,0 @@
-#!/bin/sh
-echo "config mesh_node 'main'" > /etc/config/mesh_node
-chmod +x /etc/init.d/mesh_node
-exit 0
