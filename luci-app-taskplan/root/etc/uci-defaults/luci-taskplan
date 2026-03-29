@@ -2,11 +2,5 @@
 mkdir -p /etc/taskplan
 chmod +x /etc/init.d/taskplan \
 		 /usr/bin/taskplanhandler
-uci -q batch <<-EOF >/dev/null
-	delete ucitrack.@taskplan[-1]
-	add ucitrack taskplan
-	set ucitrack.@taskplan[-1].init="taskplan"
-	commit ucitrack
-EOF
 rm -rf /tmp/luci-*
 exit 0

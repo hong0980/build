@@ -1,15 +1,6 @@
 #!/bin/sh
 
-touch /etc/config/wizard
-uci -q batch <<-EOF >/dev/null
-	delete ucitrack.@wizard[-1]
-	add ucitrack wizard
-	set ucitrack.@wizard[-1].init=wizard
-	commit ucitrack
-	set wizard.default=wizard
-	commit wizard
-EOF
-
+echo "config wizard 'default'" > /etc/config/wizard
 chmod +x /etc/init.d/wizard
 chmod +x /etc/hotplug.d/button/99-wizard-restore
 

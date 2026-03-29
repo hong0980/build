@@ -1,15 +1,6 @@
 #!/bin/sh
 
-touch /etc/config/mesh_node
-uci -q batch <<-EOF >/dev/null
-	delete ucitrack.@mesh_node[-1]
-	add ucitrack mesh_node
-	set ucitrack.@mesh_node[-1].init=mesh_node
-	commit ucitrack
-	set mesh_node.main=mesh_node
-	commit mesh_node
-EOF
-
+echo "config mesh_node 'main'" > /etc/config/mesh_node
 chmod +x /etc/init.d/mesh_node
 rm -f /tmp/luci-*
 exit 0

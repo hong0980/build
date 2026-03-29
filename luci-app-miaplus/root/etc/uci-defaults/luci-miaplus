@@ -2,12 +2,5 @@
 chmod +x /etc/init.d/miaplus
 echo "config basic 'config'" > /etc/config/miaplus
 
-uci -q batch <<-EOF >/dev/null
-	delete ucitrack.@miaplus[-1]
-	add ucitrack miaplus
-	set ucitrack.@miaplus[-1].init=miaplus
-	commit ucitrack
-EOF
-
-rm -f /tmp/luci-indexcache
+rm -f /tmp/luci-*
 exit 0

@@ -2,7 +2,6 @@
 
 START=99
 STOP=10
-USE_PROCD=1
 . /lib/functions/network.sh
 
 do_network() {
@@ -36,6 +35,8 @@ do_network() {
 				del dhcp.lan.ra
 				del dhcp.lan.ra_flags
 				del dhcp.lan.dhcpv6
+				del dhcp.lan.max_preferred_lifetime
+				del dhcp.lan.max_valid_lifetime
 				set dhcp.lan.ignore='1'
 				del network.lan.ipaddr
 				del network.lan.netmask
@@ -74,7 +75,7 @@ do_network() {
 				EOF
 			fi
 			;;
-		none)
+		dhcp)
 			uci -q batch <<-EOF
 				del network.wan
 				set network.wan=interface
@@ -185,7 +186,7 @@ do_services() {
 	config_list_foreach main init     handle_new_service
 }
 
-start_service() {
+start() {
 	local lan_ip gateway bridge_wan hostname lan_proto wan_pppoe_user wan_pppoe_pass \
 		  ssid_24g ssid_5g wifi_pass mesh_id mesh_pass init old_init old_hostname \
 		  network_changed=0 wireless_changed=0
@@ -227,9 +228,4 @@ start_service() {
 	[ "$network_changed"  = 1 ] && /etc/init.d/network restart
 }
 
-service_triggers() {
-	procd_add_reload_trigger mesh_node
-}
-
 stop() { :; }
-boot() { :; }
