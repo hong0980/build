@@ -2,18 +2,23 @@
 	"luci-app-mesh-node": {
 		"description": "Mesh Node Configurator ACL",
 		"read": {
-			"uci": [ "mesh_node", "network", "wireless", "system", "dhcp" ],
+			"uci": [ "mesh_node", "mesh11sd", "network", "wireless", "system", "dhcp" ],
 			"ubus": {
 				"network.wireless": [ "status" ],
 				"network.interface.*": [ "status" ],
 				"network.interface": [ "status", "dump" ]
 			},
 			"file": {
-				"/usr/sbin/iw": [ "exec" ]
+				"/usr/sbin/iw": [ "exec" ],
+				"/sbin/logread": [ "exec" ],
+				"/usr/sbin/batctl": [ "exec" ],
+				"/usr/sbin/mesh11sd": [ "exec" ],
+				"/etc/init.d/mesh11sd": [ "exec" ],
+				"/tmp/mesh11sd/mesh11sd_log.log": [ "read" ]
 			}
 		},
 		"write": {
-			"uci": [ "mesh_node" ]
+			"uci": [ "mesh_node", "mesh11sd" ]
 		}
 	}
 }

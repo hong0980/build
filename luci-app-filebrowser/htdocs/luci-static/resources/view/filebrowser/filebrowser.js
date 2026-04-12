@@ -284,8 +284,7 @@ return view.extend({
 
 		const crumbs = E('div', [
 			E('a', {
-				href: '#',
-				click: ui.createHandlerFn(this, 'reload', '/')
+				href: '#', click: ui.createHandlerFn(this, 'reload', '/')
 			}, E('em', _('(root)')))
 		]);
 
@@ -294,8 +293,7 @@ return view.extend({
 			dom.append(crumbs, [
 				E('span', ' / '),
 				E('a', {
-					href: '#',
-					click: ui.createHandlerFn(this, 'reload', path)
+					href: '#', click: ui.createHandlerFn(this, 'reload', path)
 				}, p)
 			]);
 		});
@@ -446,7 +444,6 @@ return view.extend({
 				window.removeEventListener('scroll', throttledCheck);
 				window.removeEventListener('resize', debouncedCheck);
 			};
-
 			check();
 		};
 
@@ -558,14 +555,15 @@ return view.extend({
 		const wrapCheckbox = E('input', { type: 'checkbox', checked: true, id: 'wrapCheckbox' });
 		const editCheckbox = E('input', {
 			type: 'checkbox', id: 'editCheckbox', checked: !!editable || undefined,
-			change: ev => {
+			change: ui.createHandlerFn(this, ev => {
 				if (!editor) return;
+				saveBtn.style.display = ev.target.checked ? 'inline-block' : 'none';
 				document.querySelector('.modal h4')
 					.textContent = ev.target.checked ? _('edit mode') : _('view mode');
-			}
+			})
 		});
 		const saveBtn = E('button', {
-			style: 'display:none;',
+			style: `display:${!!editable ? 'inline-block' : 'none'};`,
 			class: 'btn cbi-button-positive important',
 			click: ui.createHandlerFn(this, () => {
 				if (!editor) return;
@@ -680,7 +678,7 @@ return view.extend({
 			style: 'width:100%;height:320px;font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;'
 		}, content);
 		const saveBtn = E('button', {
-			class: 'btn cbi-button-positive important', style: 'display:none',
+			class: 'btn cbi-button-positive important', style: `display:${!!editable ? 'inline-block' : 'none'};`,
 			click: ui.createHandlerFn(this, () => {
 				fs.write(file.path, container.value)
 					.then(() => {
@@ -704,19 +702,21 @@ return view.extend({
 				)),
 				E('input', {
 					type: 'checkbox', checked: true, id: 'wrapCheckbox',
-					change: ev =>
+					change: ui.createHandlerFn(this, ev => {
 						container.style.whiteSpace = ev.target.checked ? 'pre-wrap' : 'pre'
+					})
 				}),
 				E('label', { class: 'inline-form-group', for: 'wrapCheckbox' }, _('wrap')),
 				E('input', {
 					id: 'editCheckbox', type: 'checkbox',
 					checked: !!editable || undefined,
-					change: ev => {
+					change: ui.createHandlerFn(this, ev => {
 						const isChecked = ev.target.checked;
 						container.readOnly = !isChecked;
+						saveBtn.style.display = isChecked ? 'inline-block' : 'none';
 						document.querySelector('.modal h4')
 							.textContent = isChecked ? _('edit mode') : _('view mode');
-					}
+					})
 				}),
 				E('label', { class: 'inline-form-group', for: 'editCheckbox' }, _('Edit')),
 				btnFull, btnExit
