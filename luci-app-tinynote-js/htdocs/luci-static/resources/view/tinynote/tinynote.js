@@ -397,6 +397,7 @@ return view.extend({
 
 	render: function () {
 		// this.loadLibrary('jquery');
+		this.con = uci.get_first('luci', 'tinynote');
 		let m, s, o;
 
 		m = new form.Map('luci', '');
@@ -480,7 +481,6 @@ return view.extend({
 		o.datatype = 'range(100,1000)';
 		['200', '250', '300', '350'].forEach(v => o.value(v, v));
 
-		this.con = this.con || uci.get_first('luci', 'tinynote');
 		const note_sum = parseInt(this.con.note_sum) || 0;
 		const code_aceenable = this.con.aceenable == '1';
 		if (note_sum > 0) {
@@ -999,7 +999,7 @@ return view.extend({
 		return this.super('handleSaveApply', [ev, mode])
 			.then(() => uci.load('luci'))
 			.then(() => {
-				const newCon = uci.get_first('luci', 'tinynote');
+				const newCon = uci.get_first('luci', 'tinynote') || {};
 				const newCfg = {
 					path: newCon.note_path || '/etc/tinynote',
 					sum: parseInt(newCon.note_sum) || 1,
@@ -1015,6 +1015,23 @@ return view.extend({
 					};
 				}
 
+				const doEnsureFiles = (cfg) => {
+					return fs.stat(cfg.path)
+						.catch(() => fs.exec('/bin/mkdir', ['-p', cfg.path]))
+						.then(() => {
+							const tasks = [];
+							for (let i = 1; i <= cfg.sum; i++) {
+								const file = cfg.files[i];
+								const filePath = `${cfg.path}/note${String(i).padStart(2, '0')}.${file.type}`;
+								const perm = ['sh', 'lua', 'py'].includes(file.type) ? parseInt('755', 8) : parseInt('644', 8);
+								tasks.push(
+									fs.stat(filePath).catch(() => fs.write(filePath, templates[file.type] || '', perm))
+								);
+							}
+							return Promise.all(tasks);
+						});
+				};
+
 				// 情况1：全局路径改变 - 删除旧路径文件，新路径创建文件
 				if (oldCfg.path !== newCfg.path) {
 					return fs.list(oldCfg.path).then(files => {
@@ -1024,20 +1041,10 @@ return view.extend({
 								.map(f => fs.remove(`${oldCfg.path}/${f.name}`).catch(() => {}))
 						);
 					}).catch(() => {})
-						.then(() => fs.stat(newCfg.path).catch(() => fs.exec('/bin/mkdir', ['-p', newCfg.path])))
-						.then(() => {
-							const ensurePromises = [];
-							for (let i = 1; i <= newCfg.sum; i++) {
-								const newFile = newCfg.files[i];
-								const filePath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newFile.type}`;
-								const perm = ['sh', 'lua', 'py'].includes(newFile.type) ? parseInt('755', 8) : parseInt('644', 8);
-								ensurePromises.push(
-									fs.stat(filePath).catch(() => fs.write(filePath, templates[newFile.type] || '', perm))
-								);
-							}
-							return Promise.all(ensurePromises);
-						});
+						.then(() => doEnsureFiles(newCfg))
+						.then(() => ui.addNotification(null, E('p', _('Config saved, files updated')), 'info'));
 				}
+
 				const cleanupPromises = [];
 
 				// 情况2：文件数量减少 - 删除多余文件
@@ -1079,20 +1086,9 @@ return view.extend({
 					}
 				}
 
-				return Promise.all(cleanupPromises).then(() => {
-					const ensurePromises = [];
-					for (let i = 1; i <= newCfg.sum; i++) {
-						const newFile = newCfg.files[i];
-						const filePath = `${newCfg.path}/note${String(i).padStart(2, '0')}.${newFile.type}`;
-						const perm = ['sh', 'lua', 'py'].includes(newFile.type) ? parseInt('755', 8) : parseInt('644', 8);
-						ensurePromises.push(
-							fs.stat(filePath).catch(() => fs.write(filePath, templates[newFile.type] || '', perm))
-						);
-					}
-					return Promise.all(ensurePromises);
-				}).then(() =>
-					ui.addNotification(null, E('p', _('Config saved, files updated')), 'info')
-				);
+				return Promise.all(cleanupPromises)
+					.then(() => doEnsureFiles(newCfg))
+					.then(() => ui.addNotification(null, E('p', _('Config saved, files updated')), 'info'));
 			}).catch(() => {});
 	}
 });

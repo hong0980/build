@@ -664,3 +664,107 @@ msgstr "在每台节点上执行："
 
 msgid "All mesh nodes must use the same routing algorithm. mesh11sd is not recommended with batman-adv."
 msgstr "同一 Mesh 网络中所有节点必须使用相同路由算法。使用 batman-adv 时不建议同时启用 mesh11sd。"
+
+msgid "Disabled (no log)"
+msgstr "无日志"
+
+msgid "Routing (OGM)"
+msgstr "路由协议（OGM）日志"
+
+msgid "Routing table changes"
+msgstr "路由表变更日志"
+
+msgid "Routing + table changes"
+msgstr "路由 + 表变更日志"
+
+msgid "Statistics"
+msgstr "统计数据"
+
+msgid "All messages"
+msgstr "全部开启"
+
+msgid "Routing Algorithm"
+msgstr "路由算法"
+
+msgid "General Settings"
+msgstr "常规设置"
+
+msgid "Advanced Settings"
+msgstr "高级设置"
+
+msgid "Aggregate Originator Messages"
+msgstr "聚合源节点消息"
+
+msgid "reduces overhead by collecting and aggregating originator messages in a single packet rather than many small ones"
+msgstr "将多个源节点消息合并到单个数据包中发送，减少协议开销。"
+
+msgid "Originator Interval"
+msgstr "源节点广播间隔"
+
+msgid "The value specifies the interval (milliseconds) in which batman-adv floods the network with its protocol information."
+msgstr "batman-adv 向网络广播自身协议信息的间隔时间（毫秒）。"
+
+msgid "Access Point Isolation"
+msgstr "AP 客户端隔离"
+
+msgid "Prevents one wireless client to talk to another. This setting only affects packets without any VLAN tag (untagged packets)."
+msgstr "禁止同一 AP 下的无线客户端之间直接通信。仅影响无 VLAN 标签的未标记数据包。"
+
+msgid "Bonding Mode"
+msgstr "聚合模式"
+
+msgid "When running the mesh over multiple WiFi interfaces per node batman-adv is capable of optimizing the traffic flow to gain maximum performance."
+msgstr "节点有多个无线接口时，batman-adv 可跨接口优化流量分配以获得最大吞吐量。"
+
+msgid "Avoid Bridge Loops"
+msgstr "避免桥接环路"
+
+msgid "In bridged LAN setups it is advisable to enable the bridge loop avoidance in order to avoid broadcast loops that can bring the entire LAN to a standstill."
+msgstr "在桥接 LAN 场景中建议启用，防止广播环路导致整个局域网瘫痪。"
+
+msgid "Distributed ARP Table"
+msgstr "分布式 ARP 表"
+
+msgid "When enabled the distributed ARP table forms a mesh-wide ARP cache that helps non-mesh clients to get ARP responses much more reliably and without much delay."
+msgstr "启用后，batman-adv 在整个 Mesh 网络范围内维护一张分布式 ARP 缓存表，使非 Mesh 客户端的 ARP 查询更快速可靠。"
+
+msgid "Fragmentation"
+msgstr "分片"
+
+msgid "Batman-adv has a built-in layer 2 fragmentation for unicast data flowing through the mesh which will allow to run batman-adv over interfaces / connections that don't allow to increase the MTU beyond the standard Ethernet packet size of 1500 bytes. When the fragmentation is enabled batman-adv will automatically fragment over-sized packets and defragment them on the other end. Per default fragmentation is enabled and inactive if the packet fits but it is possible to deactivate the fragmentation entirely."
+msgstr "batman-adv 内置的二层分片功能，允许在 MTU 不超过 1500 字节的链路上运行。启用后超大包会被自动分片并在对端重组；若数据包本身不超过 MTU 则分片功能不激活。可完全禁用分片。"
+
+msgid "Hop Penalty"
+msgstr "跳数惩罚"
+
+msgid "The hop penalty setting allows to modify batman-adv's preference for multihop routes vs. short routes. The value is applied to the TQ of each forwarded OGM, thereby propagating the cost of an extra hop (the packet has to be received and retransmitted which costs airtime)"
+msgstr "控制 batman-adv 对多跳路由的偏好程度。每次 OGM 转发时会将此值从 TQ 中扣除，体现每增加一跳的空口代价。数值越大越倾向于选择短路径。"
+
+msgid "Multicast Mode"
+msgstr "组播模式"
+
+msgid "Enables more efficient, group aware multicast forwarding infrastructure in batman-adv."
+msgstr "启用 batman-adv 的感知组成员的高效组播转发机制。"
+
+msgid "Isolation Mark"
+msgstr "隔离标记"
+
+msgid "Set the isolation mark for AP isolation"
+msgstr "设置 AP 隔离功能使用的 netfilter 标记，格式为 mark/mask（如 0xff000000/0xff000000）。"
+
+msgid "Multicast Fanout"
+msgstr "组播扇出数"
+
+msgid "Set the multicast fanout value"
+msgstr "设置组播扇出上限值，超过此数量的接收方时 batman-adv 改用广播方式发送。"
+
+msgid "MESH INFO"
+msgstr "Mesh 信息"
+
+msgid "INTERFACES"
+msgstr "接口列表"
+
+msgid "GATEWAYS"
+msgstr "网关列表"
+msgid "default"
+msgstr "默认"

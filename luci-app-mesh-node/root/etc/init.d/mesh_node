@@ -2,7 +2,6 @@
 
 START=99
 STOP=10
-. /lib/functions/network.sh
 
 hash_value() { echo "$1" | md5sum | awk '{print $1}'; }
 
@@ -18,14 +17,19 @@ do_network() {
 					del dhcp.lan.max_valid_lifetime
 					del dhcp.lan.max_preferred_lifetime
 					set dhcp.lan.ignore='1'
-					del network.lan.ip6assign
+					set dhcp.lan.dhcpv4='disabled'
+
 					set network.lan.proto='static'
 					set network.lan.device='br-lan'
-					set network.lan.ipaddr='$lan_ip'
-					set network.lan.netmask='255.255.255.0'
+					del network.lan.ipaddr
+					add_list network.lan.ipaddr='$lan_ip'
 					set network.lan.gateway='$gateway'
+					del network.lan.ip6assign
+					set network.lan.multipath='off'
 					del network.lan.dns
 					add_list network.lan.dns='$gateway'
+					del firewall.@zone[0].network
+					set network.@device[0].stp='1'
 				EOF
 				;;
 			dhcp)
@@ -51,12 +55,14 @@ do_network() {
 					set network.lan.device='br-lan'
 					set network.lan.ipaddr='$old_lan_ip'
 					set network.lan.netmask='255.255.255.0'
+					add_list firewall.@zone[0].network='lan'
 					del dhcp.lan.ignore
 					set dhcp.lan.ra_slaac='1'
 					set dhcp.lan.ra='server'
 					set dhcp.lan.max_preferred_lifetime='2700'
 					set dhcp.lan.max_valid_lifetime='5400'
 					del mesh_node.main.old_lan_ip
+					del network.@device[0].stp
 				EOF
 				;;
 		esac
@@ -104,10 +110,10 @@ do_network() {
 
 	[ "$lan_hash" = "$old_lan_hash" ] || { do_lan; changed=1; }
 	[ "$wan_hash" = "$old_wan_hash" ] || { do_wan; changed=1; }
-	[ "$changed" -eq 0 ] && return 1
 	uci -q set mesh_node.main.old_lan_hash="$lan_hash"
 	uci -q set mesh_node.main.old_wan_hash="$wan_hash"
 	[ -n "$old_lan_ip" ] || uci -q set mesh_node.main.old_lan_ip="$(uci -q get network.lan.ipaddr)"
+	[ "$changed" -eq 0 ] && return 1
 	return 0
 }
 
@@ -202,30 +208,17 @@ do_wireless() {
 }
 
 do_batadv() {
-	local batadv_hash old_batadv_hash
-	batadv_hash=$(hash_value "${use_batadv}:${batadv_algo}")
-	config_get old_batadv_hash main old_batadv_hash ''
-	[ "$batadv_hash" = "$old_batadv_hash" ] && return 1
-	uci -q set mesh_node.main.old_batadv_hash="$batadv_hash"
+	local old_use_batadv
+	config_get old_use_batadv main old_use_batadv ''
+	[ "$use_batadv" = "$old_use_batadv" ] && return 1
+	uci -q set mesh_node.main.old_use_batadv="$use_batadv"
 
 	if [ "$use_batadv" = "1" ]; then
 		modprobe batman-adv 2>/dev/null || true
 		uci -q batch <<-EOF
 			set network.bat0=interface
 			set network.bat0.proto='batadv'
-			set network.bat0.routing_algo='${batadv_algo}'
-			set network.bat0.aggregated_ogms='1'
-			set network.bat0.bridge_loop_avoidance='1'
-			set network.bat0.distributed_arp_table='1'
-			set network.bat0.fragmentation='1'
 			set network.bat0.gw_mode='off'
-			set network.bat0.hop_penalty='30'
-			set network.bat0.network_coding='0'
-			set network.bat0.orig_interval='1000'
-			set network.bat0.ap_isolation='0'
-			set network.bat0.bonding='0'
-			set network.bat0.multicast_mode='1'
-			set network.bat0.log_level='0'
 
 			set network.batmesh=interface
 			set network.batmesh.proto='batadv_hardif'
@@ -267,7 +260,7 @@ do_services() {
 }
 
 do_mesh11sd() {
-	local m11_hash; m11_hash=$(hash_value "$(uci show mesh11sd 2>/dev/null)")
+	local m11_hash; m11_hash=$(hash_value "$(uci -q show mesh11sd)")
 	config_get old_m11_hash main old_m11_hash ''
 	[ "$m11_hash" = "$old_m11_hash" ] && return
 
@@ -277,7 +270,7 @@ do_mesh11sd() {
 
 do_usteer() {
 	local usteer_hash old_usteer_hash
-	usteer_hash=$(hash_value "$(uci show usteer 2>/dev/null)")
+	usteer_hash=$(hash_value "$(uci -q show usteer)")
 	config_get old_usteer_hash main old_usteer_hash ''
 	[ "$usteer_hash" = "$old_usteer_hash" ] && return
 
@@ -293,14 +286,14 @@ do_usteer() {
 		uci -q set usteer.@usteer[0].band_steering_min_snr='-60'
 		uci -q set usteer.@usteer[0].band_steering_interval='120000'
 	fi
-	usteer_changed=1
+	return 0
 }
 
 start() {
 	local combo_mode wan_proto lan_proto lan_ip gateway user pass \
 		  ssid_2g ssid_5g key_2g key_5g wifi_ssid wifi_pass mesh_id mesh_pass \
 		  mesh_radio enable_usteer init old_init hostname old_hostname \
-		  old_m11_hash m11_enable use_batadv batadv_algo usteer_changed=0 \
+		  old_m11_hash m11_enable use_batadv usteer_changed=0 \
 		  network_changed=0 wireless_changed=0 mesh11sd_changed=0
 
 	config_load mesh_node
@@ -321,7 +314,6 @@ start() {
 	config_get mesh_id       main mesh_id         ''
 	config_get mesh_pass     main mesh_pass       ''
 	config_get mesh_radio    main mesh_radio      ''
-	config_get batadv_algo   main batadv_algo     ''
 
 	config_get init          main init            ''
 	config_get old_init      main old_init        ''
@@ -329,8 +321,8 @@ start() {
 	config_get old_hostname  main old_hostname    ''
 
 	config_get_bool use_batadv    main use_batadv
-	config_get_bool m11_enable    main m11_enable
 	config_get_bool enable_usteer main enable_usteer
+	config_get_bool m11_enable    globals m11_enable
 
 	[ "$hostname" != "$old_hostname" ] && {
 		uci -q set system.@system[0].hostname="$hostname"
@@ -344,7 +336,7 @@ start() {
 	do_batadv   && network_changed=1
 	do_network  && network_changed=1
 	do_mesh11sd
-	do_usteer
+	do_usteer   && usteer_changed=1
 	uci -q commit
 
 	[ "$network_changed"  = 1 ] && { /etc/init.d/network restart; sleep 5; }
