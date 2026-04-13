@@ -28,6 +28,7 @@ do_network() {
 					set network.lan.multipath='off'
 					del network.lan.dns
 					add_list network.lan.dns='$gateway'
+					del network.lan.netmask
 					del firewall.@zone[0].network
 					set network.@device[0].stp='1'
 				EOF

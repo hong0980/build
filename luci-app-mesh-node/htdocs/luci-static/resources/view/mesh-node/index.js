@@ -75,6 +75,13 @@ function m11opt(s, tab, widget, name, section, title, desc) {
 	return o;
 }
 
+function usteeropt(s, widget, name, title, desc) {
+	var o = s.taboption('settings', widget, name, title, desc);
+	o.depends('mesh_node.main.enable_usteer', '1');
+	o.uciconfig = 'usteer'; o.ucisection = '@usteer[0]';
+	return o;
+}
+
 return view.extend({
 	load: function () {
 		return Promise.all([
@@ -130,6 +137,7 @@ return view.extend({
 		m = new form.Map('mesh_node', _('AP + Mesh Deployment'));
 		m.chain('mesh11sd');
 		m.chain('network');
+		m.chain('usteer');
 
 		s = m.section(form.NamedSection, 'main');
 		s.addremove = false;
@@ -209,6 +217,10 @@ return view.extend({
 
 		o = s.taboption('wireless', form.Flag, 'enable_usteer', _('Enable usteer Smart Steering'),
 			_('Uses usteer to steer clients to the best radio for optimal performance.'));
+		o.write = function (section_id, value) {
+			this.super('write', [section_id, value]);
+			return this.map.uci.set('usteer', '@usteer[0]', 'enabled', value);
+		};
 		o.default = '0';
 
 		o = s.taboption('wireless', form.Value, 'ssid_2g', _('2.4 GHz SSID'),
@@ -436,11 +448,11 @@ return view.extend({
 		};
 		so.default = '0'; so.rmempty = false;
 
-		o = m11opt(ss,'daemon', form.Value, 'checkinterval', null, _('Check Interval (seconds)'),
+		o = m11opt(ss,'daemon', form.Value, 'checkinterval', '', _('Check Interval (seconds)'),
 			_('How often the daemon checks and updates mesh configuration. Minimum: 10.'));
 		o.datatype = 'min(10)'; o.default = '10';
 
-		o = m11opt(ss,'daemon',  form.ListValue, 'debuglevel', null, _('Log Level'),
+		o = m11opt(ss,'daemon',  form.ListValue, 'debuglevel', '', _('Log Level'),
 			_('Sets the debug log level.'));
 		o.value('0', _('Silent'));
 		o.value('1', _('Notification'));
@@ -448,15 +460,15 @@ return view.extend({
 		o.value('3', _('Debug'));
 		o.default = '1';
 
-		o = m11opt(ss,'daemon', form.Value, 'interface_timeout', null, _('Interface Timeout (seconds)'),
+		o = m11opt(ss,'daemon', form.Value, 'interface_timeout', '', _('Interface Timeout (seconds)'),
 			_('Time to wait for a mesh interface to become ready before giving up.'));
 		o.datatype = 'uinteger'; o.default = '10';
 
-		o = m11opt(ss,'daemon', form.Value, 'mesh_path_cost', null, _('Mesh Path Cost'),
+		o = m11opt(ss,'daemon', form.Value, 'mesh_path_cost', '', _('Mesh Path Cost'),
 			_('STP cost assigned to the mesh network. Range: 0–65534. Set to 0 to disable STP.'));
 		o.datatype = 'range(0,65534)'; o.default = '10';
 
-		o = m11opt(ss, 'advanced',  form.Flag, 'auto_config', null, _('Auto Configuration'),
+		o = m11opt(ss, 'advanced', form.Flag, 'auto_config', '', _('Auto Configuration'),
 			_('Enables autonomous dynamic mesh configuration.<br>' +
 			'<span style="color: #d63638; font-weight: bold;">⚠️ Warning: ' +
 			'If an existing mesh configuration is found, it will be honoured even if it is incorrect.<br>' +
@@ -466,7 +478,7 @@ return view.extend({
 		o.value('1', _('Enabled'));
 		o.default = '0';
 
-		o = m11opt(ss, 'advanced',  form.ListValue, 'portal_detect', null, _('Portal Detection Mode'),
+		o = m11opt(ss, 'advanced', form.ListValue, 'portal_detect', '', _('Portal Detection Mode'),
 			_('Controls how this node determines its role in the mesh.<br>' +
 			'Force routed portal (MRP): always acts as IPv4 NAT gateway regardless of upstream.<br>' +
 			'Auto detect (default): portal if upstream WAN is active, otherwise layer-2 bridge peer.<br>' +
@@ -481,7 +493,7 @@ return view.extend({
 		o.default = '1'; o.deps = [];
 		o.depends('auto_config', '1');
 
-		o = m11opt(ss, 'advanced',  form.Value, 'portal_channel', null, _('Portal Channel (2.4 GHz)'),
+		o = m11opt(ss, 'advanced', form.Value, 'portal_channel', '', _('Portal Channel (2.4 GHz)'),
 			_('Forced portal channel for the 2.4 GHz band. All peer nodes will autonomously track this channel. ' +
 			  'or a valid channel number 1–13.'));
 		o.value('default', _('default'));
@@ -489,31 +501,31 @@ return view.extend({
 		o.default = 'default'; o.deps = [];
 		o.depends({ portal_detect: '0' });
 
-		o = m11opt(ss, 'advanced',  form.Flag, 'portal_use_default_ipv4', null, _('Use Default IPv4'),
+		o = m11opt(ss, 'advanced', form.Flag, 'portal_use_default_ipv4', '', _('Use Default IPv4'),
 			_('Only effective when this node is a portal. ' +
 			  'When enabled, the IPv4 address from /etc/config/network is used as the portal address. ' +
 			  'When disabled, an address is auto-calculated from the label MAC address.'));
 		o.default = '0'; o.deps = [];
 		o.depends({ auto_config: '1', portal_detect: /^(0|1|4)$/ });
 
-		o = m11opt(ss, 'advanced',  form.Value, 'portal_detect_threshold', null, _('Portal Detect Threshold'),
+		o = m11opt(ss, 'advanced', form.Value, 'portal_detect_threshold', '', _('Portal Detect Threshold'),
 			_('Number of consecutive check intervals without portal contact before the watchdog takes action ' +
 			  '(attempts reconnection, then reboots). Set to 0 to disable the watchdog.'));
 		o.datatype = 'uinteger'; o.default = '10';
 		o.deps = []; o.depends('auto_config', '1');
 
-		o = m11opt(ss, 'advanced',  form.Value, 'channel_tracking_checkinterval', null, _('Channel Tracking Checkinterval (seconds)'),
+		o = m11opt(ss, 'advanced', form.Value, 'channel_tracking_checkinterval', '', _('Channel Tracking Checkinterval (seconds)'),
 			_('Minimum interval after which peer nodes begin tracking the portal channel. ' +
 			  'Values smaller than Check Interval are ignored.'));
 		o.datatype = 'uinteger'; o.default = '30';
 
-		o = m11opt(ss, 'advanced',  form.Value, 'auto_mesh_id', null, _('Auto Mesh ID'),
+		o = m11opt(ss, 'advanced', form.Value, 'auto_mesh_id', '', _('Auto Mesh ID'),
 			_('A string that is hashed to produce a secure mesh ID. Must be identical on every mesh node. ' +
 			  'Only used when Auto Configuration is enabled.'));
 		o.datatype = 'string'; o.placeholder = 'MyMeshID';
 		o.deps = []; o.depends('auto_config', '1');
 
-		o = m11opt(ss, 'advanced',  form.ListValue, 'auto_mesh_band', null, _('Auto Mesh Band'),
+		o = m11opt(ss, 'advanced', form.ListValue, 'auto_mesh_band', '', _('Auto Mesh Band'),
 			_('Radio band to use for the auto-configured mesh interface. ' +
 			  'All peer nodes will autonomously track the portal channel regardless of this setting. ' +
 			  'Must be identical on every mesh node.'));
@@ -525,36 +537,36 @@ return view.extend({
 		o.default = '2g40'; o.deps = [];
 		o.depends('auto_config', '1');
 
-		o = m11opt(ss, 'advanced',  form.Value, 'auto_mesh_key', null, _('Auto Mesh Key'),
+		o = m11opt(ss, 'advanced', form.Value, 'auto_mesh_key', '', _('Auto Mesh Key'),
 			_('A string used to generate a secure SHA-256 mesh encryption key. ' +
 			  'Must be identical on every mesh node when Auto Configuration is enabled.'));
 		o.datatype = 'string'; o.password = true; o.placeholder = 'MySecretKey';
 		o.deps = []; o.depends('auto_config', '1');
 
-		o = m11opt(ss, 'advanced',  form.Value, 'mesh_phy_index', null, _('Mesh PHY Index'),
+		o = m11opt(ss, 'advanced', form.Value, 'mesh_phy_index', '', _('Mesh PHY Index'),
 			_('Force the auto-config mesh interface onto a specific radio (e.g. 0 for phy0, 1 for phy1). ' +
 			  'Useful on devices with multiple radios on the same band. Default: not set (first matching phy used).'));
 		o.datatype = 'uinteger'; o.placeholder = '0';
 		o.deps = []; o.depends('auto_config', '1');
 
-		o = m11opt(ss, 'advanced',  form.Value, 'country', null, _('Country Code'),
+		o = m11opt(ss, 'advanced', form.Value, 'country', '', _('Country Code'),
 			_('Set a valid ISO country code for all radios (e.g. US, CN, DE). ' +
 			  'Overrides the country set in the wireless config. Defaults to DFS-ETSI if not set.'));
 		o.datatype = 'string'; o.default = 'CN';
 
-		o = m11opt(ss, 'advanced',  form.Value, 'mesh_basename', null, _('Mesh Basename'),
+		o = m11opt(ss, 'advanced', form.Value, 'mesh_basename', '', _('Mesh Basename'),
 			_('String used to construct the mesh interface name in the form m-xxxx-n. ' +
 			  'Non-alphanumeric characters are removed; only the first 4 characters are used. ' +
 			  'Default: 11s (produces interface name m-11s-0).'));
 		o.datatype = 'string'; o.placeholder = '11s';
 
-		o = m11opt(ss, 'advanced',  form.Value, 'mesh_gate_base_ssid', null, _('Mesh Gate Base SSID'),
+		o = m11opt(ss, 'advanced', form.Value, 'mesh_gate_base_ssid', '', _('Mesh Gate Base SSID'),
 			_('Base SSID string for this node\'s gate (access point). ' +
 			  'Maximum 30 characters (or 22 if SSID Suffix is enabled). ' +
 			  'Overrides the SSID in the wireless config. Default: uses wireless config SSID.'));
 		o.datatype = 'maxlength(30)'; o.placeholder = 'MeshGate';
 
-		o = m11opt(ss, 'advanced',  form.ListValue, 'mesh_gate_encryption', null, _('Mesh Gate Encryption'),
+		o = m11opt(ss, 'advanced', form.ListValue, 'mesh_gate_encryption', '', _('Mesh Gate Encryption'),
 			_('Encryption mode for this node\'s gate (access point).'));
 		o.value('0', _('None / OWE-transition'));
 		o.value('1', _('SAE (WPA3)'));
@@ -563,40 +575,40 @@ return view.extend({
 		o.value('4', _('Opportunistic Wireless Encryption (OWE)'));
 		o.default = '0';
 
-		o = m11opt(ss, 'advanced',  form.Value, 'mesh_gate_key', null, _('Mesh Gate Key'),
+		o = m11opt(ss, 'advanced', form.Value, 'mesh_gate_key', '', _('Mesh Gate Key'),
 			_('Encryption key for this node\'s gate. ' +
 			  'Ignored when Mesh Gate Encryption is set to 0 (none) or 4 (OWE). Minimum 8 characters.'));
 		o.password = true; o.datatype = 'minlength(8)';
 		o.deps = []; o.depends('mesh_gate_encryption', /^(1|2|3)$/);
 
-		o = m11opt(ss, 'advanced',  form.Flag, 'ssid_suffix_enable', null, _('SSID Suffix Enable'),
+		o = m11opt(ss, 'advanced', form.Flag, 'ssid_suffix_enable', '', _('SSID Suffix Enable'),
 			_('Append a 4-digit suffix (last 4 hex digits of the mesh interface MAC address) to the SSID. ' +
 			  'When enabled, limits Gate Base SSID to 22 characters.'));
 		o.default = '1';
 
-		o = m11opt(ss, 'advanced',  form.Flag, 'vtun_enable', null, _('VXLAN Tunnel Enable'),
+		o = m11opt(ss, 'advanced', form.Flag, 'vtun_enable', '', _('VXLAN Tunnel Enable'),
 			_('Enables point-to-multipoint VXLAN tunneling from the portal to all compatible peer nodes. ' +
 			  'Forced to 0 when Portal Detection Mode is set to 3 (CPE).'));
 		o.default = '1'; o.deps = [];
 		o.depends('portal_detect', /^(0|1|4|5)$/);
 
-		o = m11opt(ss, 'advanced',  form.Value, 'tun_id', null, _('Tunnel ID'),
+		o = m11opt(ss, 'advanced', form.Value, 'tun_id', '', _('Tunnel ID'),
 			_('VXLAN tunnel identifier. A decimal number between 1 and 16777216 (24-bit).'));
 		o.datatype = 'range(1,16777216)'; o.default = '69';
 		o.deps = []; o.depends('vtun_enable', '1');
 
-		o = m11opt(ss, 'advanced',  form.Value, 'vtun_ip', null, _('VXLAN Tunnel IPv4 Gateway'),
+		o = m11opt(ss, 'advanced', form.Value, 'vtun_ip', '', _('VXLAN Tunnel IPv4 Gateway'),
 			_('IPv4 gateway address for the VXLAN tunnel subnet. ' +
 			  'Becomes active when this node is a portal (Portal Detection Mode 0 or 1).'));
 		o.datatype = 'ip4addr'; o.placeholder = '192.168.168.1';
 		o.deps = []; o.depends({ vtun_enable: '1', portal_detect: /^(0|1)$/ });
 
-		o = m11opt(ss, 'advanced',  form.Value, 'vtun_mask', null, _('VXLAN Tunnel IPv4 Mask'),
+		o = m11opt(ss, 'advanced', form.Value, 'vtun_mask', '', _('VXLAN Tunnel IPv4 Mask'),
 			_('Subnet mask for the VXLAN tunnel address.'));
 		o.datatype = 'ip4addr'; o.placeholder = '255.255.255.0';
 		o.deps = []; o.depends({ vtun_enable: '1', portal_detect: /^(0|1)$/ });
 
-		o = m11opt(ss, 'advanced',  form.RichListValue, 'vtun_gate_encryption', null, _('VXLAN Tunnel Gate Encryption'),
+		o = m11opt(ss, 'advanced', form.RichListValue, 'vtun_gate_encryption', '', _('VXLAN Tunnel Gate Encryption'),
 			_('Encryption mode for access points connected to the VXLAN tunnel. ' +
 			  'Default: 0 (None / OWE-transition).'));
 		o.value('0', _('None / OWE-transition'));
@@ -607,99 +619,99 @@ return view.extend({
 		o.default = '0'; o.deps = [];
 		o.depends('vtun_enable', '1');
 
-		o = m11opt(ss, 'advanced',  form.Value, 'vtun_gate_key', null, _('VXLAN Tunnel Gate Key'),
+		o = m11opt(ss, 'advanced', form.Value, 'vtun_gate_key', '', _('VXLAN Tunnel Gate Key'),
 			_('Encryption key for VXLAN tunnel gate access points. ' +
 			  'Ignored when Tunnel Gate Encryption is 0 or 4. Minimum 8 characters.'));
 		o.password = true; o.datatype = 'minlength(8)'; o.deps = [];
 		o.depends({ vtun_enable: '1', vtun_gate_encryption: /^(1|2|3)$/ });
 
-		o = m11opt(ss, 'advanced',  form.Value, 'vtun_base_ssid', null, _('VXLAN Tunnel Base SSID'),
+		o = m11opt(ss, 'advanced', form.Value, 'vtun_base_ssid', '', _('VXLAN Tunnel Base SSID'),
 			_('Base SSID for access points connected to the VXLAN tunnel. ' +
 			  'Maximum 30 characters (or 22 if SSID Suffix is enabled).'));
 		o.datatype = 'maxlength(30)'; o.default = 'Guest';
 		o.deps = []; o.depends('vtun_enable', '1');
 
-		o = m11opt(ss, 'advanced',  form.Value, 'vtun_path_cost', null, _('VXLAN Tunnel Path Cost'),
+		o = m11opt(ss, 'advanced', form.Value, 'vtun_path_cost', '', _('VXLAN Tunnel Path Cost'),
 			_('STP cost assigned to the VXLAN tunnel network. Range: 0–65534. Set to 0 to disable STP.'));
 		o.datatype = 'range(0,65534)'; o.default = '10';
 		o.deps = []; o.depends('vtun_enable', '1');
 
-		o = m11opt(ss, 'advanced',  form.RichListValue, 'mesh_gate_enable', null, _('Mesh Gate Enable'),
+		o = m11opt(ss, 'advanced', form.RichListValue, 'mesh_gate_enable', '', _('Mesh Gate Enable'),
 			_('Controls whether this node provides a gate (access point) into the mesh.'));
 		o.value('0', _('Disable all mesh gate access points'));
 		o.value('1', _('Enable all mesh gate access points'));
 		o.value('2', _('Enable only on radios NOT shared with mesh interface'));
 		o.default = '1';
 
-		o = m11opt(ss, 'advanced',  form.Flag, 'mesh_leechmode_enable', null, _('Leech Mode Enable'),
+		o = m11opt(ss, 'advanced', form.Flag, 'mesh_leechmode_enable', '', _('Leech Mode Enable'),
 			_('When enabled, this node acts as an AP with mesh backhaul but does NOT contribute to mesh routing/forwarding.<br>' +
 			'Useful when a node is within coverage of 2 or more peers and would otherwise create unstable multi-hop paths.<br>' +
 			'Can also be toggled at runtime: <code>mesh11sd mesh_leechmode [enable/disable]</code>.'));
 		o.default = '0';
 
-		o = m11opt(ss, 'advanced',  form.Value, 'txpower', null, _('TX Power (dBm)'),
+		o = m11opt(ss, 'advanced', form.Value, 'txpower', '', _('TX Power (dBm)'),
 			_('Transmit power for the mesh radio in dBm. ' +
 			  'Values outside the regulatory domain limits are ignored. Default: driver/wireless config default.'));
 		o.datatype = 'uinteger'; o.placeholder = '20';
 
-		o = m11opt(ss, 'advanced',  form.Flag, 'mesh_path_stabilisation', null, _('Mesh Path Stabilisation'),
+		o = m11opt(ss, 'advanced', form.Flag, 'mesh_path_stabilisation', '', _('Mesh Path Stabilisation'),
 			_('Prevents frequent multi-hop path changes caused by multipath signal strength jitter.'));
 		o.default = '1';
 
-		o = m11opt(ss, 'advanced',  form.Value, 'reactive_path_stabilisation_threshold', null, _('Reactive Path Stabilisation Threshold'),
+		o = m11opt(ss, 'advanced', form.Value, 'reactive_path_stabilisation_threshold', '', _('Reactive Path Stabilisation Threshold'),
 			_('Number of consecutive check intervals with an unstable neighbour path before path stabilisation is activated.'));
 		o.datatype = 'uinteger'; o.default = '10';
 
-		o = m11opt(ss, 'advanced',  form.Flag, 'mesh_mac_forced_forwarding', null, _('MAC Forced Forwarding'),
+		o = m11opt(ss, 'advanced', form.Flag, 'mesh_mac_forced_forwarding', '', _('MAC Forced Forwarding'),
 			_('Enables MAC forced forwarding on the mesh interface to prevent ARP flooding.'));
 		o.default = '1';
 
-		o = m11opt(ss, 'advanced',  form.Flag, 'gateway_proxy_arp', null, _('Gateway Proxy ARP'),
+		o = m11opt(ss, 'advanced', form.Flag, 'gateway_proxy_arp', '', _('Gateway Proxy ARP'),
 			_('Enables proxy ARP on the gateway bridge interface.'));
 		o.default = '1';
 
-		o = m11opt(ss, 'advanced',  form.Flag, 'stop_on_error', null, _('Stop on Error'),
+		o = m11opt(ss, 'advanced', form.Flag, 'stop_on_error', '', _('Stop on Error'),
 			_('When the watchdog detects an IPv4 communication failure with the portal, ' +
 			  'the daemon enters idle mode instead of rebooting. ' +
 			  'Useful on nodes without a reset button. Overrides Reboot on Error.'));
 		o.default = '0';
 
-		o = m11opt(ss, 'advanced',  form.Flag, 'reboot_on_error', null, _('Reboot on Error'),
+		o = m11opt(ss, 'advanced', form.Flag, 'reboot_on_error', '', _('Reboot on Error'),
 			_('When the watchdog detects a persistent IPv4 communication failure with the portal, ' +
 			  'the node is rebooted. Overridden by Stop on Error.'));
 		o.default = '1'; o.deps = [];
 		o.depends('stop_on_error', '0');
 
-		o = m11opt(ss, 'advanced',  form.Flag, 'apmond_enable', null, _('AP Monitor Enable'),
+		o = m11opt(ss, 'advanced', form.Flag, 'apmond_enable', '', _('AP Monitor Enable'),
 			_('Enables the access point monitoring daemon (apmond). ' +
 			  'Collects AP data and forwards it to the portal node.'));
 		o.default = '0';
 
-		o = m11opt(ss, 'advanced',  form.Value, 'apmond_cgi_dir', null, _('AP Monitor CGI Directory'),
+		o = m11opt(ss, 'advanced', form.Value, 'apmond_cgi_dir', '', _('AP Monitor CGI Directory'),
 			_('Directory for apmond CGI scripts. Takes effect when this node becomes a portal. Default: /www/cgi-bin.'));
 		o.placeholder = '/www/cgi-bin'; o.deps = [];
 		o.depends({ apmond_enable: '1', portal_detect: /^(0|1|4)$/ });
 
-		o = m11opt(ss, 'advanced',  form.Value, 'mesh_backhaul_led', null, _('Mesh Backhaul LED'),
+		o = m11opt(ss, 'advanced', form.Value, 'mesh_backhaul_led', '', _('Mesh Backhaul LED'),
 			_('LED used as a mesh backhaul heartbeat indicator. ' +
 			  'LED is solid when the mesh interface is up, and switches to a heartbeat pattern when peers are connected. ' +
 			  '"auto" uses the power/system LED if present. "none" disables. ' +
 			  'Other LEDs are listed in /sys/class/leds as "color:function" (e.g. blue:run). Default: auto.'));
 		o.placeholder = 'auto';
 
-		o = m11opt(ss, 'advanced',  form.Value, 'mesh_rssi_threshold', 'mesh_params', _('RSSI Threshold (dBm)'),
+		o = m11opt(ss, 'advanced', form.Value, 'mesh_rssi_threshold', 'mesh_params', _('RSSI Threshold (dBm)'),
 			_('Minimum signal strength required to form a peer connection. ' +
 			  'Range: −95 to −25 dBm. Default: −65. ' +
 			  'Lower values permit weaker links; higher values enforce stronger connections.'));
 		o.datatype = 'range(-95,-25)'; o.default = '-65';
 
-		o = m11opt(ss, 'advanced',  form.Value, 'mesh_max_peer_links', 'mesh_params', _('Max Peer Links'),
+		o = m11opt(ss, 'advanced', form.Value, 'mesh_max_peer_links', 'mesh_params', _('Max Peer Links'),
 			_('Maximum number of simultaneous direct peer connections per node. ' +
 			  'Range: 0–32. Default: 16. ' +
 			  'Reduce on dense deployments to lower protocol overhead.'));
 		o.datatype = 'range(0,32)'; o.default = '16';
 
-		o = m11opt(ss,'daemon', form.Button, '_mesh11sd_status_btn', null, _('Live Status'));
+		o = m11opt(ss,'daemon', form.Button, '_mesh11sd_status_btn', '', _('Live Status'));
 		o.inputtitle = _('Refresh Status'); o.inputstyle = 'positive'; o.addremove = false;
 		o.onclick = function () {
 			return fs.exec_direct('/usr/sbin/mesh11sd', ['status']).then(function (out) {
@@ -710,7 +722,7 @@ return view.extend({
 			});
 		};
 
-		o = m11opt(ss,'daemon', form.Button, '_mesh11sd_log_btn', null, _('Daemon Log'));
+		o = m11opt(ss,'daemon', form.Button, '_mesh11sd_log_btn', '', _('Daemon Log'));
 		o.inputtitle = _('View Recent Log'); o.inputstyle = 'action'; o.addremove = false;
 		o.onclick = function () {
 			return fs.read('/tmp/mesh11sd/mesh11sd_log.log').then(function (content) {
@@ -726,6 +738,193 @@ return view.extend({
 				showMeshModal(_('Daemon Log'), _('Execution failed: %s').format(e.message || e));
 			});
 		};
+
+		s.tab('settings', _('Usteer Settings'));
+		o = usteeropt(s, form.Flag, 'syslog', _('Log messages to syslog'),
+			_('default true'));
+		o.default = '1'; o.rmempty = false;
+
+		o = usteeropt(s, form.Flag, 'local_mode', _('Local mode'),
+			_('Disable network communication') + ' (' + _('default false') + ')');
+		o.rmempty = false;
+
+		o = usteeropt(s, form.Flag, 'ipv6', _('IPv6 mode'),
+			_('Use IPv6 for remote exchange') + ' (' + _('default false') + ')');
+		o.rmempty = false;
+
+		o = usteeropt(s, form.ListValue, 'debug_level', _('Debug level'));
+		o.value('0', _('Fatal'));
+		o.value('1', _('Info'));
+		o.value('2', _('Verbose'));
+		o.value('3', _('Some debug'));
+		o.value('4', _('Network packet info'));
+		o.value('5', _('All debug messages'));
+		o.rmempty = false; o.editable = true;
+
+		o = usteeropt(s, form.Value, 'max_neighbor_reports', _('Max neighbor reports'),
+			_('Maximum number of neighbor reports set for a node'));
+		o.optional = true; o.placeholder = 8;
+
+		o = usteeropt(s, form.Value, 'sta_block_timeout', _('Sta block timeout'),
+			_('Maximum amount of time (ms) a station may be blocked due to policy decisions'));
+		o.optional = true; o.placeholder = 30000;
+
+		o = usteeropt(s, form.Value, 'local_sta_timeout', _('Local sta timeout'),
+			_('Maximum amount of time (ms) a local unconnected station is tracked'));
+		o.optional = true; o.placeholder = 120000;
+
+		o = usteeropt(s, form.Value, 'measurement_report_timeout', _('Measurement report timeout'),
+			_('Maximum amount of time (ms) a measurement report is stored'));
+		o.optional = true; o.placeholder = 120000;
+
+		o = usteeropt(s, form.Value, 'local_sta_update', _('Local sta update'),
+			_('Local station information update interval (ms)'));
+		o.optional = true; o.placeholder = 1000;
+
+		o = usteeropt(s, form.Value, 'max_retry_band', _('Max retry band'),
+			_('Maximum number of consecutive times a station may be blocked by policy'));
+		o.optional = true; o.placeholder = 5;
+
+		o = usteeropt(s, form.Value, 'seen_policy_timeout', _('Seen policy timeout'),
+			_('Maximum idle time of a station entry (ms) to be considered for policy decisions'));
+		o.optional = true; o.placeholder = 30000;
+
+		o = usteeropt(s, form.Value, 'load_balancing_threshold', _('Load balancing threshold'),
+			_('Minimum number of stations delta between APs before load balancing policy is active'));
+		o.optional = true; o.placeholder = 0;
+
+		o = usteeropt(s, form.Value, 'band_steering_threshold', _('Band steering threshold'),
+			_('Minimum number of stations delta between bands before band steering policy is active'));
+		o.optional = true; o.placeholder = 5;
+
+		o = usteeropt(s, form.Value, 'remote_update_interval', _('Remote update interval'),
+			_('Interval (ms) between sending state updates to other APs'));
+		o.optional = true; o.placeholder = 1000;
+
+		o = usteeropt(s, form.Value, 'remote_node_timeout', _('Remote node timeout'),
+			_('Number of remote update intervals after which a remote-node is deleted'));
+		o.optional = true; o.placeholder = 10;
+
+		o = usteeropt(s, form.Flag, 'assoc_steering', _('Assoc steering'),
+			_('Allow rejecting assoc requests for steering purposes') + ' (' + _('default false') + ')');
+		o.optional = true;
+
+		o = usteeropt(s, form.Flag, 'probe_steering', _('Probe steering'),
+			_('Allow ignoring probe requests for steering purposes') + ' (' + _('default false') + ')');
+		o.optional = true;
+
+		o = usteeropt(s, form.Value, 'min_connect_snr', _('Min connect SNR'),
+			_('Minimum signal-to-noise ratio or signal level (dBm) to allow connections'));
+		o.optional = true; o.placeholder = 0; o.datatype = 'integer';
+
+		o = usteeropt(s, form.Value, 'min_snr', _('Min SNR'),
+			_('Minimum signal-to-noise ratio or signal level (dBm) to remain connected'));
+		o.optional = true; o.placeholder = 0; o.datatype = 'integer';
+
+		o = usteeropt(s, form.Value, 'min_snr_kick_delay', _('Min SNR kick delay'),
+			_('Timeout after which a station with SNR < min_SNR will be kicked'));
+		o.optional = true; o.placeholder = 5000; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'steer_reject_timeout', _('Steer reject timeout'),
+			_('Timeout (ms) for which a client will not be steered after rejecting a BSS-transition-request'));
+		o.optional = true; o.placeholder = 60000; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'roam_process_timeout', _('Roam process timeout'),
+			_('Timeout (in ms) after which a association following a disassociation is not seen as a roam'));
+		o.optional = true; o.placeholder = 5000; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'roam_scan_snr', _('Roam scan SNR'),
+			_('Minimum signal-to-noise ratio or signal level (dBm) before attempting to trigger client scans for roam'));
+		o.optional = true; o.placeholder = 0; o.datatype = 'integer';
+
+		o = usteeropt(s, form.Value, 'roam_scan_tries', _('Roam scan tries'),
+			_('Maximum number of client roaming scan trigger attempts'));
+		o.optional = true; o.placeholder = 3; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'roam_scan_timeout', _('Roam scan timeout'),
+			_('Retry scanning when roam_scan_tries is exceeded after this timeout (in ms).') +
+			_(' In case this option is disabled, the client is kicked instead')
+		);
+		o.optional = true; o.placeholder = 0; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'roam_scan_interval', _('Roam scan interval'),
+			_('Minimum time (ms) between client roaming scan trigger attempts'));
+		o.optional = true; o.placeholder = 10000; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'roam_trigger_snr', _('Roam trigger SNR'),
+			_('Minimum signal-to-noise ratio or signal level (dBm) before attempting to trigger forced client roaming'));
+		o.optional = true; o.placeholder = 0; o.datatype = 'integer';
+
+		o = usteeropt(s, form.Value, 'roam_trigger_interval', _('Roam trigger interval'),
+			_('Minimum time (ms) between client roaming trigger attempts'));
+		o.optional = true; o.placeholder = 60000; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'roam_kick_delay', _('Roam kick delay'),
+			_('Timeout (ms) for client roam requests. usteer will kick the client after this times out.'));
+		o.optional = true; o.placeholder = 10000; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'signal_diff_threshold', _('Signal diff threshold'),
+			_('Minimum signal strength difference until AP steering policy is active'));
+		o.optional = true; o.placeholder = 0; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'initial_connect_delay', _('Initial connect delay'),
+			_('Initial delay (ms) before responding to probe requests (to allow other APs to see packets as well)'));
+		o.optional = true; o.placeholder = 0; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Flag, 'load_kick_enabled', _('Load kick enabled'),
+			_('Enable kicking client on excessive channel load') + ' (' + _('default false') + ')');
+		o.optional = true;
+
+		o = usteeropt(s, form.Value, 'load_kick_threshold', _('Load kick threshold'),
+			_('Minimum channel load (%) before kicking clients'));
+		o.optional = true; o.placeholder = 75; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'load_kick_delay', _('Load kick delay'),
+			_('Minimum amount of time (ms) that channel load is above threshold before starting to kick clients'));
+		o.optional = true; o.placeholder = 10000; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'load_kick_min_clients', _('Load kick min clients'),
+			_('Minimum number of connected clients before kicking based on channel load'));
+		o.optional = true; o.placeholder = 10; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'load_kick_reason_code', _('Load kick reason code'),
+			_('Reason code on client kick based on channel load.') + ' Default: WLAN_REASON_DISASSOC_AP_BUSY)'
+		);
+		o.optional = true; o.placeholder = 5; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'band_steering_interval', _('Band steering interval'),
+			_('Attempting to steer clients to a higher frequency-band every n ms. A value of 0 disables band-steering.'));
+		o.optional = true; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'band_steering_min_snr', _('Band steering min SNR'),
+			_('Minimal SNR or absolute signal a device has to maintain over band_steering_interval to be steered to a higher frequency band.'));
+		o.optional = true; o.placeholder = -60; o.datatype = 'integer';
+
+		o = usteeropt(s, form.Value, 'link_measurement_interval', _('Link measurement interval'),
+			_('Interval (ms) the device is sent a link-measurement request to help assess the bi-directional link quality.') +
+			_('Setting the interval to 0 disables link-measurements.')
+		);
+		o.optional = true; o.placeholder = 30000; o.datatype = 'uinteger';
+
+		o = usteeropt(s, form.Value, 'node_up_script', _('Node up script'),
+			_('Script to run after bringing up a node'));
+		o.optional = true; o.datatype = 'string';
+
+		o = usteeropt(s, form.MultiValue, 'event_log_types', _('Event log types'),
+			_('Message types to include in log.'));
+		o.value('probe_req_accept');
+		o.value('probe_req_deny');
+		o.value('auth_req_accept');
+		o.value('auth_req_deny');
+		o.value('assoc_req_accept');
+		o.value('assoc_req_deny');
+		o.value('load_kick_trigger');
+		o.value('load_kick_reset');
+		o.value('load_kick_min_clients');
+		o.value('load_kick_no_client');
+		o.value('load_kick_client');
+		o.value('signal_kick');
+		o.optional = true; o.datatype = 'list(string)';
 
 		o = s.taboption('miscellaneous', form.Value, 'hostname', _('Hostname'));
 		o.datatype = 'hostname';
