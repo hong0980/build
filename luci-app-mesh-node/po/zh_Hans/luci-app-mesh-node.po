@@ -766,5 +766,12 @@ msgstr "接口列表"
 
 msgid "GATEWAYS"
 msgstr "网关列表"
-msgid "default"
-msgstr "默认"
+
+msgid "Usteer Settings"
+msgstr "Usteer 设置"
+
+msgid "Hostapd Log Level"
+msgstr "Hostapd 日志级别"
+
+msgid "Global setting for all Wi-Fi radios"
+msgstr "全局设置，应用于所有 Wi-Fi 无线模块"

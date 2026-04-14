@@ -107,12 +107,12 @@ do_network() {
 	config_get old_lan_hash main old_lan_hash ''
 	config_get old_wan_hash main old_wan_hash ''
 
+	[ -n "$old_lan_ip" ] || uci -q set mesh_node.main.old_lan_ip="$(uci -q get network.lan.ipaddr)"
 	[ "$lan_hash" = "$old_lan_hash" ] || { do_lan; changed=1; }
 	[ "$wan_hash" = "$old_wan_hash" ] || { do_wan; changed=1; }
+	[ "$changed" -eq 0 ] && return 1
 	uci -q set mesh_node.main.old_lan_hash="$lan_hash"
 	uci -q set mesh_node.main.old_wan_hash="$wan_hash"
-	[ -n "$old_lan_ip" ] || uci -q set mesh_node.main.old_lan_ip="$(uci -q get network.lan.ipaddr)"
-	[ "$changed" -eq 0 ] && return 1
 	return 0
 }
 
@@ -159,6 +159,9 @@ do_wireless() {
 		config_get band "$dev" band
 		local mesh_ifname="phy${dev#radio}-mesh0"
 		uci -q del wireless.${mesh_iface}
+		uci -q set wireless."$dev".disabled='0'
+		uci -q set wireless."$dev".cell_density='0'
+		uci -q set wireless."$dev".log_level="${log_level}"
 
 		case "$mesh_radio" in
 			"none") ;;
@@ -183,12 +186,10 @@ do_wireless() {
 			set wireless.${mesh_iface}.ifname='${mesh_ifname}'
 			set wireless.${mesh_iface}.mesh_rssi_threshold='0'
 		EOF
-		uci -q set wireless."$dev".disabled='0'
-		uci -q set wireless."$dev".cell_density='0'
 	}
-iw dev bat0 survey dump
+
 	local mesh_hash old_mesh_hash radio_hash old_radio_hash changed=0
-	mesh_hash=$(hash_value "${mesh_id}:${mesh_pass}:${mesh_radio}:${use_batadv}")
+	mesh_hash=$(hash_value "${mesh_id}:${mesh_pass}:${mesh_radio}:${use_batadv}:${log_level}")
 	radio_hash=$(hash_value "${ssid_2g}:${ssid_5g}:${key_2g}:${key_5g}:${wifi_pass}:${wifi_ssid}")
 
 	config_get old_mesh_hash  main old_mesh_hash  ''
@@ -217,6 +218,10 @@ do_batadv() {
 			set network.bat0.proto='batadv'
 			set network.bat0.gw_mode='off'
 			set network.bat0.routing_algo='${routing_algo}'
+			set network.bat0.log_level='0'
+			set network.bat0.hop_penalty='30'
+			set network.bat0.orig_interval='1000'
+			set network.bat0.multicast_fanout='16'
 
 			set network.batmesh=interface
 			set network.batmesh.proto='batadv_hardif'
@@ -260,10 +265,10 @@ do_services() {
 do_mesh11sd() {
 	local m11_hash; m11_hash=$(hash_value "$(uci -q show mesh11sd)")
 	config_get old_m11_hash main old_m11_hash ''
-	[ "$m11_hash" = "$old_m11_hash" ] && return
-
+	[ "$m11_hash" = "$old_m11_hash" ] && return 1
+	uci -q set mesh11sd.setup.enabled="${m11_enable}"
 	uci -q set mesh_node.main.old_m11_hash="$m11_hash"
-	mesh11sd_changed=1
+	return 0
 }
 
 do_usteer() {
@@ -271,25 +276,13 @@ do_usteer() {
 	usteer_hash=$(hash_value "$(uci -q show usteer)")
 	config_get old_usteer_hash main old_usteer_hash ''
 	[ "$usteer_hash" = "$old_usteer_hash" ] && return 1
-
+	uci -q set usteer.@usteer[0].enabled="${enable_usteer}"
 	uci -q set mesh_node.main.old_usteer_hash="$usteer_hash"
-	uci -q set usteer.@usteer[0].enabled="${enable_usteer:-0}"
-	uci -q set usteer.@usteer[0].network='lan'
-	uci -q set usteer.@usteer[0].local_mode='0'
-	uci -q set usteer.@usteer[0].min_snr='-75'
-	uci -q set usteer.@usteer[0].min_snr_kick_delay='30000'
-	if [ "$use_batadv" = "1" ]; then
-		uci -q set usteer.@usteer[0].assoc_steering='0'
-		uci -q set usteer.@usteer[0].probe_steering='0'
-		uci -q set usteer.@usteer[0].signal_diff_threshold='10'
-		uci -q set usteer.@usteer[0].band_steering_min_snr='-60'
-		uci -q set usteer.@usteer[0].band_steering_interval='120000'
-	fi
 	return 0
 }
 
 start() {
-	local combo_mode wan_proto lan_proto lan_ip gateway user pass \
+	local combo_mode wan_proto lan_proto lan_ip gateway user pass log_level \
 		  ssid_2g ssid_5g key_2g key_5g wifi_ssid wifi_pass mesh_id mesh_pass \
 		  mesh_radio enable_usteer init old_init hostname old_hostname \
 		  old_m11_hash m11_enable use_batadv routing_algo usteer_changed=0 \
@@ -309,6 +302,7 @@ start() {
 	config_get ssid_2g       main ssid_2g         ''
 	config_get ssid_5g       main ssid_5g         ''
 	config_get wifi_pass     main wifi_pass       ''
+	config_get log_level     main log_level       ''
 	config_get wifi_ssid     main wifi_ssid       ''
 	config_get mesh_id       main mesh_id         ''
 	config_get mesh_pass     main mesh_pass       ''
@@ -321,8 +315,8 @@ start() {
 
 	config_get routing_algo  globals routing_algo ''
 	config_get_bool use_batadv    main use_batadv
-	config_get_bool enable_usteer main enable_usteer
-	config_get_bool m11_enable    globals m11_enable
+	config_get_bool enable_usteer main enable_usteer 0
+	config_get_bool m11_enable    globals m11_enable 0
 
 	[ "$hostname" != "$old_hostname" ] && {
 		uci -q set system.@system[0].hostname="$hostname"
@@ -335,7 +329,7 @@ start() {
 	do_wireless
 	do_batadv   && network_changed=1
 	do_network  && network_changed=1
-	do_mesh11sd
+	do_mesh11sd && mesh11sd_changed=1
 	do_usteer   && usteer_changed=1
 	uci -q commit
 
