@@ -357,7 +357,11 @@ return view.extend({
 		so.value('BATMAN_IV', _('BATMAN_IV — link quality (recommended)'));
 		so.value('BATMAN_V',  _('BATMAN_V — throughput based'));
 		so.default = 'BATMAN_IV';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
+		so.depends('mesh_node.main.use_batadv', '1');
+		so.write = function (section_id, value) {
+			this.super('write', [section_id, value]);
+			return this.map.uci.set('network', 'bat0', 'routing_algo', value);
+		};
 
 		so = ss.taboption('general', form.Flag, 'aggregated_ogms', _('Aggregate Originator Messages'),
 			_('reduces overhead by collecting and aggregating originator messages in a single packet rather than many small ones'));
@@ -425,13 +429,15 @@ return view.extend({
 		so.uciconfig = 'network'; so.ucisection = 'bat0';
 
 		o = s.taboption('mesh', form.SectionValue, '_mesh11sd_config', form.NamedSection, 'globals');
-		o.depends('use_batadv', '0');
+		o.depends('mesh_node.main.use_batadv', '0');
+
 		ss = o.subsection;
 		ss.tab('daemon', _('General Settings'));
 		ss.tab('advanced', _('Advanced Settings'));
 
 		so = ss.taboption('daemon', form.DummyValue, '_m11_badge', _('Daemon Status'));
 		so.rawhtml = true;
+		so.depends('mesh_node.main.use_batadv', '0');
 		so.cfgvalue = function () {
 			return E('span', { style: 'display:inline-flex;align-items:center;gap:8px;' }, [
 				E('strong', { style: `color:${running ? '#02a546ff' : '#FF3B30'};` }, running ? _('Running') : _('Stopped'))
@@ -442,11 +448,12 @@ return view.extend({
 			_('the daemon continuously monitors mesh interfaces, synchronises ' +
 			  'kernel parameters, removes phantom routes, and manages DHCP role selection ' +
 			  'based on upstream connectivity.'));
-		so.write = function (section_id, value) {
-			this.super('write', [section_id, value]);
-			return this.map.uci.set('mesh11sd', 'setup', 'enabled', value);
-		};
 		so.default = '0'; so.rmempty = false;
+		so.depends('mesh_node.main.use_batadv', '0');
+		so.write = function (section_id, value) {
+			this.map.uci.set('mesh11sd', 'setup', 'enabled', value);
+			return this.super('write', [section_id, value]);
+		};
 
 		o = m11opt(ss,'daemon', form.Value, 'checkinterval', '', _('Check Interval (seconds)'),
 			_('How often the daemon checks and updates mesh configuration. Minimum: 10.'));

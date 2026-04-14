@@ -17,18 +17,16 @@ do_network() {
 					del dhcp.lan.max_valid_lifetime
 					del dhcp.lan.max_preferred_lifetime
 					set dhcp.lan.ignore='1'
-					set dhcp.lan.dhcpv4='disabled'
 
 					set network.lan.proto='static'
 					set network.lan.device='br-lan'
-					del network.lan.ipaddr
-					add_list network.lan.ipaddr='$lan_ip'
+					set network.lan.ipaddr='$lan_ip'
+					set network.lan.netmask='255.255.255.0'
 					set network.lan.gateway='$gateway'
 					del network.lan.ip6assign
 					set network.lan.multipath='off'
 					del network.lan.dns
 					add_list network.lan.dns='$gateway'
-					del network.lan.netmask
 					del firewall.@zone[0].network
 					set network.@device[0].stp='1'
 				EOF
@@ -141,17 +139,15 @@ do_wireless() {
 		[ -z "$iface_mac" ] && iface_mac=$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')
 		iface_mac="${iface_mac:=000000000000}"
 		uci -q batch <<-EOF
-			set wireless.${iface}.ocv='0'
 			set wireless.${iface}.disabled='0'
 			set wireless.${iface}.proxy_arp='1'
 			set wireless.${iface}.ieee80211k='1'
-			set wireless.${iface}.ieee80211v='1'
 			set wireless.${iface}.ieee80211r='1'
 			set wireless.${iface}.ft_over_ds='0'
 			set wireless.${iface}.nasid='${iface_mac}'
 			set wireless.${iface}.mobility_domain='55ff'
 			set wireless.${iface}.encryption='psk2'
-			set wireless.${iface}.ft_psk_generate_local='1'
+			set wireless.${iface}.ft_psk_generate_local='0'
 			set wireless.${iface}.bss_transition='1'
 			set wireless.${iface}.r1_key_holder='9f8e7d6c5b4a'
 		EOF
@@ -190,7 +186,7 @@ do_wireless() {
 		uci -q set wireless."$dev".disabled='0'
 		uci -q set wireless."$dev".cell_density='0'
 	}
-
+iw dev bat0 survey dump
 	local mesh_hash old_mesh_hash radio_hash old_radio_hash changed=0
 	mesh_hash=$(hash_value "${mesh_id}:${mesh_pass}:${mesh_radio}:${use_batadv}")
 	radio_hash=$(hash_value "${ssid_2g}:${ssid_5g}:${key_2g}:${key_5g}:${wifi_pass}:${wifi_ssid}")
@@ -220,6 +216,7 @@ do_batadv() {
 			set network.bat0=interface
 			set network.bat0.proto='batadv'
 			set network.bat0.gw_mode='off'
+			set network.bat0.routing_algo='${routing_algo}'
 
 			set network.batmesh=interface
 			set network.batmesh.proto='batadv_hardif'
@@ -273,17 +270,18 @@ do_usteer() {
 	local usteer_hash old_usteer_hash
 	usteer_hash=$(hash_value "$(uci -q show usteer)")
 	config_get old_usteer_hash main old_usteer_hash ''
-	[ "$usteer_hash" = "$old_usteer_hash" ] && return
+	[ "$usteer_hash" = "$old_usteer_hash" ] && return 1
 
 	uci -q set mesh_node.main.old_usteer_hash="$usteer_hash"
 	uci -q set usteer.@usteer[0].enabled="${enable_usteer:-0}"
 	uci -q set usteer.@usteer[0].network='lan'
 	uci -q set usteer.@usteer[0].local_mode='0'
+	uci -q set usteer.@usteer[0].min_snr='-75'
+	uci -q set usteer.@usteer[0].min_snr_kick_delay='30000'
 	if [ "$use_batadv" = "1" ]; then
-		uci -q set usteer.@usteer[0].min_snr='15'
-		uci -q set usteer.@usteer[0].assoc_steering='1'
-		uci -q set usteer.@usteer[0].probe_steering='1'
-		uci -q set usteer.@usteer[0].signal_diff_threshold='5'
+		uci -q set usteer.@usteer[0].assoc_steering='0'
+		uci -q set usteer.@usteer[0].probe_steering='0'
+		uci -q set usteer.@usteer[0].signal_diff_threshold='10'
 		uci -q set usteer.@usteer[0].band_steering_min_snr='-60'
 		uci -q set usteer.@usteer[0].band_steering_interval='120000'
 	fi
@@ -294,7 +292,7 @@ start() {
 	local combo_mode wan_proto lan_proto lan_ip gateway user pass \
 		  ssid_2g ssid_5g key_2g key_5g wifi_ssid wifi_pass mesh_id mesh_pass \
 		  mesh_radio enable_usteer init old_init hostname old_hostname \
-		  old_m11_hash m11_enable use_batadv usteer_changed=0 \
+		  old_m11_hash m11_enable use_batadv routing_algo usteer_changed=0 \
 		  network_changed=0 wireless_changed=0 mesh11sd_changed=0
 
 	config_load mesh_node
@@ -321,6 +319,7 @@ start() {
 	config_get hostname      main hostname        ''
 	config_get old_hostname  main old_hostname    ''
 
+	config_get routing_algo  globals routing_algo ''
 	config_get_bool use_batadv    main use_batadv
 	config_get_bool enable_usteer main enable_usteer
 	config_get_bool m11_enable    globals m11_enable
@@ -354,6 +353,7 @@ start() {
 
 	[ "$usteer_changed" = 1 ] && {
 		if [ "$enable_usteer" = '1' ]; then
+			[ "$use_batadv" = "1" ] && sleep 10
 			/etc/init.d/usteer enable  2>/dev/null || true
 			/etc/init.d/usteer restart 2>/dev/null || true
 		else
