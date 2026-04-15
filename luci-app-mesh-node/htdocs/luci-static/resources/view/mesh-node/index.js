@@ -128,6 +128,7 @@ return view.extend({
 				}),
 			fs.exec('/etc/init.d/mesh11sd', ['running'])
 				.then(function (r) { return r.code === 0; }),
+			uci.load('network'),
 			uci.load('mesh_node')
 		]);
 	},
@@ -367,9 +368,20 @@ return view.extend({
 		so.value('BATMAN_V',  _('BATMAN_V — throughput based'));
 		so.default = 'BATMAN_IV';
 		so.depends('mesh_node.main.use_batadv', '1');
-		so.write = function (section_id, value) {
-			this.super('write', [section_id, value]);
-			return this.map.uci.set('network', 'bat0', 'routing_algo', value);
+		so.write = function(section_id, value) {
+			if (!uci.get('network', 'bat0')) {
+				uci.add('network', 'interface', 'bat0');
+				uci.set('network', 'bat0',      'proto',   'batadv');
+				uci.set('network', 'bat0',      'gw_mode', 'off');
+			}
+			if (!uci.get('network', 'batmesh')) {
+				uci.add('network', 'interface', 'batmesh');
+				uci.set('network', 'batmesh',   'proto',  'batadv_hardif');
+				uci.set('network', 'batmesh',   'master', 'bat0');
+				uci.set('network', 'batmesh',   'mtu',    '1536');
+			}
+
+			return this.super('write', [section_id, value]);
 		};
 
 		so = ss.taboption('general', form.Flag, 'aggregated_ogms', _('Aggregate Originator Messages'),

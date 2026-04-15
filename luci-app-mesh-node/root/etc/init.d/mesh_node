@@ -206,35 +206,20 @@ do_wireless() {
 }
 
 do_batadv() {
-	local old_use_batadv
+	local old_use_batadv bat0_in_bridge
 	config_get old_use_batadv main old_use_batadv ''
 	[ "$use_batadv" = "$old_use_batadv" ] && return 1
 	uci -q set mesh_node.main.old_use_batadv="$use_batadv"
 
 	if [ "$use_batadv" = "1" ]; then
 		modprobe batman-adv 2>/dev/null || true
-		uci -q batch <<-EOF
-			set network.bat0=interface
-			set network.bat0.proto='batadv'
-			set network.bat0.gw_mode='off'
-			set network.bat0.routing_algo='${routing_algo}'
-			set network.bat0.log_level='0'
-			set network.bat0.hop_penalty='30'
-			set network.bat0.orig_interval='1000'
-			set network.bat0.multicast_fanout='16'
-
-			set network.batmesh=interface
-			set network.batmesh.proto='batadv_hardif'
-			set network.batmesh.master='bat0'
-			set network.batmesh.mtu='1536'
-		EOF
-
-		local bat0_in_bridge; bat0_in_bridge=$(uci -q show network.@device[0].ports 2>/dev/null | grep -c 'bat0')
+		uci -q set network.bat0.routing_algo='${routing_algo}'
+		bat0_in_bridge=$(uci -q show network.@device[0].ports 2>/dev/null | grep -c 'bat0')
 		[ "${bat0_in_bridge:-0}" -eq 0 ] && \
 			uci -q add_list network.@device[0].ports='bat0'
 	else
-		uci -q del network.batmesh
 		uci -q del network.bat0
+		uci -q del network.batmesh
 		uci -q del_list network.@device[0].ports='bat0'
 		rmmod batman-adv 2>/dev/null || true
 	fi
