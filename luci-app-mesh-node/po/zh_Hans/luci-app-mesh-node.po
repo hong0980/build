@@ -775,3 +775,34 @@ msgstr "Hostapd 日志级别"
 
 msgid "Global setting for all Wi-Fi radios"
 msgstr "全局设置，应用于所有 Wi-Fi 无线模块"
+
+msgid "802.11r Mobility Domain"
+msgstr "802.11r 移动域"
+
+msgid ""
+"4-hex-digit domain identifier shared by all APs that participate in fast "
+"roaming (FT). Must be identical on every node. Change this if you have "
+"multiple independent mesh networks in the same area to avoid cross-domain FT conflicts."
+msgstr ""
+"由所有参与快速漫游 (FT) 的 AP 共享的 4 位十六进制域标识符。所有节点必须保持一"
+"致。如果你在同一区域拥有多个独立的 Mesh 网络，请修改此值以避免跨域 FT 冲突。"
+
+msgid "802.11r FT Key Mode"
+msgstr "802.11r 密钥管理模式"
+
+msgid "Controls how Fast Transition (FT) session keys are shared between APs."
+msgstr "控制 AP 之间如何共享快速漫游 (FT) 会话密钥。"
+
+msgid ""
+"Distributed FT (advanced) — APs exchange FT keys via RRB protocol. Requires "
+"manual r0kh/r1kh peer lists in each AP's wireless config."
+msgstr ""
+"分布式 FT (高级) — AP 通过 RRB 协议交换 FT 密钥。需要在每个 AP 的无线配置中手"
+"动设置 r0kh/r1kh 邻居列表。"
+
+msgid ""
+"Local key derivation (recommended) — each AP derives FT keys independently; "
+"no inter-AP key sync required. Works correctly out of the box."
+msgstr ""
+"本地密钥派生 (推荐) — 各 AP 独立生成 FT 密钥；无需 AP 间密钥同步。开箱即用，无"
+"需额外配置。"
