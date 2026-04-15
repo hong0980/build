@@ -5,11 +5,6 @@ STOP=10
 
 hash_value() { echo "$1" | md5sum | awk '{print $1}'; }
 
-derive_hex() {
-	local seed="$1" len="${2:-12}"
-	echo "$seed" | md5sum | awk '{print $1}' | cut -c1-${len}
-}
-
 do_network() {
 	do_lan() {
 		case "$lan_proto" in
@@ -123,7 +118,7 @@ do_network() {
 
 do_wireless() {
 	wifi_iface() {
-		local iface="$1" dev band mode band_tag="2g"
+		local iface="$1" dev band mode
 		config_get mode "$iface" mode
 		[ "$mode" = "ap" ] || return
 		config_get dev  "$iface" device
@@ -131,7 +126,6 @@ do_wireless() {
 
 		case "$band" in
 			5g|5GHz|a|an)
-				band_tag="5g"
 				uci -q set wireless."$iface".key="${wifi_pass:-$key_5g}"
 				uci -q set wireless."$iface".ssid="${wifi_ssid:-$ssid_5g}"
 				;;
@@ -141,24 +135,21 @@ do_wireless() {
 				;;
 		esac
 
-		local base_mac; base_mac=$(cat /sys/class/net/br-lan/address 2>/dev/null | tr -d ':')
-		[ -z "$base_mac" ] && base_mac=$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')
-		base_mac="${base_mac:=000000000000}"
-		local iface_nasid; iface_nasid=$(derive_hex "${base_mac}${band_tag}" 12)
-		local iface_r1kh; iface_r1kh=$(derive_hex "${base_mac}${band_tag}r1kh" 12)
-
+		local iface_mac; iface_mac=$(cat /sys/class/net/br-lan/address 2>/dev/null | tr -d ':')
+		[ -z "$iface_mac" ] && iface_mac=$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')
+		iface_mac="${iface_mac:=000000000000}"
 		uci -q batch <<-EOF
 			set wireless.${iface}.disabled='0'
 			set wireless.${iface}.proxy_arp='1'
 			set wireless.${iface}.ieee80211k='1'
 			set wireless.${iface}.ieee80211r='1'
 			set wireless.${iface}.ft_over_ds='0'
-			set wireless.${iface}.nasid='${iface_nasid}'
+			set wireless.${iface}.nasid='${iface_mac}'
+			set wireless.${iface}.mobility_domain='55ff'
 			set wireless.${iface}.encryption='psk2'
+			set wireless.${iface}.ft_psk_generate_local='0'
 			set wireless.${iface}.bss_transition='1'
-			set wireless.${iface}.r1_key_holder='${iface_r1kh}'
-			set wireless.${iface}.mobility_domain='${mobility_domain}'
-			set wireless.${iface}.ft_psk_generate_local='${ft_advanced}'
+			set wireless.${iface}.r1_key_holder='9f8e7d6c5b4a'
 		EOF
 	}
 
@@ -199,7 +190,7 @@ do_wireless() {
 
 	local mesh_hash old_mesh_hash radio_hash old_radio_hash changed=0
 	mesh_hash=$(hash_value "${mesh_id}:${mesh_pass}:${mesh_radio}:${use_batadv}:${log_level}")
-	radio_hash=$(hash_value "${ssid_2g}:${ssid_5g}:${key_2g}:${key_5g}:${wifi_pass}:${wifi_ssid}:${mobility_domain}:${ft_advanced}")
+	radio_hash=$(hash_value "${ssid_2g}:${ssid_5g}:${key_2g}:${key_5g}:${wifi_pass}:${wifi_ssid}")
 
 	config_get old_mesh_hash  main old_mesh_hash  ''
 	config_get old_radio_hash main old_radio_hash ''
@@ -293,7 +284,6 @@ do_usteer() {
 start() {
 	local combo_mode wan_proto lan_proto lan_ip gateway user pass log_level \
 		  ssid_2g ssid_5g key_2g key_5g wifi_ssid wifi_pass mesh_id mesh_pass \
-		  mobility_domain ft_advanced \
 		  mesh_radio enable_usteer init old_init hostname old_hostname \
 		  old_m11_hash m11_enable use_batadv routing_algo usteer_changed=0 \
 		  network_changed=0 wireless_changed=0 mesh11sd_changed=0
@@ -322,9 +312,6 @@ start() {
 	config_get old_init      main old_init        ''
 	config_get hostname      main hostname        ''
 	config_get old_hostname  main old_hostname    ''
-
-	config_get ft_advanced main ft_advanced       0
-	config_get mobility_domain main mobility_domain    '55ff'
 
 	config_get routing_algo  globals routing_algo ''
 	config_get_bool use_batadv    main use_batadv

@@ -214,10 +214,6 @@ return view.extend({
 		o = s.taboption('wireless', form.Flag, 'band_merge', _('Dual-band Merge'),
 			_('Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz radios.'));
 		o.default = '0';
-		o.defaults = {
-			0:   [],
-			1: [{ enable_usteer: '1' }]
-		};
 
 		o = s.taboption('wireless', form.Flag, 'enable_usteer', _('Enable usteer Smart Steering'),
 			_('Uses usteer to steer clients to the best radio for optimal performance.'));
@@ -267,23 +263,6 @@ return view.extend({
 		o.datatype = 'wpakey'; o.password = true;
 		o.rmempty = false; o.default = info.wifi_pass || '';
 		o.depends('band_merge', '1');
-
-		o = s.taboption('wireless', form.Value, 'mobility_domain', _('802.11r Mobility Domain'),
-			_('4-hex-digit domain identifier shared by all APs that participate in fast roaming (FT). ' +
-			  'Must be identical on every node. Change this if you have multiple independent mesh networks ' +
-			  'in the same area to avoid cross-domain FT conflicts.'));
-		o.datatype = 'and(hexstring,rangelength(4,4))';
-		o.placeholder = '55ff'; o.default = '55ff'; o.rmempty = false;
-		o.depends({ enable_usteer: '1' });
-
-		o = s.taboption('wireless', form.RichListValue, 'ft_advanced', _('802.11r FT Key Mode'),
-			_('Controls how Fast Transition (FT) session keys are shared between APs.'));
-		o.value('0', _('Distributed FT (advanced) — APs exchange FT keys via RRB protocol. ' +
-			'Requires manual r0kh/r1kh peer lists in each AP\'s wireless config.'));
-		o.value('1', _('Local key derivation (recommended) — each AP derives FT keys independently; ' +
-			'no inter-AP key sync required. Works correctly out of the box.'));
-		o.default = '1';
-		o.depends({ enable_usteer: '1' });
 
 		o = s.taboption('mesh', form.RichListValue, 'mesh_radio', _('Mesh Backhaul Band'),
 			_('Select the radio band used for the 802.11s mesh backhaul link.'));
