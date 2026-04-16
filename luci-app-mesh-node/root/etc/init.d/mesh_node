@@ -300,8 +300,8 @@ start() {
 
 	config_get routing_algo  globals routing_algo ''
 	config_get_bool use_batadv    main use_batadv
-	config_get_bool enable_usteer main enable_usteer 0
-	config_get_bool m11_enable    globals m11_enable 0
+	config_get_bool m11_enable    globals m11_enable    0
+	config_get_bool enable_usteer globals enable_usteer 0
 
 	[ "$hostname" != "$old_hostname" ] && {
 		uci -q set system.@system[0].hostname="$hostname"

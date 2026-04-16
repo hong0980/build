@@ -13,6 +13,7 @@
 				"/sbin/logread": [ "exec" ],
 				"/usr/sbin/batctl": [ "exec" ],
 				"/usr/sbin/mesh11sd": [ "exec" ],
+				"/etc/init.d/usteer": [ "exec" ],
 				"/etc/init.d/mesh11sd": [ "exec" ],
 				"/tmp/mesh11sd/mesh11sd_log.log": [ "read" ]
 			}

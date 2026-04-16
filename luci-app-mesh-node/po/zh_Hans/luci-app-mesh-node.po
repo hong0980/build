@@ -146,8 +146,8 @@ msgstr "转发路径信息（mpath）"
 msgid "Execution failed: %s"
 msgstr "执行失败：%s"
 
-msgid "Daemon Status"
-msgstr "守护进程状态"
+msgid "mesh11sd Status"
+msgstr "mesh11sd 状态"
 
 msgid "Running"
 msgstr "运行中"
@@ -806,3 +806,30 @@ msgid ""
 msgstr ""
 "本地密钥派生 (推荐) — 各 AP 独立生成 FT 密钥；无需 AP 间密钥同步。开箱即用，无"
 "需额外配置。"
+
+msgid "Usteer Status"
+msgstr "Usteer 状态"
+
+msgid "Usteer Settings"
+msgstr "Usteer 设置"
+
+msgid "batadv Settings"
+msgstr "batadv 设置"
+
+msgid "mesh11sd Settings"
+msgstr "mesh11sd 设置"
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""
