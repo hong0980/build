@@ -406,9 +406,7 @@ return view.extend({
 		/* ══════════════════════════════════════
 		   Section 2: mesh_params
 		   ══════════════════════════════════════ */
-		s = m.section(form.NamedSection, 'mesh_params', 'mesh11sd', _('Mesh Driver Parameters'),
-			_('Dynamic parameters passed directly to the wireless driver and continuously re-applied every check interval. '
-			+ 'Run "mesh11sd status" for the full list of supported parameters.'));
+		s = m.section(form.NamedSection, 'mesh_params');
 		s.anonymous = true;
 		s.addremove = false;
 
