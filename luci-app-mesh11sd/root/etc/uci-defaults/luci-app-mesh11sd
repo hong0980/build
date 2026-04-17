@@ -1,0 +1,6 @@
+#!/bin/sh
+
+/etc/init.d/mesh11sd stop    2>/dev/null || true
+/etc/init.d/mesh11sd disable 2>/dev/null || true
+rm -f /tmp/luci-*
+exit 0
