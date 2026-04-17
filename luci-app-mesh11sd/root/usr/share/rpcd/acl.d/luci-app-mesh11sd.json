@@ -1,0 +1,14 @@
+{
+  "luci-app-mesh11sd": {
+	"description": "Grant access to mesh11sd configuration",
+	"read": {
+	  "uci": [ "mesh11sd" ],
+	  "file": {
+		"/etc/init.d/mesh11sd": [ "exec" ]
+	  }
+	},
+	"write": {
+	  "uci": [ "mesh11sd" ]
+	}
+  }
+}

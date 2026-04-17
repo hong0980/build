@@ -213,7 +213,6 @@ do_batadv() {
 
 	if [ "$use_batadv" = "1" ]; then
 		modprobe batman-adv 2>/dev/null || true
-		uci -q set network.bat0.routing_algo='${routing_algo}'
 		bat0_in_bridge=$(uci -q show network.@device[0].ports 2>/dev/null | grep -c 'bat0')
 		[ "${bat0_in_bridge:-0}" -eq 0 ] && \
 			uci -q add_list network.@device[0].ports='bat0'
@@ -270,7 +269,7 @@ start() {
 	local combo_mode wan_proto lan_proto lan_ip gateway user pass log_level \
 		  ssid_2g ssid_5g key_2g key_5g wifi_ssid wifi_pass mesh_id mesh_pass \
 		  mesh_radio enable_usteer init old_init hostname old_hostname \
-		  old_m11_hash m11_enable use_batadv routing_algo usteer_changed=0 \
+		  old_m11_hash m11_enable use_batadv usteer_changed=0 \
 		  network_changed=0 wireless_changed=0 mesh11sd_changed=0
 
 	config_load mesh_node
@@ -298,8 +297,7 @@ start() {
 	config_get hostname      main hostname        ''
 	config_get old_hostname  main old_hostname    ''
 
-	config_get routing_algo  globals routing_algo ''
-	config_get_bool use_batadv    main use_batadv
+	config_get_bool use_batadv    main use_batadv 0
 	config_get_bool m11_enable    globals m11_enable    0
 	config_get_bool enable_usteer globals enable_usteer 0
 

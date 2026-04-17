@@ -1,0 +1,265 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Configure 802.11s mesh network daemon"
+msgstr "配置 802.11s 无线 Mesh 网络守护进程"
+
+msgid "RUNNING"
+msgstr "运行中"
+
+msgid "NOT RUNNING"
+msgstr "未运行"
+
+msgid "Setup"
+msgstr "基本设置"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Debug Level"
+msgstr "日志级别"
+
+msgid "Silent"
+msgstr "静默"
+
+msgid "Notice"
+msgstr "通知"
+
+msgid "Info"
+msgstr "详细"
+
+msgid "Debug"
+msgstr "调试"
+
+msgid "Check Interval (s)"
+msgstr "状态检查间隔（秒）"
+
+msgid "How often the daemon checks and updates mesh status"
+msgstr "守护进程检查并更新 Mesh 状态的频率"
+
+msgid "Auto Config"
+msgstr "自动配置"
+
+msgid "Disabled (manual)"
+msgstr "禁用（手动配置）"
+
+msgid "Enabled"
+msgstr "启用"
+
+msgid "Enabled + commit (locks config permanently)"
+msgstr "启用并提交（永久锁定配置，谨慎使用）"
+
+msgid "Mesh ID Seed"
+msgstr "Mesh 网络 ID 种子"
+
+msgid "Hashed to produce the mesh network ID — must match on all nodes"
+msgstr "经哈希生成 Mesh 网络标识，所有节点必须设置相同的值"
+
+msgid "Mesh Key Seed"
+msgstr "Mesh 加密密钥种子"
+
+msgid "SHA256 seed for mesh encryption — must match on all nodes"
+msgstr "用于生成 Mesh 加密密钥的 SHA256 种子，所有节点必须相同"
+
+msgid "Mesh Band"
+msgstr "Mesh 工作频段"
+
+msgid "Must be the same on all nodes"
+msgstr "所有节点必须设置相同的频段"
+
+msgid "Force Radio Index"
+msgstr "指定无线网卡序号"
+
+msgid "Force a specific radio (phy index) for the mesh interface. Leave empty for auto."
+msgstr "强制指定用于 Mesh 接口的物理网卡编号（如 0、1），留空自动选择"
+
+msgid "Country Code"
+msgstr "国家/地区代码"
+
+msgid "Overrides the country code in wireless config (e.g. US, DE)"
+msgstr "覆盖无线配置中的国家代码，如 CN、US、DE"
+
+msgid "Node Role"
+msgstr "节点角色"
+
+msgid "Auto: portal if WAN is up, peer otherwise"
+msgstr "自动模式：WAN 在线则为门户节点，否则为对等节点"
+
+msgid "0 - Force MRP (routed portal)"
+msgstr "0 - 强制 MRP（路由门户节点）"
+
+msgid "1 - Auto detect (recommended)"
+msgstr "1 - 自动识别（推荐）"
+
+msgid "3 - CPE (client premises, mesh as WAN)"
+msgstr "3 - CPE（客户端节点，以 Mesh 作为 WAN）"
+
+msgid "4 - MBP (bridge portal, adds WAN to vxlan)"
+msgstr "4 - MBP（桥接门户，将 WAN 口接入 vxlan）"
+
+msgid "5 - TPN (trunk peer, WAN as vxlan endpoint)"
+msgstr "5 - TPN（汇聚对等节点，WAN 口作为 vxlan 端点）"
+
+msgid "Portal Detect Watchdog"
+msgstr "门户检测看门狗"
+
+msgid "Number of check intervals before watchdog reboots the node. 0 = disabled."
+msgstr "未检测到门户节点超过此检查次数后自动重启，0 表示禁用"
+
+msgid "Portal Channel"
+msgstr "门户信道"
+
+msgid "2.4 GHz only. Peers auto-track the portal channel."
+msgstr "仅适用于 2.4 GHz，对等节点会自动跟踪门户信道"
+
+msgid "Default (from wireless config)"
+msgstr "默认（使用无线配置中的信道）"
+
+msgid "Auto select"
+msgstr "自动选择"
+
+msgid "CPE IPv6 Mode"
+msgstr "CPE IPv6 模式"
+
+msgid "Applies only when Node Role is CPE (3)"
+msgstr "仅在节点角色为 CPE（3）时有效"
+
+msgid "AP Gate"
+msgstr "接入点开关"
+
+msgid "Disabled"
+msgstr "禁用"
+
+msgid "All radios"
+msgstr "所有频段"
+
+msgid "Only radios not shared with mesh"
+msgstr "仅非 Mesh 独占频段"
+
+msgid "AP SSID"
+msgstr "接入点 SSID"
+
+msgid "Base SSID — max 22 chars if suffix enabled, 30 if not"
+msgstr "接入点基础名称：启用后缀时最多 22 字符，不启用时最多 30 字符"
+
+msgid "SSID Suffix"
+msgstr "SSID 后缀"
+
+msgid "Append last 4 digits of mesh MAC to SSID"
+msgstr "在 SSID 末尾追加 Mesh 接口 MAC 地址后 4 位"
+
+msgid "AP Encryption"
+msgstr "接入点加密方式"
+
+msgid "OWE (opportunistic, default)"
+msgstr "OWE（机会性加密，默认）"
+
+msgid "None / OWE transition"
+msgstr "不加密 / OWE 过渡模式"
+
+msgid "SAE (WPA3)"
+msgstr "SAE（WPA3）"
+
+msgid "SAE-Mixed (WPA2+WPA3)"
+msgstr "SAE 混合（WPA2+WPA3）"
+
+msgid "WPA2 PSK"
+msgstr "WPA2 PSK"
+
+msgid "AP Password"
+msgstr "接入点密码"
+
+msgid "Mesh Base Name"
+msgstr "Mesh 接口基础名"
+
+msgid "Constructs interface name m-<name>-0, max 8 chars"
+msgstr "生成形如 m-<名称>-0 的接口名，最多 8 个字符"
+
+msgid "Mesh Path Cost"
+msgstr "Mesh 路径代价"
+
+msgid "STP link cost 0–65534, 0 disables STP"
+msgstr "STP 链路代价值 0–65534，设为 0 则禁用 STP"
+
+msgid "Interface Timeout (s)"
+msgstr "接口就绪超时（秒）"
+
+msgid "Node Mobility Level"
+msgstr "节点移动性等级"
+
+msgid "0=stationary (not recommended), 1=up to 1.5 m/s, 2–4=higher speeds with more overhead"
+msgstr "0=固定（不推荐），1=低速≤1.5m/s，2–4=更高速度但回程开销更大"
+
+msgid "0 - Stationary"
+msgstr "0 - 固定部署（不推荐）"
+
+msgid "1 - Low (default)"
+msgstr "1 - 低速（默认）"
+
+msgid "2 - Medium"
+msgstr "2 - 中速"
+
+msgid "3 - High"
+msgstr "3 - 高速"
+
+msgid "4 - Very High"
+msgstr "4 - 极高速"
+
+msgid "Path Stabilisation"
+msgstr "路径稳定"
+
+msgid "Prevents multi-hop path flapping. Usually not needed above mobility level 1."
+msgstr "防止多跳路径频繁切换，移动性等级 1 以上通常不需要"
+
+msgid "Leech Mode"
+msgstr "寄生模式"
+
+msgid "AP-only node: uses mesh backhaul but does not route. Requires mobility level 0, non-portal."
+msgstr "仅作为接入点，借用 Mesh 回程但不参与路由。需移动性等级 0 且非门户节点。"
+
+msgid "TX Power (dBm)"
+msgstr "发射功率（dBm）"
+
+msgid "Leave empty to use radio/regulatory default"
+msgstr "留空则使用无线设备或监管域默认值"
+
+msgid "VXLan Tunnel"
+msgstr "VXLan 隧道"
+
+msgid "Requires ip-full and vxlan packages"
+msgstr "需要安装 ip-full 和 vxlan 软件包"
+
+msgid "Tunnel ID"
+msgstr "隧道 ID"
+
+msgid "VXLAN tunnel ID, 1–16777216"
+msgstr "VXLAN 隧道标识，范围 1–16777216"
+
+msgid "Reboot on Error"
+msgstr "出错时自动重启"
+
+msgid "Stop on Error"
+msgstr "出错时停止服务"
+
+msgid "Overrides Reboot on Error — daemon goes idle instead of rebooting"
+msgstr "优先级高于「出错重启」，触发后守护进程进入空闲而非重启"
+
+msgid "Mesh Driver Parameters"
+msgstr "Mesh 驱动参数"
+
+msgid "Dynamic parameters passed directly to the wireless driver. Run \"mesh11sd status\" for the full list."
+msgstr "直接传递给无线驱动的动态参数，运行 \"mesh11sd status\" 可查看完整列表"
+
+msgid "RSSI Threshold (dBm)"
+msgstr "RSSI 门限（dBm）"
+
+msgid "Minimum signal strength to establish a peer link (e.g. -70)"
+msgstr "建立对等链路所需的最低信号强度（如 -70）"
+
+msgid "Max Peer Links"
+msgstr "最大对等链路数"
+
+msgid "Maximum number of peer links per node"
+msgstr "每个节点允许的最大对等链路数量"
