@@ -27,10 +27,9 @@ return view.extend({
 			]);
 		};
 
-		s = m.section(form.TypedSection, 'mesh11sd');
+		s = m.section(form.NamedSection, 'setup');
 		s.anonymous = true;
 		s.addremove = false;
-		s.filter = function(section_id) { return section_id === 'setup'; };
 
 		o = s.option(form.Flag, 'enabled', _('Enable'));
 		o.default = '1';
@@ -91,11 +90,11 @@ return view.extend({
 
 		o = s.option(form.ListValue, 'portal_detect', _('Node Role'),
 			_('Auto: portal if WAN is up, peer otherwise'));
-		o.value('0', _('0 - Force MRP (routed portal)'));
-		o.value('1', _('1 - Auto detect (recommended)'));
-		o.value('3', _('3 - CPE (client premises, mesh as WAN)'));
-		o.value('4', _('4 - MBP (bridge portal, adds WAN to vxlan)'));
-		o.value('5', _('5 - TPN (trunk peer, WAN as vxlan endpoint)'));
+		o.value('0', _('Force MRP (routed portal)'));
+		o.value('1', _('Auto detect (recommended)'));
+		o.value('3', _('CPE (client premises, mesh as WAN)'));
+		o.value('4', _('MBP (bridge portal, adds WAN to vxlan)'));
+		o.value('5', _('TPN (trunk peer, WAN as vxlan endpoint)'));
 		o.default = '1';
 
 		o = s.option(form.Value, 'portal_detect_threshold', _('Portal Detect Watchdog'),
@@ -162,11 +161,11 @@ return view.extend({
 
 		o = s.option(form.ListValue, 'mesh_node_mobility_level', _('Node Mobility Level'),
 			_('0=stationary (not recommended), 1=up to 1.5 m/s, 2–4=higher speeds with more overhead'));
-		o.value('0', '0 - Stationary');
-		o.value('1', '1 - Low (default)');
-		o.value('2', '2 - Medium');
-		o.value('3', '3 - High');
-		o.value('4', '4 - Very High');
+		o.value('0', 'Stationary');
+		o.value('1', 'Low (default)');
+		o.value('2', 'Medium');
+		o.value('3', 'High');
+		o.value('4', 'Very High');
 		o.default = '1';
 
 		o = s.option(form.Flag, 'mesh_path_stabilisation', _('Path Stabilisation'),
@@ -199,8 +198,10 @@ return view.extend({
 			_('Overrides Reboot on Error — daemon goes idle instead of rebooting'));
 		o.default = '0';
 
+		s = m.section(form.NamedSection, 'mesh_params');
+		s.anonymous = true;
+		s.addremove = false;
 
-		s.filter = function(section_id) { return section_id === 'mesh_params'; };
 		o = s.option(form.Value, 'mesh_rssi_threshold', _('RSSI Threshold (dBm)'),
 			_('Minimum signal strength to establish a peer link (e.g. -70)'));
 		o.datatype = 'range(-100,0)';

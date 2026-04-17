@@ -87,20 +87,20 @@ msgstr "节点角色"
 msgid "Auto: portal if WAN is up, peer otherwise"
 msgstr "自动模式：WAN 在线则为门户节点，否则为对等节点"
 
-msgid "0 - Force MRP (routed portal)"
-msgstr "0 - 强制 MRP（路由门户节点）"
+msgid "Force MRP (routed portal)"
+msgstr "强制 MRP（路由门户节点）"
 
-msgid "1 - Auto detect (recommended)"
-msgstr "1 - 自动识别（推荐）"
+msgid "Auto detect (recommended)"
+msgstr "自动识别（推荐）"
 
-msgid "3 - CPE (client premises, mesh as WAN)"
-msgstr "3 - CPE（客户端节点，以 Mesh 作为 WAN）"
+msgid "CPE (client premises, mesh as WAN)"
+msgstr "CPE（客户端节点，以 Mesh 作为 WAN）"
 
-msgid "4 - MBP (bridge portal, adds WAN to vxlan)"
-msgstr "4 - MBP（桥接门户，将 WAN 口接入 vxlan）"
+msgid "MBP (bridge portal, adds WAN to vxlan)"
+msgstr "MBP（桥接门户，将 WAN 口接入 vxlan）"
 
-msgid "5 - TPN (trunk peer, WAN as vxlan endpoint)"
-msgstr "5 - TPN（汇聚对等节点，WAN 口作为 vxlan 端点）"
+msgid "TPN (trunk peer, WAN as vxlan endpoint)"
+msgstr "TPN（汇聚对等节点，WAN 口作为 vxlan 端点）"
 
 msgid "Portal Detect Watchdog"
 msgstr "门户检测看门狗"
@@ -192,20 +192,20 @@ msgstr "节点移动性等级"
 msgid "0=stationary (not recommended), 1=up to 1.5 m/s, 2–4=higher speeds with more overhead"
 msgstr "0=固定（不推荐），1=低速≤1.5m/s，2–4=更高速度但回程开销更大"
 
-msgid "0 - Stationary"
-msgstr "0 - 固定部署（不推荐）"
+msgid "Stationary"
+msgstr "固定部署（不推荐）"
 
-msgid "1 - Low (default)"
-msgstr "1 - 低速（默认）"
+msgid "Low (default)"
+msgstr "低速（默认）"
 
-msgid "2 - Medium"
-msgstr "2 - 中速"
+msgid "Medium"
+msgstr "中速"
 
-msgid "3 - High"
-msgstr "3 - 高速"
+msgid "High"
+msgstr "高速"
 
-msgid "4 - Very High"
-msgstr "4 - 极高速"
+msgid "Very High"
+msgstr "极高速"
 
 msgid "Path Stabilisation"
 msgstr "路径稳定"
