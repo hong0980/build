@@ -7,75 +7,63 @@ Copyright 2021 lisaac <lisaac.cn@gmail.com>
 local util = require "luci.util"
 local uci = require "luci.model.uci".cursor()
 local isfw4 = util.exec("command -v fw4") ~= ''
-local isiptables = uci:get("dockerd", "globals", "iptables") == "1"
-local isremote_endpoint = uci:get("dockerd", "dockerman", "remote_endpoint") == "0"
+local isiptables = uci:get_bool("dockerd", "globals", "iptables")
+local isremote_endpoint = uci:get_bool("dockerd", "dockerman", "remote_endpoint")
 
-m = Map("dockerd",
-	translate("Docker - Configuration"),
+m = Map("dockerd", translate("Docker - Configuration"),
 	translate("DockerMan is a simple docker manager client for LuCI"))
 
-if isremote_endpoint then
+if not isremote_endpoint then
 	s = m:section(NamedSection, "globals", "section", translate("Docker Daemon settings"))
+
 	o = s:option(Flag, "auto_start", translate("Auto start"))
 	o.rmempty = false
 	function o.write(self, section, value)
-		if not value or value == "" then
-			return
-		end
+		if not value or value == "" then return end
 		local val = value == "1" and 'enable' or 'disable'
 		util.exec("/etc/init.d/dockerd %s" %val)
 		uci:set("dockerd", "globals", "auto_start", value)
 	end
 
-	o = s:option(Value, "data_root",
-		translate("Docker Root Dir"))
+	o = s:option(Value, "data_root", translate("Docker Root Dir"))
 	o.placeholder = "/opt/docker/"
 
-	o = s:option(Flag, "iptables",
-		translate("Enable"),
+	o = s:option(Flag, "iptables", translate("Enable"),
 		translate("Use iptables to configure network isolation and routing"))
 	o.default = 1
 
-	o = s:option(Flag, "ip6tables",
-		translate("Enable"),
+	o = s:option(Flag, "ip6tables", translate("Enable"),
 		translate("Use ip6tables to configure network isolation and routing"))
 
-	o = s:option(Value, "bip",
-		translate("Default bridge"),
+	o = s:option(Value, "bip", translate("Default bridge"),
 		translate("Configure the default bridge network"))
 	o.placeholder = "172.17.0.1/16"
 	o.datatype = "ipaddr"
 
-	o = s:option(Value, "fixed_cidr",
-		translate("Limit IP Range Available for Containers"),
+	o = s:option(Value, "fixed_cidr", translate("Limit IP Range Available for Containers"),
 		translate("Assign a fixed CIDR subnet (IPv4) for Docker bridge network"))
 	o.placeholder = '172.17.0.0/16'
 	o.datatype = "ipaddr"
 
-	o = s:option(Value, "alt_config_file",
-		translate("Specify Docker Configuration File"),
+	o = s:option(Value, "alt_config_file", translate("Specify Docker Configuration File"),
 		translate("Use a custom JSON configuration, default is /tmp/dockerd/daemon.json"))
 	o.placeholder = "/etc/dockerd/daemon.json"
 
-	o = s:option(DynamicList, "hosts",
-		translate("Client connection"),
+	o = s:option(DynamicList, "hosts", translate("Client connection"),
 		translate('Specifies where the Docker daemon will listen for client connections (default: unix:///var/run/docker.sock)'))
 	o:value("unix:///var/run/docker.sock", "unix:///var/run/docker.sock")
 	o:value("tcp://0.0.0.0:2375", "tcp://0.0.0.0:2375")
 	o.rmempty = true
 
-	o = s:option(Value, "ip",
-		translate("Specify IP"),
+	o = s:option(Value, "ip", translate("Specify IP"),
 		translate("Docker will use the given IP address instead of automatically assigning one"))
 	o.datatype = "ipaddr"
 
-	o = s:option(DynamicList, "dns",
-		translate("DNS Servers"),
+	o = s:option(DynamicList, "dns", translate("DNS Servers"),
 		translate("Set custom DNS for Docker"))
 	o.datatype = "ipaddr"
 
-	o = s:option(DynamicList, "registry_mirrors",
-		translate("Registry Mirrors"),
+	o = s:option(DynamicList, "registry_mirrors", translate("Registry Mirrors"),
 		translate("It replaces the daemon registry mirrors with a new set of registry mirrors"))
 	o:value("https://docker.m.daocloud.io", "https://docker.m.daocloud.io")
 	o:value("https://hub-mirror.c.163.com", "https://hub-mirror.c.163.com")
@@ -83,8 +71,7 @@ if isremote_endpoint then
 	o:value("https://docker.mirrors.ustc.edu.cn", "https://docker.mirrors.ustc.edu.cn")
 	o.default = "https://docker.m.daocloud.io"
 
-	o = s:option(ListValue, "log_level",
-		translate("Log Level"),
+	o = s:option(ListValue, "log_level", translate("Log Level"),
 		translate('Set the logging level'))
 	o:value("debug", translate("Debug"))
 	o:value("", translate("Info"))
@@ -96,9 +83,8 @@ if isremote_endpoint then
 	if isiptables then
 		s = m:section(NamedSection, "firewall", "section", translate("Firewall Settings"))
 		if isfw4 then
-			o = s:option(Flag, "fw4",
-				translate("Enable"),
-				translate("Add Docker device to LAN zone"))
+			o = s:option(Flag, "fw4", translate("Enable"),
+					translate("Add Docker device to LAN zone"))
 			o.rmempty = false
 			o.default = 1
 			function o.write(self, section, value)
@@ -132,41 +118,36 @@ if isremote_endpoint then
 				if modified then
 					uci:commit("firewall")
 					util.exec("/etc/init.d/firewall reload &")
+					-- util.exec("/etc/init.d/dockerd restart &")
 				end
 				uci:set("dockerd", "firewall", "fw4", value)
 			end
 		end
 
-		-- o = s:option(Value, "device",
-		-- 	translate("Docker Network Interface"),
+		-- o = s:option(Value, "device", translate("Docker Network Interface"),
 		-- 	translate('By default, the firewall associates the docker0 interface with the Docker zone'))
 		-- o.default = 'docker0'
 
-		-- o = s:option(DynamicList, "blocked_interfaces",
-		-- 	translate("Blocked Networks for Docker Access"),
+		-- o = s:option(DynamicList, "blocked_interfaces", translate("Blocked Networks for Docker Access"),
 		-- 	translate("Setting 'wan' means Docker containers cannot directly initiate connections to WAN interfaces (e.g., pppoe-wan or eth1)."))
 		-- local wa = require "luci.tools.webadmin"
 		-- wa.cbi_add_networks(o)
 
-		o = s:option(Value, "extra_iptables_args",
-			translate("Firewall Rules"),
+		o = s:option(Value, "extra_iptables_args", translate("Firewall Rules"),
 			translate("Add extra parameters to the generated iptables rules. Restart Docker after modification"))
 		o.placeholder = '--match conntrack ! --ctstate RELATED,ESTABLISHED'
 	end
 
 	s = m:section(NamedSection, "proxies", "section", translate("Proxy Settings"))
-	o = s:option(Value, "http_proxy",
-		translate("HTTP Proxy Server"),
+	o = s:option(Value, "http_proxy", translate("HTTP Proxy Server"),
 		translate("Set the HTTP proxy server for Docker"))
 	o.placeholder = "http://proxy.example.com:3128"
 
-	o = s:option(Value, "https_proxy",
-		translate("HTTPS Proxy Server"),
+	o = s:option(Value, "https_proxy", translate("HTTPS Proxy Server"),
 		translate("Set the HTTPS proxy server for Docker"))
 	o.placeholder = "https://proxy.example.com:3129"
 
-	o = s:option(Value, "no_proxy",
-		translate("Specify Addresses and Networks Not to Use Proxy"),
+	o = s:option(Value, "no_proxy", translate("Specify Addresses and Networks Not to Use Proxy"),
 		translate('Exclude internal network addresses, specific domains, or local addresses from being accessed through the proxy.'))
 	o.placeholder = '*.test.example.com,.example.org,127.0.0.0/8'
 end
@@ -175,8 +156,7 @@ s = m:section(NamedSection, "dockerman", "section", translate("DockerMan setting
 s:tab("ac", translate("Access Control"))
 s:tab("dockerman", translate("DockerMan"))
 
-o = s:taboption("dockerman", Flag, "remote_endpoint",
-	translate("Remote Endpoint"),
+o = s:taboption("dockerman", Flag, "remote_endpoint", translate("Remote Endpoint"),
 	translate("Connect to remote docker endpoint"))
 o.rmempty = false
 o.validate = function(self, value, sid)
@@ -198,49 +178,40 @@ o.validate = function(self, value, sid)
 	return 0
 end
 
-o = s:taboption("dockerman", Value, "socket_path",
-	translate("Docker Socket Path"))
+o = s:taboption("dockerman", Value, "socket_path", translate("Docker Socket Path"))
 o.default = "/var/run/docker.sock"
 o.placeholder = "/var/run/docker.sock"
 o:depends("remote_endpoint", 0)
 
-o = s:taboption("dockerman", Value, "remote_host",
-	translate("Remote Host"),
+o = s:taboption("dockerman", Value, "remote_host", translate("Remote Host"),
 	translate("Host or IP Address for the connection to a remote docker instance"))
 o.datatype = "host"
 o.placeholder = "10.1.1.2"
 o:depends("remote_endpoint", 1)
 
-o = s:taboption("dockerman", Value, "remote_port",
-	translate("Remote Port"))
+o = s:taboption("dockerman", Value, "remote_port", translate("Remote Port"))
 o.placeholder = "2375"
 o.datatype = "port"
 o:depends("remote_endpoint", 1)
 
-o = s:taboption("dockerman", Value, "status_path",
-	translate("Action Status Tempfile Path"),
+o = s:taboption("dockerman", Value, "status_path", translate("Action Status Tempfile Path"),
 	translate("Where you want to save the docker status file"))
 
-o = s:taboption("dockerman", Flag, "debug",
-	translate("Enable Debug"),
+o = s:taboption("dockerman", Flag, "debug", translate("Enable Debug"),
 	translate("For debug, It shows all docker API actions of luci-app-dockerman in Debug Tempfile Path"))
 o.enabled = "true"
 o.disabled = "false"
 
-o = s:taboption("dockerman", Value, "debug_path",
-	translate("Debug Tempfile Path"),
+o = s:taboption("dockerman", Value, "debug_path", translate("Debug Tempfile Path"),
 	translate("Where you want to save the debug tempfile"))
 
-if isremote_endpoint then
-	o = s:taboption("ac", DynamicList, "ac_allowed_interface",
-		translate("Allowed access interfaces"),
+if not isremote_endpoint then
+	o = s:taboption("ac", DynamicList, "ac_allowed_interface", translate("Allowed access interfaces"),
 		translate("Which interface(s) can access containers under the bridge network, fill-in Interface Name"))
 	local interfaces = luci.sys.net.devices() or {}
-	for i, v in ipairs(interfaces) do
-		o:value(v, v)
-	end
-	o = s:taboption("ac", DynamicList, "ac_allowed_ports",
-		translate("Ports allowed to be accessed"),
+	for i, v in ipairs(interfaces) do o:value(v, v) end
+
+	o = s:taboption("ac", DynamicList, "ac_allowed_ports", translate("Ports allowed to be accessed"),
 		translate("Which Port(s) can be accessed, it's not restricted by the Allowed Access interfaces configuration. Use this configuration with caution!"))
 	o.placeholder = "8080/tcp"
 	local docker = require "luci.model.docker"

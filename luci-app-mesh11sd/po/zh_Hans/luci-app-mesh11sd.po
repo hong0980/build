@@ -6,8 +6,8 @@ msgstr ""
 msgid "Mesh11sd"
 msgstr "Mesh11sd 网状网络"
 
-msgid "Configure the IEEE 802.11s mesh network daemon. Options marked \"must match on all nodes\" must be set identically on every device in the mesh."
-msgstr "配置 IEEE 802.11s 无线网状网络守护进程。标注"必须与所有节点一致"的选项需在网络中每台设备上设置相同的值。"
+msgid "Configure the IEEE 802.11s mesh network daemon."
+msgstr "配置 IEEE 802.11s 无线网状网络守护进程。"
 
 msgid "RUNNING"
 msgstr "运行中"
@@ -144,23 +144,38 @@ msgstr "用于构造接口名称 m-<名称>-0，最多 8 个字符。默认：11
 msgid "Node Role"
 msgstr "节点角色"
 
+msgid "Auto detect (recommended)"
+msgstr "WAN 在线时为门户（MRP），否则为对等节点（MPE）"
+
 msgid "Defines the role this node plays in the mesh network."
 msgstr "决定本节点在网状网络中担任的角色。"
 
-msgid "Auto detect (recommended)\nPortal (MRP) if WAN is up; Peer (MPE) otherwise"
-msgstr "自动检测（推荐）\nWAN 在线时为门户（MRP），否则为对等节点（MPE）"
+msgid "Portal (MRP) if WAN is up; Peer (MPE) otherwise"
+msgstr "WAN 在线时为门户（MRP），否则为对等节点（MPE）"
 
-msgid "Force MRP — Routed Portal\nAlways runs as IPv4 NAT routed portal regardless of upstream"
-msgstr "强制 MRP — 路由门户\n始终以 IPv4 NAT 路由门户模式运行，不检测上行"
+msgid "Force MRP — Routed Portal"
+msgstr "强制 MRP — 路由门户"
 
-msgid "CPE — Customer Premises Equipment\nUses mesh backhaul as WAN; creates its own NAT IPv4 subnet"
-msgstr "CPE — 用户侧设备\n将网状回程作为 WAN，创建独立 IPv4 子网的 NAT 网络"
+msgid "Always runs as IPv4 NAT routed portal regardless of upstream"
+msgstr "始终以 IPv4 NAT 路由门户模式运行，不检测上行"
 
-msgid "MBP — Bridge VXLAN Portal\nBridged portal; adds WAN port into the vxlan tunnel bridge (br-tun69)"
-msgstr "MBP — 桥接 VXLAN 门户\n桥接模式门户，将 WAN 口加入 vxlan 隧道桥（br-tun69）"
+msgid "CPE — Customer Premises Equipment"
+msgstr "CPE — 用户侧设备"
 
-msgid "TPN — Trunk Peer Node\nPeer mode; WAN port is a vxlan endpoint (compatible with portal modes 0/1/4)"
-msgstr "TPN — 汇聚对等节点\n对等模式，WAN 口作为 vxlan 端点（兼容门户模式 0/1/4）"
+msgid "Uses mesh backhaul as WAN; creates its own NAT IPv4 subnet"
+msgstr "将网状回程作为 WAN，创建独立 IPv4 子网的 NAT 网络"
+
+msgid "MBP — Bridge VXLAN Portal"
+msgstr "MBP — 桥接 VXLAN 门户"
+
+msgid "Bridged portal; adds WAN port into the vxlan tunnel bridge (br-tun69)"
+msgstr "桥接模式门户，将 WAN 口加入 vxlan 隧道桥（br-tun69）"
+
+msgid "TPN — Trunk Peer Node"
+msgstr "TPN — 汇聚对等节点"
+
+msgid "TPN — Peer mode; WAN port is a vxlan endpoint (compatible with portal modes 0/1/4)"
+msgstr "对等模式，WAN 口作为 vxlan 端点（兼容门户模式 0/1/4）"
 
 msgid "Portal Detect Watchdog"
 msgstr "门户检测看门狗"
@@ -270,20 +285,20 @@ msgstr "节点移动性级别"
 msgid "Tunes path-selection aggressiveness. Use 1 for fixed deployments; increase for mobile nodes."
 msgstr "调整路径选择算法的激进程度。固定部署使用 1（低），移动场景酌情调高。"
 
-msgid "0 - Stationary (not recommended)"
-msgstr "0 - 固定部署（不推荐）"
+msgid "Stationary (not recommended)"
+msgstr "固定部署（不推荐）"
 
-msgid "1 - Low (default, up to 1.5 m/s)"
-msgstr "1 - 低速（默认，≤1.5 m/s）"
+msgid "Low (default, up to 1.5 m/s)"
+msgstr "低速（默认，≤1.5 m/s）"
 
-msgid "2 - Medium"
-msgstr "2 - 中速"
+msgid "Medium"
+msgstr "中速"
 
-msgid "3 - High"
-msgstr "3 - 高速"
+msgid "High"
+msgstr "高速"
 
-msgid "4 - Very High"
-msgstr "4 - 极高速"
+msgid "Very High"
+msgstr "极高速"
 
 msgid "Path Stabilisation"
 msgstr "路径稳定化"
@@ -410,12 +425,6 @@ msgstr "看门狗非易失性日志（仅用于调试）"
 
 msgid "<b>Warning:</b> Writes watchdog actions to non-volatile storage (/mesh11sd_log/mesh11sd.log). Leaving this enabled long-term may cause irreparable flash wear and consume storage. <b>Disable immediately after debugging.</b>"
 msgstr "<b>警告：</b>将看门狗操作写入非易失性存储（/mesh11sd_log/mesh11sd.log）。长期启用可能导致 Flash 不可修复磨损并占用存储空间。<b>调试完成后请立即关闭。</b>"
-
-msgid "Mesh Driver Parameters"
-msgstr "网状驱动参数"
-
-msgid "Dynamic parameters passed directly to the wireless driver and continuously re-applied every check interval. Run \"mesh11sd status\" for the full list of supported parameters."
-msgstr "直接传递给无线驱动的动态参数，每个检查间隔持续重新应用。运行 \"mesh11sd status\" 可查看完整的支持参数列表。"
 
 msgid "RSSI Threshold (dBm)"
 msgstr "RSSI 门限（dBm）"

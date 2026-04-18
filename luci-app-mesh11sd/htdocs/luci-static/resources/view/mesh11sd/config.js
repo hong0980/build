@@ -55,10 +55,7 @@ return view.extend({
 	render: function([running]) {
 		var m, s, o;
 
-		m = new form.Map('mesh11sd',
-			_('Mesh11sd'),
-			_('Configure the IEEE 802.11s mesh network daemon. Options marked "must match on all nodes" must be set identically on every device in the mesh.')
-		);
+		m = new form.Map('mesh11sd', _('Mesh11sd'), _('Configure the IEEE 802.11s mesh network daemon.'));
 
 		s = m.section(form.TypedSection);
 		s.render = function () {
@@ -190,11 +187,11 @@ return view.extend({
 		/* ── Node Role & Portal Detection ── */
 		o = s.option(form.RichListValue, 'portal_detect', _('Node Role'),
 			_('Defines the role this node plays in the mesh network.'));
-		o.value('1', _('Auto detect (recommended)\nPortal (MRP) if WAN is up; Peer (MPE) otherwise'));
-		o.value('0', _('Force MRP — Routed Portal\nAlways runs as IPv4 NAT routed portal regardless of upstream'));
-		o.value('3', _('CPE — Customer Premises Equipment\nUses mesh backhaul as WAN; creates its own NAT IPv4 subnet'));
-		o.value('4', _('MBP — Bridge VXLAN Portal\nBridged portal; adds WAN port into the vxlan tunnel bridge (br-tun69)'));
-		o.value('5', _('TPN — Trunk Peer Node\nPeer mode; WAN port is a vxlan endpoint (compatible with portal modes 0/1/4)'));
+		o.value('1', _('Auto detect (recommended)'));
+		o.value('0', _('Force MRP — Routed Portal'));
+		o.value('3', _('CPE — Customer Premises Equipment'));
+		o.value('4', _('MBP — Bridge VXLAN Portal'));
+		o.value('5', _('TPN — Trunk Peer Node'));
 		o.default = '1';
 
 		o = s.option(form.Value, 'portal_detect_threshold', _('Portal Detect Watchdog'),
@@ -271,11 +268,11 @@ return view.extend({
 
 		o = s.option(form.ListValue, 'mesh_node_mobility_level', _('Node Mobility Level'),
 			_('Tunes path-selection aggressiveness. Use 1 for fixed deployments; increase for mobile nodes.'));
-		o.value('0', _('0 - Stationary (not recommended)'));
-		o.value('1', _('1 - Low (default, up to 1.5 m/s)'));
-		o.value('2', _('2 - Medium'));
-		o.value('3', _('3 - High'));
-		o.value('4', _('4 - Very High'));
+		o.value('0', _('Stationary (not recommended)'));
+		o.value('1', _('Low (default, up to 1.5 m/s)'));
+		o.value('2', _('Medium'));
+		o.value('3', _('High'));
+		o.value('4', _('Very High'));
 		o.default = '1';
 
 		o = s.option(form.Flag, 'mesh_path_stabilisation', _('Path Stabilisation'),
@@ -395,7 +392,7 @@ return view.extend({
 		o = s.option(form.Flag, 'manage_opennds_startup', _('Manage openNDS Startup'),
 			_('If openNDS is installed, mesh11sd manages its startup and synchronises nft rulesets. '
 			+ 'Disabling may cause crash loops because the openNDS gateway interface may not be ready in time.'));
-		o.default = '1';
+		o.default = '0';
 
 		o = s.option(form.Flag, 'watchdog_nonvolatile_log', _('Watchdog Non-volatile Log (debug only)'),
 			_('<b>Warning:</b> Writes watchdog actions to non-volatile storage (/mesh11sd_log/mesh11sd.log). '
@@ -403,9 +400,6 @@ return view.extend({
 			+ '<b>Disable immediately after debugging.</b>'));
 		o.default = '0';
 
-		/* ══════════════════════════════════════
-		   Section 2: mesh_params
-		   ══════════════════════════════════════ */
 		s = m.section(form.NamedSection, 'mesh_params');
 		s.anonymous = true;
 		s.addremove = false;
