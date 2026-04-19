@@ -250,7 +250,6 @@ do_mesh11sd() {
 	local m11_hash; m11_hash=$(hash_value "$(uci -q show mesh11sd)")
 	config_get old_m11_hash main old_m11_hash ''
 	[ "$m11_hash" = "$old_m11_hash" ] && return 1
-	uci -q set mesh11sd.setup.enabled="${m11_enable}"
 	uci -q set mesh_node.main.old_m11_hash="$m11_hash"
 	return 0
 }
@@ -297,8 +296,8 @@ start() {
 	config_get hostname      main hostname        ''
 	config_get old_hostname  main old_hostname    ''
 
-	config_get_bool use_batadv    main use_batadv 0
-	config_get_bool m11_enable    globals m11_enable    0
+	config_get_bool use_batadv main use_batadv 0
+	config_get_bool m11_enable main m11_enable 0
 	config_get_bool enable_usteer globals enable_usteer 0
 
 	[ "$hostname" != "$old_hostname" ] && {
