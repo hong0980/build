@@ -125,18 +125,18 @@ return view.extend({
 
 		o = s.option(form.ListValue, 'debuglevel', _('Debug Level'));
 		o.value('0', _('Silent'));
-		o.value('1', _('Notice (default)'));
+		o.value('1', _('Notice'));
 		o.value('2', _('Info'));
 		o.value('3', _('Debug'));
 		o.default = '1';
 
 		o = s.option(form.Value, 'checkinterval', _('Check Interval (s)'),
-			_('How often the daemon dynamically checks and updates the mesh configuration. Default: 10 s.'));
+			_('How often the daemon dynamically checks and updates the mesh configuration.'));
 		o.datatype = 'uinteger';
-		o.default  = '10';
+		o.default  = '15';
 
 		o = s.option(form.Value, 'interface_timeout', _('Interface Timeout (s)'),
-			_('Seconds to wait for a wireless interface to become ready. Default: 10 s.'));
+			_('Seconds to wait for a wireless interface to become ready.'));
 		o.datatype = 'uinteger';
 		o.default  = '10';
 
@@ -185,28 +185,42 @@ return view.extend({
 		o.datatype = 'maxlength(8)';
 
 		/* ── Node Role & Portal Detection ── */
-		o = s.option(form.RichListValue, 'portal_detect', _('Node Role'),
-			_('Defines the role this node plays in the mesh network.'));
-		o.value('1', _('Auto detect (recommended)'));
-		o.value('0', _('Force MRP — Routed Portal'));
-		o.value('3', _('CPE — Customer Premises Equipment'));
-		o.value('4', _('MBP — Bridge VXLAN Portal'));
-		o.value('5', _('TPN — Trunk Peer Node'));
-		o.default = '1';
+		o = s.option(form.RichListValue, 'portal_detect', _('Node Mode'),
+			_('Select the operating mode for this node in the mesh network')
+		);
+		o.value('1', _('Auto Detect (Recommended)'),
+			_('Automatically detects WAN status:<br/>• WAN available = MRP (Routed Portal)<br/>• No WAN = MPE (Mesh Peer)')
+		);
+		o.value('0', _('Forced Routed Portal (MRP)'),
+			_('Forces routed portal mode:<br/>• Always provides DHCP/NAT<br/>• Must have WAN connection')
+		);
+		o.value('3', _('Client Equipment (CPE)'),
+			_('Peer mode, mesh as WAN:<br/>• Creates independent NAT subnet<br/>• Supports multiple IPv6 modes')
+		);
+		o.value('4', _('Bridged Portal (MBP)'),
+			_('Bridge mode, WAN joins VXLAN:<br/>• No NAT translation<br/>• WAN port added to br-tun69')
+		);
+		o.value('5', _('Trunk Peer Node (TPN)'),
+			_('Special peer node:<br/>• WAN port is VXLAN endpoint<br/>• Compatible with mode 0/1/4 portals')
+		);
+		o.default  = '1';
+		o.depends('auto_config', '1');
 
 		o = s.option(form.Value, 'portal_detect_threshold', _('Portal Detect Watchdog'),
 			_('Number of check intervals a peer node can fail to detect the portal before the watchdog triggers a reboot. 0 = disabled.'));
 		o.datatype = 'uinteger';
 		o.default  = '10';
+		o.depends('auto_config', '1');
 
 		o = s.option(form.ListValue, 'portal_channel', _('Portal Channel (2.4 GHz only)'),
 			_('Peer nodes automatically track the portal channel regardless of auto_mesh_band.'));
-		o.value('default', _('Use channel from wireless config (default)'));
+		o.value('default', _('Use channel from wireless config'));
 		o.value('auto',    _('Auto select'));
 		for (var ch = 1; ch <= 13; ch++) {
 			o.value(String(ch), _('Channel ') + ch);
 		}
 		o.default = 'default';
+		o.depends({ 'auto_config': '1', 'portal_detect': '0' });
 
 		o = s.option(form.Value, 'channel_tracking_checkinterval', _('Channel Tracking Start Interval (s)'),
 			_('Minimum interval after which channel tracking begins on peer nodes. Values less than checkinterval are ignored. Default: 30 s.'));
@@ -216,8 +230,11 @@ return view.extend({
 
 		o = s.option(form.Flag, 'portal_use_default_ipv4', _('Use Default IPv4 Address'),
 			_('When enabled, the portal node uses the IPv4 address from /etc/config/network. '
-			+ 'When disabled (default), the subnet is auto-calculated from the label MAC address.'));
+			+ 'When disabled, the subnet is auto-calculated from the label MAC address.'));
 		o.default = '0';
+		o.depends({ 'auto_config': '1', 'portal_detect': '0' });
+		o.depends({ 'auto_config': '1', 'portal_detect': '1' });
+		o.depends({ 'auto_config': '1', 'portal_detect': '4' });
 
 		/* ── CPE only ── */
 		o = s.option(form.ListValue, 'cpe_mode', _('CPE IPv6 Mode'),
@@ -226,13 +243,13 @@ return view.extend({
 		o.value('prefix_delegation', _('Prefix Delegation'));
 		o.value('relay',             _('Relay'));
 		o.default = 'nat66';
-		o.depends('portal_detect', '3');
+		o.depends({ 'auto_config': '1', 'portal_detect': '3' });
 
 		/* ── Access Point (Gate) ── */
 		o = s.option(form.ListValue, 'mesh_gate_enable', _('AP Gate'),
 			_('Controls whether this node creates a Wi-Fi access point (SSID).'));
 		o.value('0', _('Disabled'));
-		o.value('1', _('Enabled on all radios (default)'));
+		o.value('1', _('Enabled on all radios'));
 		o.value('2', _('Enabled only on radios not shared with mesh'));
 		o.default = '1';
 
@@ -240,25 +257,34 @@ return view.extend({
 			_('Base SSID for the access point. Max 22 chars with suffix enabled, 30 without. '
 			+ 'Leave empty to use the SSID from wireless config.'));
 		o.optional = true;
+		o.depends('mesh_gate_enable', '1');
+		o.depends('mesh_gate_enable', '2');
 
 		o = s.option(form.Flag, 'ssid_suffix_enable', _('SSID Suffix'),
 			_('Append the last 4 digits of the mesh interface MAC to the SSID to distinguish nodes.'));
 		o.default = '1';
+		o.depends('mesh_gate_enable', '1');
+		o.depends('mesh_gate_enable', '2');
 
 		o = s.option(form.RichListValue, 'mesh_gate_encryption', _('AP Encryption'));
-		o.value('4', _('OWE — Opportunistic Wireless Encryption (default)'));
 		o.value('0', _('None / OWE transition'));
 		o.value('1', _('SAE (WPA3)'));
 		o.value('2', _('SAE-Mixed (WPA2+WPA3)'));
 		o.value('3', _('WPA2 PSK'));
+		o.value('4', _('OWE — Opportunistic Wireless Encryption'));
 		o.default = '4';
+		o.depends('mesh_gate_enable', '1');
+		o.depends('mesh_gate_enable', '2');
 
 		o = s.option(form.Value, 'mesh_gate_key', _('AP Password'));
 		o.password = true;
 		o.optional = true;
-		o.depends('mesh_gate_encryption', '1');
-		o.depends('mesh_gate_encryption', '2');
-		o.depends('mesh_gate_encryption', '3');
+		o.depends({ 'mesh_gate_enable': '1', 'mesh_gate_encryption': '1' });
+		o.depends({ 'mesh_gate_enable': '1', 'mesh_gate_encryption': '2' });
+		o.depends({ 'mesh_gate_enable': '1', 'mesh_gate_encryption': '3' });
+		o.depends({ 'mesh_gate_enable': '2', 'mesh_gate_encryption': '1' });
+		o.depends({ 'mesh_gate_enable': '2', 'mesh_gate_encryption': '2' });
+		o.depends({ 'mesh_gate_enable': '2', 'mesh_gate_encryption': '3' });
 
 		/* ── Path & Performance ── */
 		o = s.option(form.Value, 'mesh_path_cost', _('Mesh Path Cost (STP)'),
@@ -298,6 +324,10 @@ return view.extend({
 			+ 'Useful when the node is within range of 2+ peer nodes to avoid unstable multi-hop paths. '
 			+ 'Requires mobility level 0 and non-portal role.'));
 		o.default = '0';
+		o.depends({ 'mesh_node_mobility_level': '0', 'auto_config': '0' });
+		o.depends({ 'mesh_node_mobility_level': '0', 'auto_config': '1', 'portal_detect': '1' });
+		o.depends({ 'mesh_node_mobility_level': '0', 'auto_config': '1', 'portal_detect': '3' });
+		o.depends({ 'mesh_node_mobility_level': '0', 'auto_config': '1', 'portal_detect': '5' });
 
 		o = s.option(form.Value, 'txpower', _('TX Power (dBm)'),
 			_('Transmit power for the mesh radio. Values outside the regulatory domain are ignored. Leave empty for driver/wireless default.'));
@@ -309,7 +339,12 @@ return view.extend({
 			_('Point-to-multipoint VXLAN tunnel between the portal and all compatible peers. '
 			+ 'Requires <b>ip-full</b> and <b>vxlan</b> packages; ignored otherwise. '
 			+ 'Disabled by default when Node Role is CPE (3).'));
-		o.default = '1';
+		o.default = '0';
+		o.depends({ 'auto_config': '0' });
+		o.depends({ 'auto_config': '1', 'portal_detect': '0' });
+		o.depends({ 'auto_config': '1', 'portal_detect': '1' });
+		o.depends({ 'auto_config': '1', 'portal_detect': '4' });
+		o.depends({ 'auto_config': '1', 'portal_detect': '5' });
 
 		o = s.option(form.Value, 'tun_id', _('Tunnel ID'),
 			_('VXLAN tunnel identifier. Decimal, range 1–16777216 (24-bit). Default: 69.'));
@@ -344,11 +379,11 @@ return view.extend({
 
 		o = s.option(form.RichListValue, 'vtun_gate_encryption', _('VXLAN AP Encryption'),
 			_('Encryption for the AP attached to the vxlan tunnel.'));
-		o.value('4', _('OWE — Opportunistic Wireless Encryption (default)'));
 		o.value('0', _('None / OWE transition'));
 		o.value('1', _('SAE (WPA3)'));
 		o.value('2', _('SAE-Mixed (WPA2+WPA3)'));
 		o.value('3', _('WPA2 PSK'));
+		o.value('4', _('OWE — Opportunistic Wireless Encryption'));
 		o.default = '4';
 		o.depends('vtun_enable', '1');
 
