@@ -188,6 +188,7 @@ do_wireless() {
 		EOF
 	}
 
+	[ "$band_mode" = "2" ] && return
 	local mesh_hash old_mesh_hash radio_hash old_radio_hash changed=0
 	mesh_hash=$(hash_value "${mesh_id}:${mesh_pass}:${mesh_radio}:${use_batadv}:${log_level}")
 	radio_hash=$(hash_value "${ssid_2g}:${ssid_5g}:${key_2g}:${key_5g}:${wifi_pass}:${wifi_ssid}")
@@ -250,6 +251,7 @@ do_mesh11sd() {
 	local m11_hash; m11_hash=$(hash_value "$(uci -q show mesh11sd)")
 	config_get old_m11_hash main old_m11_hash ''
 	[ "$m11_hash" = "$old_m11_hash" ] && return 1
+	uci -q set mesh11sd.setup.enabled="${m11_enable}"
 	uci -q set mesh_node.main.old_m11_hash="$m11_hash"
 	return 0
 }
@@ -268,7 +270,7 @@ start() {
 	local combo_mode wan_proto lan_proto lan_ip gateway user pass log_level \
 		  ssid_2g ssid_5g key_2g key_5g wifi_ssid wifi_pass mesh_id mesh_pass \
 		  mesh_radio enable_usteer init old_init hostname old_hostname \
-		  old_m11_hash m11_enable use_batadv usteer_changed=0 \
+		  band_mode old_m11_hash m11_enable use_batadv usteer_changed=0 \
 		  network_changed=0 wireless_changed=0 mesh11sd_changed=0
 
 	config_load mesh_node
@@ -290,6 +292,7 @@ start() {
 	config_get mesh_id       main mesh_id         ''
 	config_get mesh_pass     main mesh_pass       ''
 	config_get mesh_radio    main mesh_radio      ''
+	config_get band_mode     main _band_mode      '0'
 
 	config_get init          main init            ''
 	config_get old_init      main old_init        ''
