@@ -6,6 +6,7 @@
 'require view';
 'require form';
 'require network';
+'require tools.widgets as widgets';
 
 var callIfaceDump = rpc.declare({
 	object: 'network.interface',
@@ -75,10 +76,10 @@ function m11opt(ss, widget, name, section, title, desc) {
 
 function m11dep(o, conditions) {
 	if (!conditions || conditions.length === 0) {
-		o.depends('mesh_node.main._band_mode', '2');
+		o.depends('mesh_node.main.band_mode', '2');
 	} else {
 		conditions.forEach(function(cond) {
-			var merged = { 'mesh_node.main._band_mode': '2' };
+			var merged = { 'mesh_node.main.band_mode': '2' };
 			Object.keys(cond).forEach(function(k) { merged[k] = cond[k]; });
 			o.depends(merged);
 		});
@@ -86,10 +87,10 @@ function m11dep(o, conditions) {
 }
 
 function usteeropt(ss, widget, name, title, desc) {
-	var so = ss.taboption('usteer', widget, name, title, desc);
-	so.depends('mesh_node.globals.enable_usteer', '1');
-	so.uciconfig = 'usteer'; so.ucisection = '@usteer[0]';
-	return so;
+	var s = ss.taboption('usteer', widget, name, title, desc);
+	s.depends('mesh_node.globals.enable_usteer', '1');
+	s.uciconfig = 'usteer'; s.ucisection = '@usteer[0]';
+	return s;
 }
 
 return view.extend({
@@ -116,8 +117,10 @@ return view.extend({
 							if (mode === 'Master' || mode === 'ap') {
 								if (band === '5g' || band === '5GHz') {
 									info.ssid_5g = ssid; info.key_5g  = key;
-								} else {
+								} else if (band === '2g' || band === '2.4GHz') {
 									info.ssid_2g = ssid; info.key_2g  = key;
+								} else {
+									info.ssid_6g = ssid; info.key_6g  = key;
 								}
 							} else if (mode === 'Mesh Point' || mode === 'mesh') {
 								info.mesh_id   = meshId;
@@ -136,18 +139,16 @@ return view.extend({
 					if (devs.wan) { info.wanMac = devs.wan.mac; info.wanIfname = devs.wan.name; }
 					return info;
 				}),
+			callLuciWirelessDevices(),
 			fs.exec('/etc/init.d/mesh11sd', ['running'])
 				.then(function (r) { return r.code === 0; }),
 			fs.exec('/etc/init.d/usteer', ['running'])
 				.then(function (r) { return r.code === 0; }),
-			uci.load('mesh_node'),
-			uci.load('mesh11sd'),
-			uci.load('network'),
-			uci.load('usteer')
+			uci.load('mesh_node')
 		]);
 	},
 
-	render: function ([info, m_running, u_running]) {
+	render: function ([info, wifiDevs, m_running, u_running]) {
 		var m, s, o, so, ss;
 		m = new form.Map('mesh_node', _('AP + Mesh Deployment'));
 		m.chain('mesh11sd');
@@ -188,8 +189,8 @@ return view.extend({
 		o.value('dhcp',   _('Default'));
 		o.defaults = {
 			'pppoe':  [{ combo_mode: 'pppoe_none' }],
-			'dhcp':   [{ combo_mode: 'custom' }, { combo_mode: 'dhcp_none' }],
-			'bridge': [{ combo_mode: 'bridge_dhcp' }, { combo_mode: 'bridge_static' }]
+			'dhcp':   [{ combo_mode: /(custom|dhcp_none)/ }],
+			'bridge': [{ combo_mode: /(bridge_dhcp|bridge_static)/ }]
 		};
 		o.rmempty = false;
 
@@ -208,7 +209,7 @@ return view.extend({
 		o.defaults = {
 			'dhcp':   [{ combo_mode: 'bridge_dhcp' }],
 			'static': [{ combo_mode: 'bridge_static' }],
-			'none':   [{ combo_mode: 'custom' }, { combo_mode: 'dhcp_none' }, { combo_mode: 'pppoe_none' }],
+			'none':   [{ combo_mode: /(custom|dhcp_none|pppoe_none)/ }],
 		};
 
 		o = s.taboption('network', form.Value, 'lan_ip', _('Node Static IP'),
@@ -223,7 +224,7 @@ return view.extend({
 		o.depends({ combo_mode: 'custom'  });
 		o.depends({ lan_proto: 'static'  });
 
-		o = s.taboption('network', form.ListValue, '_band_mode', _('回程模式'));
+		o = s.taboption('network', form.ListValue, 'band_mode', _('回程模式'));
 		o.value('0', _('无线+有线'));
 		o.value('1', _('有线'));
 		o.value('2', _('mesh11sd'));
@@ -232,12 +233,12 @@ return view.extend({
 		o = s.taboption('network', form.DummyValue, '_lan_ip', _('DHCP Assigned IP'),
 			_('IP address assigned to this node by the upstream DHCP server; shown for reference only'));
 		o.default = info.lanIp || ''; o.depends({ lan_proto: 'dhcp'  });
-		o.depends('_band_mode', /(0|1)/);
+		o.depends('band_mode', /(0|1)/);
 
 		o = s.taboption('wireless', form.Flag, 'band_merge', _('Dual-band Merge'),
 			_('Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz radios.'));
 		o.default = '0';
-		o.depends('_band_mode', /(0|1)/);
+		o.depends('band_mode', /(0|1)/);
 
 		o = s.taboption('wireless', form.ListValue, 'log_level', _('Hostapd Log Level'),
 			_('Global setting for all Wi-Fi radios'));
@@ -247,33 +248,31 @@ return view.extend({
 		o.value('3', _('Notice'));
 		o.value('4', _('Warning'));
 		o.default = '2'; o.rmempty = false;
-		o.depends('_band_mode', /(0|1)/);
+		o.depends('band_mode', /(0|1)/);
 
 		o = s.taboption('wireless', form.Value, 'ssid_2g', _('2.4 GHz SSID'),
 			_('Must exactly match the main router SSID to enable seamless roaming'));
 		o.default = info.ssid_2g || 'HomeWiFi';
-		o.rmempty = false; o.depends('band_merge', '0');
-		o.depends('_band_mode', /(0|1)/);
+		o.rmempty = false;
+		o.depends('band_merge', '0');
 
 		o = s.taboption('wireless', form.Value, 'key_2g', _('2.4 GHz WiFi Password'),
 			_('Encryption: psk2+ccmp (WPA2). Minimum 8 characters.'));
 		o.datatype = 'wpakey'; o.password = true;
 		o.rmempty = false; o.default = info.key_2g || '';
 		o.depends('band_merge', '0');
-		o.depends('_band_mode', /(0|1)/);
 
 		o = s.taboption('wireless', form.Value, 'ssid_5g', _('5 GHz SSID'),
 			_('Must exactly match the main router SSID to enable seamless roaming'));
 		o.default = info.ssid_5g || 'HomeWiFi-5G';
-		o.rmempty = false; o.depends('band_merge', '0');
-		o.depends('_band_mode', /(0|1)/);
+		o.rmempty = false;
+		o.depends('band_merge', '0');
 
 		o = s.taboption('wireless', form.Value, 'key_5g', _('5 GHz WiFi Password'),
 			_('Encryption: psk2+ccmp (WPA2). Minimum 8 characters.'));
 		o.datatype = 'wpakey'; o.password = true;
 		o.rmempty = false; o.default = info.key_5g || '';
 		o.depends('band_merge', '0');
-		o.depends('_band_mode', /(0|1)/);
 
 		o = s.taboption('wireless', form.Value, 'wifi_ssid', _('WiFi SSID'),
 			_('Shared by 2.4 GHz and 5 GHz'));
@@ -344,37 +343,52 @@ return view.extend({
 		o.rmempty  = false;
 		m11dep(o, []);
 
-		o = m11opt(s, form.Value, 'auto_mesh_id', '',  _('Mesh ID Seed'),
-			_('Hashed to generate the actual mesh network ID. <b>Must match on all nodes.</b> Default: --__'));
+		o = m11opt(s, form.ListValue, 'auto_mesh_band', '', _('Mesh Backhaul Band'),
+			_('Select the radio band used for the 802.11s mesh backhaul link. <b>Must match on all nodes.</b>'));
+		var bands = [];
+		['radio0', 'radio1', 'radio2', 'radio3'].forEach(function(radio) {
+			var dev = wifiDevs[radio];
+			if (!dev || !dev.config) return;
+			var band = dev.config.band;
+			if (band === '2g') {
+				bands.push(dev.config.htmode && dev.config.htmode.includes('40') ?
+					['2g40', '2.4 GHz (40 MHz, default)'] :
+					['2g', '2.4 GHz (20 MHz)']);
+			} else if (band === '5g') bands.push(['5g', '5 GHz']);
+			else if (band === '6g')   bands.push(['6g', '6 GHz']);
+			else if (band === '60g')  bands.push(['60g', '60 GHz']);
+		});
+		bands.forEach(function(b) { o.value(b[0], _(b[1])); });
+		o.default = bands.some(function(b) { return b[0] === '2g40'; }) ? '2g40' : (bands[0] ? bands[0][0] : '2g40');
+		o.rmempty = false;
+		m11dep(o, [{ 'auto_config': '1' }]);
+
+		o = m11opt(s, form.Value, 'auto_mesh_id', '',  _('Mesh ID'),
+			_('Hashed to generate the actual mesh network ID. <b>Must match on all nodes.</b>'));
 		o.default  = '--__';
 		m11dep(o, [{ 'auto_config': '1' }]);
 
-		o = m11opt(s, form.Value, 'auto_mesh_key', '',  _('Mesh Encryption Key Seed'),
+		o = m11opt(s, form.Value, 'auto_mesh_key', '',  _('Mesh Password'),
 			_('SHA256-hashed to produce the mesh encryption key. <b>Must match on all nodes.</b>'));
 		o.password = true;
 		o.optional = true;
 		m11dep(o, [{ 'auto_config': '1' }]);
 
-		o = m11opt(s, form.ListValue, 'auto_mesh_band', '',  _('Mesh Band'),
-			_('Wireless band used for the mesh backhaul. <b>Must match on all nodes.</b>'));
-		o.value('2g',   _('2.4 GHz (20 MHz)'));
-		o.value('2g40', _('2.4 GHz (40 MHz, default)'));
-		o.value('5g',   _('5 GHz'));
-		o.value('6g',   _('6 GHz'));
-		o.value('60g',  _('60 GHz'));
-		o.default = '2g40';
+		o = m11opt(s, widgets.NetworkSelect, 'auto_mesh_network', '',  _('specifies the firewall zone used for the mesh.'),
+			_('This can be set differently on each meshnode as required.'));
+		o.default = 'lan';
 		m11dep(o, [{ 'auto_config': '1' }]);
+
+		o = m11opt(s, form.Value, 'country', '',  _('Country Code'),
+			_('Overrides the country code in the wireless config (e.g. CN, US, DE). Defaults to DFS-ETSI if not set.'));
+		o.optional = true; o.placeholder = 'CN';
+		m11dep(o, []);
 
 		o = m11opt(s, form.Value, 'mesh_phy_index', '',  _('Force Radio Index'),
 			_('Leave empty for auto-selection. Only needed on devices with multiple radios on the same band (e.g. enter 2 to force phy2).'));
 		o.datatype = 'uinteger';
 		o.optional = true;
 		m11dep(o, [{ 'auto_config': '1' }]);
-
-		o = m11opt(s, form.Value, 'country', '',  _('Country Code'),
-			_('Overrides the country code in the wireless config (e.g. CN, US, DE). Defaults to DFS-ETSI if not set.'));
-		o.optional = true;
-		m11dep(o, []);
 
 		o = m11opt(s, form.Value, 'mesh_basename', '',  _('Mesh Interface Base Name'),
 			_('Used to build the interface name m-<name>-0. Max 8 characters. Default: 11s → interface m-11s-0.'));
@@ -384,23 +398,17 @@ return view.extend({
 
 		/* ── Node Role & Portal Detection ── */
 		o = m11opt(s, form.RichListValue, 'portal_detect', '',  _('Node Mode'),
-			_('Select the operating mode for this node in the mesh network')
-		);
+			_('Select the operating mode for this node in the mesh network'));
 		o.value('0', _('Forced Routed Portal (MRP)'),
-			_('Forces routed portal mode:<br/>• Always provides DHCP/NAT<br/>• Must have WAN connection')
-		);
+			_('Forces routed portal mode:<br/>• Always provides DHCP/NAT<br/>• Must have WAN connection'));
 		o.value('1', _('Auto Detect (Recommended)'),
-			_('Automatically detects WAN status:<br/>• WAN available = MRP (Routed Portal)<br/>• No WAN = MPE (Mesh Peer)')
-		);
+			_('Automatically detects WAN status:<br/>• WAN available = MRP (Routed Portal)<br/>• No WAN = MPE (Mesh Peer)'));
 		o.value('3', _('Client Equipment (CPE)'),
-			_('Peer mode, mesh as WAN:<br/>• Creates independent NAT subnet<br/>• Supports multiple IPv6 modes')
-		);
+			_('Peer mode, mesh as WAN:<br/>• Creates independent NAT subnet<br/>• Supports multiple IPv6 modes'));
 		o.value('4', _('Bridged Portal (MBP)'),
-			_('Bridge mode, WAN joins VXLAN:<br/>• No NAT translation<br/>• WAN port added to br-tun69')
-		);
+			_('Bridge mode, WAN joins VXLAN:<br/>• No NAT translation<br/>• WAN port added to br-tun69'));
 		o.value('5', _('Trunk Peer Node (TPN)'),
-			_('Special peer node:<br/>• WAN port is VXLAN endpoint<br/>• Compatible with mode 0/1/4 portals')
-		);
+			_('Special peer node:<br/>• WAN port is VXLAN endpoint<br/>• Compatible with mode 0/1/4 portals'));
 		o.default  = '1';
 		m11dep(o, [{ 'auto_config': '1' }]);
 
@@ -454,7 +462,7 @@ return view.extend({
 		o = m11opt(s, form.Value, 'mesh_gate_base_ssid', '',  _('AP SSID'),
 			_('Base SSID for the access point. Max 22 chars with suffix enabled, 30 without. '
 			+ 'Leave empty to use the SSID from wireless config.'));
-		o.optional = true;
+		o.optional = true; o.rmempty = false; o.default = 'HomeWiFi'; o.default = 'HomeWiFi';
 		m11dep(o, [{ 'mesh_gate_enable': /(1|2)/ } ]);
 
 		o = m11opt(s, form.Flag, 'ssid_suffix_enable', '',  _('SSID Suffix'),
@@ -650,17 +658,61 @@ return view.extend({
 		o.value('2g',   _('2.4 GHz (longer range, lower throughput)'));
 		o.value('none', _('All bands (all radios participate in the mesh)'));
 		o.default = '5g';
-		o.depends('_band_mode', '0');
+		o.depends('band_mode', '0');
+
+		o = s.taboption('mesh', widgets.NetworkSelect, 'mesh_network', _('Mesh Network'),
+			_('Choose the network(s) you want to attach to this wireless interface or fill out the <em>custom</em> field to define a new network.'));
+		o.default = 'lan'; o.rmempty = true;
+		o.multiple = true; o.novirtual = true;
+		o.depends('band_mode', '0');
+		o.write = function(section_id, value) {
+			return network.getDevice(section_id).then(L.bind(function(dev) {
+				var old_networks = dev.getNetworks().reduce(function(o, v) { o[v.getName()] = v; return o; }, {});
+				var new_networks = {}, tasks = []
+				var values = L.toArray(value);
+
+				values.forEach(value => {
+					new_networks[value] = true;
+					if (old_networks[value]) return;
+					tasks.push(network.getNetwork(value).then(L.bind(function(name, net) {
+						return net || network.addNetwork(name, { proto: 'none' });
+					}, this, value)).then(L.bind(function(dev, net) {
+						if (net) {
+							if (!net.isEmpty()) {
+								var target_dev = net.getDevice();
+
+								while (target_dev && target_dev.getType() == 'vlan')
+									target_dev = target_dev.getParent();
+
+								if (!target_dev || target_dev.getType() != 'bridge')
+									net.set('type', 'bridge');
+							}
+
+							net.addDevice(dev);
+						}
+					}, this, dev)));
+				});
+
+				for (var name in old_networks)
+					if (!new_networks[name])
+						tasks.push(network.getNetwork(name).then(L.bind(function(dev, net) {
+							if (net)
+								net.deleteDevice(dev);
+						}, this, dev)));
+
+				return Promise.all(tasks);
+			}, this));
+		};
 
 		o = s.taboption('mesh', form.Value, 'mesh_id', _('Mesh ID'),
 			_('Must be identical on every mesh node'));
-		o.depends('_band_mode', '0');
+		o.depends('band_mode', '0');
 		o.default = info.mesh_id || 'HomeMesh'; o.rmempty = false;
 
 		o = s.taboption('mesh', form.Value, 'mesh_pass', _('Mesh Password'),
 			_('SAE (WPA3) passphrase; minimum 8 characters, must match on all nodes'));
 		o.datatype = 'wpakey'; o.password = true;
-		o.depends('_band_mode', '0');
+		o.depends('band_mode', '0');
 		o.rmempty = false; o.default = info.mesh_pass || '';
 
 		o = s.taboption('mesh', form.RichListValue, 'use_batadv', _('Mesh Protocol'),
@@ -670,7 +722,7 @@ return view.extend({
 		o.value('0', _('802.11s native — kernel mesh forwarding (default)'));
 		o.value('1', _('batman-adv — 802.11s backhaul + batadv L2 routing'));
 		o.default = '0';
-		o.depends('_band_mode', '0');
+		o.depends('band_mode', '0');
 		o.onchange = function(ev, sid, val) {
 			["usteer", "batadv"].find(function(t) {
 				var el = document.querySelector('[data-tab="' + t + '"].cbi-tab-disabled');
@@ -680,7 +732,7 @@ return view.extend({
 
 		o = s.taboption('mesh', form.Button, '_mesh_status_btn', _('Mesh Status'));
 		o.inputtitle = _('View Mesh Status'); o.inputstyle = 'positive';
-		o.depends('_band_mode', '0');
+		o.depends('band_mode', '0');
 		o.onclick = function () {
 			if (uci.get_bool('mesh_node', 'main', 'use_batadv')) {
 				var run = function (args) {
@@ -745,7 +797,7 @@ return view.extend({
 
 		o = s.taboption('mesh', form.SectionValue, '_config', form.NamedSection, 'globals');
 		ss = o.subsection;
-		o.depends('_band_mode', '0');
+		o.depends('band_mode', '0');
 		ss.tab('batadv', _('batadv Settings'));
 		ss.tab('usteer', _('Usteer Settings'));
 
@@ -857,7 +909,7 @@ return view.extend({
 		so.default = '0'; so.rmempty = false;
 		so.depends({ 'mesh_node.main.use_batadv': '0' });
 		so.write = function (section_id, value) {
-			this.map.uci.set('usteer', '@usteer[0]', 'enabled', value);
+			uci.set('usteer', '@usteer[0]', 'enabled', value);
 			return this.super('write', [section_id, value]);
 		};
 

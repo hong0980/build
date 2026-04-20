@@ -154,7 +154,7 @@ do_wireless() {
 	}
 
 	wifi_device() {
-		local dev="$1" band
+		local dev="$1" band mesh_fwding=1
 		local mesh_iface="mesh_${dev}"
 		config_get band "$dev" band
 		local mesh_ifname="phy${dev#radio}-mesh0"
@@ -170,7 +170,6 @@ do_wireless() {
 			*) return 0;;
 		esac
 
-		local mesh_network='lan' mesh_fwding=1
 		[ "$use_batadv" = "1" ] && { mesh_network='batmesh'; mesh_fwding=0; }
 
 		uci -q batch <<-EOF
@@ -190,7 +189,7 @@ do_wireless() {
 
 	[ "$band_mode" = "2" ] && return
 	local mesh_hash old_mesh_hash radio_hash old_radio_hash changed=0
-	mesh_hash=$(hash_value "${mesh_id}:${mesh_pass}:${mesh_radio}:${use_batadv}:${log_level}")
+	mesh_hash=$(hash_value "${mesh_id}:${mesh_pass}:${mesh_radio}:${mesh_network}:${use_batadv}:${log_level}")
 	radio_hash=$(hash_value "${ssid_2g}:${ssid_5g}:${key_2g}:${key_5g}:${wifi_pass}:${wifi_ssid}")
 
 	config_get old_mesh_hash  main old_mesh_hash  ''
@@ -269,7 +268,7 @@ do_usteer() {
 start() {
 	local combo_mode wan_proto lan_proto lan_ip gateway user pass log_level \
 		  ssid_2g ssid_5g key_2g key_5g wifi_ssid wifi_pass mesh_id mesh_pass \
-		  mesh_radio enable_usteer init old_init hostname old_hostname \
+		  mesh_radio mesh_network enable_usteer init old_init hostname old_hostname \
 		  band_mode old_m11_hash m11_enable use_batadv usteer_changed=0 \
 		  network_changed=0 wireless_changed=0 mesh11sd_changed=0
 
@@ -292,7 +291,8 @@ start() {
 	config_get mesh_id       main mesh_id         ''
 	config_get mesh_pass     main mesh_pass       ''
 	config_get mesh_radio    main mesh_radio      ''
-	config_get band_mode     main _band_mode      '0'
+	config_get mesh_network  main mesh_network    ''
+	config_get band_mode     main band_mode       '0'
 
 	config_get init          main init            ''
 	config_get old_init      main old_init        ''

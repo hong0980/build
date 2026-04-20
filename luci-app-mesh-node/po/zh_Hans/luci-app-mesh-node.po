@@ -11,8 +11,8 @@ msgstr "Mesh 回程"
 msgid "Mesh11sd Daemon"
 msgstr "Mesh11sd 守护进程"
 
-msgid "Miscellaneous"
-msgstr "杂项"
+msgid "Other"
+msgstr "其他"
 
 msgid "Network Mode"
 msgstr "网络模式"
