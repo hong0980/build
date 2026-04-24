@@ -155,361 +155,6 @@ msgstr "运行中"
 msgid "Stopped"
 msgstr "未运行"
 
-msgid "the daemon continuously monitors mesh interfaces, synchronises kernel parameters, removes phantom routes, and manages DHCP role selection based on upstream connectivity."
-msgstr "持续监控 Mesh 接口、同步内核参数、清除幽灵路由条目，并根据上游连通性自动管理 DHCP 角色。"
-
-msgid "Enable mesh11sd Daemon"
-msgstr "启用 mesh11sd"
-
-msgid "Log Level"
-msgstr "日志级别"
-
-msgid "Sets the debug log level."
-msgstr "设置守护进程的调试日志等级。"
-
-msgid "Silent"
-msgstr "静默"
-
-msgid "Notification"
-msgstr "通知"
-
-msgid "Info"
-msgstr "信息"
-
-msgid "Debug"
-msgstr "调试"
-
-msgid "Check Interval (seconds)"
-msgstr "巡检间隔（秒）"
-
-msgid "How often the daemon checks and updates mesh configuration. Minimum: 10."
-msgstr "守护进程检查并更新 Mesh 配置的频率（秒）。最小 10 秒。"
-
-msgid "Interface Timeout (seconds)"
-msgstr "接口超时（秒）"
-
-msgid "Time to wait for a mesh interface to become ready before giving up."
-msgstr "等待 Mesh 接口就绪的超时时间（秒）。超时后放弃本轮尝试。"
-
-msgid "Mesh Path Cost"
-msgstr "Mesh 路径成本"
-
-msgid "STP cost assigned to the mesh network. Range: 0–65534. Set to 0 to disable STP."
-msgstr "分配给 Mesh 网络的 STP 路径成本。范围 0–65534，设为 0 禁用 STP。"
-
-msgid "Auto Configuration"
-msgstr "自动配置"
-
-msgid ""
-"Enables autonomous dynamic mesh configuration.<br>"
-"<span style=\"color: #d63638; font-weight: bold;\">⚠️ Warning:"
-" If an existing mesh configuration is found, it will be honoured even if it is incorrect.<br>"
-"Manually configuring a mesh can soft brick the router if incorrectly done.<br></span>"
-"Auto config can be tested using the command line function: <code>mesh11sd auto_config test</code>"
-msgstr ""
-"启用自主动态 Mesh 配置。<br>"
-"<span style=\"color: #d63638; font-weight: bold;\">⚠️ 警告:"
-" 如果发现现有的 Mesh 配置，即使不正确也会被使用。<br>"
-"手动配置 Mesh 如果操作不当，可能导致路由器软砖。<br></span>"
-"可以使用命令行功能测试自动配置：<code>mesh11sd auto_config test</code>"
-
-msgid "Disabled"
-msgstr "禁用"
-
-msgid "Enabled"
-msgstr "启用"
-
-msgid "Portal Detection Mode"
-msgstr "门户节点检测模式"
-
-msgid "Controls how this node determines its role in the mesh.<br>Force routed portal (MRP): always acts as IPv4 NAT gateway regardless of upstream.<br>Auto detect (default): portal if upstream WAN is active, otherwise layer-2 bridge peer.<br>CPE mode: treats mesh backhaul as upstream WAN; creates its own NAT subnet. Forces VXLAN tunnel off.<br>Bridge VXLAN trunk portal (MBP): bridged (no-NAT) portal; adds WAN port to vxtunnel bridge.<br>Bridge VXLAN trunk peer (TPN): peer node; adds WAN port to vxtunnel bridge."
-msgstr "控制此节点如何确定其在网状网络中的角色。<br>强制路由门户 (MRP)：无论上游如何，始终充当 IPv4 NAT 网关。<br>自动检测（默认）：如果上游 WAN 活跃则为门户，否则为二层桥接对等节点。<br>CPE 模式：将网状回程视为上游 WAN；创建自己的 NAT 子网。强制关闭 VXLAN 隧道。<br>桥接 VXLAN 干线门户 (MBP)：桥接（无 NAT）门户；将 WAN 端口添加到 vxtunnel 桥。<br>桥接 VXLAN 干线对等节点 (TPN)：对等节点；将 WAN 端口添加到 vxtunnel 桥。"
-
-msgid "Forced Routed Portal (MRP)"
-msgstr "强制路由门户（MRP）"
-
-msgid "Auto Detect (default)"
-msgstr "自动检测（默认）"
-
-msgid "Client Premises Equipment (CPE)"
-msgstr "客户前端设备（CPE）"
-
-msgid "Bridge VXLAN Trunk Portal (MBP)"
-msgstr "桥接 VXLAN 主干门户（MBP）"
-
-msgid "Bridge VXLAN Trunk Peer (TPN)"
-msgstr "桥接 VXLAN 主干 Peer（TPN）"
-
-msgid "Portal Channel (2.4 GHz)"
-msgstr "门户信道（2.4 GHz）"
-
-msgid "Forced portal channel for the 2.4 GHz band. All peer nodes will autonomously track this channel. or a valid channel number 1–13."
-msgstr "强制指定门户使用的 2.4 GHz 信道，所有 Peer 节点会自动跟踪此信道。可选有效信道编号 1–13。"
-
-msgid "Auto-select"
-msgstr "自动选择"
-
-msgid "Use Default IPv4"
-msgstr "使用默认 IPv4"
-
-msgid "Only effective when this node is a portal. When enabled, the IPv4 address from /etc/config/network is used as the portal address. When disabled, an address is auto-calculated from the label MAC address."
-msgstr "仅当本节点为门户时有效。启用后使用 network 中的 IPv4 地址作为门户地址；禁用时基于标签 MAC 地址计算一个 IP 子网地址。"
-
-msgid "Portal Detect Threshold"
-msgstr "门户检测看门狗阈值"
-
-msgid "Number of consecutive check intervals without portal contact before the watchdog takes action (attempts reconnection, then reboots). Set to 0 to disable the watchdog."
-msgstr "连续多少个巡检周期未与门户通信后触发看门狗（先尝试重连，仍失败则重启节点）。设为 0 禁用看门狗。"
-
-msgid "Channel Tracking Checkinterval (seconds)"
-msgstr "信道跟踪间隔（秒）"
-
-msgid "Minimum interval after which peer nodes begin tracking the portal channel. Values smaller than Check Interval are ignored."
-msgstr "对等节点开始信道跟踪的最小间隔（秒）。小于巡检间隔的值将被忽略。"
-
-msgid "Auto Mesh ID"
-msgstr "自动 Mesh ID"
-
-msgid "A string that is hashed to produce a secure mesh ID. Must be identical on every mesh node. Only used when Auto Configuration is enabled."
-msgstr "该字符串经哈希后生成安全的 Mesh ID。所有节点必须完全一致。"
-
-msgid "Auto Mesh Band"
-msgstr "自动 Mesh 频段"
-
-msgid "Radio band to use for the auto-configured mesh interface. All peer nodes will autonomously track the portal channel regardless of this setting. Must be identical on every mesh node."
-msgstr "自动配置 Mesh 接口所使用的无线频段。所有 Peer 节点会自动跟踪门户信道，与此设置无关。所有节点必须一致。"
-
-msgid "Auto Mesh Key"
-msgstr "自动 Mesh 密钥"
-
-msgid "A string used to generate a secure SHA-256 mesh encryption key. Must be identical on every mesh node when Auto Configuration is enabled."
-msgstr "用于生成安全 SHA-256 Mesh 加密密钥的字符串。启用自动配置时所有节点必须一致。"
-
-msgid "Mesh PHY Index"
-msgstr "Mesh PHY 索引"
-
-msgid "Force the auto-config mesh interface onto a specific radio (e.g. 0 for phy0, 1 for phy1). Useful on devices with multiple radios on the same band. Default: not set (first matching phy used)."
-msgstr "强制自动配置 Mesh 接口使用指定的无线硬件（如 0 对应 phy0、1 对应 phy1）。适用于同频段有多个硬件的设备。默认不设置（使用第一个匹配的 phy）。"
-
-msgid "Country Code"
-msgstr "国家代码"
-
-msgid "Set a valid ISO country code for all radios (e.g. US, CN, DE). Overrides the country set in the wireless config. Defaults to DFS-ETSI if not set."
-msgstr "为所有无线频段设置有效的 ISO 国家代码（如 US、CN、DE），将覆盖无线配置中的国家设置。未设置时默认使用 DFS-ETSI。"
-
-msgid "Mesh Basename"
-msgstr "Mesh 基础名称"
-
-msgid "String used to construct the mesh interface name in the form m-xxxx-n. Non-alphanumeric characters are removed; only the first 4 characters are used. Default: 11s (produces interface name m-11s-0)."
-msgstr "用于构造 Mesh 接口名称（格式 m-xxxx-n）。非字母数字字符会被去除，仅取前 4 个字符。默认 11s，生成接口名 m-11s-0。"
-
-msgid "Mesh Gate Base SSID"
-msgstr "Mesh Gate 基础 SSID"
-
-msgid "Base SSID string for this node's gate (access point). Maximum 30 characters (or 22 if SSID Suffix is enabled). Overrides the SSID in the wireless config. Default: uses wireless config SSID."
-msgstr "本节点 Gate（接入点）的基础 SSID。最多 30 个字符（启用 SSID 后缀时最多 22 个），将覆盖无线配置中的 SSID。默认使用无线配置中的 SSID。"
-
-msgid "Mesh Gate Encryption"
-msgstr "Mesh Gate 加密方式"
-
-msgid "Encryption mode for this node's gate (access point)."
-msgstr "本节点 Gate（接入点）的加密方式。"
-
-msgid "None / OWE-transition"
-msgstr "无加密 / OWE 过渡"
-
-msgid "SAE-mixed (WPA2/WPA3)"
-msgstr "SAE 混合（WPA2/WPA3）"
-
-msgid "PSK2 (WPA2)"
-msgstr "PSK2（WPA2）"
-
-msgid "Opportunistic Wireless Encryption (OWE)"
-msgstr "机会无线加密（OWE）"
-
-msgid "Mesh Gate Key"
-msgstr "Mesh Gate 密钥"
-
-msgid "Encryption key for this node's gate. Ignored when Mesh Gate Encryption is set to 0 (none) or 4 (OWE). Minimum 8 characters."
-msgstr "本节点 Gate 的加密密钥。Mesh Gate 加密设为 0（无加密）或 4（OWE）时忽略。最少 8 个字符。"
-
-msgid "SSID Suffix Enable"
-msgstr "启用 SSID 后缀"
-
-msgid "Append a 4-digit suffix (last 4 hex digits of the mesh interface MAC address) to the SSID. When enabled, limits Gate Base SSID to 22 characters."
-msgstr "在 SSID 末尾追加 4 位十六进制后缀（Mesh 接口 MAC 地址的最后 4 位）。启用后 Gate 基础 SSID 长度限制为 22 个字符。"
-
-msgid "VXLAN Tunnel Enable"
-msgstr "启用 VXLAN 隧道"
-
-msgid "Enables point-to-multipoint VXLAN tunneling from the portal to all compatible peer nodes. Forced to 0 when Portal Detection Mode is set to 3 (CPE)."
-msgstr "启用从门户节点到所有兼容 Peer 节点的点对多点 VXLAN 隧道。门户节点检测模式设为 3（CPE）时强制关闭。"
-
-msgid "Tunnel ID"
-msgstr "隧道 ID"
-
-msgid "VXLAN tunnel identifier. A decimal number between 1 and 16777216 (24-bit)."
-msgstr "VXLAN 隧道标识符，十进制数，范围 1–16777216（24 位）。"
-
-msgid "VXLAN Tunnel IPv4 Gateway"
-msgstr "VXLAN 隧道 IPv4 网关"
-
-msgid "IPv4 gateway address for the VXLAN tunnel subnet. Becomes active when this node is a portal (Portal Detection Mode 0 or 1)."
-msgstr "VXLAN 隧道子网的 IPv4 网关地址。本节点成为门户时生效（门户检测模式 0 或 1）。"
-
-msgid "VXLAN Tunnel IPv4 Mask"
-msgstr "VXLAN 隧道 IPv4 掩码"
-
-msgid "Subnet mask for the VXLAN tunnel address."
-msgstr "VXLAN 隧道地址的子网掩码。"
-
-msgid "VXLAN Tunnel Gate Encryption"
-msgstr "VXLAN 隧道 Gate 加密"
-
-msgid "Encryption mode for access points connected to the VXLAN tunnel."
-msgstr "连接至 VXLAN 隧道的接入点的加密方式。"
-
-msgid "VXLAN Tunnel Gate Key"
-msgstr "VXLAN 隧道 Gate 密钥"
-
-msgid "Encryption key for VXLAN tunnel gate access points. Ignored when Tunnel Gate Encryption is 0 or 4. Minimum 8 characters."
-msgstr "VXLAN 隧道 Gate 接入点的加密密钥。隧道 Gate 加密设为 0 或 4 时忽略。最少 8 个字符。"
-
-msgid "VXLAN Tunnel Base SSID"
-msgstr "VXLAN 隧道基础 SSID"
-
-msgid "Base SSID for access points connected to the VXLAN tunnel. Maximum 30 characters (or 22 if SSID Suffix is enabled)."
-msgstr "连接至 VXLAN 隧道的接入点基础 SSID。最多 30 个字符（启用 SSID 后缀时最多 22 个）。默认 Guest。"
-
-msgid "VXLAN Tunnel Path Cost"
-msgstr "VXLAN 隧道路径成本"
-
-msgid "STP cost assigned to the VXLAN tunnel network. Range: 0–65534. Set to 0 to disable STP."
-msgstr "分配给 VXLAN 隧道网络的 STP 路径成本。范围 0–65534，设为 0 禁用 STP。"
-
-msgid "Mesh Gate Enable"
-msgstr "Mesh Gate 启用模式"
-
-msgid "Controls whether this node provides a gate (access point) into the mesh."
-msgstr "控制本节点是否提供 Gate 接入点进入 Mesh 网络。"
-
-msgid "Disable all mesh gate access points"
-msgstr "禁用所有 Mesh Gate 接入点"
-
-msgid "Enable all mesh gate access points"
-msgstr "启用所有 Mesh Gate 接入点"
-
-msgid "Enable only on radios NOT shared with mesh interface"
-msgstr "仅在未与 Mesh 接口共用无线频段的频段上启用"
-
-msgid "Leech Mode Enable"
-msgstr "启用 Leech 模式"
-
-msgid ""
-"When enabled, this node acts as an AP with mesh backhaul but does NOT contribute to mesh routing/forwarding.<br>"
-"Useful when a node is within coverage of 2 or more peers and would otherwise create unstable multi-hop paths.<br>"
-"Can also be toggled at runtime: <code>mesh11sd mesh_leechmode [enable/disable]</code>."
-msgstr ""
-"启用后，本节点仅作为接入点提供客户端无线接入，不参与 Mesh 路由转发。<br>"
-"适用于处于多个 Peer 节点覆盖范围内、可能造成不稳定多跳路径的节点。<br>"
-"也可通过命令行实时切换：<code>mesh11sd mesh_leechmode [enable/disable]</code>。"
-
-msgid "TX Power (dBm)"
-msgstr "发射功率（dBm）"
-
-msgid "Transmit power for the mesh radio in dBm. Values outside the regulatory domain limits are ignored. Default: driver/wireless config default."
-msgstr "Mesh 无线频段的发射功率（dBm）。超出监管域限制的值将被忽略。默认使用驱动或无线配置中的默认值。"
-
-msgid "Mesh Path Stabilisation"
-msgstr "Mesh 路径稳定"
-
-msgid "Prevents frequent multi-hop path changes caused by multipath signal strength jitter."
-msgstr "防止因多径信号强度抖动导致 Mesh 多跳路径频繁切换。"
-
-msgid "Reactive Path Stabilisation Threshold"
-msgstr "反应式路径稳定阈值"
-
-msgid "Number of consecutive check intervals with an unstable neighbour path before path stabilisation is activated."
-msgstr "邻居路径持续不稳定多少个连续巡检周期后激活路径稳定机制。"
-
-msgid "MAC Forced Forwarding"
-msgstr "MAC 强制转发"
-
-msgid "Enables MAC forced forwarding on the mesh interface to prevent ARP flooding."
-msgstr "在 Mesh 接口上启用 MAC 强制转发，防止 ARP 洪泛。"
-
-msgid "Gateway Proxy ARP"
-msgstr "网关代理 ARP"
-
-msgid "Enables proxy ARP on the gateway bridge interface."
-msgstr "在网关桥接接口上启用代理 ARP。"
-
-msgid "Stop on Error"
-msgstr "错误时停止"
-
-msgid "When the watchdog detects an IPv4 communication failure with the portal, the daemon enters idle mode instead of rebooting. Useful on nodes without a reset button. Overrides Reboot on Error."
-msgstr "看门狗检测到与门户 IPv4 通信失败时，守护进程进入空闲模式而非重启节点。适用于没有复位按钮的节点。优先级高于「错误时重启」。"
-
-msgid "Reboot on Error"
-msgstr "错误时重启"
-
-msgid "When the watchdog detects a persistent IPv4 communication failure with the portal, the node is rebooted. Overridden by Stop on Error."
-msgstr "看门狗检测到与门户的 IPv4 通信持续失败时重启节点。默认启用，可被「错误时停止」覆盖。"
-
-msgid "AP Monitor Enable"
-msgstr "启用 AP 监控"
-
-msgid "Enables the access point monitoring daemon (apmond). Collects AP data and forwards it to the portal node."
-msgstr "启用接入点监控守护进程（apmond），采集本节点 AP 数据并上报至门户节点。"
-
-msgid "AP Monitor CGI Directory"
-msgstr "AP 监控 CGI 目录"
-
-msgid "Directory for apmond CGI scripts. Takes effect when this node becomes a portal. Default: /www/cgi-bin."
-msgstr "apmond CGI 脚本目录，本节点成为门户时生效。默认 /www/cgi-bin。"
-
-msgid "Mesh Backhaul LED"
-msgstr "Mesh 回程 LED"
-
-msgid "LED used as a mesh backhaul heartbeat indicator. LED is solid when the mesh interface is up, and switches to a heartbeat pattern when peers are connected. \"auto\" uses the power/system LED if present. \"none\" disables. Other LEDs are listed in /sys/class/leds as \"color:function\" (e.g. blue:run). Default: auto."
-msgstr "用作 Mesh 回程心跳指示的 LED。Mesh 接口启动时常亮，有 Peer 连接时切换为心跳模式。\"auto\" 自动选择电源/系统 LED（若存在），\"none\" 禁用。其他 LED 可在 /sys/class/leds 下查看，格式为\"颜色:功能\"（如 blue:run）。默认 auto。"
-
-msgid "RSSI Threshold (dBm)"
-msgstr "RSSI 接入门限（dBm）"
-
-msgid "Minimum signal strength required to form a peer connection. Range: −95 to −25 dBm. Default: −65. Lower values permit weaker links; higher values enforce stronger connections."
-msgstr "建立 Peer 连接所需的最低信号强度。范围：−95 至 −25 dBm，默认 −65。数值越低允许信号更弱的连接；数值越高则要求更强的信号。"
-
-msgid "Max Peer Links"
-msgstr "最大 Peer 连接数"
-
-msgid "Maximum number of simultaneous direct peer connections per node. Range: 0–32. Default: 16. Reduce on dense deployments to lower protocol overhead."
-msgstr "每个节点可同时维持的最大直连 Peer 数量。范围 0–32，默认 16。节点密集时可适当降低以减少协议开销。"
-
-msgid "Live Status"
-msgstr "实时状态"
-
-msgid "Refresh Status"
-msgstr "刷新状态"
-
-msgid "Fetching daemon status..."
-msgstr "正在获取守护进程状态..."
-
-msgid "No output. The daemon may still be starting; please retry in a moment."
-msgstr "无输出。守护进程可能仍在启动中，请稍后重试。"
-
-msgid "Daemon Log"
-msgstr "守护进程日志"
-
-msgid "View Recent Log"
-msgstr "查看最近日志"
-
-msgid "Loading log..."
-msgstr "正在加载日志..."
-
-msgid "No mesh11sd log entries found."
-msgstr "未找到 mesh11sd 日志条目。"
-
 msgid "Hostname"
 msgstr "主机名"
 
@@ -817,7 +462,441 @@ msgid "batadv Settings"
 msgstr "batadv 设置"
 
 msgid "mesh11sd Settings"
-msgstr "mesh11sd 设置"
+msgstr "mesh11sd 设置"msgid "Mesh11sd"
+msgstr "Mesh11sd 网状网络"
+
+msgid "Configure the IEEE 802.11s mesh network daemon."
+msgstr "配置 IEEE 802.11s 无线网状网络守护进程。"
+
+msgid "RUNNING"
+msgstr "运行中"
+
+msgid "NOT RUNNING"
+msgstr "未运行"
+
+msgid "Live Status"
+msgstr "实时状态"
+
+msgid "Mesh Status"
+msgstr "网状状态"
+
+msgid "mesh11sd Status"
+msgstr "mesh11sd 状态"
+
+msgid "Mesh Status (802.11s)"
+msgstr "网状状态（802.11s）"
+
+msgid "No output. The daemon may still be starting; please retry in a moment."
+msgstr "无输出。守护进程可能仍在启动，请稍后重试。"
+
+msgid "Execution failed: %s"
+msgstr "执行失败：%s"
+
+msgid "No active mesh interface found."
+msgstr "未找到活跃的网状接口。"
+
+msgid "Mesh Interface"
+msgstr "网状接口"
+
+msgid "NEIGHBOR STATION DUMP"
+msgstr "邻居节点信息"
+
+msgid "FORWARDING PATH DUMP (mpath)"
+msgstr "转发路径信息（mpath）"
+
+msgid "(No neighbor nodes connected)"
+msgstr "（无邻居节点连接）"
+
+msgid "(No mesh paths established)"
+msgstr "（尚未建立网状路径）"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Enable Daemon"
+msgstr "启用守护进程"
+
+msgid "Debug Level"
+msgstr "日志级别"
+
+msgid "Silent"
+msgstr "静默"
+
+msgid "Notice"
+msgstr "通知"
+
+msgid "Info"
+msgstr "详细"
+
+msgid "Debug"
+msgstr "调试"
+
+msgid "Check Interval (s)"
+msgstr "检查间隔（秒）"
+
+msgid "How often the daemon dynamically checks and updates the mesh configuration."
+msgstr "守护进程动态检查并更新网状配置的频率。"
+
+msgid "Interface Timeout (s)"
+msgstr "接口就绪超时（秒）"
+
+msgid "Seconds to wait for a wireless interface to become ready."
+msgstr "等待无线接口就绪的超时时间。"
+
+msgid "Auto Config"
+msgstr "自动配置"
+
+msgid "When enabled, the daemon automatically configures wireless interfaces for the mesh — no manual wireless config needed. When disabled, the daemon only monitors an existing mesh configuration.<br><b>Warning:</b> Incorrect manual mesh configuration can soft-brick the router."
+msgstr "启用后，守护进程自动配置无线接口加入网状网络，无需手动修改 wireless 配置。禁用时，守护进程仅监控已有网状配置。<br><b>警告：</b>手动配置错误可能导致路由器变砖。"
+
+msgid "Mesh ID Seed"
+msgstr "网状 ID 种子"
+
+msgid "Hashed to generate the actual mesh network ID. <b>Must match on all nodes.</b> Default: --__"
+msgstr "经哈希生成实际的网状网络标识。<b>必须与所有节点一致。</b>默认：--__"
+
+msgid "Mesh Encryption Key Seed"
+msgstr "网状加密密钥种子"
+
+msgid "SHA256-hashed to produce the mesh encryption key. <b>Must match on all nodes.</b>"
+msgstr "经 SHA256 哈希生成网状加密密钥。<b>必须与所有节点一致。</b>"
+
+msgid "Mesh Band"
+msgstr "网状工作频段"
+
+msgid "Wireless band used for the mesh backhaul. <b>Must match on all nodes.</b>"
+msgstr "用于网状回程的无线频段。<b>必须与所有节点一致。</b>"
+
+msgid "2.4 GHz (20 MHz)"
+msgstr "2.4 GHz（20 MHz）"
+
+msgid "2.4 GHz (40 MHz, default)"
+msgstr "2.4 GHz（40 MHz，默认）"
+
+msgid "5 GHz"
+msgstr "5 GHz"
+
+msgid "6 GHz"
+msgstr "6 GHz"
+
+msgid "60 GHz"
+msgstr "60 GHz"
+
+msgid "Force Radio Index"
+msgstr "指定无线网卡序号"
+
+msgid "Leave empty for auto-selection. Only needed on devices with multiple radios on the same band (e.g. enter 2 to force phy2)."
+msgstr "留空则自动选择。仅在设备有多个同频段无线网卡时需要指定（如填 2 代表 phy2）。"
+
+msgid "Country Code"
+msgstr "国家/地区代码"
+
+msgid "Overrides the country code in the wireless config (e.g. CN, US, DE). Defaults to DFS-ETSI if not set."
+msgstr "覆盖 wireless 配置中的国家代码（如 CN、US、DE）。未设置时默认使用 DFS-ETSI。"
+
+msgid "Mesh Interface Base Name"
+msgstr "网状接口基础名"
+
+msgid "Used to build the interface name m-<name>-0. Max 8 characters. Default: 11s → interface m-11s-0."
+msgstr "用于构造接口名称 m-<名称>-0，最多 8 个字符。默认：11s → 接口名 m-11s-0。"
+
+msgid "Node Mode"
+msgstr "节点模式"
+
+msgid "Select the operating mode for this node in the mesh network"
+msgstr "选择节点在网状网络中的工作模式"
+
+msgid "Auto Detect (Recommended)"
+msgstr "自动检测（推荐）"
+
+msgid "Automatically detects WAN status:<br/>• WAN available = MRP (Routed Portal)<br/>• No WAN = MPE (Mesh Peer)"
+msgstr "自动检测WAN状态：<br/>• 有WAN = MRP（路由门户）<br/>• 无WAN = MPE（对等节点）"
+
+msgid "Forced Routed Portal (MRP)"
+msgstr "强制路由门户(MRP)"
+
+msgid "Forces routed portal mode:<br/>• Always provides DHCP/NAT<br/>• Must have WAN connection"
+msgstr "强制作为路由门户：<br/>• 始终提供DHCP/NAT<br/>• 必须有WAN连接"
+
+msgid "Client Equipment (CPE)"
+msgstr "客户端设备(CPE)"
+
+msgid "Peer mode, mesh as WAN:<br/>• Creates independent NAT subnet<br/>• Supports multiple IPv6 modes"
+msgstr "对等模式，网状作为WAN：<br/>• 创建独立NAT子网<br/>• 支持多种IPv6模式"
+
+msgid "Bridged Portal (MBP)"
+msgstr "桥接门户(MBP)"
+
+msgid "Bridge mode, WAN joins VXLAN:<br/>• No NAT translation<br/>• WAN port added to br-tun69"
+msgstr "桥接模式，WAN加入VXLAN：<br/>• 不进行NAT<br/>• WAN口加入br-tun69"
+
+msgid "Trunk Peer Node (TPN)"
+msgstr "汇聚节点(TPN)"
+
+msgid "Special peer node:<br/>• WAN port is VXLAN endpoint<br/>• Compatible with mode 0/1/4 portals"
+msgstr "特殊对等节点：<br/>• WAN口是VXLAN端点<br/>• 兼容模式0/1/4门户"
+
+
+msgid "Portal Detect Watchdog"
+msgstr "门户检测看门狗"
+
+msgid "Number of check intervals a peer node can fail to detect the portal before the watchdog triggers a reboot. 0 = disabled."
+msgstr "对等节点连续多少个检查间隔未检测到门户后，看门狗触发重启。0 = 禁用。"
+
+msgid "Portal Channel (2.4 GHz only)"
+msgstr "门户信道（仅 2.4 GHz）"
+
+msgid "Peer nodes automatically track the portal channel regardless of auto_mesh_band."
+msgstr "对等节点会自动跟踪门户信道，与 auto_mesh_band 设置无关。"
+
+msgid "Use channel from wireless config"
+msgstr "使用 wireless 配置中的信道"
+
+msgid "Auto select"
+msgstr "自动选择"
+
+msgid "Channel "
+msgstr "信道 "
+
+msgid "Channel Tracking Start Interval (s)"
+msgstr "信道跟踪开始间隔（秒）"
+
+msgid "Minimum interval after which channel tracking begins on peer nodes. Values less than checkinterval are ignored. Default: 30 s."
+msgstr "对等节点开始跟踪门户信道的最小间隔，小于检查间隔的值将被忽略。"
+
+msgid "Use Default IPv4 Address"
+msgstr "使用默认 IPv4 地址"
+
+msgid "When enabled, the portal node uses the IPv4 address from /etc/config/network. When disabled, the subnet is auto-calculated from the label MAC address."
+msgstr "启用后，门户节点使用 /etc/config/network 中定义的 IPv4 地址。禁用时，根据标签 MAC 地址自动计算子网。"
+
+msgid "CPE IPv6 Mode"
+msgstr "CPE IPv6 模式"
+
+msgid "Applies only when Node Role is CPE (3)."
+msgstr "仅在节点角色为 CPE（3）时生效。"
+
+msgid "NAT66 (default, compatible with Android)"
+msgstr "NAT66（默认，兼容 Android）"
+
+msgid "Prefix Delegation"
+msgstr "前缀委派"
+
+msgid "Relay"
+msgstr "中继"
+
+msgid "AP Gate"
+msgstr "AP 接入点开关"
+
+msgid "Controls whether this node creates a Wi-Fi access point (SSID)."
+msgstr "控制本节点是否创建 Wi-Fi 接入点（SSID）。"
+
+msgid "Disabled"
+msgstr "禁用"
+
+msgid "Enabled on all radios"
+msgstr "在所有无线网卡上启用"
+
+msgid "Enabled only on radios not shared with mesh"
+msgstr "仅在非网状回程独占的无线网卡上启用"
+
+msgid "AP SSID"
+msgstr "AP 接入点 SSID"
+
+msgid "Base SSID for the access point. Max 22 chars with suffix enabled, 30 without. Leave empty to use the SSID from wireless config."
+msgstr "AP 的基础 SSID 名称。启用后缀时最长 22 字符，禁用时最长 30 字符。留空则使用 wireless 配置中的 SSID。"
+
+msgid "SSID Suffix"
+msgstr "SSID 后缀"
+
+msgid "Append the last 4 digits of the mesh interface MAC to the SSID to distinguish nodes."
+msgstr "在 SSID 末尾追加网状接口 MAC 地址的最后 4 位，便于区分不同节点的 AP。"
+
+msgid "AP Encryption"
+msgstr "AP 加密方式"
+
+msgid "OWE — Opportunistic Wireless Encryption"
+msgstr "OWE — 机会性无线加密"
+
+msgid "None / OWE transition"
+msgstr "不加密 / OWE 过渡模式"
+
+msgid "SAE (WPA3)"
+msgstr "SAE（WPA3）"
+
+msgid "SAE-Mixed (WPA2+WPA3)"
+msgstr "SAE 混合（WPA2+WPA3）"
+
+msgid "WPA2 PSK"
+msgstr "WPA2 PSK"
+
+msgid "AP Password"
+msgstr "AP 接入点密码"
+
+msgid "Mesh Path Cost (STP)"
+msgstr "网状路径代价（STP）"
+
+msgid "STP link cost for the mesh network. Range 0–65534. 0 disables STP. Default: 10."
+msgstr "网状网络的 STP 链路代价，范围 0–65534。设为 0 则禁用 STP。"
+
+msgid "Node Mobility Level"
+msgstr "节点移动性级别"
+
+msgid "Tunes path-selection aggressiveness. Use 1 for fixed deployments; increase for mobile nodes."
+msgstr "调整路径选择算法的激进程度。固定部署使用 1（低），移动场景酌情调高。"
+
+msgid "Stationary (not recommended)"
+msgstr "固定部署（不推荐）"
+
+msgid "Low (default, up to 1.5 m/s)"
+msgstr "低速（默认，≤1.5 m/s）"
+
+msgid "Medium"
+msgstr "中速"
+
+msgid "High"
+msgstr "高速"
+
+msgid "Very High"
+msgstr "极高速"
+
+msgid "Path Stabilisation"
+msgstr "路径稳定化"
+
+msgid "Prevents path flapping caused by multipath signal-strength jitter. Usually not needed above mobility level 1. Default: disabled."
+msgstr "防止因多路径信号抖动导致路径频繁切换。移动性级别 > 1 时通常无需启用。"
+
+msgid "Reactive Path Stabilisation Threshold"
+msgstr "响应式路径稳定化阈值"
+
+msgid "Number of check intervals an unstable neighbour path must persist before path stabilisation activates. Default: 10."
+msgstr "邻居节点路径不稳定持续多少个检查间隔后才激活路径稳定化。"
+
+msgid "MAC Forced Forwarding"
+msgstr "MAC 强制转发"
+
+msgid "Enable MAC forced forwarding on the mesh interface to improve Layer 2 forwarding reliability. Default: enabled."
+msgstr "在网状接口上启用 MAC 强制转发，提升二层转发可靠性。"
+
+msgid "Gateway Proxy ARP"
+msgstr "网关代理 ARP"
+
+msgid "Enable proxy ARP on the gateway bridge interface to improve ARP resolution. Default: enabled."
+msgstr "在网关桥接接口上启用代理 ARP，改善 ARP 解析可靠性。"
+
+msgid "Leech Mode"
+msgstr "寄生模式"
+
+msgid "Node acts as AP only: uses mesh backhaul but does not contribute to routing or forwarding. Useful when the node is within range of 2+ peer nodes to avoid unstable multi-hop paths. Requires mobility level 0 and non-portal role."
+msgstr "节点仅作为 AP，借用网状回程但不参与路由或转发。适用于覆盖范围内有 2 个以上对等节点、避免产生不稳定多跳路径的场景。需要移动性级别 0 且为非门户节点。"
+
+msgid "TX Power (dBm)"
+msgstr "发射功率（dBm）"
+
+msgid "Transmit power for the mesh radio. Values outside the regulatory domain are ignored. Leave empty for driver/wireless default."
+msgstr "网状无线电的发射功率。超出监管域限制的值将被忽略。留空则使用驱动/wireless 默认值。"
+
+msgid "Enable VXLAN Tunnel"
+msgstr "启用 VXLAN 隧道"
+
+msgid "Point-to-multipoint VXLAN tunnel between the portal and all compatible peers. Requires <b>ip-full</b> and <b>vxlan</b> packages; ignored otherwise. Disabled by default when Node Role is CPE (3)."
+msgstr "在门户与所有兼容对等节点之间建立点对多点 VXLAN 隧道。需要安装 <b>ip-full</b> 和 <b>vxlan</b> 软件包，否则忽略此选项。节点角色为 CPE（3）时默认禁用。"
+
+msgid "Tunnel ID"
+msgstr "隧道 ID"
+
+msgid "VXLAN tunnel identifier. Decimal, range 1–16777216 (24-bit). Default: 69."
+msgstr "VXLAN 隧道标识符，十进制，范围 1–16777216（24 位）。"
+
+msgid "VXLAN Tunnel IPv4 Gateway"
+msgstr "VXLAN 隧道 IPv4 网关"
+
+msgid "IPv4 gateway address for the vxlan tunnel bridge. Active only when this node becomes a portal. Default: auto-generated."
+msgstr "vxlan 隧道桥的 IPv4 网关地址，仅在本节点成为门户时生效。"
+
+msgid "VXLAN Tunnel Subnet Mask"
+msgstr "VXLAN 隧道子网掩码"
+
+msgid "IPv4 subnet mask for the vxlan tunnel bridge. Active only when this node becomes a portal. Default: 255.255.255.0."
+msgstr "vxlan 隧道桥的 IPv4 子网掩码，仅在本节点成为门户时生效。默认：255.255.255.0。"
+
+msgid "VXLAN Path Cost (STP)"
+msgstr "VXLAN 路径代价（STP）"
+
+msgid "STP link cost for the vxlan tunnel network. Range 0–65534. 0 disables STP. Default: 10."
+msgstr "vxlan 隧道网络的 STP 链路代价，范围 0–65534。设为 0 则禁用 STP。"
+
+msgid "VXLAN AP SSID"
+msgstr "VXLAN AP SSID"
+
+msgid "Base SSID for the AP attached to the vxlan tunnel. Max 22 chars with suffix, 30 without. Default: VTunnel."
+msgstr "连接到 vxlan 隧道的 AP 基础 SSID。启用后缀时最长 22 字符，禁用时最长 30 字符。"
+
+msgid "VXLAN AP Encryption"
+msgstr "VXLAN AP 加密方式"
+
+msgid "Encryption for the AP attached to the vxlan tunnel."
+msgstr "连接到 vxlan 隧道的 AP 加密方式。"
+
+msgid "VXLAN AP Password"
+msgstr "VXLAN AP 密码"
+
+msgid "Encryption key for the vxlan-attached AP. Minimum 8 characters."
+msgstr "连接到 vxlan 隧道的 AP 加密密钥，最少 8 个字符。"
+
+msgid "Reboot on Error"
+msgstr "出错时自动重启"
+
+msgid "Reboot the node when the watchdog detects IPv4 communication failure with the portal. Default: enabled."
+msgstr "当看门狗检测到与门户的 IPv4 通信失败时，自动重启本节点。"
+
+msgid "Stop on Error (overrides Reboot on Error)"
+msgstr "出错时停止服务（覆盖"出错重启"选项）"
+
+msgid "When the watchdog detects a portal communication failure, the daemon goes idle instead of rebooting. Useful for nodes without a reset button. Takes priority over Reboot on Error."
+msgstr "当看门狗检测到门户通信失败时，守护进程进入空闲而非重启。适用于无复位按钮的节点。此选项优先于"出错重启"。"
+
+msgid "Enable AP Monitor (apmond)"
+msgstr "启用 AP 监控守护进程（apmond）"
+
+msgid "Collects AP interface data from this node and sends it to the portal. Requires uhttpd and px5g-mbedtls packages."
+msgstr "收集本节点 AP 接口数据并上报门户节点。需要安装 uhttpd 和 px5g-mbedtls 软件包。"
+
+msgid "apmond CGI Directory"
+msgstr "apmond CGI 目录"
+
+msgid "Path for apmond CGI scripts when this node becomes a portal. Default: /www/cgi-bin."
+msgstr "本节点成为门户时 apmond CGI 脚本的存放路径。默认：/www/cgi-bin。"
+
+msgid "Mesh Backhaul LED"
+msgstr "网状回程 LED"
+
+msgid "LED is solid when the mesh interface is up; switches to Linux heartbeat when peers are connected. Set to <b>none</b> to disable, or enter an LED name from /sys/class/leds/ (e.g. blue:run). Default: auto (uses power/system LED)."
+msgstr "网状接口启动时 LED 常亮，有对等节点连接后变为 Linux 心跳信号。填写 <b>none</b> 禁用，或填写 /sys/class/leds/ 下的 LED 名称（如 blue:run）。默认：auto（使用电源/系统 LED）。"
+
+msgid "Manage openNDS Startup"
+msgstr "管理 openNDS 启动顺序"
+
+msgid "If openNDS is installed, mesh11sd manages its startup and synchronises nft rulesets. Disabling may cause crash loops because the openNDS gateway interface may not be ready in time."
+msgstr "若安装了 openNDS，由 mesh11sd 管理其启动顺序并同步 nft 规则集。禁用可能因 openNDS 网关接口未就绪而导致崩溃循环。"
+
+msgid "Watchdog Non-volatile Log (debug only)"
+msgstr "看门狗非易失性日志（仅用于调试）"
+
+msgid "<b>Warning:</b> Writes watchdog actions to non-volatile storage (/mesh11sd_log/mesh11sd.log). Leaving this enabled long-term may cause irreparable flash wear and consume storage. <b>Disable immediately after debugging.</b>"
+msgstr "<b>警告：</b>将看门狗操作写入非易失性存储（/mesh11sd_log/mesh11sd.log）。长期启用可能导致 Flash 不可修复磨损并占用存储空间。<b>调试完成后请立即关闭。</b>"
+
+msgid "RSSI Threshold (dBm)"
+msgstr "RSSI 门限（dBm）"
+
+msgid "Minimum signal strength required to establish a peer link (e.g. -70). Range: -100 to 0."
+msgstr "建立对等链路所需的最低信号强度（如 -70）。范围：-100 到 0。"
+
+msgid "Max Peer Links"
+msgstr "最大对等链路数"
+
+msgid "Maximum number of peer links allowed per node."
+msgstr "每个节点允许建立的最大对等链路数量。"
 
 msgid ""
 msgstr ""

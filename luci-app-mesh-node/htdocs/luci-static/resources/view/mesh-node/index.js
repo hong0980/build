@@ -450,7 +450,6 @@ return view.extend({
 		o.default = 'nat66';
 		m11dep(o, [{ 'portal_detect': '3' }]);
 
-		/* ── Access Point (Gate) ── */
 		o = m11opt(s, form.ListValue, 'mesh_gate_enable', '',  _('AP Gate'),
 			_('Controls whether this node creates a Wi-Fi access point (SSID).'));
 		o.value('0', _('Disabled'));
@@ -484,7 +483,6 @@ return view.extend({
 		o.optional = true;
 		m11dep(o, [{ 'mesh_gate_encryption': /(1|2|3)/ }]);
 
-		/* ── Path & Performance ── */
 		o = m11opt(s, form.Value, 'mesh_path_cost', '',  _('Mesh Path Cost (STP)'),
 			_('STP link cost for the mesh network. Range 0–65534. 0 disables STP. Default: 10.'));
 		o.datatype = 'range(0,65534)';
@@ -536,14 +534,12 @@ return view.extend({
 		o.optional = true;
 		m11dep(o, []);
 
-		/* ── VXLAN Tunnel ── */
 		o = m11opt(s, form.Flag, 'vtun_enable', '',  _('Enable VXLAN Tunnel'),
 			_('Point-to-multipoint VXLAN tunnel between the portal and all compatible peers. '
 			+ 'Requires <b>ip-full</b> and <b>vxlan</b> packages; ignored otherwise. '
 			+ 'Disabled by default when Node Role is CPE (3).'));
 		o.default = '0';
 		m11dep(o, [{ 'auto_config': '0' }, { 'portal_detect': /(0|1|4|5)/ }]);
-		// m11dep(o, [{ 'auto_config': '0' }, { 'auto_config': '1', 'portal_detect': '0' }, { 'auto_config': '1', 'portal_detect': '1' }, { 'auto_config': '1', 'portal_detect': '4' }, { 'auto_config': '1', 'portal_detect': '5' }]);
 
 		o = m11opt(s, form.Value, 'tun_id', '',  _('Tunnel ID'),
 			_('VXLAN tunnel identifier. Decimal, range 1–16777216 (24-bit). Default: 69.'));
@@ -662,47 +658,8 @@ return view.extend({
 
 		o = s.taboption('mesh', widgets.NetworkSelect, 'mesh_network', _('Mesh Network'),
 			_('Choose the network(s) you want to attach to this wireless interface or fill out the <em>custom</em> field to define a new network.'));
-		o.default = 'lan'; o.rmempty = true;
-		o.multiple = true; o.novirtual = true;
+		o.default = 'lan';
 		o.depends('band_mode', '0');
-		o.write = function(section_id, value) {
-			return network.getDevice(section_id).then(L.bind(function(dev) {
-				var old_networks = dev.getNetworks().reduce(function(o, v) { o[v.getName()] = v; return o; }, {});
-				var new_networks = {}, tasks = []
-				var values = L.toArray(value);
-
-				values.forEach(value => {
-					new_networks[value] = true;
-					if (old_networks[value]) return;
-					tasks.push(network.getNetwork(value).then(L.bind(function(name, net) {
-						return net || network.addNetwork(name, { proto: 'none' });
-					}, this, value)).then(L.bind(function(dev, net) {
-						if (net) {
-							if (!net.isEmpty()) {
-								var target_dev = net.getDevice();
-
-								while (target_dev && target_dev.getType() == 'vlan')
-									target_dev = target_dev.getParent();
-
-								if (!target_dev || target_dev.getType() != 'bridge')
-									net.set('type', 'bridge');
-							}
-
-							net.addDevice(dev);
-						}
-					}, this, dev)));
-				});
-
-				for (var name in old_networks)
-					if (!new_networks[name])
-						tasks.push(network.getNetwork(name).then(L.bind(function(dev, net) {
-							if (net)
-								net.deleteDevice(dev);
-						}, this, dev)));
-
-				return Promise.all(tasks);
-			}, this));
-		};
 
 		o = s.taboption('mesh', form.Value, 'mesh_id', _('Mesh ID'),
 			_('Must be identical on every mesh node'));
@@ -802,6 +759,14 @@ return view.extend({
 		ss.tab('usteer', _('Usteer Settings'));
 
 		// batadv
+		so = ss.taboption('batadv', form.Value, 'batadv_proto', _('Batman Device'));
+		so.default = 'bat0'; so.rmempty = false; so.retain = true;
+		so.depends('mesh_node.main.use_batadv', '1');
+
+		so = ss.taboption('batadv', form.Value, 'batadv_hardif', _('Batman Interface'));
+		so.default = 'batmesh'; so.rmempty = false; so.retain = true;
+		so.depends('mesh_node.main.use_batadv', '1');
+
 		so = ss.taboption('batadv', form.RichListValue, 'routing_algo', _('Routing Algorithm'),
 			_('BATMAN_IV: based on link quality (TQ), compatible with all devices. ' +
 			'All nodes in the same mesh must use the same algorithm.'));
@@ -810,19 +775,23 @@ return view.extend({
 		so.default = 'BATMAN_IV';
 		so.depends('mesh_node.main.use_batadv', '1');
 		so.write = function (section_id, value) {
-			if (!uci.get('network', 'bat0')) {
-				uci.add('network', 'interface', 'bat0');
-				uci.set('network', 'bat0',      'proto',   'batadv');
-				uci.set('network', 'bat0',      'gw_mode', 'off');
-				uci.set('network', 'bat0',      'multipath', 'off');
+			var proto   = this.section.formvalue(section_id, 'batadv_proto') || 'bat0';
+			var hardif  = this.section.formvalue(section_id, 'batadv_hardif') || 'batmesh';
+
+			if (!uci.get('network', proto)) {
+				uci.add('network', 'interface', proto);
+				uci.set('network', proto, 'proto', 'batadv');
+				uci.set('network', proto, 'gw_mode', 'off');
+				uci.set('network', proto, 'multipath', 'off');
 			}
-			if (!uci.get('network', 'batmesh')) {
-				uci.add('network', 'interface', 'batmesh');
-				uci.set('network', 'batmesh',   'proto',  'batadv_hardif');
-				uci.set('network', 'batmesh',   'master', 'bat0');
-				uci.set('network', 'batmesh',   'mtu',    '1536');
+
+			if (!uci.get('network', hardif)) {
+				uci.add('network', 'interface', hardif);
+				uci.set('network', hardif, 'proto',  'batadv_hardif');
+				uci.set('network', hardif, 'master', proto);
+				uci.set('network', hardif, 'mtu',    '1536');
 			}
-			uci.set('network', 'bat0', 'routing_algo', value);
+			uci.set('network', proto, 'routing_algo', value);
 			return this.super('write', [section_id, value]);
 		};
 
@@ -877,29 +846,6 @@ return view.extend({
 		so = ss.taboption('batadv', form.Flag, 'multicast_mode', _('Multicast Mode'),
 			_('Enables more efficient, group aware multicast forwarding infrastructure in batman-adv.'));
 		so.default = '1';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
-		so.depends('mesh_node.main.use_batadv', '1');
-
-		so = ss.taboption('batadv', form.ListValue, 'log_level', _('Log Level'));
-		so.value('0',  _('Disabled (no log)'));
-		so.value('1',  _('Routing (OGM)'));
-		so.value('2',  _('Routing table changes'));
-		so.value('3',  _('Routing + table changes'));
-		so.value('4',  _('Statistics'));
-		so.value('15', _('All messages'));
-		so.default = '0';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
-		so.depends('mesh_node.main.use_batadv', '1');
-
-		so = ss.taboption('batadv', form.Value, 'isolation_mark', _('Isolation Mark'),
-			_('Set the isolation mark for AP isolation'));
-		so.placeholder = '0x00000000/0x00000000';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
-		so.depends('mesh_node.main.use_batadv', '1');
-
-		so = ss.taboption('batadv', form.Value, 'multicast_fanout', _('Multicast Fanout'),
-			_('Set the multicast fanout value'));
-		so.datatype = 'min(1)'; so.default = '16';
 		so.uciconfig = 'network'; so.ucisection = 'bat0';
 		so.depends('mesh_node.main.use_batadv', '1');
 

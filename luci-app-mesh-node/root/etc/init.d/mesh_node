@@ -206,21 +206,30 @@ do_wireless() {
 }
 
 do_batadv() {
-	local old_use_batadv bat0_in_bridge
-	config_get old_use_batadv main old_use_batadv ''
+	local old_use_batadv bat0_in_bridge bat0
+	config_get old_use_batadv main old_use_batadv  ''
 	[ "$use_batadv" = "$old_use_batadv" ] && return 1
+	config_get bat0 globals batadv_proto  ''
 	uci -q set mesh_node.main.old_use_batadv="$use_batadv"
 
 	if [ "$use_batadv" = "1" ]; then
 		modprobe batman-adv 2>/dev/null || true
-		bat0_in_bridge=$(uci -q show network.@device[0].ports 2>/dev/null | grep -c 'bat0')
+		bat0_in_bridge=$(uci -q show network.@device[0].ports 2>/dev/null | grep -c "$bat0")
 		[ "${bat0_in_bridge:-0}" -eq 0 ] && \
-			uci -q add_list network.@device[0].ports='bat0'
+			uci -q add_list network.@device[0].ports="$bat0"
 	else
-		uci -q del network.bat0
-		uci -q del network.batmesh
-		uci -q del_list network.@device[0].ports='bat0'
-		rmmod batman-adv 2>/dev/null || true
+		cleanup_batman() {
+			local iface="$1" proto
+			config_get proto "$iface" proto
+			if [ "$proto" = 'batadv' ] || [ "$proto" = 'batadv_hardif' ]; then
+				uci -q del network."$iface"
+				uci -q del_list network.@device[0].ports="$iface" 2>/dev/null
+			fi
+		}
+		config_load network
+		config_foreach cleanup_batman interface
+		rmmod batman-adv 2>/dev/null
+		config_load mesh_node
 	fi
 	return 0
 }
@@ -320,7 +329,7 @@ start() {
 
 	[ "$network_changed"  = 1 ] && { /etc/init.d/network restart; sleep 5; }
 	[ "$wireless_changed" = 1 ] && { wifi reload; sleep 3; }
-	[ "$mesh11sd_changed" = 1 ] && {
+	[ "$mesh11sd_changed" = 1 ] && [ "$band_mode" = "2" ] && {
 		if [ "$m11_enable" = "1" ]; then
 			/etc/init.d/mesh11sd enable  2>/dev/null || true
 			/etc/init.d/mesh11sd restart 2>/dev/null || true
