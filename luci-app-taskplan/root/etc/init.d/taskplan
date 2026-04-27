@@ -15,7 +15,8 @@ del_cru() {
 }
 
 task_cmd() {
-    case "$1" in
+    local cfg="$1"
+    case "$cfg" in
         01) echo "reboot" ;;
         02) echo "poweroff" ;;
         03) echo "network" ;;
@@ -30,31 +31,33 @@ task_cmd() {
         12) echo "restartmwan3" ;;
         13) echo "upwifi" ;;
         14) echo "downwifi" ;;
-        script*) echo "$1" ;;
+        script*) echo "$cfg" ;;
     esac
 }
 
 run_stime() {
-    config_get_bool enable "$1" enable "0"
+    local enable day week hour month minute stype time_part cmd_part cfg="$1"
+    config_get_bool enable "$cfg" enable 0
     [ "$enable" -eq 0 ] && return
-    config_get day "$1" day "*"
-    config_get week "$1" week "*"
-    config_get hour "$1" hour "*"
-    config_get month "$1" month "*"
-    config_get minute "$1" minute "0"
-    config_get stype "$1" stype "07"
+    config_get minute "$cfg" minute 0
+    config_get hour   "$cfg" hour   *
+    config_get month  "$cfg" month  *
+    config_get day    "$cfg" day    *
+    config_get week   "$cfg" week   *
+    config_get stype  "$cfg" stype  07
 
-    local time_part="$minute $hour $day $month $week /usr/bin/taskplanhandler"
-    local cmd_part="$(task_cmd "$stype") 'Scheduled task' > /dev/null 2>&1 &"
+    time_part="$minute $hour $day $month $week /usr/bin/taskplanhandler"
+    cmd_part="$(task_cmd "$stype") 'Scheduled task' > /dev/null 2>&1 &"
 
     [ -s "$CR" ] && sed -i "1i\\$time_part $cmd_part" "$CR" || echo "$time_part $cmd_part" > "$CR"
 }
 
 run_ltime() {
-    config_get_bool enable "$1" enable "0"
+    local enable stype delay cfg="$1"
+    config_get_bool enable "$cfg" enable 0
     [ "$enable" -eq 0 ] && return
-    config_get stype "$1" stype "#"
-    config_get delay "$1" delay "10"
+    config_get stype "$cfg" stype "#"
+    config_get delay "$cfg" delay 10
 
     awk -v task="(sleep $delay && /usr/bin/taskplanhandler $(task_cmd "$stype") 'Startup task') &" '
         $0 ~ /exit 0/ { print task }
@@ -79,3 +82,5 @@ stop_service() {
 service_triggers() {
     procd_add_reload_trigger taskplan
 }
+
+boot() { :; }

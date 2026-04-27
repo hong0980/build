@@ -1,13 +1,13 @@
 {
   "admin/network/mesh-node": {
-    "title": "Mesh Node Setup",
-    "order": 90,
-    "action": {
-      "type": "view",
-      "path": "mesh-node/index"
-    },
-    "depends": {
-      "acl": [ "luci-app-mesh-node" ]
-    }
+	"title": "Mesh Node Setup",
+	"order": 79,
+	"action": {
+	  "type": "view",
+	  "path": "mesh-node/index"
+	},
+	"depends": {
+	  "acl": [ "luci-app-mesh-node" ]
+	}
   }
 }

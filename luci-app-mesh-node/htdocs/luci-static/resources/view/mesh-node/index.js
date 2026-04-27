@@ -100,9 +100,9 @@ return view.extend({
 				.then(function ([wifiDevs, ifaces, devs]) {
 					var info = {
 						ssid_2g: '', ssid_5g: '', key_2g: '', key_5g: '',
-						mesh_id: '', wifi_pass: '', mesh_pass: '',
-						lanIp: '', lanMac: '', lanProto: '',
-						wanIfname: '', wanMac: '', wanProto: ''
+						ssid_6g: '', key_6g: '', mesh_id: '', mesh_pass: '',
+						wifi_ssid: '', wifi_pass: '', lanIp: '', lanMac: '',
+						lanProto: '', wanIfname: '', wanMac: '', wanProto: ''
 					};
 					Object.keys(wifiDevs).forEach(function (rn) {
 						var dev = wifiDevs[rn] || {};
@@ -115,16 +115,15 @@ return view.extend({
 							var key  = cfg.key  || '', meshId = cfg.mesh_id || '';
 
 							if (mode === 'Master' || mode === 'ap') {
-								if (band === '5g' || band === '5GHz') {
-									info.ssid_5g = ssid; info.key_5g  = key;
-								} else if (band === '2g' || band === '2.4GHz') {
-									info.ssid_2g = ssid; info.key_2g  = key;
-								} else {
-									info.ssid_6g = ssid; info.key_6g  = key;
+								if (band === '2g') {
+									info.ssid_2g = ssid; info.key_2g = key;
+								} else if (band === '5g') {
+									info.ssid_5g = ssid; info.key_5g = key;
+								} else if (band === '6g') {
+									info.ssid_6g = ssid; info.key_6g = key;
 								}
 							} else if (mode === 'Mesh Point' || mode === 'mesh') {
-								info.mesh_id   = meshId;
-								if (key) info.mesh_pass = key;
+								info.mesh_id = meshId; info.mesh_pass = key;
 							}
 						});
 					});
@@ -139,7 +138,6 @@ return view.extend({
 					if (devs.wan) { info.wanMac = devs.wan.mac; info.wanIfname = devs.wan.name; }
 					return info;
 				}),
-			callLuciWirelessDevices(),
 			fs.exec('/etc/init.d/mesh11sd', ['running'])
 				.then(function (r) { return r.code === 0; }),
 			fs.exec('/etc/init.d/usteer', ['running'])
@@ -148,9 +146,9 @@ return view.extend({
 		]);
 	},
 
-	render: function ([info, wifiDevs, m_running, u_running]) {
+	render: function ([info, m_running, u_running]) {
 		var m, s, o, so, ss;
-		m = new form.Map('mesh_node', _('AP + Mesh Deployment'));
+		m = new form.Map('mesh_node', _('AP + Mesh Deployment'), _('Quickly create a Mesh'));
 		m.chain('mesh11sd');
 		m.chain('network');
 		m.chain('usteer');
@@ -224,19 +222,20 @@ return view.extend({
 		o.depends({ combo_mode: 'custom'  });
 		o.depends({ lan_proto: 'static'  });
 
-		o = s.taboption('network', form.ListValue, 'band_mode', _('回程模式'));
-		o.value('0', _('无线+有线'));
-		o.value('1', _('有线'));
+		o = s.taboption('network', form.ListValue, 'band_mode', _('Backhaul Mode'));
+		o.value('0', _('Wireless + Wired'));
+		o.value('1', _('Wired Only'));
 		o.value('2', _('mesh11sd'));
 		o.default = '0';
 
 		o = s.taboption('network', form.DummyValue, '_lan_ip', _('DHCP Assigned IP'),
 			_('IP address assigned to this node by the upstream DHCP server; shown for reference only'));
-		o.default = info.lanIp || ''; o.depends({ lan_proto: 'dhcp'  });
+		o.default = info.lanIp;
+		o.depends({ lan_proto: 'dhcp' });
 		o.depends('band_mode', /(0|1)/);
 
 		o = s.taboption('wireless', form.Flag, 'band_merge', _('Dual-band Merge'),
-			_('Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz radios.'));
+			_('Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz %s radios.').format(info.ssid_6g ? ' 6 GHz' : ''));
 		o.default = '0';
 		o.depends('band_mode', /(0|1)/);
 
@@ -250,38 +249,38 @@ return view.extend({
 		o.default = '2'; o.rmempty = false;
 		o.depends('band_mode', /(0|1)/);
 
-		o = s.taboption('wireless', form.Value, 'ssid_2g', _('2.4 GHz SSID'),
-			_('Must exactly match the main router SSID to enable seamless roaming'));
-		o.default = info.ssid_2g || 'HomeWiFi';
-		o.rmempty = false;
-		o.depends('band_merge', '0');
+		var BAND_DEFS = [
+			{ key: '2g', label: '2.4 GHz', ssid: info.ssid_2g, pass: info.key_2g },
+			{ key: '5g', label: '5 GHz',   ssid: info.ssid_5g, pass: info.key_5g },
+		];
+		if (info.ssid_6g || info.key_6g)
+			BAND_DEFS.push({ key: '6g', label: '6 GHz', ssid: info.ssid_6g, pass: info.key_6g });
 
-		o = s.taboption('wireless', form.Value, 'key_2g', _('2.4 GHz WiFi Password'),
-			_('Encryption: psk2+ccmp (WPA2). Minimum 8 characters.'));
-		o.datatype = 'wpakey'; o.password = true;
-		o.rmempty = false; o.default = info.key_2g || '';
-		o.depends('band_merge', '0');
+		BAND_DEFS.forEach(function(band) {
+			o = s.taboption('wireless', form.Value, 'ssid_' + band.key, _('%s SSID').format(band.label),
+				_('Must exactly match the main router SSID to enable seamless roaming'));
+			o.default  = band.ssid || 'HomeWiFi';
+			o.rmempty  = false;
+			o.depends('band_merge', '0');
 
-		o = s.taboption('wireless', form.Value, 'ssid_5g', _('5 GHz SSID'),
-			_('Must exactly match the main router SSID to enable seamless roaming'));
-		o.default = info.ssid_5g || 'HomeWiFi-5G';
-		o.rmempty = false;
-		o.depends('band_merge', '0');
-
-		o = s.taboption('wireless', form.Value, 'key_5g', _('5 GHz WiFi Password'),
-			_('Encryption: psk2+ccmp (WPA2). Minimum 8 characters.'));
-		o.datatype = 'wpakey'; o.password = true;
-		o.rmempty = false; o.default = info.key_5g || '';
-		o.depends('band_merge', '0');
+			o = s.taboption('wireless', form.Value, 'key_' + band.key, _('%s WiFi Password').format(band.label),
+				_('Encryption: psk2+ccmp (WPA2). Minimum 8 characters.'));
+			o.datatype = 'wpakey';
+			o.password = true;
+			o.rmempty  = false;
+			o.default  = band.pass || '';
+			o.depends('band_merge', '0');
+		});
 
 		o = s.taboption('wireless', form.Value, 'wifi_ssid', _('WiFi SSID'),
-			_('Shared by 2.4 GHz and 5 GHz'));
+			_('Shared by all bands (2.4 GHz / 5 GHz%s)').format(info.ssid_6g ? ' / 6 GHz' : ''));
+		o.default = info.wifi_ssid;
 		o.rmempty = false; o.depends('band_merge', '1');
 
 		o = s.taboption('wireless', form.Value, 'wifi_pass', _('WiFi Password'),
-			_('Shared by 2.4 GHz and 5 GHz; minimum 8 characters'));
+			_('Shared by 2.4 GHz and 5 GHz %s; minimum 8 characters').format(info.ssid_6g ? '6 GHz' : ''));
 		o.datatype = 'wpakey'; o.password = true;
-		o.rmempty = false; o.default = info.wifi_pass || '';
+		o.rmempty = false; o.default = info.wifi_pass;
 		o.depends('band_merge', '1');
 
 		o = m11opt(s, form.DummyValue, '_m11_badge', '', _('mesh11sd Status'));
@@ -346,20 +345,10 @@ return view.extend({
 		o = m11opt(s, form.ListValue, 'auto_mesh_band', '', _('Mesh Backhaul Band'),
 			_('Select the radio band used for the 802.11s mesh backhaul link. <b>Must match on all nodes.</b>'));
 		var bands = [];
-		['radio0', 'radio1', 'radio2', 'radio3'].forEach(function(radio) {
-			var dev = wifiDevs[radio];
-			if (!dev || !dev.config) return;
-			var band = dev.config.band;
-			if (band === '2g') {
-				bands.push(dev.config.htmode && dev.config.htmode.includes('40') ?
-					['2g40', '2.4 GHz (40 MHz, default)'] :
-					['2g', '2.4 GHz (20 MHz)']);
-			} else if (band === '5g') bands.push(['5g', '5 GHz']);
-			else if (band === '6g')   bands.push(['6g', '6 GHz']);
-			else if (band === '60g')  bands.push(['60g', '60 GHz']);
-		});
+		if (info.ssid_2g) bands.push(['2g', '2.4 GHz']);
+		if (info.ssid_5g) bands.push(['5g', '5 GHz']);
+		if (info.ssid_6g) bands.push(['6g', '6 GHz']);
 		bands.forEach(function(b) { o.value(b[0], _(b[1])); });
-		o.default = bands.some(function(b) { return b[0] === '2g40'; }) ? '2g40' : (bands[0] ? bands[0][0] : '2g40');
 		o.rmempty = false;
 		m11dep(o, [{ 'auto_config': '1' }]);
 
@@ -651,7 +640,8 @@ return view.extend({
 		o = s.taboption('mesh', form.RichListValue, 'mesh_radio', _('Mesh Backhaul Band'),
 			_('Select the radio band used for the 802.11s mesh backhaul link.'));
 		o.value('5g',   _('5 GHz (recommended, best throughput)'));
-		o.value('2g',   _('2.4 GHz (longer range, lower throughput)'));
+		o.value('2g', _('2.4 GHz (longer range, lower throughput)'));
+		if (info.ssid_6g) o.value('6g', _('6 GHz'));
 		o.value('none', _('All bands (all radios participate in the mesh)'));
 		o.default = '5g';
 		o.depends('band_mode', '0');
@@ -680,7 +670,7 @@ return view.extend({
 		o.value('1', _('batman-adv — 802.11s backhaul + batadv L2 routing'));
 		o.default = '0';
 		o.depends('band_mode', '0');
-		o.onchange = function(ev, sid, val) {
+		o.onchange = function (ev, section_id, value) {
 			["usteer", "batadv"].find(function(t) {
 				var el = document.querySelector('[data-tab="' + t + '"].cbi-tab-disabled');
 				if (el && el.offsetWidth > 0) return el.querySelector('a').click() || true;
@@ -762,6 +752,7 @@ return view.extend({
 		so = ss.taboption('batadv', form.Value, 'batadv_proto', _('Batman Device'));
 		so.default = 'bat0'; so.rmempty = false; so.retain = true;
 		so.depends('mesh_node.main.use_batadv', '1');
+		so.titleref = L.url('admin/network/network');
 
 		so = ss.taboption('batadv', form.Value, 'batadv_hardif', _('Batman Interface'));
 		so.default = 'batmesh'; so.rmempty = false; so.retain = true;
