@@ -1,16 +1,14 @@
 #!/bin/sh /etc/rc.common
-# Copyright by sirpdboy
 
 START=99
 STOP=10
-USE_PROCD=1
 
 RC=/etc/rc.local
 CR=/etc/crontabs/root
 
 del_cru() {
     for file in "$CR" "$RC"; do
-        grep -q "taskplanhandler" "$file" && sed -i '/taskplanhandler/d' "$file"
+        grep -q "taskplanhandler" "$file" 2>/dev/null && sed -i '/taskplanhandler/d' "$file"
     done
 }
 
@@ -38,7 +36,7 @@ task_cmd() {
 run_stime() {
     local enable day week hour month minute stype time_part cmd_part cfg="$1"
     config_get_bool enable "$cfg" enable 0
-    [ "$enable" -eq 0 ] && return
+    [ "$enable" = '0' ] && return
     config_get minute "$cfg" minute 0
     config_get hour   "$cfg" hour   *
     config_get month  "$cfg" month  *
@@ -46,41 +44,31 @@ run_stime() {
     config_get week   "$cfg" week   *
     config_get stype  "$cfg" stype  07
 
-    time_part="$minute $hour $day $month $week /usr/bin/taskplanhandler"
+    time_part="$minute $hour $day $month $week /usr/sbin/taskplanhandler"
     cmd_part="$(task_cmd "$stype") 'Scheduled task' > /dev/null 2>&1 &"
-
     [ -s "$CR" ] && sed -i "1i\\$time_part $cmd_part" "$CR" || echo "$time_part $cmd_part" > "$CR"
 }
 
 run_ltime() {
     local enable stype delay cfg="$1"
     config_get_bool enable "$cfg" enable 0
-    [ "$enable" -eq 0 ] && return
+    [ "$enable" = '0' ] && return
     config_get stype "$cfg" stype "#"
     config_get delay "$cfg" delay 10
 
-    awk -v task="(sleep $delay && /usr/bin/taskplanhandler $(task_cmd "$stype") 'Startup task') &" '
+    awk -v task="(sleep $delay && /usr/sbin/taskplanhandler $(task_cmd "$stype") 'Startup task') &" '
         $0 ~ /exit 0/ { print task }
         $0 !~ /exit 0/ { print }
         END { print "exit 0" }
     ' "$RC" > "$RC.tmp" && mv "$RC.tmp" "$RC"
 }
 
-start_service() {
+start() {
     del_cru
     config_load taskplan
     config_foreach run_stime stime
     config_foreach run_ltime ltime
     /etc/init.d/cron reload
-}
-
-stop_service() {
-    del_cru
-    /etc/init.d/cron reload
-}
-
-service_triggers() {
-    procd_add_reload_trigger taskplan
 }
 
 boot() { :; }

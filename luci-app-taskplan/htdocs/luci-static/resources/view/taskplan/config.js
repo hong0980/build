@@ -5,22 +5,6 @@
 'require view';
 'require form';
 
-const CSS = `
-@media (min-width: 768px) {
-	.cbi-section-table .cbi-input-text {
-		max-width: 50px;
-	}
-	.cbi-section-table select {
-		max-width: 80px;
-	}
-	[data-name="remarks"] .cbi-input-text {
-		min-width: 140px !important;
-	}
-	td:has(.cbi-button) {
-		width: 22px !important;
-	}
-}`;
-
 const validateCrontabField = (type, value, monthValue) => {
 	const types = {
 		'day': {
@@ -166,7 +150,6 @@ return view.extend({
 	render: function () {
 		let m, s, e;
 		m = new form.Map('taskplan', '', [
-			E('style', [CSS]),
 			E('div', [
 				_('Timed task execution and startup task execution. More than 10 preset functions, including restart, shutdown, network restart, freeing memory, system cleaning, network sharing, shutting down the network, automatic detection of network disconnection and reconnection, MWAN3 load balancing reconnection detection, custom scripts, etc.'),
 				E('a', {
@@ -178,8 +161,10 @@ return view.extend({
 
 		s = m.section(form.GridSection, 'stime', _('Scheduled task'), [
 			E('div', { style: 'color:#666; margin-top:0.6em;' }, [
-				_('Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-6, 0 and 6 = Sunday)'), E('br'),
-				_('"*" any value, "," value list separator, "-" range of values, "/" step values'), E('br'),
+				_('Minute (0-59), Hour (0-23), Day of Month (1-31), Month (1-12), Day of Week (0-6, 0 and 6 = Sunday)'),
+				E('br'),
+				_('"*" any value, "," value list separator, "-" range of values, "/" step values'),
+				E('br'),
 				_('Examples: Range 2-5 (means 2 to 5), List 1,3,5 (means 1 and 3 and 5), Step */5 (means every 5 units)')
 			])
 		]);
@@ -197,6 +182,7 @@ return view.extend({
 		e = s.option(form.Value, 'minute', _('minutes'));
 		e.editable = true;
 		e.default = '0';
+		e.width = '7%';
 		e.validate = function (section_id, value) {
 			return validateCrontabField('minute', value);
 		};
@@ -204,6 +190,7 @@ return view.extend({
 		e = s.option(form.Value, 'hour', _('hours'));
 		e.editable = true;
 		e.default = '*';
+		e.width = '7%';
 		e.validate = function (section_id, value) {
 			return validateCrontabField('hour', value);
 		};
@@ -211,6 +198,7 @@ return view.extend({
 		e = s.option(form.Value, 'day', _('Days'));
 		e.editable = true;
 		e.default = '*';
+		e.width = '7%';
 		e.validate = function (section_id, value) {
 			return validateCrontabField('day', value,
 				this.section.formvalue(section_id, 'month'));
@@ -219,6 +207,7 @@ return view.extend({
 		e = s.option(form.Value, 'month', _('months'));
 		e.editable = true;
 		e.default = '*';
+		e.width = '7%';
 		e.validate = function (section_id, value) {
 			return validateCrontabField('month', value);
 		};
@@ -226,6 +215,7 @@ return view.extend({
 		e = s.option(form.Value, 'week', _('weeks'));
 		e.editable = true;
 		e.default = '*';
+		e.width = '7%';
 		e.validate = function (section_id, value) {
 			return validateCrontabField('week', value);
 		};
@@ -311,6 +301,8 @@ return view.extend({
 
 	defineStypeOptions: function (s) {
 		let e = s.option(form.ListValue, 'stype', _('Scheduled Type'));
+		e.editable = true;
+		e.width = '15%';
 		e.default = '10';
 		e.value('01', _('Scheduled Reboot'));
 		e.value('02', _('Scheduled Poweroff'));
@@ -336,7 +328,6 @@ return view.extend({
 			));
 		e.onchange = (ev, section_id, value) =>
 			(value.startsWith('script_')) && this.showScriptEditModal(value);
-		e.editable = true;
 	},
 
 	showScriptEditModal: function (v) {

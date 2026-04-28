@@ -123,17 +123,9 @@ do_wireless() {
 		[ "$mode" = "ap" ] || return
 		config_get dev  "$iface" device
 		config_get band "$dev"   band
-
-		case "$band" in
-			5g|5GHz|a|an)
-				uci -q set wireless."$iface".key="${wifi_pass:-$key_5g}"
-				uci -q set wireless."$iface".ssid="${wifi_ssid:-$ssid_5g}"
-				;;
-			2g|2.4GHz|b|bg)
-				uci -q set wireless."$iface".key="${wifi_pass:-$key_2g}"
-				uci -q set wireless."$iface".ssid="${wifi_ssid:-$ssid_2g}"
-				;;
-		esac
+		local key=key_"${band}" ssid=ssid_"${band}"
+		uci -q set wireless."$iface".key="${wifi_pass:-$key}"
+		uci -q set wireless."$iface".ssid="${wifi_ssid:-$ssid}"
 
 		local iface_mac; iface_mac=$(cat /sys/class/net/br-lan/address 2>/dev/null | tr -d ':')
 		[ -z "$iface_mac" ] && iface_mac=$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')
@@ -170,13 +162,13 @@ do_wireless() {
 			*) return 0;;
 		esac
 
-		[ "$use_batadv" = "1" ] && { mesh_network='batmesh'; mesh_fwding=0; }
+		[ "$use_batadv" = "1" ] && mesh_fwding=0
 
 		uci -q batch <<-EOF
 			set wireless.${mesh_iface}='wifi-iface'
 			set wireless.${mesh_iface}.device='${dev}'
 			set wireless.${mesh_iface}.mode='mesh'
-			set wireless.${mesh_iface}.network='${mesh_network}'
+			set wireless.${mesh_iface}.network='${batadv_hardif:-$mesh_network}'
 			set wireless.${mesh_iface}.mesh_fwding='${mesh_fwding}'
 			set wireless.${mesh_iface}.mesh_ttl='31'
 			set wireless.${mesh_iface}.encryption='sae'
@@ -188,9 +180,18 @@ do_wireless() {
 	}
 
 	[ "$band_mode" = "2" ] && return
+	config_get key_2g        main key_2g          ''
+	config_get ssid_2g       main ssid_2g         ''
+	config_get key_5g        main key_5g          ''
+	config_get ssid_5g       main ssid_5g         ''
+	config_get key_6g        main key_6g          ''
+	config_get ssid_6g       main ssid_6g         ''
+	config_get wifi_pass     main wifi_pass       ''
+	config_get wifi_ssid     main wifi_ssid       ''
+	config_get log_level     main log_level       ''
 	local mesh_hash old_mesh_hash radio_hash old_radio_hash changed=0
 	mesh_hash=$(hash_value "${mesh_id}:${mesh_pass}:${mesh_radio}:${mesh_network}:${use_batadv}:${log_level}")
-	radio_hash=$(hash_value "${ssid_2g}:${ssid_5g}:${key_2g}:${key_5g}:${wifi_pass}:${wifi_ssid}")
+	radio_hash=$(hash_value "${ssid_2g}:${key_2g}:${ssid_5g}:${key_5g}:${ssid_6g}:${key_6g}:${wifi_pass}:${wifi_ssid}")
 
 	config_get old_mesh_hash  main old_mesh_hash  ''
 	config_get old_radio_hash main old_radio_hash ''
@@ -206,17 +207,16 @@ do_wireless() {
 }
 
 do_batadv() {
-	local old_use_batadv bat0_in_bridge bat0
+	local old_use_batadv bat0_in_bridge
 	config_get old_use_batadv main old_use_batadv  ''
 	[ "$use_batadv" = "$old_use_batadv" ] && return 1
-	config_get bat0 globals batadv_proto  ''
 	uci -q set mesh_node.main.old_use_batadv="$use_batadv"
 
 	if [ "$use_batadv" = "1" ]; then
 		modprobe batman-adv 2>/dev/null || true
-		bat0_in_bridge=$(uci -q show network.@device[0].ports 2>/dev/null | grep -c "$bat0")
+		bat0_in_bridge=$(uci -q show network.@device[0].ports 2>/dev/null | grep -c "$batadv_proto")
 		[ "${bat0_in_bridge:-0}" -eq 0 ] && \
-			uci -q add_list network.@device[0].ports="$bat0"
+			uci -q add_list network.@device[0].ports="$batadv_proto"
 	else
 		cleanup_batman() {
 			local iface="$1" proto
@@ -278,6 +278,7 @@ start() {
 	local combo_mode wan_proto lan_proto lan_ip gateway user pass log_level \
 		  ssid_2g ssid_5g key_2g key_5g wifi_ssid wifi_pass mesh_id mesh_pass \
 		  mesh_radio mesh_network enable_usteer init old_init hostname old_hostname \
+		  batadv_proto batadv_hardif \
 		  band_mode old_m11_hash m11_enable use_batadv usteer_changed=0 \
 		  network_changed=0 wireless_changed=0 mesh11sd_changed=0
 
@@ -290,18 +291,13 @@ start() {
 	config_get user          main wan_pppoe_user  ''
 	config_get pass          main wan_pppoe_pass  ''
 
-	config_get key_2g        main key_2g          ''
-	config_get key_5g        main key_5g          ''
-	config_get ssid_2g       main ssid_2g         ''
-	config_get ssid_5g       main ssid_5g         ''
-	config_get wifi_pass     main wifi_pass       ''
-	config_get log_level     main log_level       ''
-	config_get wifi_ssid     main wifi_ssid       ''
 	config_get mesh_id       main mesh_id         ''
 	config_get mesh_pass     main mesh_pass       ''
 	config_get mesh_radio    main mesh_radio      ''
 	config_get mesh_network  main mesh_network    ''
 	config_get band_mode     main band_mode       '0'
+	config_get batadv_proto  globals batadv_proto ''
+	config_get batadv_hardif globals batadv_hardif ''
 
 	config_get init          main init            ''
 	config_get old_init      main old_init        ''

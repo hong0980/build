@@ -4,21 +4,12 @@ START=99
 XBOOT=0
 extra_command "reconfig" ""
 
-log_msg() {
-	logger -p daemon.info -t "wizard" "$*"
-}
+hash_value() { echo "$1" | md5sum | awk '{print $1}'; }
 
 get_config() {
-	local default="$1"; shift
 	for val in "$@"; do
-		config_get "$val" "$default" "$val" ""
+		config_get "$val" default "$val" ""
 	done
-}
-
-validate_device() {
-	local dev=$1
-	[ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1 && return 0
-	return 1
 }
 
 uci_changes() {
@@ -49,81 +40,29 @@ set_dns() {
 }
 
 set_wireless() {
-	config_load wireless || return 1
-
-	[ -n "$wifi_ssid" -a -n "$wifi_key" ] || return 0
-
-	local old_ssid=$(uci_get wizard default wifi_ssid_old "")
-	local old_key=$(uci_get wizard default wifi_key_old "")
-
-	if [ "$wifi_ssid" = "$old_ssid" ] && [ "$wifi_key" = "$old_key" ]; then
-		return 0
-	fi
-
-	local wifi_updated=0
-
 	process_wifi_iface() {
-		local cfg="$1"
-		local mode device band
-
+		local cfg="$1" mode dev band
 		config_get mode "$cfg" mode
-		config_get device "$cfg" device
-
 		[ "$mode" = "ap" ] || return 0
 
-		uci_set wireless "$cfg" ssid "$wifi_ssid"
-		uci_set wireless "$cfg" key "$wifi_key"
-
-		config_get band "$device" band
-
-		if [ "$band" = "6g" ]; then
-			uci_set wireless "$cfg" encryption 'sae'
-			uci_remove wireless "$cfg" ft_psk_generate_local
-			uci_set wireless "$cfg" ssid "${wifi_ssid}_6G"
-		else
-			uci_set wireless "$cfg" encryption 'psk2'
-		fi
-
-		wifi_updated=1
+		config_get dev "$cfg" device
+		config_get band "$dev" band
+		local key=key_"${band}" ssid=ssid_"${band}"
+		uci_set wireless "$cfg" key  "$key"
+		uci_set wireless "$cfg" ssid "$ssid"
+		uci_set wireless "$cfg" encryption psk2
 	}
+	local radio_hash
+	radio_hash=$(hash_value "${ssid_2g}:${key_2g}:${ssid_5g}:${key_5g}:${ssid_6g}:${key_6g}")
+	[ "$radio_hash" = "$old_radio_hash" ] && return 1
+	uci_set wizard default old_radio_hash "$radio_hash"
 
+	config_load wireless || return 1
 	config_foreach process_wifi_iface wifi-iface
-
-	if [ "$wifi_updated" = "1" ]; then
-		uci_set wizard default wifi_ssid_old "$wifi_ssid"
-		uci_set wizard default wifi_key_old "$wifi_key"
-		return 0
-	else
-		log_msg "Warning: No active 'ap' interface found in wireless config."
-		return 1
-	fi
 }
 
 reconfig() {
-	local ssid key dhcp_ignore found=0
-
-	_get_first_ap() {
-		local section="$1"
-		local mode disabled
-		[ "$found" -eq 1 ] && return 0
-
-		config_get mode "$section" mode ''
-		config_get network "$section" network ''
-
-		if [ "$mode" = "ap" -a "$network" = "lan" ]; then
-			config_get ssid "$section" ssid ""
-			config_get key "$section" key ""
-			found=1
-		fi
-	}
-
-	config_load wireless 2>/dev/null
-	config_foreach _get_first_ap wifi-iface
-
-	if [ "$found" -eq 1 ]; then
-		uci_set wizard default wifi_key "$key"
-		uci_set wizard default wifi_ssid "$ssid"
-	fi
+	local dhcp_ignore
 
 	config_load dhcp 2>/dev/null
 	config_get dhcp_ignore lan ignore "0"
@@ -158,26 +97,17 @@ reconfig() {
 }
 
 add_wizard() {
-	[ "$XBOOT" = 1 ] && return 0
-
-	get_config default \
+	get_config \
 		wan_proto wan_pppoe_user wan_pppoe_pass wan_dns lan_dns ipv6 \
 		ap_ip_mode ap_bridge_ip ap_netmask ap_gateway ap_dhcp ap_bridge_interfaces \
 		siderouter_local_ip siderouter_lan_netmask siderouter_netmask \
 		siderouter_wan_ip siderouter_gateway siderouter_dhcp siderouter_interfaces \
-		wifi_ssid wifi_key wifi_ssid_old wifi_key_old \
-		lan_ipaddr lan_netmask lan_ipaddr_old lan_netmask_old
+		lan_ipaddr lan_netmask lan_ipaddr_old lan_netmask_old \
+		old_radio_hash ssid_2g ssid_5g ssid_6g key_2g key_5g key_6g
 
 	local device ifname
-	device=$(uci_get network wan device 2>/dev/null || uci_get bk_network wan device "")
+	device=$(uci_get network wan device "")
 	ifname=$(uci_get network wan ifname "")
-
-	if [ "$wan_proto" != "ap" ] && [ "$wan_proto" != "siderouter" ]; then
-		validate_device "$device" || {
-			log_msg "Error: WAN device '$device' not found."
-			return 1
-		}
-	fi
 
 	case "$wan_proto" in
 		pppoe)
@@ -194,7 +124,6 @@ add_wizard() {
 				[ -n "$ifname" ] && uci_set network wan ifname "$ifname"
 			fi
 			;;
-
 		dhcp)
 			uci_remove network wan
 			uci_add network interface wan
@@ -202,20 +131,7 @@ add_wizard() {
 			uci_set network wan device "$device"
 			[ -n "$ifname" ] && uci_set network wan ifname "$ifname"
 			;;
-
 		ap)
-			[ -n "$ap_bridge_interfaces" ] || {
-				log_msg "Error: No bridge interfaces configured for AP mode."
-				return 1
-			}
-
-			for iface in $ap_bridge_interfaces; do
-				validate_device "$iface" || {
-					log_msg "Error: Interface '$iface' not found."
-					return 1
-				}
-			done
-
 			uci_remove network wan
 
 			if [ "${ap_ip_mode:-dhcp}" = "dhcp" ]; then
@@ -224,10 +140,6 @@ add_wizard() {
 				uci_remove network lan netmask
 				uci_remove network lan gateway
 			else
-				[ -n "$ap_bridge_ip" -a -n "$ap_netmask" ] || {
-					log_msg "Error: ap_bridge_ip and ap_netmask required for AP static mode."
-					return 1
-				}
 				uci_set network lan proto 'static'
 				uci_set network lan ipaddr "$ap_bridge_ip"
 				uci_set network lan netmask "$ap_netmask"
@@ -250,16 +162,8 @@ add_wizard() {
 			[ -n "$siderouter_wan_ip" -a -n "$siderouter_netmask" -a \
 			  -n "$siderouter_gateway"  -a -n "$siderouter_interfaces" -a \
 			  -n "$siderouter_local_ip" ] || {
-				log_msg "Error: Missing parameters for Side Router mode."
 				return 1
 			}
-
-			for iface in $siderouter_interfaces; do
-				validate_device "$iface" || {
-					log_msg "Error: Interface '$iface' not found."
-					return 1
-				}
-			done
 
 			uci_remove network wan
 			uci_add network interface wan
@@ -281,7 +185,6 @@ add_wizard() {
 			uci_set dhcp lan ra_slaac '0'
 			;;
 		*)
-			log_msg "Error: Unknown wan_proto '$wan_proto'."
 			return 1
 			;;
 	esac
@@ -321,7 +224,6 @@ add_wizard() {
 		[ "$reload_firewall" = "1" ] && /etc/init.d/firewall reload
 		[ "$reload_dhcp"     = "1" ] && /etc/init.d/dnsmasq reload
 		[ "$reload_wireless" = "1" ] && wifi reload
-		log_msg "Configuration applied and services reloaded."
 	fi
 }
 
@@ -337,3 +239,5 @@ boot() {
 			uci -q export $file > /etc/network_bk/$file
 	done
 }
+
+stop() { :; }

@@ -142,7 +142,8 @@ return view.extend({
 				.then(function (r) { return r.code === 0; }),
 			fs.exec('/etc/init.d/usteer', ['running'])
 				.then(function (r) { return r.code === 0; }),
-			uci.load('mesh_node')
+			uci.load('mesh_node'),
+			uci.load('network')
 		]);
 	},
 
@@ -246,7 +247,7 @@ return view.extend({
 		o.value('2', _('Info'));
 		o.value('3', _('Notice'));
 		o.value('4', _('Warning'));
-		o.default = '2'; o.rmempty = false;
+		o.default = '2';
 		o.depends('band_mode', /(0|1)/);
 
 		var BAND_DEFS = [
@@ -272,13 +273,11 @@ return view.extend({
 			o.depends('band_merge', '0');
 		});
 
-		o = s.taboption('wireless', form.Value, 'wifi_ssid', _('WiFi SSID'),
-			_('Shared by all bands (2.4 GHz / 5 GHz%s)').format(info.ssid_6g ? ' / 6 GHz' : ''));
+		o = s.taboption('wireless', form.Value, 'wifi_ssid', _('WiFi SSID'));
 		o.default = info.wifi_ssid;
 		o.rmempty = false; o.depends('band_merge', '1');
 
-		o = s.taboption('wireless', form.Value, 'wifi_pass', _('WiFi Password'),
-			_('Shared by 2.4 GHz and 5 GHz %s; minimum 8 characters').format(info.ssid_6g ? '6 GHz' : ''));
+		o = s.taboption('wireless', form.Value, 'wifi_pass', _('WiFi Password'));
 		o.datatype = 'wpakey'; o.password = true;
 		o.rmempty = false; o.default = info.wifi_pass;
 		o.depends('band_merge', '1');
@@ -680,7 +679,8 @@ return view.extend({
 		o = s.taboption('mesh', form.Button, '_mesh_status_btn', _('Mesh Status'));
 		o.inputtitle = _('View Mesh Status'); o.inputstyle = 'positive';
 		o.depends('band_mode', '0');
-		o.onclick = function () {
+		o.onclick = function (ev, section_id) {
+			var proto  = this.section.formvalue(section_id, 'batadv_proto') || 'bat0';
 			if (uci.get_bool('mesh_node', 'main', 'use_batadv')) {
 				var run = function (args) {
 					return fs.exec_direct('/usr/sbin/batctl', args)
@@ -689,11 +689,11 @@ return view.extend({
 				};
 
 				return Promise.all([
-					run(['meshif', 'bat0', 'mj']),
-					run(['meshif', 'bat0', 'hj']),
-					run(['meshif', 'bat0', 'nj']),
-					run(['meshif', 'bat0', 'oj']),
-					run(['meshif', 'bat0', 'statistics'])
+					run(['meshif', proto, 'mj']),
+					run(['meshif', proto, 'hj']),
+					run(['meshif', proto, 'nj']),
+					run(['meshif', proto, 'oj']),
+					run(['meshif', proto, 'statistics'])
 				]).then(function (r) {
 					var sep = '─'.repeat(72), text = '';
 					var titles = [_('MESH INFO'), _('INTERFACES'), _('NEIGHBORS'), _('ORIGINATORS'), _('STATISTICS')];
@@ -750,12 +750,12 @@ return view.extend({
 
 		// batadv
 		so = ss.taboption('batadv', form.Value, 'batadv_proto', _('Batman Device'));
-		so.default = 'bat0'; so.rmempty = false; so.retain = true;
+		so.default = 'bat0'; so.rmempty = false;
 		so.depends('mesh_node.main.use_batadv', '1');
 		so.titleref = L.url('admin/network/network');
 
 		so = ss.taboption('batadv', form.Value, 'batadv_hardif', _('Batman Interface'));
-		so.default = 'batmesh'; so.rmempty = false; so.retain = true;
+		so.default = 'batmesh'; so.rmempty = false;
 		so.depends('mesh_node.main.use_batadv', '1');
 
 		so = ss.taboption('batadv', form.RichListValue, 'routing_algo', _('Routing Algorithm'),
@@ -766,16 +766,14 @@ return view.extend({
 		so.default = 'BATMAN_IV';
 		so.depends('mesh_node.main.use_batadv', '1');
 		so.write = function (section_id, value) {
-			var proto   = this.section.formvalue(section_id, 'batadv_proto') || 'bat0';
-			var hardif  = this.section.formvalue(section_id, 'batadv_hardif') || 'batmesh';
-
+			var proto  = this.section.formvalue(section_id, 'batadv_proto') || 'bat0';
+			var hardif = this.section.formvalue(section_id, 'batadv_hardif') || 'batmesh';
 			if (!uci.get('network', proto)) {
 				uci.add('network', 'interface', proto);
-				uci.set('network', proto, 'proto', 'batadv');
-				uci.set('network', proto, 'gw_mode', 'off');
+				uci.set('network', proto, 'proto',     'batadv');
+				uci.set('network', proto, 'gw_mode',   'off');
 				uci.set('network', proto, 'multipath', 'off');
 			}
-
 			if (!uci.get('network', hardif)) {
 				uci.add('network', 'interface', hardif);
 				uci.set('network', hardif, 'proto',  'batadv_hardif');
@@ -783,62 +781,63 @@ return view.extend({
 				uci.set('network', hardif, 'mtu',    '1536');
 			}
 			uci.set('network', proto, 'routing_algo', value);
-			return this.super('write', [section_id, value]);
+			// return this.super('write', [section_id, value]);
 		};
 
-		so = ss.taboption('batadv', form.Flag, 'aggregated_ogms', _('Aggregate Originator Messages'),
+		function batadvOpt(widget, name, title, desc) {
+			var so = ss.taboption('batadv', widget, name, title, desc);
+			so.depends('mesh_node.main.use_batadv', '1');
+			function proto(self, section_id) {
+				return self.section.formvalue(section_id, 'batadv_proto') || 'bat0';
+			}
+			so.load = function(section_id) {
+				return uci.get('network', proto(this, section_id), this.option);
+			};
+			so.write = function(section_id, value) {
+				uci.set('network', proto(this, section_id), this.option, value);
+			};
+			so.remove = function(section_id) {
+				uci.unset('network', proto(this, section_id), this.option);
+			};
+
+			return so;
+		}
+
+		so = batadvOpt(form.Flag, 'aggregated_ogms', _('Aggregate Originator Messages'),
 			_('reduces overhead by collecting and aggregating originator messages in a single packet rather than many small ones'));
 		so.default = '1';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
-		so.depends('mesh_node.main.use_batadv', '1');
 
-		so = ss.taboption('batadv', form.Value, 'orig_interval', _('Originator Interval'),
+		so = batadvOpt(form.Value, 'orig_interval', _('Originator Interval'),
 			_('The value specifies the interval (milliseconds) in which batman-adv floods the network with its protocol information.'));
 		so.default = '1000'; so.datatype = 'min(1)';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
-		so.depends('mesh_node.main.use_batadv', '1');
 
-		so = ss.taboption('batadv', form.Flag, 'ap_isolation', _('Access Point Isolation'),
+		so = batadvOpt(form.Flag, 'ap_isolation', _('Access Point Isolation'),
 			_('Prevents one wireless client to talk to another. This setting only affects packets without any VLAN tag (untagged packets).'));
 		so.default = '0';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
-		so.depends('mesh_node.main.use_batadv', '1');
 
-		so = ss.taboption('batadv', form.Flag, 'bonding', _('Bonding Mode'),
+		so = batadvOpt(form.Flag, 'bonding', _('Bonding Mode'),
 			_('When running the mesh over multiple WiFi interfaces per node batman-adv is capable of optimizing the traffic flow to gain maximum performance.'));
 		so.default = '0';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
-		so.depends('mesh_node.main.use_batadv', '1');
 
-		so = ss.taboption('batadv', form.Flag, 'bridge_loop_avoidance', _('Avoid Bridge Loops'),
+		so = batadvOpt(form.Flag, 'bridge_loop_avoidance', _('Avoid Bridge Loops'),
 			_('In bridged LAN setups it is advisable to enable the bridge loop avoidance in order to avoid broadcast loops that can bring the entire LAN to a standstill.'));
 		so.default = '1';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
-		so.depends('mesh_node.main.use_batadv', '1');
 
-		so = ss.taboption('batadv', form.Flag, 'distributed_arp_table', _('Distributed ARP Table'),
+		so = batadvOpt(form.Flag, 'distributed_arp_table', _('Distributed ARP Table'),
 			_('When enabled the distributed ARP table forms a mesh-wide ARP cache that helps non-mesh clients to get ARP responses much more reliably and without much delay.'));
-		so.default = '1';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
-		so.depends('mesh_node.main.use_batadv', '1');
+		so.default = '0';
 
-		so = ss.taboption('batadv', form.Flag, 'fragmentation', _('Fragmentation'),
+		so = batadvOpt(form.Flag, 'fragmentation', _('Fragmentation'),
 			_('Batman-adv has a built-in layer 2 fragmentation for unicast data flowing through the mesh which will allow to run batman-adv over interfaces / connections that don\'t allow to increase the MTU beyond the standard Ethernet packet size of 1500 bytes. When the fragmentation is enabled batman-adv will automatically fragment over-sized packets and defragment them on the other end. Per default fragmentation is enabled and inactive if the packet fits but it is possible to deactivate the fragmentation entirely.'));
-		so.default = '1';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
-		so.depends('mesh_node.main.use_batadv', '1');
+		so.default = '0';
 
-		so = ss.taboption('batadv', form.Value, 'hop_penalty', _('Hop Penalty'),
+		so = batadvOpt(form.Value, 'hop_penalty', _('Hop Penalty'),
 			_('The hop penalty setting allows to modify batman-adv\'s preference for multihop routes vs. short routes. The value is applied to the TQ of each forwarded OGM, thereby propagating the cost of an extra hop (the packet has to be received and retransmitted which costs airtime)'));
 		so.datatype = 'range(0,255)'; so.default = '30';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
-		so.depends('mesh_node.main.use_batadv', '1');
 
-		so = ss.taboption('batadv', form.Flag, 'multicast_mode', _('Multicast Mode'),
+		so = batadvOpt(form.Flag, 'multicast_mode', _('Multicast Mode'),
 			_('Enables more efficient, group aware multicast forwarding infrastructure in batman-adv.'));
-		so.default = '1';
-		so.uciconfig = 'network'; so.ucisection = 'bat0';
-		so.depends('mesh_node.main.use_batadv', '1');
+		so.default = '0';
 
 		// usteer
 		so = ss.taboption('usteer', form.Flag, 'enable_usteer', _('Enable usteer Smart Steering'),

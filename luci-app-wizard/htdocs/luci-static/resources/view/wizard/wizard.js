@@ -3,12 +3,14 @@
 'require uci';
 'require view';
 'require form';
+'require network';
 'require tools.widgets as widgets';
 
 return view.extend({
 	load: function () {
 		return Promise.all([
-			fs.stat('/etc/config/wireless').catch(function () { return null; }),
+			L.resolveDefault(fs.stat('/etc/config/wireless'), null),
+			L.resolveDefault(network.getWifiDevices(), []),
 			uci.load('wizard').then(function (data) {
 				if (!uci.get(data, 'default', 'wan_proto')) {
 					return fs.exec_direct('/etc/init.d/wizard', ['reconfig'])
@@ -17,13 +19,11 @@ return view.extend({
 							return uci.load('wizard');
 						});
 				}
-				return data;
 			})
 		]);
 	},
 
-	render: function (data) {
-		var stat = data[0];
+	render: function ([stat, radios]) {
 		var m, s, o;
 		var dnsOptions = [
 			{ value: '223.5.5.5',       label: _('AliDNS: 223.5.5.5') },
@@ -44,6 +44,8 @@ return view.extend({
 		s.tab('wansetup', _('Wan Settings'),
 			_('There are several different ways to access the Internet, please choose according to your own situation.'));
 		s.tab('lansetup', _('Lan Settings'));
+		s.tab('wifisetup', _('Wireless Settings'),
+			_("Set the router's wireless name and password. For more advanced settings, please go to the Network-Wireless page."));
 
 		o = s.taboption('wansetup', form.ListValue, 'wan_proto', _('Protocol'),
 			_('Select the network access protocol to determine how the router connects to the Internet.'));
@@ -235,20 +237,26 @@ return view.extend({
 		o.default = '';
 		dnsOptions.forEach(opt => o.value(opt.value, opt.label));
 
-		if (stat?.size > 0) {
-			s.tab('wifisetup', _('Wireless Settings'),
-				_("Set the router's wireless name and password. For more advanced settings, please go to the Network-Wireless page."));
+		if (stat && stat.size > 0) {
+			radios.forEach(function (radio) {
+				var band       = radio.ubus('dev', 'config', 'band') || '';
+				var interfaces = radio.ubus('dev', 'interfaces') || [];
+				var apCfg      = (interfaces.find(i => i.config?.mode === 'ap') || {}).config;
+				if (!band || !apCfg) return;
+				var bandLabel = { '2g': '2.4 GHz', '5g': '5 GHz', '6g': '6 GHz' }[band] || band;
 
-			o = s.taboption('wifisetup', form.Value, 'wifi_ssid',
-				_("<abbr title='Extended Service Set Identifier'>ESSID</abbr>"),
-				_('SSID of the wireless network, with a maximum length of 32 characters.'));
-			o.datatype = 'maxlength(32)';
+				o = s.taboption('wifisetup', form.Value, 'ssid_' + band, _('%s SSID').format(bandLabel),
+					_('SSID of the wireless network, with a maximum length of 32 characters.'));
+				o.datatype = 'maxlength(32)';
+				o.default = apCfg.ssid || '';
 
-			o = s.taboption('wifisetup', form.Value, 'wifi_key', _('Key'),
-				_('Password for the wireless network, compliant with WPA key requirements.'));
-			o.datatype = 'wpakey';
-			o.password = true;
-		}
+				o = s.taboption('wifisetup', form.Value, 'key_' + band, _('%s Password').format(bandLabel),
+					_('Password for the wireless network, compliant with WPA key requirements.'));
+				o.datatype = 'wpakey';
+				o.password = true;
+				o.default = apCfg.key || '';
+			});
+		};
 
 		return m.render();
 	}

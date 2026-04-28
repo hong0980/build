@@ -1,6 +1,5 @@
 #!/bin/sh
 mkdir -p /etc/taskplan
-chmod +x /etc/init.d/taskplan \
-		 /usr/bin/taskplanhandler
+chmod +x /etc/init.d/taskplan /usr/sbin/taskplanhandler
 rm -rf /tmp/luci-*
 exit 0

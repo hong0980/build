@@ -92,9 +92,6 @@ msgstr "加密方式：psk2+ccmp（WPA2），最少 8 个字符。"
 msgid "WiFi Password"
 msgstr "WiFi 密码"
 
-msgid "Shared by 2.4 GHz and 5 GHz %s; minimum 8 characters"
-msgstr "2.4 GHz 和 5 GHz %s 共用；最少 8 个字符"
-
 msgid "Mesh Backhaul Band"
 msgstr "Mesh 回程频段"
 
