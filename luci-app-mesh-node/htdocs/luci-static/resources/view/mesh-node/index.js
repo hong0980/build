@@ -449,7 +449,7 @@ return view.extend({
 		o = m11opt(s, form.Value, 'mesh_gate_base_ssid', '',  _('AP SSID'),
 			_('Base SSID for the access point. Max 22 chars with suffix enabled, 30 without. '
 			+ 'Leave empty to use the SSID from wireless config.'));
-		o.optional = true; o.rmempty = false; o.default = 'HomeWiFi'; o.default = 'HomeWiFi';
+		o.optional = true; o.rmempty = false; o.default = 'HomeWiFi';
 		m11dep(o, [{ 'mesh_gate_enable': /(1|2)/ } ]);
 
 		o = m11opt(s, form.Flag, 'ssid_suffix_enable', '',  _('SSID Suffix'),
@@ -656,7 +656,7 @@ return view.extend({
 		o.default = info.mesh_id || 'HomeMesh'; o.rmempty = false;
 
 		o = s.taboption('mesh', form.Value, 'mesh_pass', _('Mesh Password'),
-			_('SAE (WPA3) passphrase; minimum 8 characters, must match on all nodes'));
+			_('Must be identical on every mesh node'));
 		o.datatype = 'wpakey'; o.password = true;
 		o.depends('band_mode', '0');
 		o.rmempty = false; o.default = info.mesh_pass || '';
@@ -781,31 +781,25 @@ return view.extend({
 				uci.set('network', hardif, 'mtu',    '1536');
 			}
 			uci.set('network', proto, 'routing_algo', value);
-			// return this.super('write', [section_id, value]);
 		};
 
 		function batadvOpt(widget, name, title, desc) {
 			var so = ss.taboption('batadv', widget, name, title, desc);
 			so.depends('mesh_node.main.use_batadv', '1');
-			function proto(self, section_id) {
-				return self.section.formvalue(section_id, 'batadv_proto') || 'bat0';
-			}
-			so.load = function(section_id) {
-				return uci.get('network', proto(this, section_id), this.option);
+			so.load = function (section_id) {
+				var proto  = this.section.formvalue(section_id, 'batadv_proto') || 'bat0';
+				return uci.get('network', proto, this.option);
 			};
-			so.write = function(section_id, value) {
-				uci.set('network', proto(this, section_id), this.option, value);
+			so.write = function (section_id, value) {
+				var proto  = this.section.formvalue(section_id, 'batadv_proto') || 'bat0';
+				uci.set('network', proto, this.option, value);
 			};
-			so.remove = function(section_id) {
-				uci.unset('network', proto(this, section_id), this.option);
-			};
-
 			return so;
 		}
 
 		so = batadvOpt(form.Flag, 'aggregated_ogms', _('Aggregate Originator Messages'),
 			_('reduces overhead by collecting and aggregating originator messages in a single packet rather than many small ones'));
-		so.default = '1';
+		so.default = o.disabled;
 
 		so = batadvOpt(form.Value, 'orig_interval', _('Originator Interval'),
 			_('The value specifies the interval (milliseconds) in which batman-adv floods the network with its protocol information.'));
@@ -813,23 +807,23 @@ return view.extend({
 
 		so = batadvOpt(form.Flag, 'ap_isolation', _('Access Point Isolation'),
 			_('Prevents one wireless client to talk to another. This setting only affects packets without any VLAN tag (untagged packets).'));
-		so.default = '0';
+		so.default = o.enabled;
 
 		so = batadvOpt(form.Flag, 'bonding', _('Bonding Mode'),
 			_('When running the mesh over multiple WiFi interfaces per node batman-adv is capable of optimizing the traffic flow to gain maximum performance.'));
-		so.default = '0';
+		so.default = o.enabled;
 
 		so = batadvOpt(form.Flag, 'bridge_loop_avoidance', _('Avoid Bridge Loops'),
 			_('In bridged LAN setups it is advisable to enable the bridge loop avoidance in order to avoid broadcast loops that can bring the entire LAN to a standstill.'));
-		so.default = '1';
+		so.default = o.disabled;
 
 		so = batadvOpt(form.Flag, 'distributed_arp_table', _('Distributed ARP Table'),
 			_('When enabled the distributed ARP table forms a mesh-wide ARP cache that helps non-mesh clients to get ARP responses much more reliably and without much delay.'));
-		so.default = '0';
+		so.default = o.enabled;
 
 		so = batadvOpt(form.Flag, 'fragmentation', _('Fragmentation'),
 			_('Batman-adv has a built-in layer 2 fragmentation for unicast data flowing through the mesh which will allow to run batman-adv over interfaces / connections that don\'t allow to increase the MTU beyond the standard Ethernet packet size of 1500 bytes. When the fragmentation is enabled batman-adv will automatically fragment over-sized packets and defragment them on the other end. Per default fragmentation is enabled and inactive if the packet fits but it is possible to deactivate the fragmentation entirely.'));
-		so.default = '0';
+		so.default = o.enabled;
 
 		so = batadvOpt(form.Value, 'hop_penalty', _('Hop Penalty'),
 			_('The hop penalty setting allows to modify batman-adv\'s preference for multihop routes vs. short routes. The value is applied to the TQ of each forwarded OGM, thereby propagating the cost of an extra hop (the packet has to be received and retransmitted which costs airtime)'));
@@ -837,12 +831,16 @@ return view.extend({
 
 		so = batadvOpt(form.Flag, 'multicast_mode', _('Multicast Mode'),
 			_('Enables more efficient, group aware multicast forwarding infrastructure in batman-adv.'));
-		so.default = '0';
+		so.default = o.enabled;
+
+		so = batadvOpt(form.Flag, 'network_coding', _('Network Coding'),
+				_('When enabled network coding increases the WiFi throughput by combining multiple frames into a single frame, thus reducing the needed air time.'));
+		so.default = o.enabled;
 
 		// usteer
 		so = ss.taboption('usteer', form.Flag, 'enable_usteer', _('Enable usteer Smart Steering'),
 			_('Uses usteer to steer clients to the best radio for optimal performance.'));
-		so.default = '0'; so.rmempty = false;
+		so.default = o.enabled; so.rmempty = false;
 		so.depends({ 'mesh_node.main.use_batadv': '0' });
 		so.write = function (section_id, value) {
 			uci.set('usteer', '@usteer[0]', 'enabled', value);
@@ -859,15 +857,15 @@ return view.extend({
 
 		so = usteeropt(ss, form.Flag, 'syslog', _('Log messages to syslog'),
 			_('default true'));
-		so.default = '1'; so.rmempty = false;
+		so.default = o.disabled; so.rmempty = false;
 
 		so = usteeropt(ss, form.Flag, 'local_mode', _('Local mode'),
 			_('Disable network communication') + ' (' + _('default false') + ')');
-		so.default = '0'; so.rmempty = false;
+		so.default = o.enabled; so.rmempty = false;
 
 		so = usteeropt(ss, form.Flag, 'ipv6', _('IPv6 mode'),
 			_('Use IPv6 for remote exchange') + ' (' + _('default false') + ')');
-		so.default = '0'; so.rmempty = false;
+		so.default = o.enabled; so.rmempty = false;
 
 		so = usteeropt(ss, form.ListValue, 'debug_level', _('Debug level'));
 		so.value('0', _('Fatal'));
@@ -924,11 +922,11 @@ return view.extend({
 
 		so = usteeropt(ss, form.Flag, 'assoc_steering', _('Assoc steering'),
 			_('Allow rejecting assoc requests for steering purposes') + ' (' + _('default false') + ')');
-		so.default = '0'; so.optional = true;
+		so.default = o.enabled; so.optional = true;
 
 		so = usteeropt(ss, form.Flag, 'probe_steering', _('Probe steering'),
 			_('Allow ignoring probe requests for steering purposes') + ' (' + _('default false') + ')');
-		so.default = '0'; so.optional = true;
+		so.default = o.enabled; so.optional = true;
 
 		so = usteeropt(ss, form.Value, 'min_connect_snr', _('Min connect SNR'),
 			_('Minimum signal-to-noise ratio or signal level (dBm) to allow connections'));
@@ -990,7 +988,7 @@ return view.extend({
 
 		so = usteeropt(ss, form.Flag, 'load_kick_enabled', _('Load kick enabled'),
 			_('Enable kicking client on excessive channel load') + ' (' + _('default false') + ')');
-		so.default = '0'; so.optional = true;
+		so.default = o.enabled; so.optional = true;
 
 		so = usteeropt(ss, form.Value, 'load_kick_threshold', _('Load kick threshold'),
 			_('Minimum channel load (%) before kicking clients'));

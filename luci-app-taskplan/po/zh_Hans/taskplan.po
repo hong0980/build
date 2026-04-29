@@ -123,6 +123,9 @@ msgstr "脚本 %s"
 msgid "Execution"
 msgstr "执行"
 
+msgid "Refresh time:"
+msgstr "刷新时间："
+
 msgid "WAN restart successful!"
 msgstr "WAN 重启成功！"
 

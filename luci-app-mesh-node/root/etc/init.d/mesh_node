@@ -117,19 +117,19 @@ do_network() {
 }
 
 do_wireless() {
+	local iface_mac; iface_mac=$(cat /sys/class/net/br-lan/address 2>/dev/null | tr -d ':')
+	[ -z "$iface_mac" ] && iface_mac=$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')
+	iface_mac="${iface_mac:=000000000000}"
 	wifi_iface() {
 		local iface="$1" dev band mode
 		config_get mode "$iface" mode
 		[ "$mode" = "ap" ] || return
 		config_get dev  "$iface" device
 		config_get band "$dev"   band
-		local key=key_"${band}" ssid=ssid_"${band}"
+		eval "key=\$key_${band} ssid=\$ssid_${band}"
 		uci -q set wireless."$iface".key="${wifi_pass:-$key}"
 		uci -q set wireless."$iface".ssid="${wifi_ssid:-$ssid}"
 
-		local iface_mac; iface_mac=$(cat /sys/class/net/br-lan/address 2>/dev/null | tr -d ':')
-		[ -z "$iface_mac" ] && iface_mac=$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')
-		iface_mac="${iface_mac:=000000000000}"
 		uci -q batch <<-EOF
 			set wireless.${iface}.disabled='0'
 			set wireless.${iface}.proxy_arp='1'
@@ -155,12 +155,7 @@ do_wireless() {
 		uci -q set wireless."$dev".cell_density='0'
 		uci -q set wireless."$dev".log_level="${log_level}"
 
-		case "$mesh_radio" in
-			"none") ;;
-			"5g")  case "$band" in 5g|5GHz|a|an) ;; *) return 0;; esac ;;
-			"2g")  case "$band" in 2g|2.4GHz|b|bg) ;; *) return 0;; esac ;;
-			*) return 0;;
-		esac
+		[ "$mesh_radio" != "none" ] && [ "$mesh_radio" != "$band" ] && return 0
 
 		[ "$use_batadv" = "1" ] && mesh_fwding=0
 
