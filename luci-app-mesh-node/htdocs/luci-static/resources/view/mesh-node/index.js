@@ -88,7 +88,7 @@ function m11dep(o, conditions) {
 
 function usteeropt(ss, widget, name, title, desc) {
 	var s = ss.taboption('usteer', widget, name, title, desc);
-	s.depends('mesh_node.globals.enable_usteer', '1');
+	s.depends('mesh_node.main.enable_usteer', '1');
 	s.uciconfig = 'usteer'; s.ucisection = '@usteer[0]';
 	return s;
 }
@@ -148,7 +148,7 @@ return view.extend({
 	},
 
 	render: function ([info, m_running, u_running]) {
-		var m, s, o, so, ss;
+		var m, s, o;
 		m = new form.Map('mesh_node', _('AP + Mesh Deployment'), _('Quickly create a Mesh'));
 		m.chain('mesh11sd');
 		m.chain('network');
@@ -162,6 +162,8 @@ return view.extend({
 		s.tab('wireless', _('Wireless'));
 		s.tab('mesh',     _('Mesh Backhaul'));
 		s.tab('mesh11sd', _('mesh11sd Settings'));
+		s.tab('batadv', _('batadv Settings'));
+		s.tab('usteer', _('Usteer Settings'));
 		s.tab('other',    _('Other'));
 
 		o = s.taboption('network', form.RichListValue, 'combo_mode', _('Network Mode'));
@@ -742,32 +744,26 @@ return view.extend({
 			}
 		};
 
-		o = s.taboption('mesh', form.SectionValue, '_config', form.NamedSection, 'globals');
-		ss = o.subsection;
-		o.depends('band_mode', '0');
-		ss.tab('batadv', _('batadv Settings'));
-		ss.tab('usteer', _('Usteer Settings'));
-
 		// batadv
-		so = ss.taboption('batadv', form.Value, 'batadv_proto', _('Batman Device'));
-		so.default = 'bat0'; so.rmempty = false;
-		so.depends('mesh_node.main.use_batadv', '1');
-		so.titleref = L.url('admin/network/network');
+		o = s.taboption('batadv', form.Value, 'batadv_proto', _('Batman Device'));
+		o.default = 'bat0'; o.rmempty = false;
+		o.depends('mesh_node.main.use_batadv', '1');
+		o.titleref = L.url('admin/network/network');
 
-		so = ss.taboption('batadv', form.Value, 'batadv_hardif', _('Batman Interface'));
-		so.default = 'batmesh'; so.rmempty = false;
-		so.depends('mesh_node.main.use_batadv', '1');
+		o = s.taboption('batadv', form.Value, 'batadv_hardif', _('Batman Interface'));
+		o.default = 'batmesh'; o.rmempty = false;
+		o.depends('mesh_node.main.use_batadv', '1');
 
-		so = ss.taboption('batadv', form.RichListValue, 'routing_algo', _('Routing Algorithm'),
+		o = s.taboption('batadv', form.RichListValue, 'routing_algo', _('Routing Algorithm'),
 			_('BATMAN_IV: based on link quality (TQ), compatible with all devices. ' +
 			'All nodes in the same mesh must use the same algorithm.'));
-		so.value('BATMAN_IV', _('BATMAN_IV — link quality (recommended)'));
-		so.value('BATMAN_V',  _('BATMAN_V — throughput based'));
-		so.default = 'BATMAN_IV';
-		so.depends('mesh_node.main.use_batadv', '1');
-		so.write = function (section_id, value) {
-			var proto  = this.section.formvalue(section_id, 'batadv_proto') || 'bat0';
-			var hardif = this.section.formvalue(section_id, 'batadv_hardif') || 'batmesh';
+		o.value('BATMAN_IV', _('BATMAN_IV — link quality (recommended)'));
+		o.value('BATMAN_V',  _('BATMAN_V — throughput based'));
+		o.default = 'BATMAN_IV';
+		o.depends('mesh_node.main.use_batadv', '1');
+		o.write = function (section_id, value) {
+			var proto  = this.section.formvalue(section_id, 'batadv_proto');
+			var hardif = this.section.formvalue(section_id, 'batadv_hardif');
 			if (!uci.get('network', proto)) {
 				uci.add('network', 'interface', proto);
 				uci.set('network', proto, 'proto',     'batadv');
@@ -777,269 +773,273 @@ return view.extend({
 			if (!uci.get('network', hardif)) {
 				uci.add('network', 'interface', hardif);
 				uci.set('network', hardif, 'proto',  'batadv_hardif');
-				uci.set('network', hardif, 'master', proto);
 				uci.set('network', hardif, 'mtu',    '1536');
 			}
+			uci.set('network', hardif, 'master', proto);
 			uci.set('network', proto, 'routing_algo', value);
 		};
 
 		function batadvOpt(widget, name, title, desc) {
-			var so = ss.taboption('batadv', widget, name, title, desc);
-			so.depends('mesh_node.main.use_batadv', '1');
-			so.load = function (section_id) {
-				var proto  = this.section.formvalue(section_id, 'batadv_proto') || 'bat0';
+			var o = s.taboption('batadv', widget, name, title, desc);
+			o.depends('mesh_node.main.use_batadv', '1');
+			o.load = function (section_id) {
+				var proto  = this.section.formvalue(section_id, 'batadv_proto');
 				return uci.get('network', proto, this.option);
 			};
-			so.write = function (section_id, value) {
-				var proto  = this.section.formvalue(section_id, 'batadv_proto') || 'bat0';
-				uci.set('network', proto, this.option, value);
+			o.write = function (section_id, value) {
+				var proto  = this.section.formvalue(section_id, 'batadv_proto');
+				return uci.set('network', proto, this.option, value);
 			};
-			return so;
+			o.remove = function (section_id) {
+				var proto  = this.section.formvalue(section_id, 'batadv_proto');
+				uci.unset('network', proto, this.option);
+			};
+			return o;
 		}
 
-		so = batadvOpt(form.Flag, 'aggregated_ogms', _('Aggregate Originator Messages'),
+		o = batadvOpt(form.Flag, 'aggregated_ogms', _('Aggregate Originator Messages'),
 			_('reduces overhead by collecting and aggregating originator messages in a single packet rather than many small ones'));
-		so.default = o.disabled;
+		o.default = o.disabled; o.rmempty = true;
 
-		so = batadvOpt(form.Value, 'orig_interval', _('Originator Interval'),
+		o = batadvOpt(form.Value, 'orig_interval', _('Originator Interval'),
 			_('The value specifies the interval (milliseconds) in which batman-adv floods the network with its protocol information.'));
-		so.default = '1000'; so.datatype = 'min(1)';
+		o.default = '1000'; o.datatype = 'min(1)';
 
-		so = batadvOpt(form.Flag, 'ap_isolation', _('Access Point Isolation'),
+		o = batadvOpt(form.Flag, 'ap_isolation', _('Access Point Isolation'),
 			_('Prevents one wireless client to talk to another. This setting only affects packets without any VLAN tag (untagged packets).'));
-		so.default = o.enabled;
+		o.default = o.disabled; o.rmempty = true;
 
-		so = batadvOpt(form.Flag, 'bonding', _('Bonding Mode'),
+		o = batadvOpt(form.Flag, 'bonding', _('Bonding Mode'),
 			_('When running the mesh over multiple WiFi interfaces per node batman-adv is capable of optimizing the traffic flow to gain maximum performance.'));
-		so.default = o.enabled;
+		o.default = o.disabled; o.rmempty = true;
 
-		so = batadvOpt(form.Flag, 'bridge_loop_avoidance', _('Avoid Bridge Loops'),
+		o = batadvOpt(form.Flag, 'bridge_loop_avoidance', _('Avoid Bridge Loops'),
 			_('In bridged LAN setups it is advisable to enable the bridge loop avoidance in order to avoid broadcast loops that can bring the entire LAN to a standstill.'));
-		so.default = o.disabled;
+		o.default = o.enabled; o.rmempty = false;
 
-		so = batadvOpt(form.Flag, 'distributed_arp_table', _('Distributed ARP Table'),
+		o = batadvOpt(form.Flag, 'distributed_arp_table', _('Distributed ARP Table'),
 			_('When enabled the distributed ARP table forms a mesh-wide ARP cache that helps non-mesh clients to get ARP responses much more reliably and without much delay.'));
-		so.default = o.enabled;
+		o.default = o.enabled; o.rmempty = true;
 
-		so = batadvOpt(form.Flag, 'fragmentation', _('Fragmentation'),
+		o = batadvOpt(form.Flag, 'fragmentation', _('Fragmentation'),
 			_('Batman-adv has a built-in layer 2 fragmentation for unicast data flowing through the mesh which will allow to run batman-adv over interfaces / connections that don\'t allow to increase the MTU beyond the standard Ethernet packet size of 1500 bytes. When the fragmentation is enabled batman-adv will automatically fragment over-sized packets and defragment them on the other end. Per default fragmentation is enabled and inactive if the packet fits but it is possible to deactivate the fragmentation entirely.'));
-		so.default = o.enabled;
+		o.default = o.disabled; o.rmempty = true;
 
-		so = batadvOpt(form.Value, 'hop_penalty', _('Hop Penalty'),
+		o = batadvOpt(form.Value, 'hop_penalty', _('Hop Penalty'),
 			_('The hop penalty setting allows to modify batman-adv\'s preference for multihop routes vs. short routes. The value is applied to the TQ of each forwarded OGM, thereby propagating the cost of an extra hop (the packet has to be received and retransmitted which costs airtime)'));
-		so.datatype = 'range(0,255)'; so.default = '30';
+		o.datatype = 'range(0,255)'; o.default = '30';
 
-		so = batadvOpt(form.Flag, 'multicast_mode', _('Multicast Mode'),
+		o = batadvOpt(form.Flag, 'multicast_mode', _('Multicast Mode'),
 			_('Enables more efficient, group aware multicast forwarding infrastructure in batman-adv.'));
-		so.default = o.enabled;
+		o.default = o.enabled; o.rmempty = true;
 
-		so = batadvOpt(form.Flag, 'network_coding', _('Network Coding'),
+		o = batadvOpt(form.Flag, 'network_coding', _('Network Coding'),
 				_('When enabled network coding increases the WiFi throughput by combining multiple frames into a single frame, thus reducing the needed air time.'));
-		so.default = o.enabled;
+		o.default = o.enabled; o.rmempty = true;
 
 		// usteer
-		so = ss.taboption('usteer', form.Flag, 'enable_usteer', _('Enable usteer Smart Steering'),
+		o = s.taboption('usteer', form.Flag, 'enable_usteer', _('Enable usteer Smart Steering'),
 			_('Uses usteer to steer clients to the best radio for optimal performance.'));
-		so.default = o.enabled; so.rmempty = false;
-		so.depends({ 'mesh_node.main.use_batadv': '0' });
-		so.write = function (section_id, value) {
+		o.default = '0'; o.rmempty = false;
+		o.depends({ 'mesh_node.main.use_batadv': '0' });
+		o.write = function (section_id, value) {
 			uci.set('usteer', '@usteer[0]', 'enabled', value);
 			return this.super('write', [section_id, value]);
 		};
 
-		so = usteeropt(ss, form.DummyValue, '_usteer_badge', _('Usteer Status'));
-		so.rawhtml = true;
-		so.cfgvalue = function () {
+		o = usteeropt(s, form.DummyValue, '_usteer_badge', _('Usteer Status'));
+		o.rawhtml = true;
+		o.cfgvalue = function () {
 			return E('span', { style: 'display:inline-flex;align-items:center;gap:8px;' }, [
 				E('strong', { style: `color:${u_running ? '#02a546ff' : '#FF3B30'};` }, u_running ? _('Running') : _('Stopped'))
 			]);
 		};
 
-		so = usteeropt(ss, form.Flag, 'syslog', _('Log messages to syslog'),
+		o = usteeropt(s, form.Flag, 'syslog', _('Log messages to syslog'),
 			_('default true'));
-		so.default = o.disabled; so.rmempty = false;
+		o.default = '1'; o.rmempty = false;
 
-		so = usteeropt(ss, form.Flag, 'local_mode', _('Local mode'),
+		o = usteeropt(s, form.Flag, 'local_mode', _('Local mode'),
 			_('Disable network communication') + ' (' + _('default false') + ')');
-		so.default = o.enabled; so.rmempty = false;
+		o.default = '0'; o.rmempty = false;
 
-		so = usteeropt(ss, form.Flag, 'ipv6', _('IPv6 mode'),
+		o = usteeropt(s, form.Flag, 'ipv6', _('IPv6 mode'),
 			_('Use IPv6 for remote exchange') + ' (' + _('default false') + ')');
-		so.default = o.enabled; so.rmempty = false;
+		o.default = '0'; o.rmempty = false;
 
-		so = usteeropt(ss, form.ListValue, 'debug_level', _('Debug level'));
-		so.value('0', _('Fatal'));
-		so.value('1', _('Info'));
-		so.value('2', _('Verbose'));
-		so.value('3', _('Some debug'));
-		so.value('4', _('Network packet info'));
-		so.value('5', _('All debug messages'));
-		so.default = '2'; so.rmempty = false; so.editable = true;
+		o = usteeropt(s, form.ListValue, 'debug_level', _('Debug level'));
+		o.value('0', _('Fatal'));
+		o.value('1', _('Info'));
+		o.value('2', _('Verbose'));
+		o.value('3', _('Some debug'));
+		o.value('4', _('Network packet info'));
+		o.value('5', _('All debug messages'));
+		o.default = '2'; o.rmempty = false; o.editable = true;
 
-		so = usteeropt(ss, form.Value, 'max_neighbor_reports', _('Max neighbor reports'),
+		o = usteeropt(s, form.Value, 'max_neighbor_reports', _('Max neighbor reports'),
 			_('Maximum number of neighbor reports set for a node'));
-		so.optional = true; so.placeholder = 8;
+		o.optional = true; o.placeholder = 8;
 
-		so = usteeropt(ss, form.Value, 'sta_block_timeout', _('Sta block timeout'),
+		o = usteeropt(s, form.Value, 'sta_block_timeout', _('Sta block timeout'),
 			_('Maximum amount of time (ms) a station may be blocked due to policy decisions'));
-		so.optional = true; so.placeholder = 30000;
+		o.optional = true; o.placeholder = 30000;
 
-		so = usteeropt(ss, form.Value, 'local_sta_timeout', _('Local sta timeout'),
+		o = usteeropt(s, form.Value, 'local_sta_timeout', _('Local sta timeout'),
 			_('Maximum amount of time (ms) a local unconnected station is tracked'));
-		so.optional = true; so.placeholder = 120000;
+		o.optional = true; o.placeholder = 120000;
 
-		so = usteeropt(ss, form.Value, 'measurement_report_timeout', _('Measurement report timeout'),
+		o = usteeropt(s, form.Value, 'measurement_report_timeout', _('Measurement report timeout'),
 			_('Maximum amount of time (ms) a measurement report is stored'));
-		so.optional = true; so.placeholder = 120000;
+		o.optional = true; o.placeholder = 120000;
 
-		so = usteeropt(ss, form.Value, 'local_sta_update', _('Local sta update'),
+		o = usteeropt(s, form.Value, 'local_sta_update', _('Local sta update'),
 			_('Local station information update interval (ms)'));
-		so.optional = true; so.placeholder = 1000;
+		o.optional = true; o.placeholder = 1000;
 
-		so = usteeropt(ss, form.Value, 'max_retry_band', _('Max retry band'),
+		o = usteeropt(s, form.Value, 'max_retry_band', _('Max retry band'),
 			_('Maximum number of consecutive times a station may be blocked by policy'));
-		so.optional = true; so.placeholder = 5;
+		o.optional = true; o.placeholder = 5;
 
-		so = usteeropt(ss, form.Value, 'seen_policy_timeout', _('Seen policy timeout'),
+		o = usteeropt(s, form.Value, 'seen_policy_timeout', _('Seen policy timeout'),
 			_('Maximum idle time of a station entry (ms) to be considered for policy decisions'));
-		so.optional = true; so.placeholder = 30000;
+		o.optional = true; o.placeholder = 30000;
 
-		so = usteeropt(ss, form.Value, 'load_balancing_threshold', _('Load balancing threshold'),
+		o = usteeropt(s, form.Value, 'load_balancing_threshold', _('Load balancing threshold'),
 			_('Minimum number of stations delta between APs before load balancing policy is active'));
-		so.optional = true; so.placeholder = 0;
+		o.optional = true; o.placeholder = 0;
 
-		so = usteeropt(ss, form.Value, 'band_steering_threshold', _('Band steering threshold'),
+		o = usteeropt(s, form.Value, 'band_steering_threshold', _('Band steering threshold'),
 			_('Minimum number of stations delta between bands before band steering policy is active'));
-		so.optional = true; so.placeholder = 5;
+		o.optional = true; o.placeholder = 5;
 
-		so = usteeropt(ss, form.Value, 'remote_update_interval', _('Remote update interval'),
+		o = usteeropt(s, form.Value, 'remote_update_interval', _('Remote update interval'),
 			_('Interval (ms) between sending state updates to other APs'));
-		so.optional = true; so.placeholder = 1000;
+		o.optional = true; o.placeholder = 1000;
 
-		so = usteeropt(ss, form.Value, 'remote_node_timeout', _('Remote node timeout'),
+		o = usteeropt(s, form.Value, 'remote_node_timeout', _('Remote node timeout'),
 			_('Number of remote update intervals after which a remote-node is deleted'));
-		so.optional = true; so.placeholder = 10;
+		o.optional = true; o.placeholder = 10;
 
-		so = usteeropt(ss, form.Flag, 'assoc_steering', _('Assoc steering'),
+		o = usteeropt(s, form.Flag, 'assoc_steering', _('Assoc steering'),
 			_('Allow rejecting assoc requests for steering purposes') + ' (' + _('default false') + ')');
-		so.default = o.enabled; so.optional = true;
+		o.default = '0'; o.optional = true;
 
-		so = usteeropt(ss, form.Flag, 'probe_steering', _('Probe steering'),
+		o = usteeropt(s, form.Flag, 'probe_steering', _('Probe steering'),
 			_('Allow ignoring probe requests for steering purposes') + ' (' + _('default false') + ')');
-		so.default = o.enabled; so.optional = true;
+		o.default = '0'; o.optional = true;
 
-		so = usteeropt(ss, form.Value, 'min_connect_snr', _('Min connect SNR'),
+		o = usteeropt(s, form.Value, 'min_connect_snr', _('Min connect SNR'),
 			_('Minimum signal-to-noise ratio or signal level (dBm) to allow connections'));
-		so.optional = true; so.placeholder = 0; so.datatype = 'integer';
+		o.optional = true; o.placeholder = 0; o.datatype = 'integer';
 
-		so = usteeropt(ss, form.Value, 'min_snr', _('Min SNR'),
+		o = usteeropt(s, form.Value, 'min_snr', _('Min SNR'),
 			_('Minimum signal-to-noise ratio or signal level (dBm) to remain connected'));
-		so.optional = true; so.placeholder = 0; so.datatype = 'integer';
+		o.optional = true; o.placeholder = 0; o.datatype = 'integer';
 
-		so = usteeropt(ss, form.Value, 'min_snr_kick_delay', _('Min SNR kick delay'),
+		o = usteeropt(s, form.Value, 'min_snr_kick_delay', _('Min SNR kick delay'),
 			_('Timeout after which a station with SNR < min_SNR will be kicked'));
-		so.optional = true; so.placeholder = 5000; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 5000; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'steer_reject_timeout', _('Steer reject timeout'),
+		o = usteeropt(s, form.Value, 'steer_reject_timeout', _('Steer reject timeout'),
 			_('Timeout (ms) for which a client will not be steered after rejecting a BSS-transition-request'));
-		so.optional = true; so.placeholder = 60000; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 60000; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'roam_process_timeout', _('Roam process timeout'),
+		o = usteeropt(s, form.Value, 'roam_process_timeout', _('Roam process timeout'),
 			_('Timeout (in ms) after which a association following a disassociation is not seen as a roam'));
-		so.optional = true; so.placeholder = 5000; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 5000; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'roam_scan_snr', _('Roam scan SNR'),
+		o = usteeropt(s, form.Value, 'roam_scan_snr', _('Roam scan SNR'),
 			_('Minimum signal-to-noise ratio or signal level (dBm) before attempting to trigger client scans for roam'));
-		so.optional = true; so.placeholder = 0; so.datatype = 'integer';
+		o.optional = true; o.placeholder = 0; o.datatype = 'integer';
 
-		so = usteeropt(ss, form.Value, 'roam_scan_tries', _('Roam scan tries'),
+		o = usteeropt(s, form.Value, 'roam_scan_tries', _('Roam scan tries'),
 			_('Maximum number of client roaming scan trigger attempts'));
-		so.optional = true; so.placeholder = 3; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 3; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'roam_scan_timeout', _('Roam scan timeout'),
+		o = usteeropt(s, form.Value, 'roam_scan_timeout', _('Roam scan timeout'),
 			_('Retry scanning when roam_scan_tries is exceeded after this timeout (in ms).') +
 			_(' In case this option is disabled, the client is kicked instead')
 		);
-		so.optional = true; so.placeholder = 0; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 0; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'roam_scan_interval', _('Roam scan interval'),
+		o = usteeropt(s, form.Value, 'roam_scan_interval', _('Roam scan interval'),
 			_('Minimum time (ms) between client roaming scan trigger attempts'));
-		so.optional = true; so.placeholder = 10000; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 10000; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'roam_trigger_snr', _('Roam trigger SNR'),
+		o = usteeropt(s, form.Value, 'roam_trigger_snr', _('Roam trigger SNR'),
 			_('Minimum signal-to-noise ratio or signal level (dBm) before attempting to trigger forced client roaming'));
-		so.optional = true; so.placeholder = 0; so.datatype = 'integer';
+		o.optional = true; o.placeholder = 0; o.datatype = 'integer';
 
-		so = usteeropt(ss, form.Value, 'roam_trigger_interval', _('Roam trigger interval'),
+		o = usteeropt(s, form.Value, 'roam_trigger_interval', _('Roam trigger interval'),
 			_('Minimum time (ms) between client roaming trigger attempts'));
-		so.optional = true; so.placeholder = 60000; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 60000; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'roam_kick_delay', _('Roam kick delay'),
+		o = usteeropt(s, form.Value, 'roam_kick_delay', _('Roam kick delay'),
 			_('Timeout (ms) for client roam requests. usteer will kick the client after this times out.'));
-		so.optional = true; so.placeholder = 10000; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 10000; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'signal_diff_threshold', _('Signal diff threshold'),
+		o = usteeropt(s, form.Value, 'signal_diff_threshold', _('Signal diff threshold'),
 			_('Minimum signal strength difference until AP steering policy is active'));
-		so.optional = true; so.placeholder = 0; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 0; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'initial_connect_delay', _('Initial connect delay'),
+		o = usteeropt(s, form.Value, 'initial_connect_delay', _('Initial connect delay'),
 			_('Initial delay (ms) before responding to probe requests (to allow other APs to see packets as well)'));
-		so.optional = true; so.placeholder = 0; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 0; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Flag, 'load_kick_enabled', _('Load kick enabled'),
+		o = usteeropt(s, form.Flag, 'load_kick_enabled', _('Load kick enabled'),
 			_('Enable kicking client on excessive channel load') + ' (' + _('default false') + ')');
-		so.default = o.enabled; so.optional = true;
+		o.default = '0'; o.optional = true;
 
-		so = usteeropt(ss, form.Value, 'load_kick_threshold', _('Load kick threshold'),
+		o = usteeropt(s, form.Value, 'load_kick_threshold', _('Load kick threshold'),
 			_('Minimum channel load (%) before kicking clients'));
-		so.optional = true; so.placeholder = 75; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 75; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'load_kick_delay', _('Load kick delay'),
+		o = usteeropt(s, form.Value, 'load_kick_delay', _('Load kick delay'),
 			_('Minimum amount of time (ms) that channel load is above threshold before starting to kick clients'));
-		so.optional = true; so.placeholder = 10000; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 10000; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'load_kick_min_clients', _('Load kick min clients'),
+		o = usteeropt(s, form.Value, 'load_kick_min_clients', _('Load kick min clients'),
 			_('Minimum number of connected clients before kicking based on channel load'));
-		so.optional = true; so.placeholder = 10; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 10; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'load_kick_reason_code', _('Load kick reason code'),
+		o = usteeropt(s, form.Value, 'load_kick_reason_code', _('Load kick reason code'),
 			_('Reason code on client kick based on channel load.') + ' Default: WLAN_REASON_DISASSOC_AP_BUSY)'
 		);
-		so.optional = true; so.placeholder = 5; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 5; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'band_steering_interval', _('Band steering interval'),
+		o = usteeropt(s, form.Value, 'band_steering_interval', _('Band steering interval'),
 			_('Attempting to steer clients to a higher frequency-band every n ms. A value of 0 disables band-steering.'));
-		so.optional = true; so.placeholder = 120000; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 120000; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'band_steering_min_snr', _('Band steering min SNR'),
+		o = usteeropt(s, form.Value, 'band_steering_min_snr', _('Band steering min SNR'),
 			_('Minimal SNR or absolute signal a device has to maintain over band_steering_interval to be steered to a higher frequency band.'));
-		so.optional = true; so.placeholder = -60; so.datatype = 'integer';
+		o.optional = true; o.placeholder = -60; o.datatype = 'integer';
 
-		so = usteeropt(ss, form.Value, 'link_measurement_interval', _('Link measurement interval'),
+		o = usteeropt(s, form.Value, 'link_measurement_interval', _('Link measurement interval'),
 			_('Interval (ms) the device is sent a link-measurement request to help assess the bi-directional link quality.') +
 			_('Setting the interval to 0 disables link-measurements.')
 		);
-		so.optional = true; so.placeholder = 30000; so.datatype = 'uinteger';
+		o.optional = true; o.placeholder = 30000; o.datatype = 'uinteger';
 
-		so = usteeropt(ss, form.Value, 'node_up_script', _('Node up script'),
+		o = usteeropt(s, form.Value, 'node_up_script', _('Node up script'),
 			_('Script to run after bringing up a node'));
-		so.optional = true; so.datatype = 'string';
+		o.optional = true; o.datatype = 'string';
 
-		so = usteeropt(ss, form.MultiValue, 'event_log_types', _('Event log types'),
+		o = usteeropt(s, form.MultiValue, 'event_log_types', _('Event log types'),
 			_('Message types to include in log.'));
-		so.value('probe_req_accept');
-		so.value('probe_req_deny');
-		so.value('auth_req_accept');
-		so.value('auth_req_deny');
-		so.value('assoc_req_accept');
-		so.value('assoc_req_deny');
-		so.value('load_kick_trigger');
-		so.value('load_kick_reset');
-		so.value('load_kick_min_clients');
-		so.value('load_kick_no_client');
-		so.value('load_kick_client');
-		so.value('signal_kick');
-		so.optional = true; so.datatype = 'list(string)';
+		o.value('probe_req_accept');
+		o.value('probe_req_deny');
+		o.value('auth_req_accept');
+		o.value('auth_req_deny');
+		o.value('assoc_req_accept');
+		o.value('assoc_req_deny');
+		o.value('load_kick_trigger');
+		o.value('load_kick_reset');
+		o.value('load_kick_min_clients');
+		o.value('load_kick_no_client');
+		o.value('load_kick_client');
+		o.value('signal_kick');
+		o.optional = true; o.datatype = 'list(string)';
 
 		o = s.taboption('other', form.Value, 'hostname', _('Hostname'));
 		o.datatype = 'hostname';
