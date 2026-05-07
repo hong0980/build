@@ -28,24 +28,24 @@ var callLuciWirelessDevices = rpc.declare({
 
 var COMBO_MODES = {
 	bridge_dhcp: {
-		wan_proto: 'bridge', lan_proto: 'dhcp',
-		label: 'Bridge + DHCP (AP/Mesh node: WAN bridged to LAN, IP assigned by upstream router)'
+		wan_proto: 'bridge', lan_proto: 'dhcp', label: 'Bridge + DHCP',
+		desc: 'AP/Mesh node: WAN bridged to LAN, IP assigned by upstream router'
 	},
 	bridge_static: {
-		wan_proto: 'bridge', lan_proto: 'static',
-		label: 'Bridge + Static IP (AP/Mesh node: WAN bridged to LAN, fixed node IP)'
+		wan_proto: 'bridge', lan_proto: 'static', label: 'Bridge + Static IP',
+		desc: 'AP/Mesh node: WAN bridged to LAN, fixed node IP'
 	},
 	pppoe_none: {
-		wan_proto: 'pppoe', lan_proto: 'none',
-		label: 'PPPoE + Default (Gateway: dial-up on this device, LAN managed by system)'
+		wan_proto: 'pppoe', lan_proto: 'none', label: 'PPPoE + Default',
+		desc: 'Gateway: dial-up on this device, LAN managed by system'
 	},
 	dhcp_none: {
-		wan_proto: 'dhcp', lan_proto: 'none',
-		label: 'DHCP WAN + Default (Gateway: WAN via DHCP, LAN managed by system)'
+		wan_proto: 'dhcp', lan_proto: 'none', label: 'DHCP WAN + Default',
+		desc: 'Gateway: WAN via DHCP, LAN managed by system'
 	},
 	custom: {
-		wan_proto: 'dhcp', lan_proto: 'none',
-		label: 'Custom (configure WAN and LAN manually)'
+		wan_proto: 'dhcp', lan_proto: 'none', label: 'Custom',
+		desc: 'configure WAN and LAN manually'
 	}
 };
 
@@ -183,7 +183,7 @@ return view.extend({
 
 		o = s.taboption('network', form.RichListValue, 'combo_mode', _('Network Mode'));
 		Object.keys(COMBO_MODES).forEach(function (k) {
-			o.value(k, _(COMBO_MODES[k].label));
+			o.value(k, _(COMBO_MODES[k].label), _(COMBO_MODES[k].desc));
 		});
 		o.default  = 'bridge_static';
 		o.onchange = function (ev, section_id, value) {

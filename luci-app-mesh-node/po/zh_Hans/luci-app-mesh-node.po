@@ -164,17 +164,32 @@ msgstr "此处勾选的服务将在保存时被停止并禁止开机自启"
 msgid "Bridge + DHCP (AP/Mesh node: WAN bridged to LAN, IP assigned by upstream router)"
 msgstr "桥接 + DHCP（AP/Mesh 节点：WAN 桥接至 LAN，IP 由上游路由器分配）"
 
-msgid "Bridge + Static IP (AP/Mesh node: WAN bridged to LAN, fixed node IP)"
-msgstr "桥接 + 静态 IP（AP/Mesh 节点：WAN 桥接至 LAN，固定节点 IP）"
+msgid "Bridge + Static IP"
+msgstr "桥接 + 静态 IP"
 
-msgid "PPPoE + Default (Gateway: dial-up on this device, LAN managed by system)"
-msgstr "PPPoE + 默认（网关：本机拨号，LAN 由系统管理）"
+msgid "PPPoE + Default"
+msgstr "PPPoE + 默认"
 
-msgid "DHCP WAN + Default (Gateway: WAN via DHCP, LAN managed by system)"
-msgstr "DHCP WAN + 默认（网关：WAN 通过 DHCP 获取 IP，LAN 由系统管理）"
+msgid "DHCP WAN + Default"
+msgstr "DHCP WAN + 默认"
 
-msgid "Custom (configure WAN and LAN manually)"
-msgstr "自定义（手动配置 WAN 和 LAN）"
+msgid "Custom"
+msgstr "自定义"
+
+msgid "AP/Mesh node: WAN bridged to LAN, IP assigned by upstream router"
+msgstr "AP/Mesh 节点：WAN 桥接至 LAN，IP 由上游路由器分配"
+
+msgid "AP/Mesh node: WAN bridged to LAN, fixed node IP"
+msgstr "AP/Mesh 节点：WAN 桥接至 LAN，固定节点 IP"
+
+msgid "Gateway: dial-up on this device, LAN managed by system"
+msgstr "网关：本机拨号，LAN 由系统管理"
+
+msgid "Gateway: WAN via DHCP, LAN managed by system"
+msgstr "网关：WAN 通过 DHCP 获取 IP，LAN 由系统管理"
+
+msgid "configure WAN and LAN manually"
+msgstr "手动配置 WAN 和 LAN"
 
 # Mesh Protocol
 msgid "Mesh Protocol"
