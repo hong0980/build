@@ -47,6 +47,9 @@ msgstr "默认"
 msgid "Node Static IP"
 msgstr "节点静态 IP"
 
+msgid "Static IPv4 address for this node's LAN bridge. Must be unique per node, e.g. 192.168.2.2 / .3 / .4"
+msgstr "本节点 LAN 桥的静态 IPv4 地址，每个节点必须唯一，例如 192.168.2.2 / .3 / .4"
+
 msgid "Gateway / DNS"
 msgstr "网关 / DNS"
 
@@ -177,11 +180,17 @@ msgstr "自定义（手动配置 WAN 和 LAN）"
 msgid "Mesh Protocol"
 msgstr "Mesh 协议"
 
+msgid "802.11s native: kernel-level forwarding, simpler setup. batman-adv: advanced L2 routing on top of 802.11s, better multi-hop performance. When switching modes, save and reboot all nodes."
+msgstr "802.11s 原生：内核级转发，设置简单。batman-adv：基于 802.11s 的高级 L2 路由，多跳性能更佳。切换模式时，请保存并重启所有节点。"
+
 msgid "802.11s native — kernel mesh forwarding (default)"
 msgstr "802.11s 原生 — 内核 Mesh 转发（默认）"
 
 msgid "batman-adv — 802.11s backhaul + batadv L2 routing"
 msgstr "batman-adv — 802.11s 回程 + batadv L2 路由"
+
+msgid "BATMAN_IV: based on link quality (TQ), compatible with all devices. All nodes in the same mesh must use the same algorithm."
+msgstr "BATMAN_IV：基于链路质量（TQ），兼容所有设备。同一 Mesh 网络中的所有节点必须使用相同算法。"
 
 msgid "BATMAN_IV — link quality (recommended)"
 msgstr "BATMAN_IV — 链路质量（推荐）"
@@ -352,6 +361,9 @@ msgstr "等待无线接口就绪的超时时间。"
 msgid "Auto Config"
 msgstr "自动配置"
 
+msgid "When enabled, the daemon automatically configures wireless interfaces for the mesh — no manual wireless config needed. When disabled, the daemon only monitors an existing mesh configuration.<br><b>Warning:</b> Incorrect manual mesh configuration can soft-brick the router."
+msgstr "启用后，守护进程自动配置无线接口加入网状网络，无需手动修改 wireless 配置。禁用时，守护进程仅监控已有网状配置。<br><b>警告：</b>手动配置错误可能导致路由器变砖。"
+
 msgid "Hashed to generate the actual mesh network ID. <b>Must match on all nodes.</b>"
 msgstr "经哈希生成实际的网状网络标识。<b>必须与所有节点一致。</b>"
 
@@ -478,6 +490,9 @@ msgstr "仅在非网状回程独占的无线网卡上启用"
 msgid "AP SSID"
 msgstr "AP 接入点 SSID"
 
+msgid "Base SSID for the access point. Max 22 chars with suffix enabled, 30 without. Leave empty to use the SSID from wireless config."
+msgstr "AP 的基础 SSID 名称。启用后缀时最长 22 字符，禁用时最长 30 字符。留空则使用 wireless 配置中的 SSID。"
+
 msgid "SSID Suffix"
 msgstr "SSID 后缀"
 
@@ -565,6 +580,9 @@ msgstr "网状无线电的发射功率。超出监管域限制的值将被忽略
 msgid "Enable VXLAN Tunnel"
 msgstr "启用 VXLAN 隧道"
 
+msgid "Point-to-multipoint VXLAN tunnel between the portal and all compatible peers. Requires <b>ip-full</b> and <b>vxlan</b> packages; ignored otherwise. Disabled by default when Node Role is CPE (3)."
+msgstr "在门户与所有兼容对等节点之间建立点对多点 VXLAN 隧道。需要安装 <b>ip-full</b> 和 <b>vxlan</b> 软件包，否则忽略此选项。节点角色为 CPE（3）时默认禁用。"
+
 msgid "Tunnel ID"
 msgstr "隧道 ID"
 
@@ -613,8 +631,11 @@ msgstr "出错时自动重启"
 msgid "Reboot the node when the watchdog detects IPv4 communication failure with the portal."
 msgstr "当看门狗检测到与门户的 IPv4 通信失败时，自动重启本节点。"
 
+msgid "When the watchdog detects a portal communication failure, the daemon goes idle instead of rebooting. Useful for nodes without a reset button. Takes priority over Reboot on Error."
+msgstr "当看门狗检测到门户通信失败时，守护进程进入空闲而非重启。适用于无复位按钮的节点。此选项优先于"出错重启"。"
+
 msgid "Stop on Error (overrides Reboot on Error)"
-msgstr "出错时停止服务（覆盖"
+msgstr "出错时停止服务（覆盖）"
 
 msgid "Enable AP Monitor (apmond)"
 msgstr "启用 AP 监控守护进程（apmond）"
@@ -631,11 +652,20 @@ msgstr "本节点成为门户时 apmond CGI 脚本的存放路径。默认：/ww
 msgid "Mesh Backhaul LED"
 msgstr "网状回程 LED"
 
+msgid "LED is solid when the mesh interface is up; switches to Linux heartbeat when peers are connected. Set to <b>none</b> to disable, or enter an LED name from /sys/class/leds/ (e.g. blue:run). Default: auto (uses power/system LED)."
+msgstr "网状接口启动时 LED 常亮，有对等节点连接后变为 Linux 心跳信号。填写 <b>none</b> 禁用，或填写 /sys/class/leds/ 下的 LED 名称（如 blue:run）。默认：auto（使用电源/系统 LED）。"
+
 msgid "Manage openNDS Startup"
 msgstr "管理 openNDS 启动顺序"
 
+msgid "If openNDS is installed, mesh11sd manages its startup and synchronises nft rulesets. Disabling may cause crash loops because the openNDS gateway interface may not be ready in time."
+msgstr "若安装了 openNDS，由 mesh11sd 管理其启动顺序并同步 nft 规则集。禁用可能因 openNDS 网关接口未就绪而导致崩溃循环。"
+
 msgid "Watchdog Non-volatile Log (debug only)"
 msgstr "看门狗非易失性日志（仅用于调试）"
+
+msgid "<b>Warning:</b> Writes watchdog actions to non-volatile storage (/mesh11sd_log/mesh11sd.log). Leaving this enabled long-term may cause irreparable flash wear and consume storage. <b>Disable immediately after debugging.</b>"
+msgstr "<b>警告：</b>将看门狗操作写入非易失性存储（/mesh11sd_log/mesh11sd.log）。长期启用可能导致 Flash 不可修复磨损并占用存储空间。<b>调试完成后请立即关闭。</b>"
 
 msgid "RSSI Threshold (dBm)"
 msgstr "RSSI 门限（dBm）"

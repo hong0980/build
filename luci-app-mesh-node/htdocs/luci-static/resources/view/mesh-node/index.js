@@ -68,29 +68,44 @@ function showMeshModal(title, text) {
 	return dlg;
 }
 
-function m11opt(ss, widget, name, section, title, desc) {
-	var s = ss.taboption('mesh11sd', widget, name, title, desc);
-	s.uciconfig = 'mesh11sd'; s.ucisection = section || 'setup';
-	return s;
+function m11opt(s, widget, name, section, title, desc) {
+	var o = s.taboption('mesh11sd', widget, name, title, desc);
+	o.uciconfig = 'mesh11sd'; o.ucisection = section || 'setup';
+	o.ucioption = name;
+	return o;
 }
 
-function m11dep(o, conditions) {
-	if (!conditions || conditions.length === 0) {
-		o.depends('mesh_node.main.band_mode', '2');
-	} else {
-		conditions.forEach(function(cond) {
-			var merged = { 'mesh_node.main.band_mode': '2' };
-			Object.keys(cond).forEach(function(k) { merged[k] = cond[k]; });
-			o.depends(merged);
-		});
-	}
+function m11dep(o, conditions = []) {
+	return o.depends({
+		'mesh_node.main.band_mode': '2',
+		...Object.assign({}, ...conditions)
+	});
 }
 
-function usteeropt(ss, widget, name, title, desc) {
-	var s = ss.taboption('usteer', widget, name, title, desc);
-	s.depends('mesh_node.main.enable_usteer', '1');
-	s.uciconfig = 'usteer'; s.ucisection = '@usteer[0]';
-	return s;
+function usteeropt(s, widget, name, title, desc) {
+	var o = s.taboption('usteer', widget, name, title, desc);
+	o.depends('mesh_node.main.enable_usteer', '1');
+	o.uciconfig = 'usteer'; o.ucisection = '@usteer[0]';
+	o.ucioption = name;
+	return o;
+}
+
+function batadvopt(s, widget, name, title, desc) {
+	var o = s.taboption('batadv', widget, name, title, desc);
+	o.depends('use_batadv', '1');
+	o.load = function (section_id) {
+		var proto = uci.get(o.config, section_id, 'batadv_proto');
+		return uci.get('network', proto, this.option);
+	};
+	o.write = function (section_id, value) {
+		var proto = s.formvalue(section_id, 'batadv_proto');
+		return uci.set('network', proto, this.option, value);
+	};
+	o.remove = function (section_id) {
+		var proto = s.formvalue(section_id, 'batadv_proto');
+		return uci.unset('network', proto, this.option);
+	};
+	return o;
 }
 
 return view.extend({
@@ -298,7 +313,7 @@ return view.extend({
 				}, _('Live Status'))
 			]);
 		};
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Flag, 'enabled', '',  _('Enable Daemon'));
 		o.default  = '0';
@@ -307,7 +322,7 @@ return view.extend({
 			uci.set('mesh_node', 'main', 'm11_enable', value);
 			return this.super('write', [section_id, value]);
 		};
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.ListValue, 'debuglevel', '',  _('Debug Level'));
 		o.value('0', _('Silent'));
@@ -315,19 +330,19 @@ return view.extend({
 		o.value('2', _('Info'));
 		o.value('3', _('Debug'));
 		o.default = '1';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Value, 'checkinterval', '',  _('Check Interval (s)'),
 			_('How often the daemon dynamically checks and updates the mesh configuration.'));
 		o.datatype = 'uinteger';
 		o.default  = '15';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Value, 'interface_timeout', '',  _('Interface Timeout (s)'),
 			_('Seconds to wait for a wireless interface to become ready.'));
 		o.datatype = 'uinteger';
 		o.default  = '10';
-		m11dep(o, []);
+		m11dep(o);
 
 		/* ── Auto Config ── */
 		o = m11opt(s, form.Flag, 'auto_config', '',  _('Auto Config'),
@@ -336,7 +351,7 @@ return view.extend({
 			+ '<b>Warning:</b> Incorrect manual mesh configuration can soft-brick the router.'));
 		o.default  = '0';
 		o.rmempty  = false;
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.ListValue, 'auto_mesh_band', '', _('Mesh Backhaul Band'),
 			_('Select the radio band used for the 802.11s mesh backhaul link. <b>Must match on all nodes.</b>'));
@@ -366,8 +381,8 @@ return view.extend({
 
 		o = m11opt(s, form.Value, 'country', '',  _('Country Code'),
 			_('Overrides the country code in the wireless config (e.g. CN, US, DE). Defaults to DFS-ETSI if not set.'));
-		o.optional = true; o.placeholder = 'CN';
-		m11dep(o, []);
+		o.placeholder = 'CN';
+		m11dep(o);
 
 		o = m11opt(s, form.Value, 'mesh_phy_index', '',  _('Force Radio Index'),
 			_('Leave empty for auto-selection. Only needed on devices with multiple radios on the same band (e.g. enter 2 to force phy2).'));
@@ -379,7 +394,7 @@ return view.extend({
 			_('Used to build the interface name m-<name>-0. Max 8 characters. Default: 11s → interface m-11s-0.'));
 		o.default  = '11s';
 		o.datatype = 'maxlength(8)';
-		m11dep(o, []);
+		m11dep(o);
 
 		/* ── Node Role & Portal Detection ── */
 		o = m11opt(s, form.RichListValue, 'portal_detect', '',  _('Node Mode'),
@@ -418,7 +433,7 @@ return view.extend({
 		o.datatype = 'uinteger';
 		o.default  = '30';
 		o.optional = true;
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Flag, 'portal_use_default_ipv4', '',  _('Use Default IPv4 Address'),
 			_('When enabled, the portal node uses the IPv4 address from /etc/config/network. '
@@ -441,12 +456,12 @@ return view.extend({
 		o.value('1', _('Enabled on all radios'));
 		o.value('2', _('Enabled only on radios not shared with mesh'));
 		o.default = '1';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Value, 'mesh_gate_base_ssid', '',  _('AP SSID'),
 			_('Base SSID for the access point. Max 22 chars with suffix enabled, 30 without. '
 			+ 'Leave empty to use the SSID from wireless config.'));
-		o.optional = true; o.rmempty = false; o.default = 'HomeWiFi';
+		o.rmempty = false; o.default = 'HomeWiFi';
 		m11dep(o, [{ 'mesh_gate_enable': /(1|2)/ } ]);
 
 		o = m11opt(s, form.Flag, 'ssid_suffix_enable', '',  _('SSID Suffix'),
@@ -472,7 +487,7 @@ return view.extend({
 			_('STP link cost for the mesh network. Range 0–65534. 0 disables STP.'));
 		o.datatype = 'range(0,65534)';
 		o.default  = '10';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.ListValue, 'mesh_node_mobility_level', '',  _('Node Mobility Level'),
 			_('Tunes path-selection aggressiveness. Use 1 for fixed deployments; increase for mobile nodes.'));
@@ -482,29 +497,29 @@ return view.extend({
 		o.value('3', _('High'));
 		o.value('4', _('Very High'));
 		o.default = '1';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Flag, 'mesh_path_stabilisation', '',  _('Path Stabilisation'),
 			_('Prevents path flapping caused by multipath signal-strength jitter. Usually not needed above mobility level 1.'));
 		o.default = '0';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Value, 'reactive_path_stabilisation_threshold', '',  _('Reactive Path Stabilisation Threshold'),
 			_('Number of check intervals an unstable neighbour path must persist before path stabilisation activates.'));
 		o.datatype = 'uinteger';
 		o.default  = '10';
 		o.optional = true;
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Flag, 'mesh_mac_forced_forwarding', '',  _('MAC Forced Forwarding'),
 			_('Enable MAC forced forwarding on the mesh interface to improve Layer 2 forwarding reliability.'));
 		o.default = '1';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Flag, 'gateway_proxy_arp', '',  _('Gateway Proxy ARP'),
 			_('Enable proxy ARP on the gateway bridge interface to improve ARP resolution.'));
 		o.default = '1';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Flag, 'mesh_leechmode_enable', '',  _('Leech Mode'),
 			_('Node acts as AP only: uses mesh backhaul but does not contribute to routing or forwarding. '
@@ -517,7 +532,7 @@ return view.extend({
 			_('Transmit power for the mesh radio. Values outside the regulatory domain are ignored. Leave empty for driver/wireless default.'));
 		o.datatype = 'uinteger';
 		o.optional = true;
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Flag, 'vtun_enable', '',  _('Enable VXLAN Tunnel'),
 			_('Point-to-multipoint VXLAN tunnel between the portal and all compatible peers. '
@@ -577,19 +592,19 @@ return view.extend({
 		o = m11opt(s, form.Flag, 'reboot_on_error', '',  _('Reboot on Error'),
 			_('Reboot the node when the watchdog detects IPv4 communication failure with the portal.'));
 		o.default = '1';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Flag, 'stop_on_error', '',  _('Stop on Error (overrides Reboot on Error)'),
 			_('When the watchdog detects a portal communication failure, the daemon goes idle instead of rebooting. '
 			+ 'Useful for nodes without a reset button. Takes priority over Reboot on Error.'));
 		o.default = '0';
-		m11dep(o, []);
+		m11dep(o);
 
 		/* ── AP Monitor Daemon ── */
 		o = m11opt(s, form.Flag, 'apmond_enable', '',  _('Enable AP Monitor (apmond)'),
 			_('Collects AP interface data from this node and sends it to the portal. Requires uhttpd and px5g-mbedtls packages.'));
 		o.default = '1';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Value, 'apmond_cgi_dir', '',  _('apmond CGI Directory'),
 			_('Path for apmond CGI scripts when this node becomes a portal. Default: /www/cgi-bin.'));
@@ -604,34 +619,34 @@ return view.extend({
 			+ 'Default: auto (uses power/system LED).'));
 		o.default  = 'auto';
 		o.optional = true;
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Flag, 'manage_opennds_startup', '',  _('Manage openNDS Startup'),
 			_('If openNDS is installed, mesh11sd manages its startup and synchronises nft rulesets. '
 			+ 'Disabling may cause crash loops because the openNDS gateway interface may not be ready in time.'));
 		o.default = '0';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Flag, 'watchdog_nonvolatile_log', '',  _('Watchdog Non-volatile Log (debug only)'),
 			_('<b>Warning:</b> Writes watchdog actions to non-volatile storage (/mesh11sd_log/mesh11sd.log). '
 			+ 'Leaving this enabled long-term may cause irreparable flash wear and consume storage. '
 			+ '<b>Disable immediately after debugging.</b>'));
 		o.default = '0';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Value, 'mesh_rssi_threshold', 'mesh_params',  _('RSSI Threshold (dBm)'),
 			_('Minimum signal strength required to establish a peer link (e.g. -70). Range: -100 to 0.'));
 		o.datatype   = 'range(-100,0)';
 		o.optional   = true;
 		o.placeholder = '-70';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = m11opt(s, form.Value, 'mesh_max_peer_links', 'mesh_params',  _('Max Peer Links'),
 			_('Maximum number of peer links allowed per node.'));
 		o.datatype   = 'uinteger';
 		o.optional   = true;
 		o.placeholder = '20';
-		m11dep(o, []);
+		m11dep(o);
 
 		o = s.taboption('mesh', form.RichListValue, 'mesh_radio', _('Mesh Backhaul Band'),
 			_('Select the radio band used for the 802.11s mesh backhaul link.'));
@@ -774,61 +789,43 @@ return view.extend({
 			uci.set('network', proto, 'routing_algo', value);
 		};
 
-		function batadvOpt(widget, name, title, desc) {
-			var o = s.taboption('batadv', widget, name, title, desc);
-			o.depends('use_batadv', '1');
-			o.load = function (section_id) {
-				var proto = uci.get(o.config, section_id, 'batadv_proto');
-				return uci.get('network', proto, this.option);
-			};
-			o.write = function (section_id, value) {
-				var proto = s.formvalue(section_id, 'batadv_proto');
-				return uci.set('network', proto, this.option, value);
-			};
-			o.remove = function (section_id) {
-				var proto = s.formvalue(section_id, 'batadv_proto');
-				return uci.unset('network', proto, this.option);
-			};
-			return o;
-		}
-
-		o = batadvOpt(form.Flag, 'aggregated_ogms', _('Aggregate Originator Messages'),
+		o = batadvopt(s, form.Flag, 'aggregated_ogms', _('Aggregate Originator Messages'),
 			_('reduces overhead by collecting and aggregating originator messages in a single packet rather than many small ones'));
 		o.default = o.disabled;
 
-		o = batadvOpt(form.Value, 'orig_interval', _('Originator Interval'),
+		o = batadvopt(s, form.Value, 'orig_interval', _('Originator Interval'),
 			_('The value specifies the interval (milliseconds) in which batman-adv floods the network with its protocol information.'));
 		o.default = '1000'; o.datatype = 'min(1)';
 
-		o = batadvOpt(form.Flag, 'ap_isolation', _('Access Point Isolation'),
+		o = batadvopt(s, form.Flag, 'ap_isolation', _('Access Point Isolation'),
 			_('Prevents one wireless client to talk to another. This setting only affects packets without any VLAN tag (untagged packets).'));
 		o.default = o.disabled;
 
-		o = batadvOpt(form.Flag, 'bonding', _('Bonding Mode'),
+		o = batadvopt(s, form.Flag, 'bonding', _('Bonding Mode'),
 			_('When running the mesh over multiple WiFi interfaces per node batman-adv is capable of optimizing the traffic flow to gain maximum performance.'));
 		o.default = o.disabled;
 
-		o = batadvOpt(form.Flag, 'bridge_loop_avoidance', _('Avoid Bridge Loops'),
+		o = batadvopt(s, form.Flag, 'bridge_loop_avoidance', _('Avoid Bridge Loops'),
 			_('In bridged LAN setups it is advisable to enable the bridge loop avoidance in order to avoid broadcast loops that can bring the entire LAN to a standstill.'));
 		o.default = o.disabled;
 
-		o = batadvOpt(form.Flag, 'distributed_arp_table', _('Distributed ARP Table'),
+		o = batadvopt(s, form.Flag, 'distributed_arp_table', _('Distributed ARP Table'),
 			_('When enabled the distributed ARP table forms a mesh-wide ARP cache that helps non-mesh clients to get ARP responses much more reliably and without much delay.'));
 		o.default = o.enabled;
 
-		o = batadvOpt(form.Flag, 'fragmentation', _('Fragmentation'),
+		o = batadvopt(s, form.Flag, 'fragmentation', _('Fragmentation'),
 			_('Batman-adv has a built-in layer 2 fragmentation for unicast data flowing through the mesh which will allow to run batman-adv over interfaces / connections that don\'t allow to increase the MTU beyond the standard Ethernet packet size of 1500 bytes. When the fragmentation is enabled batman-adv will automatically fragment over-sized packets and defragment them on the other end. Per default fragmentation is enabled and inactive if the packet fits but it is possible to deactivate the fragmentation entirely.'));
 		o.default = o.enabled;
 
-		o = batadvOpt(form.Value, 'hop_penalty', _('Hop Penalty'),
+		o = batadvopt(s, form.Value, 'hop_penalty', _('Hop Penalty'),
 			_('The hop penalty setting allows to modify batman-adv\'s preference for multihop routes vs. short routes. The value is applied to the TQ of each forwarded OGM, thereby propagating the cost of an extra hop (the packet has to be received and retransmitted which costs airtime)'));
 		o.datatype = 'range(0,255)'; o.default = '30';
 
-		o = batadvOpt(form.Flag, 'multicast_mode', _('Multicast Mode'),
+		o = batadvopt(s, form.Flag, 'multicast_mode', _('Multicast Mode'),
 			_('Enables more efficient, group aware multicast forwarding infrastructure in batman-adv.'));
 		o.default = o.enabled;
 
-		o = batadvOpt(form.Flag, 'network_coding', _('Network Coding'),
+		o = batadvopt(s, form.Flag, 'network_coding', _('Network Coding'),
 				_('When enabled network coding increases the WiFi throughput by combining multiple frames into a single frame, thus reducing the needed air time.'));
 		o.default = o.enabled;
 
@@ -868,153 +865,153 @@ return view.extend({
 		o.value('3', _('Some debug'));
 		o.value('4', _('Network packet info'));
 		o.value('5', _('All debug messages'));
-		o.default = '2'; o.rmempty = false; o.editable = true;
+		o.default = '0'; o.rmempty = false;
 
 		o = usteeropt(s, form.Value, 'max_neighbor_reports', _('Max neighbor reports'),
 			_('Maximum number of neighbor reports set for a node'));
-		o.optional = true; o.placeholder = 8;
+		o.placeholder = 8;
 
 		o = usteeropt(s, form.Value, 'sta_block_timeout', _('Sta block timeout'),
 			_('Maximum amount of time (ms) a station may be blocked due to policy decisions'));
-		o.optional = true; o.placeholder = 30000;
+		o.placeholder = 30000;
 
 		o = usteeropt(s, form.Value, 'local_sta_timeout', _('Local sta timeout'),
 			_('Maximum amount of time (ms) a local unconnected station is tracked'));
-		o.optional = true; o.placeholder = 120000;
+		o.placeholder = 120000;
 
 		o = usteeropt(s, form.Value, 'measurement_report_timeout', _('Measurement report timeout'),
 			_('Maximum amount of time (ms) a measurement report is stored'));
-		o.optional = true; o.placeholder = 120000;
+		o.placeholder = 120000;
 
 		o = usteeropt(s, form.Value, 'local_sta_update', _('Local sta update'),
 			_('Local station information update interval (ms)'));
-		o.optional = true; o.placeholder = 1000;
+		o.placeholder = 1000;
 
 		o = usteeropt(s, form.Value, 'max_retry_band', _('Max retry band'),
 			_('Maximum number of consecutive times a station may be blocked by policy'));
-		o.optional = true; o.placeholder = 5;
+		o.placeholder = 5;
 
 		o = usteeropt(s, form.Value, 'seen_policy_timeout', _('Seen policy timeout'),
 			_('Maximum idle time of a station entry (ms) to be considered for policy decisions'));
-		o.optional = true; o.placeholder = 30000;
+		o.placeholder = 30000;
 
 		o = usteeropt(s, form.Value, 'load_balancing_threshold', _('Load balancing threshold'),
 			_('Minimum number of stations delta between APs before load balancing policy is active'));
-		o.optional = true; o.placeholder = 0;
+		o.placeholder = 0;
 
 		o = usteeropt(s, form.Value, 'band_steering_threshold', _('Band steering threshold'),
 			_('Minimum number of stations delta between bands before band steering policy is active'));
-		o.optional = true; o.placeholder = 5;
+		o.placeholder = 5;
 
 		o = usteeropt(s, form.Value, 'remote_update_interval', _('Remote update interval'),
 			_('Interval (ms) between sending state updates to other APs'));
-		o.optional = true; o.placeholder = 1000;
+		o.placeholder = 1000;
 
 		o = usteeropt(s, form.Value, 'remote_node_timeout', _('Remote node timeout'),
 			_('Number of remote update intervals after which a remote-node is deleted'));
-		o.optional = true; o.placeholder = 10;
+		o.placeholder = 10;
 
 		o = usteeropt(s, form.Flag, 'assoc_steering', _('Assoc steering'),
 			_('Allow rejecting assoc requests for steering purposes') + ' (' + _('default false') + ')');
-		o.default = '0'; o.optional = true;
+		o.default = '0';
 
 		o = usteeropt(s, form.Flag, 'probe_steering', _('Probe steering'),
 			_('Allow ignoring probe requests for steering purposes') + ' (' + _('default false') + ')');
-		o.default = '0'; o.optional = true;
+		o.default = '0';
 
 		o = usteeropt(s, form.Value, 'min_connect_snr', _('Min connect SNR'),
 			_('Minimum signal-to-noise ratio or signal level (dBm) to allow connections'));
-		o.optional = true; o.placeholder = 0; o.datatype = 'integer';
+		o.placeholder = 0; o.datatype = 'integer';
 
 		o = usteeropt(s, form.Value, 'min_snr', _('Min SNR'),
 			_('Minimum signal-to-noise ratio or signal level (dBm) to remain connected'));
-		o.optional = true; o.placeholder = 0; o.datatype = 'integer';
+		o.placeholder = 0; o.datatype = 'integer';
 
 		o = usteeropt(s, form.Value, 'min_snr_kick_delay', _('Min SNR kick delay'),
 			_('Timeout after which a station with SNR < min_SNR will be kicked'));
-		o.optional = true; o.placeholder = 5000; o.datatype = 'uinteger';
+		o.placeholder = 5000; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'steer_reject_timeout', _('Steer reject timeout'),
 			_('Timeout (ms) for which a client will not be steered after rejecting a BSS-transition-request'));
-		o.optional = true; o.placeholder = 60000; o.datatype = 'uinteger';
+		o.placeholder = 60000; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'roam_process_timeout', _('Roam process timeout'),
 			_('Timeout (in ms) after which a association following a disassociation is not seen as a roam'));
-		o.optional = true; o.placeholder = 5000; o.datatype = 'uinteger';
+		o.placeholder = 5000; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'roam_scan_snr', _('Roam scan SNR'),
 			_('Minimum signal-to-noise ratio or signal level (dBm) before attempting to trigger client scans for roam'));
-		o.optional = true; o.placeholder = 0; o.datatype = 'integer';
+		o.placeholder = 0; o.datatype = 'integer';
 
 		o = usteeropt(s, form.Value, 'roam_scan_tries', _('Roam scan tries'),
 			_('Maximum number of client roaming scan trigger attempts'));
-		o.optional = true; o.placeholder = 3; o.datatype = 'uinteger';
+		o.placeholder = 3; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'roam_scan_timeout', _('Roam scan timeout'),
 			_('Retry scanning when roam_scan_tries is exceeded after this timeout (in ms).') +
 			_(' In case this option is disabled, the client is kicked instead'));
-		o.optional = true; o.placeholder = 0; o.datatype = 'uinteger';
+		o.placeholder = 0; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'roam_scan_interval', _('Roam scan interval'),
 			_('Minimum time (ms) between client roaming scan trigger attempts'));
-		o.optional = true; o.placeholder = 10000; o.datatype = 'uinteger';
+		o.placeholder = 10000; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'roam_trigger_snr', _('Roam trigger SNR'),
 			_('Minimum signal-to-noise ratio or signal level (dBm) before attempting to trigger forced client roaming'));
-		o.optional = true; o.placeholder = 0; o.datatype = 'integer';
+		o.placeholder = 0; o.datatype = 'integer';
 
 		o = usteeropt(s, form.Value, 'roam_trigger_interval', _('Roam trigger interval'),
 			_('Minimum time (ms) between client roaming trigger attempts'));
-		o.optional = true; o.placeholder = 60000; o.datatype = 'uinteger';
+		o.placeholder = 60000; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'roam_kick_delay', _('Roam kick delay'),
 			_('Timeout (ms) for client roam requests. usteer will kick the client after this times out.'));
-		o.optional = true; o.placeholder = 10000; o.datatype = 'uinteger';
+		o.placeholder = 10000; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'signal_diff_threshold', _('Signal diff threshold'),
 			_('Minimum signal strength difference until AP steering policy is active'));
-		o.optional = true; o.placeholder = 0; o.datatype = 'uinteger';
+		o.placeholder = 0; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'initial_connect_delay', _('Initial connect delay'),
 			_('Initial delay (ms) before responding to probe requests (to allow other APs to see packets as well)'));
-		o.optional = true; o.placeholder = 0; o.datatype = 'uinteger';
+		o.placeholder = 0; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Flag, 'load_kick_enabled', _('Load kick enabled'),
 			_('Enable kicking client on excessive channel load') + ' (' + _('default false') + ')');
-		o.default = '0'; o.optional = true;
+		o.default = '0';
 
 		o = usteeropt(s, form.Value, 'load_kick_threshold', _('Load kick threshold'),
 			_('Minimum channel load (%) before kicking clients'));
-		o.optional = true; o.placeholder = 75; o.datatype = 'uinteger';
+		o.placeholder = 75; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'load_kick_delay', _('Load kick delay'),
 			_('Minimum amount of time (ms) that channel load is above threshold before starting to kick clients'));
-		o.optional = true; o.placeholder = 10000; o.datatype = 'uinteger';
+		o.placeholder = 10000; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'load_kick_min_clients', _('Load kick min clients'),
 			_('Minimum number of connected clients before kicking based on channel load'));
-		o.optional = true; o.placeholder = 10; o.datatype = 'uinteger';
+		o.placeholder = 10; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'load_kick_reason_code', _('Load kick reason code'),
 			_('Reason code on client kick based on channel load.'));
-		o.optional = true; o.placeholder = 5; o.datatype = 'uinteger';
+		o.placeholder = 5; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'band_steering_interval', _('Band steering interval'),
 			_('Attempting to steer clients to a higher frequency-band every n ms. A value of 0 disables band-steering.'));
-		o.optional = true; o.placeholder = 120000; o.datatype = 'uinteger';
+		o.placeholder = 120000; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'band_steering_min_snr', _('Band steering min SNR'),
 			_('Minimal SNR or absolute signal a device has to maintain over band_steering_interval to be steered to a higher frequency band.'));
-		o.optional = true; o.placeholder = -60; o.datatype = 'integer';
+		o.placeholder = -60; o.datatype = 'integer';
 
 		o = usteeropt(s, form.Value, 'link_measurement_interval', _('Link measurement interval'),
 			_('Interval (ms) the device is sent a link-measurement request to help assess the bi-directional link quality.') +
 			_('Setting the interval to 0 disables link-measurements.'));
-		o.optional = true; o.placeholder = 30000; o.datatype = 'uinteger';
+		o.placeholder = 30000; o.datatype = 'uinteger';
 
 		o = usteeropt(s, form.Value, 'node_up_script', _('Node up script'),
 			_('Script to run after bringing up a node'));
-		o.optional = true; o.datatype = 'string';
+		o.datatype = 'string';
 
 		o = usteeropt(s, form.MultiValue, 'event_log_types', _('Event log types'),
 			_('Message types to include in log.'));
@@ -1030,7 +1027,7 @@ return view.extend({
 		o.value('load_kick_no_client');
 		o.value('load_kick_client');
 		o.value('signal_kick');
-		o.optional = true; o.datatype = 'list(string)';
+		o.datatype = 'list(string)';
 
 		o = s.taboption('other', form.Value, 'hostname', _('Hostname'));
 		o.datatype = 'hostname';
