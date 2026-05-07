@@ -162,26 +162,21 @@ return view.extend({
 		s.tab('wireless', _('Wireless'));
 		s.tab('mesh',     _('Mesh Backhaul'));
 		s.tab('mesh11sd', _('mesh11sd Settings'));
-		s.tab('batadv', _('batadv Settings'));
-		s.tab('usteer', _('Usteer Settings'));
+		s.tab('batadv',   _('batadv Settings'));
+		s.tab('usteer',   _('Usteer Settings'));
 		s.tab('other',    _('Other'));
 
 		o = s.taboption('network', form.RichListValue, 'combo_mode', _('Network Mode'));
-		Object.keys(COMBO_MODES).forEach(function (k) { o.value(k, _(COMBO_MODES[k].label)); });
-		o.default = 'bridge_static';
+		Object.keys(COMBO_MODES).forEach(function (k) {
+			o.value(k, _(COMBO_MODES[k].label));
+		});
+		o.default  = 'bridge_static';
 		o.onchange = function (ev, section_id, value) {
 			var combo = COMBO_MODES[value];
-			if (!combo) return;
-			var wOpts = this.map.lookupOption('wan_proto', section_id);
-			if (wOpts && wOpts[0]) {
-				var wEl = wOpts[0].getUIElement(section_id);
-				if (wEl) wEl.setValue(combo.wan_proto);
-			}
-			var lOpts = this.map.lookupOption('lan_proto', section_id);
-			if (lOpts && lOpts[0]) {
-				var lEl = lOpts[0].getUIElement(section_id);
-				if (lEl) lEl.setValue(combo.lan_proto);
-			}
+			var lEl = s.getUIElement(section_id, 'lan_proto');
+			if (lEl) lEl.setValue(combo.lan_proto);
+			var wEl = s.getUIElement(section_id, 'wan_proto');
+			if (wEl) wEl.setValue(combo.wan_proto);
 		};
 
 		o = s.taboption('network', form.ListValue, 'wan_proto', _('WAN Protocol'));
@@ -216,14 +211,14 @@ return view.extend({
 		o = s.taboption('network', form.Value, 'lan_ip', _('Node Static IP'),
 			_('Static IPv4 address for this node\'s LAN bridge. Must be unique per node, e.g. 192.168.2.2 / .3 / .4'));
 		o.datatype = 'ip4addr'; o.rmempty = false;
-		o.depends({ combo_mode: 'custom'  });
-		o.depends({ lan_proto: 'static'  });
+		o.depends('combo_mode', 'custom');
+		o.depends('lan_proto', 'static');
 
 		o = s.taboption('network', form.Value, 'gateway', _('Gateway / DNS'),
 			_('Upstream router IP, used as the default gateway and DNS server for this node'));
 		o.datatype = 'ip4addr'; o.rmempty = false;
-		o.depends({ combo_mode: 'custom'  });
-		o.depends({ lan_proto: 'static'  });
+		o.depends('combo_mode', 'custom');
+		o.depends('lan_proto', 'static');
 
 		o = s.taboption('network', form.ListValue, 'band_mode', _('Backhaul Mode'));
 		o.value('0', _('Wireless + Wired'));
@@ -234,7 +229,7 @@ return view.extend({
 		o = s.taboption('network', form.DummyValue, '_lan_ip', _('DHCP Assigned IP'),
 			_('IP address assigned to this node by the upstream DHCP server; shown for reference only'));
 		o.default = info.lanIp;
-		o.depends({ lan_proto: 'dhcp' });
+		o.depends('lan_proto', 'dhcp');
 		o.depends('band_mode', /(0|1)/);
 
 		o = s.taboption('wireless', form.Flag, 'band_merge', _('Dual-band Merge'),
@@ -244,12 +239,12 @@ return view.extend({
 
 		o = s.taboption('wireless', form.ListValue, 'log_level', _('Hostapd Log Level'),
 			_('Global setting for all Wi-Fi radios'));
-		o.value('0', _('Verbose'));
-		o.value('1', _('Debug'));
-		o.value('2', _('Info'));
-		o.value('3', _('Notice'));
+		o.value('0', _('Verbose Debugging'));
+		o.value('1', _('Debugging'));
+		o.value('2', _('Informational Messages'));
+		o.value('3', _('Notification'));
 		o.value('4', _('Warning'));
-		o.default = '2';
+		o.default = '4';
 		o.depends('band_mode', /(0|1)/);
 
 		var BAND_DEFS = [
@@ -682,7 +677,7 @@ return view.extend({
 		o.inputtitle = _('View Mesh Status'); o.inputstyle = 'positive';
 		o.depends('band_mode', '0');
 		o.onclick = function (ev, section_id) {
-			var proto  = this.section.formvalue(section_id, 'batadv_proto') || 'bat0';
+			var proto  = s.formvalue(section_id, 'batadv_proto') || 'bat0';
 			if (uci.get_bool('mesh_node', 'main', 'use_batadv')) {
 				var run = function (args) {
 					return fs.exec_direct('/usr/sbin/batctl', args)
@@ -762,8 +757,8 @@ return view.extend({
 		o.default = 'BATMAN_IV';
 		o.depends('use_batadv', '1');
 		o.write = function (section_id, value) {
-			var proto  = this.section.formvalue(section_id, 'batadv_proto');
-			var hardif = this.section.formvalue(section_id, 'batadv_hardif');
+			var proto  = s.formvalue(section_id, 'batadv_proto');
+			var hardif = s.formvalue(section_id, 'batadv_hardif');
 			if (!uci.get('network', proto)) {
 				uci.add('network', 'interface', proto);
 				uci.set('network', proto, 'proto',     'batadv');
@@ -782,17 +777,17 @@ return view.extend({
 		function batadvOpt(widget, name, title, desc) {
 			var o = s.taboption('batadv', widget, name, title, desc);
 			o.depends('use_batadv', '1');
-			o.load = function(section_id) {
-				var proto = uci.get('mesh_node', section_id, 'batadv_proto');
+			o.load = function (section_id) {
+				var proto = uci.get(o.config, section_id, 'batadv_proto');
 				return uci.get('network', proto, this.option);
 			};
-			o.write = function(section_id, value) {
-				var proto = this.map.lookupOption('batadv_proto', section_id)[0].formvalue(section_id);
-				return uci.set('network', proto || 'bat0', this.option, value);
+			o.write = function (section_id, value) {
+				var proto = s.formvalue(section_id, 'batadv_proto');
+				return uci.set('network', proto, this.option, value);
 			};
-			o.remove = function(section_id) {
-				var proto = this.map.lookupOption('batadv_proto', section_id)[0].formvalue(section_id);
-				uci.unset('network', proto || 'bat0', this.option);
+			o.remove = function (section_id) {
+				var proto = s.formvalue(section_id, 'batadv_proto');
+				return uci.unset('network', proto, this.option);
 			};
 			return o;
 		}
@@ -841,7 +836,7 @@ return view.extend({
 		o = s.taboption('usteer', form.Flag, 'enable_usteer', _('Enable usteer Smart Steering'),
 			_('Uses usteer to steer clients to the best radio for optimal performance.'));
 		o.default = '0'; o.rmempty = false;
-		o.depends({ 'use_batadv': '0' });
+		o.depends('use_batadv', '0');
 		o.write = function (section_id, value) {
 			uci.set('usteer', '@usteer[0]', 'enabled', value);
 			return this.super('write', [section_id, value]);
