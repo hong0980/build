@@ -340,8 +340,8 @@ msgstr "mesh11sd 设置"
 msgid "Live Status"
 msgstr "实时状态"
 
-msgid "No output. The daemon may still be starting; please retry in a moment."
-msgstr "无输出。守护进程可能仍在启动，请稍后重试。"
+msgid "No output. please retry in a moment."
+msgstr "无输出。请稍后重试。"
 
 msgid "Enable Daemon"
 msgstr "启用守护进程"

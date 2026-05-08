@@ -2,7 +2,6 @@
 
 START=99
 STOP=10
-USE_PROCD=1
 
 hash_value() { echo "$1" | md5sum | awk '{print $1}'; }
 
@@ -157,7 +156,6 @@ do_wireless() {
 		uci -q set wireless."$dev".log_level="${log_level}"
 
 		[ "$mesh_radio" != "none" ] && [ "$mesh_radio" != "$band" ] && return 0
-
 		[ "$use_batadv" = "1" ] && mesh_fwding=0
 
 		uci -q batch <<-EOF
@@ -176,21 +174,21 @@ do_wireless() {
 	}
 
 	[ "$band_mode" = "2" ] && return
-	config_get key_2g        main key_2g          ''
-	config_get ssid_2g       main ssid_2g         ''
-	config_get key_5g        main key_5g          ''
-	config_get ssid_5g       main ssid_5g         ''
-	config_get key_6g        main key_6g          ''
-	config_get ssid_6g       main ssid_6g         ''
-	config_get wifi_pass     main wifi_pass       ''
-	config_get wifi_ssid     main wifi_ssid       ''
-	config_get log_level     main log_level       ''
-	local mesh_hash old_mesh_hash radio_hash old_radio_hash changed=0
-	mesh_hash=$(hash_value "${mesh_id}:${mesh_pass}:${mesh_radio}:${mesh_network}:${batadv_proto}:${batadv_hardif}:${use_batadv}:${log_level}")
-	radio_hash=$(hash_value "${ssid_2g}:${key_2g}:${ssid_5g}:${key_5g}:${ssid_6g}:${key_6g}:${wifi_pass}:${wifi_ssid}")
-
+	local key_2g ssid_2g key_5g ssid_5g key_6g ssid_6g wifi_pass wifi_ssid log_level \
+		  mesh_hash old_mesh_hash radio_hash old_radio_hash changed=0
+	config_get key_2g         main key_2g         ''
+	config_get ssid_2g        main ssid_2g        ''
+	config_get key_5g         main key_5g         ''
+	config_get ssid_5g        main ssid_5g        ''
+	config_get key_6g         main key_6g         ''
+	config_get ssid_6g        main ssid_6g        ''
+	config_get wifi_pass      main wifi_pass      ''
+	config_get wifi_ssid      main wifi_ssid      ''
+	config_get log_level      main log_level      ''
 	config_get old_mesh_hash  main old_mesh_hash  ''
 	config_get old_radio_hash main old_radio_hash ''
+	radio_hash=$(hash_value "${ssid_2g}:${key_2g}:${ssid_5g}:${key_5g}:${ssid_6g}:${key_6g}:${wifi_pass}:${wifi_ssid}")
+	mesh_hash=$(hash_value "${mesh_id}:${mesh_pass}:${mesh_radio}:${mesh_network}:${batadv_proto}:${batadv_hardif}:${use_batadv}:${log_level}")
 
 	config_load wireless
 	[ "$radio_hash" != "$old_radio_hash" ] && { config_foreach wifi_iface  wifi-iface;  changed=1; }
@@ -257,7 +255,7 @@ do_services() {
 }
 
 do_mesh11sd() {
-	local m11_hash; m11_hash=$(hash_value "$(uci -q show mesh11sd)")
+	local m11_hash old_m11_hash; m11_hash=$(hash_value "$(uci -q show mesh11sd)")
 	config_get old_m11_hash main old_m11_hash ''
 	[ "$m11_hash" = "$old_m11_hash" ] && return 1
 	uci -q set mesh11sd.setup.enabled="${m11_enable}"
@@ -275,13 +273,11 @@ do_usteer() {
 	return 0
 }
 
-start_service() {
-	local combo_mode wan_proto lan_proto lan_ip gateway user pass log_level \
-		  ssid_2g ssid_5g key_2g key_5g wifi_ssid wifi_pass mesh_id mesh_pass \
-		  mesh_radio mesh_network enable_usteer init old_init hostname old_hostname \
-		  batadv_proto batadv_hardif \
-		  band_mode old_m11_hash m11_enable use_batadv usteer_changed=0 \
-		  network_changed=0 wireless_changed=0 mesh11sd_changed=0
+start() {
+	local combo_mode wan_proto lan_proto lan_ip gateway user pass mesh_id mesh_pass \
+		  mesh_radio mesh_network band_mode batadv_proto batadv_hardif \
+		  init old_init hostname old_hostname use_batadv m11_enable enable_usteer \
+		  network_changed=0 mesh11sd_changed=0 usteer_changed=0 wireless_changed=0
 
 	config_load mesh_node
 	config_get combo_mode    main combo_mode      ''
@@ -324,7 +320,7 @@ start_service() {
 	do_usteer   && usteer_changed=1
 	uci -q commit
 
-	[ "$network_changed"  = 1 ] && { /etc/init.d/network restart; sleep 5; }
+	[ "$network_changed"  = 1 ] && { /etc/init.d/network restart; sleep 3; }
 	[ "$wireless_changed" = 1 ] && { wifi reload; sleep 3; }
 	[ "$mesh11sd_changed" = 1 ] && [ "$band_mode" = "2" ] && {
 		if [ "$m11_enable" = "1" ]; then
@@ -348,9 +344,5 @@ start_service() {
 	}
 }
 
-service_triggers() {
-	procd_add_reload_trigger "mesh_node"
-}
-
+stop() { :; }
 boot() { :; }
-stop_service() { :; }

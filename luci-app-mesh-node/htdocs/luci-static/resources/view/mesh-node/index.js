@@ -305,7 +305,7 @@ return view.extend({
 					class: 'btn cbi-button-apply', style: m_running ? '' : 'display:none',
 					click: ui.createHandlerFn(this, function() {
 						return fs.exec_direct('/usr/sbin/mesh11sd', ['status']).then(function (out) {
-							var text = (out || '').trim() || _('No output. The daemon may still be starting; please retry in a moment.');
+							var text = (out || '').trim() || _('No output. please retry in a moment.');
 							try { text = JSON.stringify(JSON.parse(out), null, 2) } catch {}
 							showMeshModal(_('mesh11sd Status'), text);
 						}).catch(function (e) {
@@ -710,7 +710,7 @@ return view.extend({
 					var sep = '─'.repeat(72), text = '';
 					var titles = [_('MESH INFO'), _('INTERFACES'), _('NEIGHBORS'), _('ORIGINATORS'), _('STATISTICS')];
 					r.forEach(function (out, i) {
-						var content = (out || '').trim() || _('No output. The daemon may still be starting; please retry in a moment.');
+						var content = (out || '').trim() || _('No output. please retry in a moment.');
 						try { content = JSON.stringify(JSON.parse(out), null, 2); } catch {}
 						text += `▶ ${titles[i]}\n${sep}\n${content}\n\n`;
 					});
