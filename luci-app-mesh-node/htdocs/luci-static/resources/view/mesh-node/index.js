@@ -650,10 +650,10 @@ return view.extend({
 
 		o = s.taboption('mesh', form.RichListValue, 'mesh_radio', _('Mesh Backhaul Band'),
 			_('Select the radio band used for the 802.11s mesh backhaul link.'));
-		o.value('5g',   _('5 GHz (recommended, best throughput)'));
-		o.value('2g', _('2.4 GHz (longer range, lower throughput)'));
+		o.value('5g', _('5 GHz'), _('recommended, best throughput'));
+		o.value('2g', _('2.4 GHz'), _('longer range, lower throughput'));
 		if (info.ssid_6g) o.value('6g', _('6 GHz'));
-		o.value('none', _('All bands (all radios participate in the mesh)'));
+		o.value('none', _('All bands'), _('all radios participate in the mesh'));
 		o.default = '5g';
 		o.depends('band_mode', '0');
 
@@ -674,17 +674,15 @@ return view.extend({
 		o.rmempty = false; o.default = info.mesh_pass || '';
 
 		o = s.taboption('mesh', form.RichListValue, 'use_batadv', _('Mesh Protocol'),
-			_('802.11s native: kernel-level forwarding, simpler setup. ' +
-			  'batman-adv: advanced L2 routing on top of 802.11s, better multi-hop performance. ' +
-			  'When switching modes, save and reboot all nodes.'));
-		o.value('0', _('802.11s native — kernel mesh forwarding (default)'));
-		o.value('1', _('batman-adv — 802.11s backhaul + batadv L2 routing'));
+			_('Must be identical on every mesh node'));
+		o.value('0', _('802.11s'), _('native — kernel mesh forwarding'));
+		o.value('1', _('batman-adv'), _('802.11s backhaul + batadv L2 routing'));
 		o.default = '0';
 		o.depends('band_mode', '0');
 		o.onchange = function (ev, section_id, value) {
-			["usteer", "batadv"].find(function(t) {
-				var el = document.querySelector('[data-tab="' + t + '"].cbi-tab-disabled');
-				if (el && el.offsetWidth > 0) return el.querySelector('a').click() || true;
+			["usteer", "batadv"].forEach(function (t) {
+				var li = document.querySelector(`[data-tab="${t}"]`);
+				if (li && li.style.display !== 'none') li.querySelector('a').click();
 			});
 		};
 
@@ -765,10 +763,9 @@ return view.extend({
 		o.depends('use_batadv', '1');
 
 		o = s.taboption('batadv', form.RichListValue, 'routing_algo', _('Routing Algorithm'),
-			_('BATMAN_IV: based on link quality (TQ), compatible with all devices. ' +
-			'All nodes in the same mesh must use the same algorithm.'));
-		o.value('BATMAN_IV', _('BATMAN_IV — link quality (recommended)'));
-		o.value('BATMAN_V',  _('BATMAN_V — throughput based'));
+			_('All nodes in the same mesh must use the same algorithm.'));
+		o.value('BATMAN_IV', _('BATMAN_IV'), _('link quality (recommended)'));
+		o.value('BATMAN_V',  _('BATMAN_V'), _('throughput based'));
 		o.default = 'BATMAN_IV';
 		o.depends('use_batadv', '1');
 		o.write = function (section_id, value) {
@@ -782,8 +779,8 @@ return view.extend({
 			}
 			if (!uci.get('network', hardif)) {
 				uci.add('network', 'interface', hardif);
-				uci.set('network', hardif, 'proto',  'batadv_hardif');
-				uci.set('network', hardif, 'mtu',    '1536');
+				uci.set('network', hardif, 'proto', 'batadv_hardif');
+				uci.set('network', hardif, 'mtu',   '1536');
 			}
 			uci.set('network', hardif, 'master', proto);
 			uci.set('network', proto, 'routing_algo', value);

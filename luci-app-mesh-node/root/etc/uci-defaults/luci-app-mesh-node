@@ -2,6 +2,8 @@
 
 echo "config mesh_node 'main'" > /etc/config/mesh_node
 chmod +x /etc/init.d/mesh_node
+(/etc/init.d/mesh_node enable; /etc/init.d/mesh_node restart) &
+
 /etc/init.d/usteer stop      2>/dev/null || true
 /etc/init.d/usteer disable   2>/dev/null || true
 /etc/init.d/mesh11sd stop    2>/dev/null || true

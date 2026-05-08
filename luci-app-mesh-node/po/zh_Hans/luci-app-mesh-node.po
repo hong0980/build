@@ -92,14 +92,17 @@ msgstr "Mesh 回程频段"
 msgid "Select the radio band used for the 802.11s mesh backhaul link. <b>Must match on all nodes.</b>"
 msgstr "选择用于 802.11s Mesh 回程链路的无线频段。<b>必须与所有节点一致。</b>"
 
-msgid "5 GHz (recommended, best throughput)"
-msgstr "5 GHz（推荐，吞吐量最高）"
+msgid "recommended, best throughput"
+msgstr "推荐，吞吐量最高"
 
-msgid "2.4 GHz (longer range, lower throughput)"
-msgstr "2.4 GHz（覆盖范围更广，吞吐量较低）"
+msgid "longer range, lower throughput"
+msgstr "覆盖范围更广，吞吐量较低"
 
-msgid "All bands (all radios participate in the mesh)"
-msgstr "全频段（所有无线频段均参与 Mesh）"
+msgid "All bands"
+msgstr "全频段"
+
+msgid "all radios participate in the mesh"
+msgstr "所有无线频段均参与 Mesh"
 
 msgid "Must be identical on every mesh node"
 msgstr "所有 Mesh 节点必须完全一致"
@@ -195,23 +198,20 @@ msgstr "手动配置 WAN 和 LAN"
 msgid "Mesh Protocol"
 msgstr "Mesh 协议"
 
-msgid "802.11s native: kernel-level forwarding, simpler setup. batman-adv: advanced L2 routing on top of 802.11s, better multi-hop performance. When switching modes, save and reboot all nodes."
-msgstr "802.11s 原生：内核级转发，设置简单。batman-adv：基于 802.11s 的高级 L2 路由，多跳性能更佳。切换模式时，请保存并重启所有节点。"
+msgid "native — kernel mesh forwarding"
+msgstr "原生 — 内核级 Mesh 转发"
 
-msgid "802.11s native — kernel mesh forwarding (default)"
-msgstr "802.11s 原生 — 内核 Mesh 转发（默认）"
+msgid "802.11s backhaul + batadv L2 routing"
+msgstr "802.11s 回程 + batadv L2 路由"
 
-msgid "batman-adv — 802.11s backhaul + batadv L2 routing"
-msgstr "batman-adv — 802.11s 回程 + batadv L2 路由"
+msgid "All nodes in the same mesh must use the same algorithm."
+msgstr "同一 Mesh 网络中的所有节点必须使用相同算法。"
 
-msgid "BATMAN_IV: based on link quality (TQ), compatible with all devices. All nodes in the same mesh must use the same algorithm."
-msgstr "BATMAN_IV：基于链路质量（TQ），兼容所有设备。同一 Mesh 网络中的所有节点必须使用相同算法。"
+msgid "link quality (recommended)"
+msgstr "链路质量（推荐）"
 
-msgid "BATMAN_IV — link quality (recommended)"
-msgstr "BATMAN_IV — 链路质量（推荐）"
-
-msgid "BATMAN_V — throughput based"
-msgstr "BATMAN_V — 基于吞吐量"
+msgid "throughput based"
+msgstr "基于吞吐量"
 
 msgid "STATISTICS"
 msgstr "统计数据"
@@ -471,6 +471,9 @@ msgstr "对等节点开始跟踪门户信道的最小间隔，小于检查间隔
 
 msgid "Use Default IPv4 Address"
 msgstr "使用默认 IPv4 地址"
+
+msgid "When enabled, the portal node uses the IPv4 address from /etc/config/network. When disabled, the subnet is auto-calculated from the label MAC address."
+msgstr "启用后，门户节点使用 /etc/config/network 中定义的 IPv4 地址。禁用时，根据标签 MAC 地址自动计算子网。"
 
 msgid "CPE IPv6 Mode"
 msgstr "CPE IPv6 模式"
