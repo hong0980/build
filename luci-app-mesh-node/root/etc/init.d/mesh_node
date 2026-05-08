@@ -2,6 +2,7 @@
 
 START=99
 STOP=10
+USE_PROCD=1
 
 hash_value() { echo "$1" | md5sum | awk '{print $1}'; }
 
@@ -274,7 +275,7 @@ do_usteer() {
 	return 0
 }
 
-start() {
+start_service() {
 	local combo_mode wan_proto lan_proto lan_ip gateway user pass log_level \
 		  ssid_2g ssid_5g key_2g key_5g wifi_ssid wifi_pass mesh_id mesh_pass \
 		  mesh_radio mesh_network enable_usteer init old_init hostname old_hostname \
@@ -347,5 +348,9 @@ start() {
 	}
 }
 
-stop() { :; }
+service_triggers() {
+	procd_add_reload_trigger "mesh_node"
+}
+
 boot() { :; }
+stop_service() { :; }

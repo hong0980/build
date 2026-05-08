@@ -235,10 +235,10 @@ return view.extend({
 		o.depends('combo_mode', 'custom');
 		o.depends('lan_proto', 'static');
 
-		o = s.taboption('network', form.ListValue, 'band_mode', _('Backhaul Mode'));
-		o.value('0', _('Wireless + Wired'));
-		o.value('1', _('Wired Only'));
-		o.value('2', _('mesh11sd'));
+		o = s.taboption('network', form.RichListValue, 'band_mode', _('Backhaul Mode'));
+		o.value('0', _('Wireless + Wired'), _(''));
+		o.value('1', _('Wired Only'), _(''));
+		o.value('2', _('mesh11sd'), _(''));
 		o.default = '0';
 
 		o = s.taboption('network', form.DummyValue, '_lan_ip', _('DHCP Assigned IP'),
@@ -306,10 +306,12 @@ return view.extend({
 					click: ui.createHandlerFn(this, function() {
 						return fs.exec_direct('/usr/sbin/mesh11sd', ['status']).then(function (out) {
 							var text = (out || '').trim() || _('No output. The daemon may still be starting; please retry in a moment.');
+							try { text = JSON.stringify(JSON.parse(out), null, 2) } catch {}
 							showMeshModal(_('mesh11sd Status'), text);
 						}).catch(function (e) {
-							showMeshModal(_('mesh11sd Status'), _('Execution failed: %s').format(e.message || e));
-						})})
+							showMeshModal(_('mesh11sd Status'), _('Execution failed: %s').format(e.message));
+						});
+					})
 				}, _('Live Status'))
 			]);
 		};
@@ -486,7 +488,7 @@ return view.extend({
 		o = m11opt(s, form.Value, 'mesh_path_cost', '',  _('Mesh Path Cost (STP)'),
 			_('STP link cost for the mesh network. Range 0–65534. 0 disables STP.'));
 		o.datatype = 'range(0,65534)';
-		o.default  = '10';
+		o.default  = '65525';
 		m11dep(o);
 
 		o = m11opt(s, form.ListValue, 'mesh_node_mobility_level', '',  _('Node Mobility Level'),
@@ -707,9 +709,9 @@ return view.extend({
 				]).then(function (r) {
 					var sep = '─'.repeat(72), text = '';
 					var titles = [_('MESH INFO'), _('INTERFACES'), _('NEIGHBORS'), _('ORIGINATORS'), _('STATISTICS')];
-					r.forEach(function (item, i) {
-						var content = item || _('none');
-						try { content = JSON.stringify(JSON.parse(item), null, 2); } catch {}
+					r.forEach(function (out, i) {
+						var content = (out || '').trim() || _('No output. The daemon may still be starting; please retry in a moment.');
+						try { content = JSON.stringify(JSON.parse(out), null, 2); } catch {}
 						text += `▶ ${titles[i]}\n${sep}\n${content}\n\n`;
 					});
 					showMeshModal(_('Mesh Status (batman-adv)'), text);
