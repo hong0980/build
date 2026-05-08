@@ -8,8 +8,8 @@ msgstr "Mesh 节点设置"
 msgid "AP + Mesh Deployment"
 msgstr "AP + Mesh 部署"
 
-msgid "Quickly create a Mesh"
-msgstr "快捷的建立 Mesh"
+msgid "Quickly create a Mesh. <span style='color: red;'><b>All mesh child nodes must be exactly identical.</b></span>"
+msgstr "快捷的建立 Mesh。<span style='color: red;'><b>所有 Mesh 子节点必须完全一致</b></span>"
 
 msgid "Mesh Backhaul"
 msgstr "Mesh 回程"
@@ -103,9 +103,6 @@ msgstr "全频段"
 
 msgid "all radios participate in the mesh"
 msgstr "所有无线频段均参与 Mesh"
-
-msgid "Must be identical on every mesh node"
-msgstr "所有 Mesh 节点必须完全一致"
 
 msgid "Backhaul Mode"
 msgstr "回程模式"
