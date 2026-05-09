@@ -56,12 +56,6 @@ msgstr "网关 / DNS"
 msgid "Upstream router IP, used as the default gateway and DNS server for this node"
 msgstr "上游路由器 IP，用作本节点的默认网关和 DNS 服务器"
 
-msgid "DHCP Assigned IP"
-msgstr "DHCP 分配的 IP"
-
-msgid "IP address assigned to this node by the upstream DHCP server; shown for reference only"
-msgstr "由上游 DHCP 服务器分配给本节点的 IP 地址，仅供参考"
-
 msgid "Dual-band Merge"
 msgstr "多频合一"
 

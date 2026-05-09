@@ -5,7 +5,6 @@
 'require rpc';
 'require view';
 'require form';
-'require network';
 'require tools.widgets as widgets';
 
 var callIfaceDump = rpc.declare({
@@ -164,8 +163,7 @@ return view.extend({
 
 	render: function ([info, m_running, u_running]) {
 		var m, s, o;
-		m = new form.Map('mesh_node', _('AP + Mesh Deployment'),
-			_("Quickly create a Mesh. <span style='color: red;'><b>All mesh child nodes must be exactly identical.</b></span>"));
+		m = new form.Map('mesh_node', _('AP + Mesh Deployment'), _('Quickly create a Mesh'));
 		m.chain('mesh11sd');
 		m.chain('network');
 		m.chain('usteer');
@@ -241,12 +239,6 @@ return view.extend({
 		o.value('1', _('Wired Only'), _(''));
 		o.value('2', _('mesh11sd'), _(''));
 		o.default = '0';
-
-		o = s.taboption('network', form.DummyValue, '_lan_ip', _('DHCP Assigned IP'),
-			_('IP address assigned to this node by the upstream DHCP server; shown for reference only'));
-		o.default = info.lanIp;
-		o.depends('lan_proto', 'dhcp');
-		o.depends('band_mode', /(0|1)/);
 
 		o = s.taboption('wireless', form.Flag, 'band_merge', _('Dual-band Merge'),
 			_('Enabled: one SSID/password applied to both 2.4 GHz and 5 GHz %s radios.').format(info.ssid_6g ? ' 6 GHz' : ''));
@@ -665,16 +657,19 @@ return view.extend({
 		o.default = 'lan';
 		o.depends('band_mode', '0');
 
-		o = s.taboption('mesh', form.Value, 'mesh_id', _('Mesh ID'));
+		o = s.taboption('mesh', form.Value, 'mesh_id', _('Mesh ID'),
+			_('Must be identical on every mesh node'));
 		o.depends('band_mode', '0');
 		o.default = info.mesh_id || 'HomeMesh'; o.rmempty = false;
 
-		o = s.taboption('mesh', form.Value, 'mesh_pass', _('Mesh Password'));
+		o = s.taboption('mesh', form.Value, 'mesh_pass', _('Mesh Password'),
+			_('Must be identical on every mesh node'));
 		o.datatype = 'wpakey'; o.password = true;
 		o.depends('band_mode', '0');
 		o.rmempty = false; o.default = info.mesh_pass || '';
 
-		o = s.taboption('mesh', form.RichListValue, 'use_batadv', _('Mesh Protocol'));
+		o = s.taboption('mesh', form.RichListValue, 'use_batadv', _('Mesh Protocol'),
+			_('Must be identical on every mesh node'));
 		o.value('0', _('802.11s'), _('native — kernel mesh forwarding'));
 		o.value('1', _('batman-adv'), _('802.11s backhaul + batadv L2 routing'));
 		o.default = '0';
