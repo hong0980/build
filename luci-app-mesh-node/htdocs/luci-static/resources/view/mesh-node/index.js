@@ -163,7 +163,8 @@ return view.extend({
 
 	render: function ([info, m_running, u_running]) {
 		var m, s, o;
-		m = new form.Map('mesh_node', _('AP + Mesh Deployment'), _('Quickly create a Mesh'));
+		m = new form.Map('mesh_node', _('AP + Mesh Deployment'),
+			_("Quickly create a Mesh. <span style='color: red;'><b>All mesh child nodes must be exactly identical.</b></span>"));
 		m.chain('mesh11sd');
 		m.chain('network');
 		m.chain('usteer');
@@ -657,19 +658,16 @@ return view.extend({
 		o.default = 'lan';
 		o.depends('band_mode', '0');
 
-		o = s.taboption('mesh', form.Value, 'mesh_id', _('Mesh ID'),
-			_('Must be identical on every mesh node'));
+		o = s.taboption('mesh', form.Value, 'mesh_id', _('Mesh ID'));
 		o.depends('band_mode', '0');
 		o.default = info.mesh_id || 'HomeMesh'; o.rmempty = false;
 
-		o = s.taboption('mesh', form.Value, 'mesh_pass', _('Mesh Password'),
-			_('Must be identical on every mesh node'));
+		o = s.taboption('mesh', form.Value, 'mesh_pass', _('Mesh Password'));
 		o.datatype = 'wpakey'; o.password = true;
 		o.depends('band_mode', '0');
 		o.rmempty = false; o.default = info.mesh_pass || '';
 
-		o = s.taboption('mesh', form.RichListValue, 'use_batadv', _('Mesh Protocol'),
-			_('Must be identical on every mesh node'));
+		o = s.taboption('mesh', form.RichListValue, 'use_batadv', _('Mesh Protocol'));
 		o.value('0', _('802.11s'), _('native — kernel mesh forwarding'));
 		o.value('1', _('batman-adv'), _('802.11s backhaul + batadv L2 routing'));
 		o.default = '0';
@@ -769,8 +767,7 @@ return view.extend({
 			if (!uci.get('network', proto)) {
 				uci.add('network', 'interface', proto);
 				uci.set('network', proto, 'proto',     'batadv');
-				uci.set('network', proto, 'gw_mode',   'off');
-				uci.set('network', proto, 'multipath', 'off');
+				// uci.set('network', proto, 'multipath', 'off');
 			}
 			if (!uci.get('network', hardif)) {
 				uci.add('network', 'interface', hardif);
@@ -780,6 +777,13 @@ return view.extend({
 			uci.set('network', hardif, 'master', proto);
 			uci.set('network', proto, 'routing_algo', value);
 		};
+
+		o = batadvopt(s, form.ListValue, 'gw_mode', _('Gateway Mode'),
+				_('A batman-adv node can either run in server mode (sharing its internet connection with the mesh) or in client mode (searching for the most suitable internet connection in the mesh) or having the gateway support turned off entirely (which is the default setting).'));
+		o.value('off', _('Off'));
+		o.value('client', _('Client'));
+		o.value('server', _('Server'));
+		o.default = 'off';
 
 		o = batadvopt(s, form.Flag, 'aggregated_ogms', _('Aggregate Originator Messages'),
 			_('reduces overhead by collecting and aggregating originator messages in a single packet rather than many small ones'));
