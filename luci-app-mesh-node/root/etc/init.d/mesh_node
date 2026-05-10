@@ -44,6 +44,7 @@ do_network() {
 					del network.lan.netmask
 					del network.lan.ip6assign
 					set network.lan.proto='dhcp'
+					add_list firewall.@zone[0].network='lan'
 				EOF
 				;;
 			none)
@@ -69,20 +70,20 @@ do_network() {
 
 	do_wan() {
 		local wan_device; wan_device="$(jsonfilter -i /etc/board.json -e '@.network.wan.device')"
+		local cur_user; cur_user=$(uci -q get network.wan.username)
+		local cur_pass; cur_pass=$(uci -q get network.wan.password)
+
 		uci -q del network.wan
 		uci -q del_list network.@device[0].ports='wan'
 		case "$wan_proto" in
 			pppoe)
-				local cur_user; cur_user=$(uci -q get network.wan.username)
-				local cur_pass; cur_pass=$(uci -q get network.wan.password)
-				([ "$cur_user" != "$user" ] || [ "$cur_pass" != "$pass" ]) && \
-				uci -q batch <<-EOF
-					set network.wan=interface
-					set network.wan.device="${wan_device:=wan}"
-					set network.wan.proto='pppoe'
-					set network.wan.username='$user'
-					set network.wan.password='$pass'
-				EOF
+				([ "$cur_user" != "$user" ] || [ "$cur_pass" != "$pass" ]) && {
+					uci -q set network.wan=interface
+					uci -q set network.wan.device="${wan_device:=wan}"
+					uci -q set network.wan.proto='pppoe'
+					uci -q set network.wan.username="$user"
+					uci -q set network.wan.password="$pass"
+				}
 				;;
 			dhcp)
 				uci -q batch <<-EOF
@@ -117,16 +118,17 @@ do_network() {
 }
 
 do_wireless() {
-	local iface_mac; iface_mac=$(cat /sys/class/net/br-lan/address 2>/dev/null | tr -d ':')
-	[ -z "$iface_mac" ] && iface_mac=$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')
-	iface_mac="${iface_mac:=000000000000}"
+	local lan_mac; lan_mac=$(jsonfilter -i /etc/board.json -e '@.network.lan.macaddr' | tr -d ':')
+
 	wifi_iface() {
-		local iface="$1" dev band mode
+		local iface="$1" dev band mode iface_own_mac
 		config_get mode "$iface" mode
 		[ "$mode" = "ap" ] || return
 		config_get dev  "$iface" device
 		config_get band "$dev"   band
 		eval "key=\$key_${band} ssid=\$ssid_${band}"
+		iface_own_mac=$(cat /sys/class/net/"$iface"/address 2>/dev/null | tr -d ':')
+
 		uci -q set wireless."$iface".key="${wifi_pass:-$key}"
 		uci -q set wireless."$iface".ssid="${wifi_ssid:-$ssid}"
 
@@ -136,12 +138,12 @@ do_wireless() {
 			set wireless.${iface}.ieee80211k='1'
 			set wireless.${iface}.ieee80211r='1'
 			set wireless.${iface}.ft_over_ds='0'
-			set wireless.${iface}.nasid='${iface_mac}'
+			set wireless.${iface}.nasid='${iface_own_mac:-$lan_mac}'
 			set wireless.${iface}.mobility_domain='55ff'
 			set wireless.${iface}.encryption='psk2'
-			set wireless.${iface}.ft_psk_generate_local='0'
+			set wireless.${iface}.ft_psk_generate_local='1'
+			set wireless.${iface}.r1_key_holder='${lan_mac}'
 			set wireless.${iface}.bss_transition='1'
-			set wireless.${iface}.r1_key_holder='9f8e7d6c5b4a'
 		EOF
 	}
 
@@ -196,7 +198,7 @@ do_wireless() {
 	uci -q set mesh_node.main.old_mesh_hash="$mesh_hash"
 	uci -q set mesh_node.main.old_radio_hash="$radio_hash"
 	config_load mesh_node
-	[ "$changed" -eq 0 ] && return
+	[ "$changed" -eq 0 ] && return 1
 	wireless_changed=1
 }
 
@@ -258,7 +260,6 @@ do_mesh11sd() {
 	local m11_hash old_m11_hash; m11_hash=$(hash_value "$(uci -q show mesh11sd)")
 	config_get old_m11_hash main old_m11_hash ''
 	[ "$m11_hash" = "$old_m11_hash" ] && return 1
-	uci -q set mesh11sd.setup.enabled="${m11_enable}"
 	uci -q set mesh_node.main.old_m11_hash="$m11_hash"
 	return 0
 }
@@ -268,7 +269,6 @@ do_usteer() {
 	usteer_hash=$(hash_value "$(uci -q show usteer)")
 	config_get old_usteer_hash main old_usteer_hash ''
 	[ "$usteer_hash" = "$old_usteer_hash" ] && return 1
-	uci -q set usteer.@usteer[0].enabled="${enable_usteer}"
 	uci -q set mesh_node.main.old_usteer_hash="$usteer_hash"
 	return 0
 }
@@ -285,8 +285,8 @@ start() {
 	config_get lan_proto     main lan_proto       ''
 	config_get lan_ip        main lan_ip          ''
 	config_get gateway       main gateway         ''
-	config_get user          main wan_pppoe_user  ''
-	config_get pass          main wan_pppoe_pass  ''
+	config_get user          main pppoe_user      ''
+	config_get pass          main pppoe_pass      ''
 
 	config_get mesh_id       main mesh_id         ''
 	config_get mesh_pass     main mesh_pass       ''

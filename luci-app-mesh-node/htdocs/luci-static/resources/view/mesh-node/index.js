@@ -205,11 +205,11 @@ return view.extend({
 		};
 		o.rmempty = false;
 
-		o = s.taboption('network', form.Value, 'wan_pppoe_user', _('PPPoE Username'));
+		o = s.taboption('network', form.Value, 'pppoe_user', _('PPPoE Username'));
 		o.datatype = 'minlength(1)'; o.rmempty = false;
 		o.depends('wan_proto', 'pppoe');
 
-		o = s.taboption('network', form.Value, 'wan_pppoe_pass', _('PPPoE Password'));
+		o = s.taboption('network', form.Value, 'pppoe_pass', _('PPPoE Password'));
 		o.datatype = 'minlength(1)'; o.rmempty = false; o.password = true;
 		o.depends('wan_proto', 'pppoe');
 
