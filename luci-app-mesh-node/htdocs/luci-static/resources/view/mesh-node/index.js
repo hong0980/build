@@ -679,12 +679,13 @@ return view.extend({
 			});
 		};
 
+		var MeshStatus = uci.get_bool('mesh_node', 'main', 'use_batadv');
 		o = s.taboption('mesh', form.Button, '_mesh_status_btn', _('Mesh Status'));
-		o.inputtitle = _('View Mesh Status'); o.inputstyle = 'positive';
-		o.depends('band_mode', '0');
+		o.inputtitle = MeshStatus ? _('Mesh Status (batman-adv)') : _('Mesh Status (802.11s)');
+		o.depends('band_mode', '0'); o.inputstyle = 'positive';
 		o.onclick = function (ev, section_id) {
 			var proto  = s.formvalue(section_id, 'batadv_proto') || 'bat0';
-			if (uci.get_bool('mesh_node', 'main', 'use_batadv')) {
+			if (MeshStatus) {
 				var run = function (args) {
 					return fs.exec_direct('/usr/sbin/batctl', args)
 						.then(function (r) { return (r || '').trim(); })
@@ -707,41 +708,40 @@ return view.extend({
 					});
 					showMeshModal(_('Mesh Status (batman-adv)'), text);
 				}).catch(function (e) {
-					showMeshModal(_('Mesh Status'), _('Execution failed: %s').format(e.message || e));
+					showMeshModal(_('Mesh Status (batman-adv)'), _('Execution failed: %s').format(e.message || e));
 				});
 			} else {
-				return fs.exec_direct('/usr/sbin/iw', ['dev'])
-					.then(function (res) {
-						var ifaces = (res || '').split('\n')
-							.filter(function (l) { return l.includes('Interface'); })
-							.map(function (l) { return l.trim().split(/\s+/)[1]; })
-							.filter(function (n) { return n && n.includes('mesh'); });
-						if (!ifaces.length) {
-							return showMeshModal(_('Mesh Status'), _('No active mesh interface found.'));
-						}
+				return fs.exec_direct('/usr/sbin/iw', ['dev']).then(function (res) {
+					var ifaces = (res || '').split('\n')
+						.filter(function (l) { return l.includes('Interface'); })
+						.map(function (l) { return l.trim().split(/\s+/)[1]; })
+						.filter(function (n) { return n && n.includes('mesh'); });
+					if (!ifaces.length) {
+						return showMeshModal(_('Mesh Status'), _('No active mesh interface found.'));
+					}
 
-						var ps = [];
-						ifaces.forEach(function (iface) {
-							ps.push(fs.exec_direct('/usr/sbin/iw', ['dev', iface, 'station', 'dump']));
-							ps.push(fs.exec_direct('/usr/sbin/iw', ['dev', iface, 'mpath', 'dump']));
-						});
-
-						return Promise.all(ps).then(function (r) {
-							var sep = '='.repeat(80);
-							var text = '';
-							ifaces.forEach(function (iface, i) {
-								var sta = (r[i * 2] || '').trim()     || _('(No neighbor nodes connected)');
-								var mp  = (r[i * 2 + 1] || '').trim();
-								if (!mp || mp.split('\n').length <= 1) mp = _('(No mesh paths established)');
-								text += '[ ' + _('Mesh Interface') + ': ' + iface + ' ]\n' + sep + '\n';
-								text += '▶ ' + _('NEIGHBOR STATION DUMP') + ':\n' + sta + '\n\n';
-								text += '▶ ' + _('FORWARDING PATH DUMP (mpath)') + ':\n' + mp + '\n' + sep + '\n\n';
-							});
-							showMeshModal(_('Mesh Status (802.11s)'), text);
-						});
-					}).catch(function (e) {
-						showMeshModal(_('Mesh Status'), _('Execution failed: %s').format(e.message || e));
+					var ps = [];
+					ifaces.forEach(function (iface) {
+						ps.push(fs.exec_direct('/usr/sbin/iw', ['dev', iface, 'station', 'dump']));
+						ps.push(fs.exec_direct('/usr/sbin/iw', ['dev', iface, 'mpath', 'dump']));
 					});
+
+					return Promise.all(ps).then(function (r) {
+						var sep = '='.repeat(80);
+						var text = '';
+						ifaces.forEach(function (iface, i) {
+							var sta = (r[i * 2] || '').trim()     || _('(No neighbor nodes connected)');
+							var mp  = (r[i * 2 + 1] || '').trim();
+							if (!mp || mp.split('\n').length <= 1) mp = _('(No mesh paths established)');
+							text += '[ ' + _('Mesh Interface') + ': ' + iface + ' ]\n' + sep + '\n';
+							text += '▶ ' + _('NEIGHBOR STATION DUMP') + ':\n' + sta + '\n\n';
+							text += '▶ ' + _('FORWARDING PATH DUMP (mpath)') + ':\n' + mp + '\n' + sep + '\n\n';
+						});
+						showMeshModal(_('Mesh Status (802.11s)'), text);
+					});
+				}).catch(function (e) {
+					showMeshModal(_('Mesh Status (802.11s)'), _('Execution failed: %s').format(e.message || e));
+				});
 			}
 		};
 

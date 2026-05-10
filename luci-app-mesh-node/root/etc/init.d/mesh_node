@@ -77,13 +77,14 @@ do_network() {
 		uci -q del_list network.@device[0].ports='wan'
 		case "$wan_proto" in
 			pppoe)
-				([ "$cur_user" != "$user" ] || [ "$cur_pass" != "$pass" ]) && {
-					uci -q set network.wan=interface
-					uci -q set network.wan.device="${wan_device:=wan}"
-					uci -q set network.wan.proto='pppoe'
-					uci -q set network.wan.username="$user"
-					uci -q set network.wan.password="$pass"
-				}
+				[ "$cur_user" = "$user" ] && [ "$cur_pass" = "$pass" ] && return
+				uci -q batch <<-EOF
+					set network.wan=interface
+					set network.wan.device="${wan_device:=wan}"
+					set network.wan.proto='pppoe'
+					set network.wan.username="$user"
+					set network.wan.password="$pass"
+				EOF
 				;;
 			dhcp)
 				uci -q batch <<-EOF
@@ -131,19 +132,17 @@ do_wireless() {
 
 		uci -q set wireless."$iface".key="${wifi_pass:-$key}"
 		uci -q set wireless."$iface".ssid="${wifi_ssid:-$ssid}"
-
 		uci -q batch <<-EOF
 			set wireless.${iface}.disabled='0'
 			set wireless.${iface}.proxy_arp='1'
 			set wireless.${iface}.ieee80211k='1'
 			set wireless.${iface}.ieee80211r='1'
 			set wireless.${iface}.ft_over_ds='0'
-			set wireless.${iface}.nasid='${iface_own_mac:-$lan_mac}'
-			set wireless.${iface}.mobility_domain='55ff'
 			set wireless.${iface}.encryption='psk2'
-			set wireless.${iface}.ft_psk_generate_local='1'
-			set wireless.${iface}.r1_key_holder='${lan_mac}'
 			set wireless.${iface}.bss_transition='1'
+			set wireless.${iface}.mobility_domain='55ff'
+			set wireless.${iface}.ft_psk_generate_local='1'
+			set wireless.${iface}.nasid='${iface_own_mac:-$lan_mac}'
 		EOF
 	}
 
