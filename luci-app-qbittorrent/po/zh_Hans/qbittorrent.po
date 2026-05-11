@@ -148,3 +148,41 @@ msgstr "系统日志"
 msgid "Application Log"
 msgstr "应用日志"
 
+msgid "Lines:"
+msgstr "显示行数："
+
+msgid "Wrap text"
+msgstr "自动换行"
+
+msgid "Enable automatic line wrapping"
+msgstr "启用自动换行功能"
+
+msgid "▽ Show Oldest First"
+msgstr "▽ 正序显示(旧在前)"
+
+msgid "△ Show Newest First"
+msgstr "△ 倒序显示(新在前)"
+
+msgid "⟳ Refresh Now"
+msgstr "⟳ 立即刷新"
+
+msgid "Last %s lines of syslog (%s):"
+msgstr "系统日志 (最近%s行, %s):"
+
+msgid "Last %s lines of run log (%s):"
+msgstr "运行日志 (最近%s行, %s):"
+
+msgid "newest first"
+msgstr "新在前"
+
+msgid "oldest first"
+msgstr "旧在前"
+
+msgid "No log data."
+msgstr "没有日志数据"
+
+msgid "No log data available"
+msgstr "无可用日志数据"
+
+msgid "System log: (no data available)"
+msgstr "系统日志：(无数据)"

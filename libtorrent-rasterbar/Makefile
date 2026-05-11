@@ -56,7 +56,8 @@ endef
 ifneq ($(CONFIG_PACKAGE_python3-libtorrent),)
 CMAKE_OPTIONS += \
 	-Dpython-bindings=ON \
-	-Dpython-egg-info=ON
+	-Dpython-egg-info=ON \
+  -DPython3_EXECUTABLE=$(PYTHON3)
 endif
 
 define Build/Configure
