@@ -3,7 +3,6 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=deluge
 PKG_VERSION:=2.2.0
 PKG_RELEASE:=1
-
 PYPI_NAME:=$(PKG_NAME)
 PKG_HASH:=f0fc64e052334ef294ca3951975dd926f129d62813f6c909bb523d914abe6537
 
@@ -25,8 +24,6 @@ define Package/$(PKG_NAME)
 	DEPENDS:= \
 		+python3-chardet \
 		+python3-libtorrent \
-		+python3-mako \
-		+python3-markupsafe \
 		+python3-pillow \
 		+python3-pyopenssl \
 		+python3-pyxdg \
@@ -41,24 +38,26 @@ endef
 define Package/$(PKG_NAME)-ui-web
 	$(call Package/deluge/Default)
 	TITLE+= (Web UI)
-	DEPENDS:=deluge
+	DEPENDS:=deluge +python3-mako +python3-markupsafe
 endef
 
 define Package/$(PKG_NAME)/description
 	BitTorrent client with a client/server model.
 endef
 
+define Package/$(PKG_NAME)-ui-web/description
+	Web UI for the Deluge BitTorrent client.
+endef
+
 define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/usr/bin $(1)$(PYTHON3_PKG_DIR)
 	$(CP) $(PKG_INSTALL_DIR)/usr/bin/* $(1)/usr/bin/
 	$(CP) $(PKG_INSTALL_DIR)$(PYTHON3_PKG_DIR)/* $(1)$(PYTHON3_PKG_DIR)/
-
 	rm -rf \
 		$(1)/usr/bin/deluge-gtk \
 		$(1)/usr/bin/deluge-web \
 		$(1)$(PYTHON3_PKG_DIR)/deluge/ui/web \
 		$(1)$(PYTHON3_PKG_DIR)/deluge/ui/gtk3
-
 	find $(1)$(PYTHON3_PKG_DIR)/deluge/i18n -mindepth 1 -maxdepth 1 \
 		! -name 'zh_CN' \
 		! -name 'en_GB' \
@@ -67,7 +66,6 @@ define Package/$(PKG_NAME)/install
 		! -name 'util.py' \
 		! -name '__pycache__' \
 		-exec rm -rf {} +
-
 	$(call Python3/FixShebang,$(1)/usr/bin/* \
 	$(1)$(PYTHON3_PKG_DIR)/deluge/path_*.py)
 endef
@@ -81,6 +79,5 @@ endef
 
 $(eval $(call Py3Package,$(PKG_NAME)))
 $(eval $(call BuildPackage,$(PKG_NAME)))
-
 $(eval $(call Py3Package,$(PKG_NAME)-ui-web))
 $(eval $(call BuildPackage,$(PKG_NAME)-ui-web))

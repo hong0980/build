@@ -12,6 +12,7 @@ PKG_MAINTAINER:=David Yang <mmyangfl@gmail.com>
 PKG_LICENSE:=BSD-3-Clause
 PKG_LICENSE_FILES:=COPYING
 
+PKG_BUILD_DEPENDS:=boost
 PKG_CONFIG_DEPENDS:=CONFIG_PACKAGE_python3-libtorrent
 
 CMAKE_INSTALL:=1
@@ -57,7 +58,12 @@ ifneq ($(CONFIG_PACKAGE_python3-libtorrent),)
 CMAKE_OPTIONS += \
 	-Dpython-bindings=ON \
 	-Dpython-egg-info=ON \
-  -DPython3_EXECUTABLE=$(PYTHON3)
+	-DPython3_EXECUTABLE=$(PYTHON3) \
+	-DBoost_NO_BOOST_CMAKE=ON \
+	-DBoost_NO_SYSTEM_PATHS=ON \
+	-DBOOST_ROOT=$(STAGING_DIR)/usr \
+	-DBoost_INCLUDE_DIR=$(STAGING_DIR)/usr/include \
+	-DBoost_LIBRARY_DIR=$(STAGING_DIR)/usr/lib
 endif
 
 define Build/Configure

@@ -26,6 +26,10 @@ ifeq ($(ARCH),aarch64)
 	PKG_ARCH:=aarch64
 endif
 
+ifeq ($(ARCH),arm64)
+	PKG_ARCH:=aarch64
+endif
+
 ifeq ($(ARCH),arm)
 	PKG_ARCH:=armv7
 endif
@@ -35,7 +39,7 @@ include $(INCLUDE_DIR)/package.mk
 define Package/qBittorrent-static
 	SECTION:=net
 	CATEGORY:=Network
-	DEPENDS:=@(arm||aarch64||i386||x86_64)
+	DEPENDS:=@(arm||aarch64||arm64||i386||x86_64)
 	SUBMENU:=BitTorrent
 	TITLE:=bittorrent client programmed in C++ / Qt
 	URL:=https://github.com/userdocs/qbittorrent-nox-static
