@@ -102,12 +102,20 @@ do_network() {
 		esac
 	}
 
-	local lan_hash old_lan_hash wan_hash old_wan_hash old_lan_ip changed=0
-	wan_hash=$(hash_value "${wan_proto}:${user}:${pass}:${combo_mode}")
-	lan_hash=$(hash_value "${lan_proto}:${lan_ip}:${gateway}:${combo_mode}")
+	local combo_mode wan_proto lan_proto lan_ip gateway user pass \
+		  lan_hash old_lan_hash wan_hash old_wan_hash old_lan_ip changed=0
+	config_get combo_mode   main combo_mode   ''
+	config_get wan_proto    main wan_proto    ''
+	config_get lan_proto    main lan_proto    ''
+	config_get lan_ip       main lan_ip       ''
+	config_get gateway      main gateway      ''
+	config_get user         main pppoe_user   ''
+	config_get pass         main pppoe_pass   ''
 	config_get old_lan_ip   main old_lan_ip   ''
 	config_get old_lan_hash main old_lan_hash ''
 	config_get old_wan_hash main old_wan_hash ''
+	wan_hash=$(hash_value "${wan_proto}:${user}:${pass}:${combo_mode}")
+	lan_hash=$(hash_value "${lan_proto}:${lan_ip}:${gateway}:${combo_mode}")
 
 	[ -n "$old_lan_ip" ] || uci -q set mesh_node.main.old_lan_ip="$(uci -q get network.lan.ipaddr)"
 	[ "$lan_hash" = "$old_lan_hash" ] || { do_lan; changed=1; }
@@ -119,8 +127,6 @@ do_network() {
 }
 
 do_wireless() {
-	local lan_mac; lan_mac=$(jsonfilter -i /etc/board.json -e '@.network.lan.macaddr' | tr -d ':')
-
 	wifi_iface() {
 		local iface="$1" dev band mode iface_own_mac
 		config_get mode "$iface" mode
@@ -133,15 +139,18 @@ do_wireless() {
 		uci -q set wireless."$iface".key="${wifi_pass:-$key}"
 		uci -q set wireless."$iface".ssid="${wifi_ssid:-$ssid}"
 		uci -q batch <<-EOF
+			set wireless.${iface}.ocv='0'
 			set wireless.${iface}.disabled='0'
 			set wireless.${iface}.proxy_arp='1'
 			set wireless.${iface}.ieee80211k='1'
 			set wireless.${iface}.ieee80211r='1'
+			set wireless.${iface}.ieee80211w='1'
 			set wireless.${iface}.ft_over_ds='0'
 			set wireless.${iface}.encryption='psk2'
 			set wireless.${iface}.bss_transition='1'
 			set wireless.${iface}.mobility_domain='55ff'
 			set wireless.${iface}.ft_psk_generate_local='1'
+			set wireless.${iface}.reassociation_deadline='20000'
 			set wireless.${iface}.nasid='${iface_own_mac:-$lan_mac}'
 		EOF
 	}
@@ -161,22 +170,24 @@ do_wireless() {
 
 		uci -q batch <<-EOF
 			set wireless.${mesh_iface}='wifi-iface'
-			set wireless.${mesh_iface}.device='${dev}'
 			set wireless.${mesh_iface}.mode='mesh'
-			set wireless.${mesh_iface}.network='${batadv_hardif:-$mesh_network}'
-			set wireless.${mesh_iface}.mesh_fwding='${mesh_fwding}'
 			set wireless.${mesh_iface}.mesh_ttl='31'
+			set wireless.${mesh_iface}.device='${dev}'
 			set wireless.${mesh_iface}.encryption='sae'
 			set wireless.${mesh_iface}.key='${mesh_pass}'
 			set wireless.${mesh_iface}.mesh_id='${mesh_id}'
 			set wireless.${mesh_iface}.ifname='${mesh_ifname}'
 			set wireless.${mesh_iface}.mesh_rssi_threshold='-75'
+			set wireless.${mesh_iface}.mesh_fwding='${mesh_fwding}'
+			set wireless.${mesh_iface}.network='${batadv_hardif:-$mesh_network}'
 		EOF
 	}
 
+	local lan_mac; lan_mac=$(jsonfilter -i /etc/board.json -e '@.network.lan.macaddr' | tr -d ':')
 	[ "$band_mode" = "2" ] && return
 	local key_2g ssid_2g key_5g ssid_5g key_6g ssid_6g wifi_pass wifi_ssid log_level \
-		  mesh_hash old_mesh_hash radio_hash old_radio_hash changed=0
+		  mesh_hash old_mesh_hash radio_hash old_radio_hash changed=0 \
+		  mesh_id mesh_pass mesh_radio mesh_network
 	config_get key_2g         main key_2g         ''
 	config_get ssid_2g        main ssid_2g        ''
 	config_get key_5g         main key_5g         ''
@@ -188,6 +199,10 @@ do_wireless() {
 	config_get log_level      main log_level      ''
 	config_get old_mesh_hash  main old_mesh_hash  ''
 	config_get old_radio_hash main old_radio_hash ''
+	config_get mesh_id       main mesh_id         ''
+	config_get mesh_pass     main mesh_pass       ''
+	config_get mesh_radio    main mesh_radio      ''
+	config_get mesh_network  main mesh_network    ''
 	radio_hash=$(hash_value "${ssid_2g}:${key_2g}:${ssid_5g}:${key_5g}:${ssid_6g}:${key_6g}:${wifi_pass}:${wifi_ssid}")
 	mesh_hash=$(hash_value "${mesh_id}:${mesh_pass}:${mesh_radio}:${mesh_network}:${batadv_proto}:${batadv_hardif}:${use_batadv}:${log_level}")
 
@@ -220,35 +235,39 @@ do_batadv() {
 	}
 
 	config_load network
+	config_foreach cleanup_batman interface
 	if [ "$use_batadv" = "1" ]; then
-		modprobe batman-adv 2>/dev/null || true
-		config_foreach cleanup_batman interface
+		# modprobe batman-adv 2>/dev/null || true
 		bat0_in_bridge=$(uci -q show network.@device[0].ports 2>/dev/null | grep -c "$batadv_proto")
 		[ "${bat0_in_bridge:-0}" -eq 0 ] && \
 			uci -q add_list network.@device[0].ports="$batadv_proto"
-	else
-		rmmod batman-adv 2>/dev/null
-		config_foreach cleanup_batman interface
+	# else
+	# 	# rmmod batman-adv 2>/dev/null
+	# 	config_foreach cleanup_batman interface
 	fi
 	config_load mesh_node
 	return 0
 }
 
 do_services() {
+	local init old_init
+	config_get init     main init     ''
+	config_get old_init main old_init ''
+
 	handle_old_service() {
 		local svc="$1"
 		echo "$init" | grep -qw "$svc" && return
 		[ -x "/etc/init.d/$svc" ] && {
-			/etc/init.d/$svc start   2>/dev/null
-			/etc/init.d/$svc enable  2>/dev/null
+			/etc/init.d/"$svc" start  2>/dev/null
+			/etc/init.d/"$svc" enable 2>/dev/null
 		}
 		uci -q del_list mesh_node.main.old_init="$svc"
 	}
 	handle_new_service() {
 		local svc="$1"
 		echo "$old_init" | grep -qw "$svc" && return
-		/etc/init.d/$svc running 2>/dev/null && /etc/init.d/$svc stop    2>/dev/null
-		/etc/init.d/$svc enabled 2>/dev/null && /etc/init.d/$svc disable 2>/dev/null
+		/etc/init.d/"$svc" running 2>/dev/null && /etc/init.d/"$svc" stop    2>/dev/null
+		/etc/init.d/"$svc" enabled 2>/dev/null && /etc/init.d/"$svc" disable 2>/dev/null
 		uci -q add_list mesh_node.main.old_init="$svc"
 	}
 	config_list_foreach main old_init handle_old_service
@@ -273,33 +292,16 @@ do_usteer() {
 }
 
 start() {
-	local combo_mode wan_proto lan_proto lan_ip gateway user pass mesh_id mesh_pass \
-		  mesh_radio mesh_network band_mode batadv_proto batadv_hardif \
-		  init old_init hostname old_hostname use_batadv m11_enable enable_usteer \
+	local band_mode batadv_proto batadv_hardif use_batadv \
+		  hostname old_hostname m11_enable enable_usteer \
 		  network_changed=0 mesh11sd_changed=0 usteer_changed=0 wireless_changed=0
 
 	config_load mesh_node
-	config_get combo_mode    main combo_mode      ''
-	config_get wan_proto     main wan_proto       ''
-	config_get lan_proto     main lan_proto       ''
-	config_get lan_ip        main lan_ip          ''
-	config_get gateway       main gateway         ''
-	config_get user          main pppoe_user      ''
-	config_get pass          main pppoe_pass      ''
-
-	config_get mesh_id       main mesh_id         ''
-	config_get mesh_pass     main mesh_pass       ''
-	config_get mesh_radio    main mesh_radio      ''
-	config_get mesh_network  main mesh_network    ''
 	config_get band_mode     main band_mode       '0'
 	config_get batadv_proto  main batadv_proto    ''
 	config_get batadv_hardif main batadv_hardif   ''
-
-	config_get init          main init            ''
-	config_get old_init      main old_init        ''
 	config_get hostname      main hostname        ''
 	config_get old_hostname  main old_hostname    ''
-
 	config_get_bool use_batadv    main use_batadv    0
 	config_get_bool m11_enable    main m11_enable    0
 	config_get_bool enable_usteer main enable_usteer 0
