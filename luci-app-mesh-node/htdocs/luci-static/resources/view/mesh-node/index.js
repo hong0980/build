@@ -81,17 +81,8 @@ function m11dep(o, conditions = []) {
 	});
 }
 
-function usteeropt(s, widget, name, title, desc) {
-	var o = s.taboption('usteer', widget, name, title, desc);
-	o.depends('mesh_node.main.enable_usteer', '1');
-	o.uciconfig = 'usteer'; o.ucisection = '@usteer[0]';
-	o.ucioption = name;
-	return o;
-}
-
-function batadvopt(s, widget, name, title, desc) {
+function batadvopt(s, widget, name, conditions = '', title, desc) {
 	var o = s.taboption('batadv', widget, name, title, desc);
-	o.depends('use_batadv', '1');
 	o.load = function (section_id) {
 		var proto = uci.get(o.config, section_id, 'batadv_proto');
 		return uci.get('network', proto, this.option);
@@ -104,6 +95,18 @@ function batadvopt(s, widget, name, title, desc) {
 		var proto = s.formvalue(section_id, 'batadv_proto');
 		return uci.unset('network', proto, this.option);
 	};
+	o.depends({
+		'mesh_node.main.use_batadv': '1',
+		...Object.assign({}, ...[conditions])
+	});
+	return o;
+}
+
+function usteeropt(s, widget, name, title, desc) {
+	var o = s.taboption('usteer', widget, name, title, desc);
+	o.depends('mesh_node.main.enable_usteer', '1');
+	o.uciconfig = 'usteer'; o.ucisection = '@usteer[0]';
+	o.ucioption = name;
 	return o;
 }
 
@@ -157,6 +160,7 @@ return view.extend({
 			fs.exec('/etc/init.d/usteer', ['running'])
 				.then(function (r) { return r.code === 0; }),
 			uci.load('mesh_node'),
+			uci.load('wireless'),
 			uci.load('network')
 		]);
 	},
@@ -288,6 +292,227 @@ return view.extend({
 		o.rmempty = false; o.default = info.wifi_pass;
 		o.depends('band_merge', '1');
 
+		o = s.taboption('mesh', form.RichListValue, 'mesh_radio', _('Mesh Backhaul Band'),
+			_('Select the radio band used for the 802.11s mesh backhaul link.'));
+		o.value('5g', _('5 GHz'), _('recommended, best throughput'));
+		o.value('2g', _('2.4 GHz'), _('longer range, lower throughput'));
+		if (info.ssid_6g) o.value('6g', _('6 GHz'));
+		o.value('none', _('All bands'), _('all radios participate in the mesh'));
+		o.default = '5g';
+		o.depends('band_mode', '0');
+
+		o = s.taboption('mesh', widgets.NetworkSelect, 'mesh_network', _('Mesh Network'),
+			_('Choose the network(s) you want to attach to this wireless interface or fill out the <em>custom</em> field to define a new network.'));
+		o.default = 'lan';
+		o.depends('band_mode', '0');
+
+		o = s.taboption('mesh', form.Value, 'mesh_id', _('Mesh ID'));
+		o.depends('band_mode', '0');
+		o.default = info.mesh_id || 'HomeMesh'; o.rmempty = false;
+
+		o = s.taboption('mesh', form.Value, 'mesh_pass', _('Mesh Password'));
+		o.datatype = 'wpakey'; o.password = true;
+		o.depends('band_mode', '0');
+		o.rmempty = false; o.default = info.mesh_pass || '';
+
+		o = s.taboption('mesh', form.RichListValue, 'use_batadv', _('Mesh Protocol'));
+		o.value('0', _('802.11s'), _('native — kernel mesh forwarding'));
+		o.value('1', _('batman-adv'), _('802.11s backhaul + batadv L2 routing'));
+		o.default = '0';
+		o.depends('band_mode', '0');
+		o.onchange = function (ev, section_id, value) {
+			["usteer", "batadv"].forEach(function (t) {
+				var li = document.querySelector(`[data-tab="${t}"]`);
+				if (li && li.style.display !== 'none') li.querySelector('a').click();
+			});
+		};
+
+		var MeshStatus = uci.get_bool('mesh_node', 'main', 'use_batadv');
+		o = s.taboption('mesh', form.Button, '_mesh_status_btn', _('Mesh Status'));
+		o.inputtitle = MeshStatus ? _('Mesh Status (batman-adv)') : _('Mesh Status (802.11s)');
+		o.depends('band_mode', '0'); o.inputstyle = 'positive';
+		o.onclick = function (ev, section_id) {
+			var sep = '='.repeat(72), text = '';
+			var proto  = s.formvalue(section_id, 'batadv_proto') || 'bat0';
+			if (MeshStatus) {
+				var run = function (args) {
+					return fs.exec_direct('/usr/sbin/batctl', args)
+						.then(function (r) { return (r || '').trim(); })
+						.catch(function (e) { return '(error: ' + (e.message || e) + ')'; });
+				};
+
+				return Promise.all([
+					run(['meshif', proto, 'mj']),
+					run(['meshif', proto, 'hj']),
+					run(['meshif', proto, 'nj']),
+					run(['meshif', proto, 'oj']),
+					run(['meshif', proto, 'statistics'])
+				]).then(function (r) {
+					var titles = [_('MESH INFO'), _('INTERFACES'), _('NEIGHBORS'), _('ORIGINATORS'), _('STATISTICS')];
+					r.forEach(function(out, i) {
+						var content = (out || '').trim() || _('No output. please retry in a moment.');
+						if (content && i === 4) {
+							content = content.split('\n').map(function (l) {
+								return l.replace(/^\s*/, '  ');
+							}).join('\n');
+						} else { try { content = JSON.stringify(JSON.parse(content), null, 2); } catch {} }
+						text += `▶ ${titles[i]}\n${sep}\n${content}\n\n`;
+					});
+					showMeshModal(_('Mesh Status (batman-adv)'), text);
+				}).catch(function (e) {
+					showMeshModal(_('Mesh Status (batman-adv)'), _('Execution failed: %s').format(e.message || e));
+				});
+			} else {
+				var ifaces = [], cmds = [], sep = '='.repeat(130);
+				uci.sections('wireless', 'wifi-iface', function (s) {
+					if (s.mode === 'mesh' && s.ifname) {
+						ifaces.push(s.ifname);
+						cmds.push(
+							fs.exec_direct('/usr/sbin/iw', ['dev', s.ifname, 'station', 'dump']),
+							fs.exec_direct('/usr/sbin/iw', ['dev', s.ifname, 'mpath', 'dump'])
+						);
+					}
+				});
+
+				if (!ifaces.length)
+					return showMeshModal(_('Mesh Status'), _('No active mesh interface found.'));
+
+				return Promise.all(cmds).then(function (r) {
+					ifaces.forEach(function (iface, i) {
+						var sta = (r[i * 2] || '').trim() || _('(No neighbor nodes connected)');
+						var mp  = (r[i * 2 + 1] || '').trim();
+						if (!mp || mp.split('\n').length <= 1) mp = _('(No mesh paths established)');
+
+						text += `[ ${_('Mesh Interface')}: ${iface} ]\n${sep}\n`;
+						text += `▶ ${_('NEIGHBOR STATION DUMP')}:\n${sta}\n${sep}\n`;
+						text += `▶ ${_('FORWARDING PATH DUMP (mpath)')}:\n${mp}\n${sep}\n`;
+					});
+					showMeshModal(_('Mesh Status (802.11s)'), text);
+				}).catch(function (e) {
+					showMeshModal(_('Mesh Status (802.11s)'), _('Execution failed: %s').format(e.message || e));
+				});
+			}
+		};
+
+		o = s.taboption('batadv', form.Value, 'batadv_proto', _('Batman Device'));
+		o.default = 'bat0'; o.rmempty = false;
+		o.titleref = L.url('admin/network/network');
+		o.depends('use_batadv', '1');
+
+		o = s.taboption('batadv', form.Value, 'batadv_hardif', _('Batman Interface'));
+		o.default = 'batmesh'; o.rmempty = false;
+		o.depends('use_batadv', '1');
+
+		o = s.taboption('batadv', form.RichListValue, 'routing_algo', _('Routing Algorithm'),
+			_('All nodes in the same mesh must use the same algorithm.'));
+		o.value('BATMAN_IV', _('BATMAN_IV'), _('link quality (recommended)'));
+		o.value('BATMAN_V',  _('BATMAN_V'), _('throughput based'));
+		o.default = 'BATMAN_IV';
+		o.depends('use_batadv', '1');
+		o.write = function (section_id, value) {
+			var proto  = s.formvalue(section_id, 'batadv_proto');
+			var hardif = s.formvalue(section_id, 'batadv_hardif');
+			if (!uci.get('network', proto)) {
+				uci.add('network', 'interface', proto);
+				uci.set('network', proto, 'proto', 'batadv');
+			}
+			if (!uci.get('network', hardif)) {
+				uci.add('network', 'interface', hardif);
+				uci.set('network', hardif, 'proto', 'batadv_hardif');
+				uci.set('network', hardif, 'mtu', '2304');
+			}
+			uci.set('network', hardif, 'master', proto);
+			uci.set('network', proto, 'routing_algo', value);
+		};
+
+		o = batadvopt(s, form.ListValue, 'gw_mode', '',  _('Gateway Mode'),
+				_('A batman-adv node can either run in server mode (sharing its internet connection with the mesh) or in client mode (searching for the most suitable internet connection in the mesh) or having the gateway support turned off entirely (which is the default setting).'));
+		o.value('off', _('Off'));
+		o.value('client', _('Client'));
+		o.value('server', _('Server'));
+		o.default = 'off';
+
+		o = batadvopt(s, form.RichListValue, 'gw_sel_class', {'gw_mode': 'client'}, _('Gateway Selection Class'));
+		o.value('1',  _('Fast'),
+			_('Prioritize by advertised throughput and link quality. Sticks with the gateway until it disappears.'));
+		o.value('2',  _('Stable'),
+			_('Prioritize by link quality only. Sticks with the gateway until it disappears.'));
+		o.value('3',  _('Fast Switch'),
+			_('Prioritize by link quality only. Switches immediately if a better gateway is found.'));
+		o.value('20', _('Late Switch'),
+			_('Prioritize by link quality only. Switches only if a better gateway is at least 20 TQ points better.'));
+		o.datatype = 'min(1)'; o.default = '20';
+
+		o = batadvopt(s, form.Value, 'gw_bandwidth', {'gw_mode': 'server'}, _('Gateway Bandwidth'),
+			_('Advertised bandwidth for gateway server mode (e.g. 100mbit/20mbit). Download/upload, defaults upload to download/5 if omitted.'));
+		o.placeholder = '100mbit/20mbit';
+
+		o = batadvopt(s, form.Flag, 'aggregated_ogms', '', _('Aggregate Originator Messages'),
+			_('reduces overhead by collecting and aggregating originator messages in a single packet rather than many small ones'));
+		o.default = o.disabled;
+
+		o = batadvopt(s, form.Value, 'orig_interval', '', _('Originator Interval'),
+			_('The value specifies the interval (milliseconds) in which batman-adv floods the network with its protocol information.'));
+		o.default = '1000';
+		o.datatype = 'min(1)';
+
+		o = batadvopt(s, form.Flag, 'ap_isolation', '', _('Access Point Isolation'),
+			_('Prevents one wireless client to talk to another. This setting only affects packets without any VLAN tag (untagged packets).'));
+		o.default = o.disabled;
+
+		o = batadvopt(s, form.ListValue, 'log_level', '', _('Log Level'),
+			_('Standard warning/error messages are sent to the kernel log. Additional debug output can be enabled here.'));
+		o.value('0',   _('Off (none)'));
+		o.value('1',   _('batman (routing/flooding)'));
+		o.value('2',   _('routes'));
+		o.value('4',   _('tt (translation table)'));
+		o.value('8',   _('bla (bridge loop avoidance)'));
+		o.value('16',  _('dat (ARP/DAT)'));
+		o.value('32',  _('mcast (multicast)'));
+		o.value('64',  _('tp (throughput meter)'));
+		o.value('128', _('nc (network coding)'));
+		o.value('255', _('all'));
+		o.default = '0';
+
+		o = batadvopt(s, form.Flag, 'bonding', '', _('Bonding Mode'),
+			_('When running the mesh over multiple WiFi interfaces per node batman-adv is capable of optimizing the traffic flow to gain maximum performance.'));
+		o.default = o.disabled;
+
+		o = batadvopt(s, form.Value, 'elp_interval', {'routing_algo': 'BATMAN_V'}, _('ELP Interval'),
+			_('Interval in ms for neighbor probing (BATMAN V only).'));
+		o.datatype = 'min(1)';
+		o.default = '500';
+
+		o = batadvopt(s, form.Flag, 'bridge_loop_avoidance', '', _('Avoid Bridge Loops'),
+			_('In bridged LAN setups it is advisable to enable the bridge loop avoidance in order to avoid broadcast loops that can bring the entire LAN to a standstill.'));
+		o.default = o.disabled;
+
+		o = batadvopt(s, form.Flag, 'distributed_arp_table', '', _('Distributed ARP Table'),
+			_('When enabled the distributed ARP table forms a mesh-wide ARP cache that helps non-mesh clients to get ARP responses much more reliably and without much delay.'));
+		o.default = o.enabled;
+
+		o = batadvopt(s, form.Flag, 'fragmentation', '', _('Fragmentation'),
+			_('The hop penalty setting allows to modify batman-adv\'s preference for multihop routes vs. short routes. The value is applied to the TQ of each forwarded OGM, thereby propagating the cost of an extra hop (the packet has to be received and retransmitted which costs airtime)'));
+		o.default = o.enabled;
+
+		o = batadvopt(s, form.Value, 'hop_penalty', '', _('Hop Penalty'),
+			_('The hop penalty setting allows to modify batman-adv\'s preference for multihop routes vs. short routes. The value is applied to the TQ of each forwarded OGM, thereby propagating the cost of an extra hop (the packet has to be received and retransmitted which costs airtime)'));
+		o.datatype = 'range(0,255)';
+		o.default = '30';
+
+		o = batadvopt(s, form.Flag, 'multicast_mode', '', _('Multicast Mode'),
+			_('Enables more efficient, group aware multicast forwarding infrastructure in batman-adv.'));
+		o.default = o.enabled;
+
+		o = batadvopt(s, form.Value, 'multicast_fanout', {'multicast_mode': '1'}, _('Multicast Fanout'),
+			_('Max number of multicast listeners before switching to classic flooding.'));
+		o.datatype = 'min(1)';
+		o.default = '16';
+
+		o = batadvopt(s, form.Flag, 'network_coding', '', _('Network Coding'),
+				_('When enabled network coding increases the WiFi throughput by combining multiple frames into a single frame, thus reducing the needed air time.'));
+		o.default = o.enabled;
+
 		o = m11opt(s, form.DummyValue, '_m11_badge', '', _('mesh11sd Status'));
 		o.rawhtml = true;
 		o.cfgvalue = function () {
@@ -340,7 +565,6 @@ return view.extend({
 		o.default  = '10';
 		m11dep(o);
 
-		/* ── Auto Config ── */
 		o = m11opt(s, form.Flag, 'auto_config', '',  _('Auto Config'),
 			_('When enabled, the daemon automatically configures wireless interfaces for the mesh — no manual wireless config needed. '
 			+ 'When disabled, the daemon only monitors an existing mesh configuration.<br>'
@@ -392,7 +616,6 @@ return view.extend({
 		o.datatype = 'maxlength(8)';
 		m11dep(o);
 
-		/* ── Node Role & Portal Detection ── */
 		o = m11opt(s, form.RichListValue, 'portal_detect', '',  _('Node Mode'),
 			_('Select the operating mode for this node in the mesh network'));
 		o.value('0', _('Forced Routed Portal (MRP)'),
@@ -437,7 +660,6 @@ return view.extend({
 		o.default = '0';
 		m11dep(o, [{ 'portal_detect': /(0|1|4)/ }]);
 
-		/* ── CPE only ── */
 		o = m11opt(s, form.ListValue, 'cpe_mode', '',  _('CPE IPv6 Mode'),
 			_('Applies only when Node Role is CPE (3).'));
 		o.value('nat66',             _('NAT66 (default, compatible with Android)'));
@@ -584,7 +806,6 @@ return view.extend({
 		o.optional = true;
 		m11dep(o, [{ 'vtun_gate_encryption': /(1|2|3)/ }]);
 
-		/* ── Watchdog & Error Handling ── */
 		o = m11opt(s, form.Flag, 'reboot_on_error', '',  _('Reboot on Error'),
 			_('Reboot the node when the watchdog detects IPv4 communication failure with the portal.'));
 		o.default = '1';
@@ -596,7 +817,6 @@ return view.extend({
 		o.default = '0';
 		m11dep(o);
 
-		/* ── AP Monitor Daemon ── */
 		o = m11opt(s, form.Flag, 'apmond_enable', '',  _('Enable AP Monitor (apmond)'),
 			_('Collects AP interface data from this node and sends it to the portal. Requires uhttpd and px5g-mbedtls packages.'));
 		o.default = '1';
@@ -608,7 +828,6 @@ return view.extend({
 		o.optional = true;
 		m11dep(o, [{ 'apmond_enable': '1' }]);
 
-		/* ── LED & Misc ── */
 		o = m11opt(s, form.Value, 'mesh_backhaul_led', '',  _('Mesh Backhaul LED'),
 			_('LED is solid when the mesh interface is up; switches to Linux heartbeat when peers are connected. '
 			+ 'Set to <b>none</b> to disable, or enter an LED name from /sys/class/leds/ (e.g. blue:run). '
@@ -644,188 +863,6 @@ return view.extend({
 		o.placeholder = '20';
 		m11dep(o);
 
-		o = s.taboption('mesh', form.RichListValue, 'mesh_radio', _('Mesh Backhaul Band'),
-			_('Select the radio band used for the 802.11s mesh backhaul link.'));
-		o.value('5g', _('5 GHz'), _('recommended, best throughput'));
-		o.value('2g', _('2.4 GHz'), _('longer range, lower throughput'));
-		if (info.ssid_6g) o.value('6g', _('6 GHz'));
-		o.value('none', _('All bands'), _('all radios participate in the mesh'));
-		o.default = '5g';
-		o.depends('band_mode', '0');
-
-		o = s.taboption('mesh', widgets.NetworkSelect, 'mesh_network', _('Mesh Network'),
-			_('Choose the network(s) you want to attach to this wireless interface or fill out the <em>custom</em> field to define a new network.'));
-		o.default = 'lan';
-		o.depends('band_mode', '0');
-
-		o = s.taboption('mesh', form.Value, 'mesh_id', _('Mesh ID'));
-		o.depends('band_mode', '0');
-		o.default = info.mesh_id || 'HomeMesh'; o.rmempty = false;
-
-		o = s.taboption('mesh', form.Value, 'mesh_pass', _('Mesh Password'));
-		o.datatype = 'wpakey'; o.password = true;
-		o.depends('band_mode', '0');
-		o.rmempty = false; o.default = info.mesh_pass || '';
-
-		o = s.taboption('mesh', form.RichListValue, 'use_batadv', _('Mesh Protocol'));
-		o.value('0', _('802.11s'), _('native — kernel mesh forwarding'));
-		o.value('1', _('batman-adv'), _('802.11s backhaul + batadv L2 routing'));
-		o.default = '0';
-		o.depends('band_mode', '0');
-		o.onchange = function (ev, section_id, value) {
-			["usteer", "batadv"].forEach(function (t) {
-				var li = document.querySelector(`[data-tab="${t}"]`);
-				if (li && li.style.display !== 'none') li.querySelector('a').click();
-			});
-		};
-
-		var MeshStatus = uci.get_bool('mesh_node', 'main', 'use_batadv');
-		o = s.taboption('mesh', form.Button, '_mesh_status_btn', _('Mesh Status'));
-		o.inputtitle = MeshStatus ? _('Mesh Status (batman-adv)') : _('Mesh Status (802.11s)');
-		o.depends('band_mode', '0'); o.inputstyle = 'positive';
-		o.onclick = function (ev, section_id) {
-			var proto  = s.formvalue(section_id, 'batadv_proto') || 'bat0';
-			if (MeshStatus) {
-				var run = function (args) {
-					return fs.exec_direct('/usr/sbin/batctl', args)
-						.then(function (r) { return (r || '').trim(); })
-						.catch(function (e) { return '(error: ' + (e.message || e) + ')'; });
-				};
-
-				return Promise.all([
-					run(['meshif', proto, 'mj']),
-					run(['meshif', proto, 'hj']),
-					run(['meshif', proto, 'nj']),
-					run(['meshif', proto, 'oj']),
-					run(['meshif', proto, 'statistics'])
-				]).then(function (r) {
-					var sep = '─'.repeat(72), text = '';
-					var titles = [_('MESH INFO'), _('INTERFACES'), _('NEIGHBORS'), _('ORIGINATORS'), _('STATISTICS')];
-					r.forEach(function (out, i) {
-						var content = (out || '').trim() || _('No output. please retry in a moment.');
-						try { content = JSON.stringify(JSON.parse(out), null, 2); } catch {}
-						text += `▶ ${titles[i]}\n${sep}\n${content}\n\n`;
-					});
-					showMeshModal(_('Mesh Status (batman-adv)'), text);
-				}).catch(function (e) {
-					showMeshModal(_('Mesh Status (batman-adv)'), _('Execution failed: %s').format(e.message || e));
-				});
-			} else {
-				return fs.exec_direct('/usr/sbin/iw', ['dev']).then(function (res) {
-					var ifaces = (res || '').split('\n')
-						.filter(function (l) { return l.includes('Interface'); })
-						.map(function (l) { return l.trim().split(/\s+/)[1]; })
-						.filter(function (n) { return n && n.includes('mesh'); });
-					if (!ifaces.length) {
-						return showMeshModal(_('Mesh Status'), _('No active mesh interface found.'));
-					}
-
-					var ps = [];
-					ifaces.forEach(function (iface) {
-						ps.push(fs.exec_direct('/usr/sbin/iw', ['dev', iface, 'station', 'dump']));
-						ps.push(fs.exec_direct('/usr/sbin/iw', ['dev', iface, 'mpath', 'dump']));
-					});
-
-					return Promise.all(ps).then(function (r) {
-						var sep = '='.repeat(80);
-						var text = '';
-						ifaces.forEach(function (iface, i) {
-							var sta = (r[i * 2] || '').trim()     || _('(No neighbor nodes connected)');
-							var mp  = (r[i * 2 + 1] || '').trim();
-							if (!mp || mp.split('\n').length <= 1) mp = _('(No mesh paths established)');
-							text += '[ ' + _('Mesh Interface') + ': ' + iface + ' ]\n' + sep + '\n';
-							text += '▶ ' + _('NEIGHBOR STATION DUMP') + ':\n' + sta + '\n\n';
-							text += '▶ ' + _('FORWARDING PATH DUMP (mpath)') + ':\n' + mp + '\n' + sep + '\n\n';
-						});
-						showMeshModal(_('Mesh Status (802.11s)'), text);
-					});
-				}).catch(function (e) {
-					showMeshModal(_('Mesh Status (802.11s)'), _('Execution failed: %s').format(e.message || e));
-				});
-			}
-		};
-
-		// batadv
-		o = s.taboption('batadv', form.Value, 'batadv_proto', _('Batman Device'));
-		o.default = 'bat0'; o.rmempty = false;
-		o.depends('use_batadv', '1');
-		o.titleref = L.url('admin/network/network');
-
-		o = s.taboption('batadv', form.Value, 'batadv_hardif', _('Batman Interface'));
-		o.default = 'batmesh'; o.rmempty = false;
-		o.depends('use_batadv', '1');
-
-		o = s.taboption('batadv', form.RichListValue, 'routing_algo', _('Routing Algorithm'),
-			_('All nodes in the same mesh must use the same algorithm.'));
-		o.value('BATMAN_IV', _('BATMAN_IV'), _('link quality (recommended)'));
-		o.value('BATMAN_V',  _('BATMAN_V'), _('throughput based'));
-		o.default = 'BATMAN_IV';
-		o.depends('use_batadv', '1');
-		o.write = function (section_id, value) {
-			var proto  = s.formvalue(section_id, 'batadv_proto');
-			var hardif = s.formvalue(section_id, 'batadv_hardif');
-			if (!uci.get('network', proto)) {
-				uci.add('network', 'interface', proto);
-				uci.set('network', proto, 'proto',     'batadv');
-				// uci.set('network', proto, 'multipath', 'off');
-			}
-			if (!uci.get('network', hardif)) {
-				uci.add('network', 'interface', hardif);
-				uci.set('network', hardif, 'proto', 'batadv_hardif');
-				uci.set('network', hardif, 'mtu',   '1536');
-			}
-			uci.set('network', hardif, 'master', proto);
-			uci.set('network', proto, 'routing_algo', value);
-		};
-
-		o = batadvopt(s, form.ListValue, 'gw_mode', _('Gateway Mode'),
-				_('A batman-adv node can either run in server mode (sharing its internet connection with the mesh) or in client mode (searching for the most suitable internet connection in the mesh) or having the gateway support turned off entirely (which is the default setting).'));
-		o.value('off', _('Off'));
-		o.value('client', _('Client'));
-		o.value('server', _('Server'));
-		o.default = 'off';
-
-		o = batadvopt(s, form.Flag, 'aggregated_ogms', _('Aggregate Originator Messages'),
-			_('reduces overhead by collecting and aggregating originator messages in a single packet rather than many small ones'));
-		o.default = o.disabled;
-
-		o = batadvopt(s, form.Value, 'orig_interval', _('Originator Interval'),
-			_('The value specifies the interval (milliseconds) in which batman-adv floods the network with its protocol information.'));
-		o.default = '1000'; o.datatype = 'min(1)';
-
-		o = batadvopt(s, form.Flag, 'ap_isolation', _('Access Point Isolation'),
-			_('Prevents one wireless client to talk to another. This setting only affects packets without any VLAN tag (untagged packets).'));
-		o.default = o.disabled;
-
-		o = batadvopt(s, form.Flag, 'bonding', _('Bonding Mode'),
-			_('When running the mesh over multiple WiFi interfaces per node batman-adv is capable of optimizing the traffic flow to gain maximum performance.'));
-		o.default = o.disabled;
-
-		o = batadvopt(s, form.Flag, 'bridge_loop_avoidance', _('Avoid Bridge Loops'),
-			_('In bridged LAN setups it is advisable to enable the bridge loop avoidance in order to avoid broadcast loops that can bring the entire LAN to a standstill.'));
-		o.default = o.disabled;
-
-		o = batadvopt(s, form.Flag, 'distributed_arp_table', _('Distributed ARP Table'),
-			_('When enabled the distributed ARP table forms a mesh-wide ARP cache that helps non-mesh clients to get ARP responses much more reliably and without much delay.'));
-		o.default = o.enabled;
-
-		o = batadvopt(s, form.Flag, 'fragmentation', _('Fragmentation'),
-			_('Batman-adv has a built-in layer 2 fragmentation for unicast data flowing through the mesh which will allow to run batman-adv over interfaces / connections that don\'t allow to increase the MTU beyond the standard Ethernet packet size of 1500 bytes. When the fragmentation is enabled batman-adv will automatically fragment over-sized packets and defragment them on the other end. Per default fragmentation is enabled and inactive if the packet fits but it is possible to deactivate the fragmentation entirely.'));
-		o.default = o.enabled;
-
-		o = batadvopt(s, form.Value, 'hop_penalty', _('Hop Penalty'),
-			_('The hop penalty setting allows to modify batman-adv\'s preference for multihop routes vs. short routes. The value is applied to the TQ of each forwarded OGM, thereby propagating the cost of an extra hop (the packet has to be received and retransmitted which costs airtime)'));
-		o.datatype = 'range(0,255)'; o.default = '30';
-
-		o = batadvopt(s, form.Flag, 'multicast_mode', _('Multicast Mode'),
-			_('Enables more efficient, group aware multicast forwarding infrastructure in batman-adv.'));
-		o.default = o.enabled;
-
-		o = batadvopt(s, form.Flag, 'network_coding', _('Network Coding'),
-				_('When enabled network coding increases the WiFi throughput by combining multiple frames into a single frame, thus reducing the needed air time.'));
-		o.default = o.enabled;
-
-		// usteer
 		o = s.taboption('usteer', form.Flag, 'enable_usteer', _('Enable usteer Smart Steering'),
 			_('Uses usteer to steer clients to the best radio for optimal performance.'));
 		o.default = '0'; o.rmempty = false;

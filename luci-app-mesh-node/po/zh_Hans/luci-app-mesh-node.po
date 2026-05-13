@@ -995,3 +995,84 @@ msgstr "通知"
 
 msgid "Warning"
 msgstr "警告"
+
+msgid "Gateway Selection Class"
+msgstr "网关选择等级"
+
+msgid "Gateway Selection Class (BATMAN_IV)"
+msgstr "网关选择等级 (BATMAN_IV)"
+
+msgid "Fast"
+msgstr "快速"
+
+msgid "Prioritize by advertised throughput and link quality. Sticks with the gateway until it disappears."
+msgstr "优先考虑通告的吞吐量和链路质量，并持续使用该网关直至其消失。"
+
+msgid "Stable"
+msgstr "稳定"
+
+msgid "Prioritize by link quality only. Sticks with the gateway until it disappears."
+msgstr "仅考虑链路质量，并持续使用该网关直至其消失。"
+
+msgid "Fast Switch"
+msgstr "快速切换"
+
+msgid "Prioritize by link quality only. Switches immediately if a better gateway is found."
+msgstr "仅考虑链路质量，如果发现更好的网关则立即切换。"
+
+msgid "Late Switch"
+msgstr "延迟切换"
+
+msgid "Late Switch (Default)"
+msgstr "延迟切换（默认）"
+
+msgid "Prioritize by link quality only. Switches only if a better gateway is at least 20 TQ points better."
+msgstr "仅考虑链路质量，仅当发现比当前网关至少好 20 TQ 的网关时才进行切换。"
+
+msgid "Gateway Bandwidth"
+msgstr "网关带宽"
+
+msgid "Advertised bandwidth for gateway server mode (e.g. 100mbit/20mbit). Download/upload, defaults upload to download/5 if omitted."
+msgstr "网关服务器模式下对外通告的带宽（例如 100mbit/20mbit）。下载/上传，若省略上传则默认为下载带宽的五分之一。"
+
+msgid "Log Level"
+msgstr "日志级别"
+
+msgid "Standard warning/error messages are sent to the kernel log. Additional debug output can be enabled here."
+msgstr "标准的警告/错误消息会发送到内核日志，此处可启用额外的调试输出。"
+
+msgid "Off (none)"
+msgstr "关闭（无）"
+
+msgid "batman (routing/flooding)"
+msgstr "batman（路由/泛洪）"
+
+msgid "routes"
+msgstr "路由"
+
+msgid "tt (translation table)"
+msgstr "tt（地址转换表）"
+
+msgid "bla (bridge loop avoidance)"
+msgstr "bla（桥接环路避免）"
+
+msgid "dat (ARP/DAT)"
+msgstr "dat（ARP/DAT）"
+
+msgid "mcast (multicast)"
+msgstr "mcast（组播）"
+
+msgid "tp (throughput meter)"
+msgstr "tp（吞吐量测试）"
+
+msgid "nc (network coding)"
+msgstr "nc（网络编码）"
+
+msgid "all"
+msgstr "全部"
+
+msgid "Multicast Fanout"
+msgstr "组播扇出"
+
+msgid "Max number of multicast listeners before switching to classic flooding."
+msgstr "超过该数量后将切换为广播模式。"

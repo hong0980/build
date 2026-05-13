@@ -177,6 +177,8 @@ do_wireless() {
 			set wireless.${mesh_iface}.key='${mesh_pass}'
 			set wireless.${mesh_iface}.mesh_id='${mesh_id}'
 			set wireless.${mesh_iface}.ifname='${mesh_ifname}'
+			set wireless.${mesh_iface}.mesh_hwmp_rootmode='0'
+			set wireless.${mesh_iface}.mesh_max_peer_links='8'
 			set wireless.${mesh_iface}.mesh_rssi_threshold='-75'
 			set wireless.${mesh_iface}.mesh_fwding='${mesh_fwding}'
 			set wireless.${mesh_iface}.network='${batadv_hardif:-$mesh_network}'
@@ -237,13 +239,9 @@ do_batadv() {
 	config_load network
 	config_foreach cleanup_batman interface
 	if [ "$use_batadv" = "1" ]; then
-		# modprobe batman-adv 2>/dev/null || true
 		bat0_in_bridge=$(uci -q show network.@device[0].ports 2>/dev/null | grep -c "$batadv_proto")
 		[ "${bat0_in_bridge:-0}" -eq 0 ] && \
 			uci -q add_list network.@device[0].ports="$batadv_proto"
-	# else
-	# 	# rmmod batman-adv 2>/dev/null
-	# 	config_foreach cleanup_batman interface
 	fi
 	config_load mesh_node
 	return 0
@@ -297,11 +295,11 @@ start() {
 		  network_changed=0 mesh11sd_changed=0 usteer_changed=0 wireless_changed=0
 
 	config_load mesh_node
-	config_get band_mode     main band_mode       '0'
-	config_get batadv_proto  main batadv_proto    ''
-	config_get batadv_hardif main batadv_hardif   ''
-	config_get hostname      main hostname        ''
-	config_get old_hostname  main old_hostname    ''
+	config_get band_mode     main band_mode         '0'
+	config_get batadv_proto  main batadv_proto      ''
+	config_get batadv_hardif main batadv_hardif     ''
+	config_get hostname      main hostname          ''
+	config_get old_hostname  main old_hostname      ''
 	config_get_bool use_batadv    main use_batadv    0
 	config_get_bool m11_enable    main m11_enable    0
 	config_get_bool enable_usteer main enable_usteer 0
