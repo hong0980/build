@@ -1,8 +1,8 @@
 <body>
-    <link rel="stylesheet" href="/luci-static/tinynote/bulma.css"/><br>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.43.3/ace.min.js"></script>
+    <link rel="stylesheet" href="/luci-static/tinynote/bulma.css" /><br>
+    <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.43.3/src-min-noconflict/ace.min.js"></script>
     <script src="/luci-static/tinynote/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.11/clipboard.min.js"></script>
+    <script src="/luci-static/tinynote/clipboard.min.js"></script>
     <div class="columns is-centered" style="display: none;"></div>
     <progress class="progress is-success is-small" max="100" style="display:none">50%</progress>
     <div class="columns mb-0 is-desktop">
@@ -23,16 +23,32 @@
                             <i class="material-icons">save</i>
                         </a> -->
                         <a class="icon" title="清除" onclick="clearAll(event, editor1);">
-                            <i class="material-icons">delete_outline</i>
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"></path>
+                                </svg>
+                            </i>
                         </a>
                         <a id='copyeditor1' class="icon" title="复制输入代码">
-                            <i class="material-icons">content_copy</i>
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path>
+                                </svg>
+                            </i>
                         </a>
                         <a id="inputFullScreen" class="icon" onclick="addFullScreen('input');" title="全屏">
-                            <i class="material-icons">open_in_full</i>
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"></path>
+                                </svg>
+                            </i>
                         </a>
                         <a id="inputCloseScreen" style="display:none" class="icon" onclick="removeFullScreen('input');" title="关闭全屏">
-                            <i class="material-icons">close_fullscreen</i>
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"></path>
+                                </svg>
+                            </i>
                         </a>
                     </div>
                 </div>
@@ -49,7 +65,11 @@
                     <label class="button is-fullwidth" title="上传文件" for="fileInput">
                         <input id="fileInput" class="file-input" type="file" onchange="changeToFileContent(this)" style="display: none;" />
                         <span class="icon is-hidden-desktop-only">
-                            <i class="material-icons">publish</i>
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"></path>
+                                </svg>
+                            </i>
                         </span>
                         <span>文件</span>
                     </label>
@@ -59,7 +79,11 @@
                 <p class="control">
                     <button class="button is-fullwidth" title="下载文件" onclick="downloadFile(event);">
                         <span class="icon">
-                            <i class="material-icons">cloud_download</i>
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"></path>
+                                </svg>
+                            </i>
                         </span>
                         <span>下载</span>
                     </button>
@@ -69,7 +93,11 @@
                 <p class="control">
                     <button class="button is-fullwidth" title="清空全部" onclick="clearAll(event);">
                         <span class="icon">
-                            <i class="material-icons">delete_outline</i>
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"></path>
+                                </svg>
+                            </i>
                         </span>
                         <span>清空全部</span>
                     </button>
@@ -107,22 +135,46 @@
                     </a>
                     <div class="editortoolbar btn-group-sm">
                         <a class="icon" title="保存" onclick="openSaveModal(true)">
-                            <i class="material-icons">save</i>
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"></path>
+                                </svg>
+                            </i>
                         </a>
                         <a class="icon" title="清除" onclick="clearAll(event, editor2);">
-                            <i class="material-icons">delete_outline</i>
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"></path>
+                                </svg>
+                            </i>
                         </a>
-                        <a  id="copyeditor2" class="icon" title="复制输出代码">
-                            <i class="material-icons">content_copy</i>
+                        <a id="copyeditor2" class="icon" title="复制输出代码">
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path>
+                                </svg>
+                            </i>
                         </a>
                         <a class="icon" title="下载" onclick="downloadFile(event);">
-                            <i class="material-icons">cloud_download</i>
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"></path>
+                                </svg>
+                            </i>
                         </a>
                         <a id="outputFullScreen" class="icon" onclick="addFullScreen('output');" title="全屏">
-                            <i class="material-icons">open_in_full</i>
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"></path>
+                                </svg>
+                            </i>
                         </a>
                         <a id="outputCloseScreen" class="icon" style="display:none" onclick="removeFullScreen('output');" title="关闭全屏">
-                            <i class="material-icons">close_fullscreen</i>
+                            <i class="material-icons">
+                                <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
+                                    <path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"></path>
+                                </svg>
+                            </i>
                         </a>
                     </div>
                 </div>

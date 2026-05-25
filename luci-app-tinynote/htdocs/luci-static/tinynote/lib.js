@@ -303,7 +303,7 @@ function formatShCode(content, indentSize) {
 function JsCompression(a) {
     var content = getContent().content;
     if (!content) return;
-    loadScripts(["/luci-static/tinynote/format.js", "https://cdn.staticfile.net/js-beautify/1.14.11/beautifier.min.js"])
+    loadScripts(["/luci-static/tinynote/format.js", "/luci-static/tinynote/beautifier.js"])
         .then(function() {
             var packer = new Packer();
             if (a === "minify") output = packer.minify(content);
@@ -333,7 +333,7 @@ function examineJavaScript() {
     var content = getContent().content;
     if (!content) return;
     editor1.session.setMode("ace/mode/javascript");
-    loadScripts("https://cdn.staticfile.net/jshint/2.13.6/jshint.min.js")
+    loadScripts("/luci-static/tinynote/jshint.min.js")
         .then(function() {
             var output = JSHINT(content, { asi: true, esversion: 8 });
             if (output) showSuccessMessage("语法通过");
@@ -352,7 +352,7 @@ function examineJavaScript() {
 function CSSFormat(a) {
     var content = getContent().content;
     if (!content) return;
-    loadScripts(["/luci-static/tinynote/vkbeautify.js", "https://cdn.staticfile.net/js-beautify/1.14.11/beautifier.min.js"])
+    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/beautifier.js"])
         .then(function() {
             if (a === "format") output = beautifier.css(content, {
                 // indent_size: 指定每一级缩进的空格数，默认值为4。
@@ -405,7 +405,7 @@ function formatLua(a) {
 function jsonFormat(a) {
     var content = getContent().content;
     if (!content) return;
-    loadScripts(["/luci-static/tinynote/vkbeautify.js", "https://cdnjs.cloudflare.com/ajax/libs/jsonlint/1.6.0/jsonlint.min.js"])
+    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/jsonlint.min.js"])
         .then(function() {
             editor1.session.setMode("ace/mode/json");
             try {
@@ -432,8 +432,9 @@ function jsonFormat(a) {
 
 function FormatHTML(a) {
     var content = getContent().content;
+    console.log(a)
     if (!content) return;
-    loadScripts(["/luci-static/tinynote/vkbeautify.js", "https://cdn.staticfile.net/js-beautify/1.14.11/beautifier.min.js"])
+    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/beautifier.js"])
         .then(function() {
             try {
                 editor1.session.setMode("ace/mode/html");
@@ -472,7 +473,7 @@ function FormatHTML(a) {
 function FormatYAML(a) {
     var content = getContent().content;
     if (!content) return;
-    loadScripts(["/luci-static/tinynote/vkbeautify.js", "https://cdn.staticfile.net/js-yaml/4.1.0/js-yaml.min.js"])
+    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/js-yaml.min.js"])
         .then(function() {
             try {
                 editor1.session.setMode("ace/mode/yaml");
@@ -488,6 +489,7 @@ function FormatYAML(a) {
                 } else if (a === 'safeLoad') {
                     if (jsyaml.load(content)) showSuccessMessage("语法通过");
                 }
+    console.log(output)
                 if (a !== 'safeLoad') editor2.setValue(output || '没有返回值');
             } catch (e) {
                 showErrorMessage(e.message);
@@ -502,7 +504,7 @@ function FormatYAML(a) {
 function yamlToxml() {
     var content = getContent().content;
     if (!content) return;
-    loadScripts(["/luci-static/tinynote/ObjTree.min.js", "/luci-static/tinynote/vkbeautify.js", "https://cdn.staticfile.net/js-yaml/4.1.0/js-yaml.min.js"])
+    loadScripts(["/luci-static/tinynote/ObjTree.min.js", "/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/js-yaml.min.js"])
         .then(function () {
             var xmlData = new XML.ObjTree().writeXML(jsyaml.load(content));
             xmlData = xmlData.substr(0, 39) + "<root>" + xmlData.substr(39) + "</root>";
@@ -559,7 +561,7 @@ function downloadFile(event) {
     event.preventDefault();
     var content = getContent(editor2).content;
     if (!content) return;
-    loadScripts("https://cdn.staticfile.net/FileSaver.js/2.0.5/FileSaver.min.js")
+    loadScripts("https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js")
         .then(function() {
             var blob = new Blob(["" + content], {
                 type: "text/plain; charset=utf-8"
@@ -585,7 +587,7 @@ $(document).on("keydown", function(event) {
 });
 
 function toggleFullScreen(editor) {
-    loadScripts("https://cdn.staticfile.net/screenfull.js/5.2.0/screenfull.min.js")
+    loadScripts("https://cdn.jsdelivr.net/npm/screenfull@6.0.2/index.min.js")
         .then(function() {
             if (screenfull.isEnabled) screenfull.toggle(editor);
         });
@@ -674,14 +676,14 @@ var loadedScripts = [];
 function loadScripts(scripts) {
     scripts = $.isArray(scripts) ? scripts : [scripts];
 
-    return $.when.apply($,
+    return Promise.resolve($.when.apply($,
         scripts.map(function(src) {
             if (loadedScripts.includes(src)) return $.Deferred().resolve();
             return $.getScript(src).done(function() {
                 loadedScripts.push(src);
             });
         })
-    );
+    ));
 }
 
 function clearAll(event, a) {

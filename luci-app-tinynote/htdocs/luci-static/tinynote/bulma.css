@@ -11857,13 +11857,17 @@ a.has-text-danger-dark:hover, a.has-text-danger-dark:focus {
     font-weight: 700
 }
 
-@font-face {
+/* @font-face {
     font-family: 'Material Icons';
     font-style: normal;
     font-weight: 400;
     src: url(https://fonts.gstatic.com/s/materialicons/v55/flUhRq6tzZclQEJ-Vdg-IuiaDsNc.woff2) format('woff2');
+} */
+
+.icon {
+    cursor: pointer;
 }
-        
+
 .material-icons {
     font-family: 'Material Icons';
     font-weight: normal;

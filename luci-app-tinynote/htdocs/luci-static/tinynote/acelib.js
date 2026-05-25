@@ -1,5 +1,15 @@
 
 function renderAceEditor(id, model, only, theme = 'monokai', font_size, height) {
+    const icons = {
+        publish: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"/></svg>',
+        save: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>',
+        download: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>',
+        delete: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>',
+        copy: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"/></svg>',
+        open_fullscreen: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"/></svg>',
+        close_fullscreen: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"/></svg>'
+    };
+
     var htmlCode = `
         <div class="aceEditorMenu">
             <a style="float:left;">
@@ -7,25 +17,25 @@ function renderAceEditor(id, model, only, theme = 'monokai', font_size, height) 
             </a>
             <div class="editortoolbar btn-group-sm">
                 <a id="fileInput${id}" class="icon is-hidden-mobile" title="上传文件">
-                    <i class="material-icons">publish</i>
+                    ${icons.publish}
                 </a>
                 <a class="icon" title="保存" onclick="cbi_submit(this, 'cbi.save')">
-                    <i class="material-icons">save</i>
+                    ${icons.save}
                 </a>
                 <a id="down${id}" class="icon" title="下载">
-                    <i class="material-icons">cloud_download</i>
+                    ${icons.download}
                 </a>
                 <a id="clear${id}" class="icon" title="清除">
-                    <i class="material-icons">delete_outline</i>
+                    ${icons.delete}
                 </a>
                 <a id="copy${id}" class="icon" title="复制输入代码">
-                    <i class="material-icons">content_copy</i>
+                    ${icons.copy}
                 </a>
                 <a id="${id}FullScreen" class="icon" onclick="addFullScreen('${id}');" title="全屏">
-                    <i class="material-icons">open_in_full</i>
+                    ${icons.open_fullscreen}
                 </a>
                 <a id="${id}CloseScreen" style="display:none" class="icon" onclick="removeFullScreen('${id}');" title="关闭全屏">
-                    <i class="material-icons">close_fullscreen</i>
+                    ${icons.close_fullscreen}
                 </a>
             </div>
         </div>`;
