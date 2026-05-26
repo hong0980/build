@@ -30,6 +30,7 @@
                 local font_size = con.acefont_size or false
                 local only = con.aceonly or con['only_note' .. sum] or false
                 local model = con['model_note' .. sum] or con.note_suffix
+                local spacing = con.aceline_spacing or 1
 
                 local models = {
                     ['shell'] = 'sh',
@@ -39,7 +40,7 @@
 
                 model = models[model] or model
         %>
-            renderAceEditor('<%=id%>', '<%=model%>', '<%=only%>', '<%=theme%>', '<%=font_size%>', '<%=height%>');
+            renderAceEditor('<%=id%>', '<%=model%>', '<%=only%>', '<%=theme%>', '<%=font_size%>', '<%=height%>', '<%=spacing%>');
         <%end%>
     });
 </script>

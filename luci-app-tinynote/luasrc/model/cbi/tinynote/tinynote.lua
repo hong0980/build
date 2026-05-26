@@ -319,9 +319,8 @@ acefont_size:depends("aceenable", 1)
 
 local aceline_spacing = f:taboption("ace", Value, "aceline_spacing",
     translate("Line Spacing"))
-aceline_spacing.default = "140"
-addValues(aceline_spacing, 100, 140, 150)
-aceline_spacing.datatype = "uinteger"
+aceline_spacing.default = "1.2"
+addValues(aceline_spacing, '1.0', '1.2', '1.3', '1.5')
 aceline_spacing:depends("aceenable", 1)
 
 local aceheight = f:taboption("ace", Value, "aceheight",
@@ -368,12 +367,11 @@ addValues(font_size, 10, 12, 14, 16)
 font_size.datatype = "uinteger"
 font_size:depends("enable", 1)
 
-local line_spacing = f:taboption("codemirror", Value, "line_spacing",
+local cmline_spacing = f:taboption("codemirror", Value, "cmline_spacing",
     translate("Line Spacing"))
-line_spacing.default = "140"
-addValues(line_spacing, 100, 140, 150)
-line_spacing.datatype = "uinteger"
-line_spacing:depends("enable", 1)
+cmline_spacing.default = "1.2"
+addValues(cmline_spacing, '1.0', '1.2', '1.3', '1.5')
+cmline_spacing:depends("enable", 1)
 
 local height = f:taboption("codemirror", Value, "height",
     translate("Display Height"))
@@ -383,8 +381,11 @@ height:depends("enable", 1)
 
 local width = f:taboption("codemirror", Value, "width",
     translate("Display Width"))
-width.default = "1000"
-addValues(width, 'auto', 1000, 1300, 1500)
+width.default = "100%"
+width:value("100%", translate("Auto"))
+width:value("1000", "1000px")
+width:value("1300", "1300px")
+width:value("1500", "1500px")
 width:depends("enable", 1)
 
 local only = f:taboption("codemirror", Flag, "only",

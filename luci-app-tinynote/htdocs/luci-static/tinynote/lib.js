@@ -432,7 +432,6 @@ function jsonFormat(a) {
 
 function FormatHTML(a) {
     var content = getContent().content;
-    console.log(a)
     if (!content) return;
     loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/beautifier.js"])
         .then(function() {
@@ -489,7 +488,6 @@ function FormatYAML(a) {
                 } else if (a === 'safeLoad') {
                     if (jsyaml.load(content)) showSuccessMessage("语法通过");
                 }
-    console.log(output)
                 if (a !== 'safeLoad') editor2.setValue(output || '没有返回值');
             } catch (e) {
                 showErrorMessage(e.message);

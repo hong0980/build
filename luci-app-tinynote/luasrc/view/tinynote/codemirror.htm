@@ -1,193 +1,214 @@
-<!-- https://www.min.jsdelivr.com/package/npm/codemirror -->
 <%
-  local uci  = require "luci.model.uci".cursor()
-  local con = uci:get_all("luci", "tinynote")
+local uci = require "luci.model.uci".cursor()
+local con = uci:get_all("luci", "tinynote")
+local modes = {}
+local needLint = false
+local lintModes = { xml=true, css=true, json=true, yaml=true, html=true, javascript=true }
+local keys = {}
+
+for v, k in pairs(con) do
+    if v:find("model_") or v:find("note_suffix") then
+        if not keys[k] then
+            local m = (k == 'sh') and 'shell' or (k == 'py') and 'python' or k
+            modes[#modes+1] = m
+            keys[k] = true
+            if lintModes[m] then needLint = true end
+        end
+    end
+end
+
+local theme = con.theme or "monokai"
 %>
+
 <style>
     .CodeMirror {
         font-size: <%=con.font_size%>px;
-        line-height: <%=con.line_spacing%>%;
+        line-height: <%=con.cmline_spacing%>;
         resize: both !important;
         text-align: left !important;
         font-family: Consolas, monospace !important;
         border-top: 1px solid black;
         border-bottom: 1px solid black;
     }
-    .CodeMirror-focused .cm-matchhighlight {
-        background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVQI12NgYGBgkKzc8x9CMDAwAAAmhwSbidEoSQAAAABJRU5ErkJggg==);
-        background-position: bottom;
-        background-repeat: repeat-x;
-    }
-    dt {font-family: monospace; color: hsl(0, 9%, 46%);}
-    .cm-matchhighlight {background-color: hsl(256, 58%, 45%)}
-    .CodeMirror-selection-highlight-scrollbar {background-color: rgb(192, 23, 23)}
 </style>
-<!-- theme -->
 
-<link rel="stylesheet" href="/luci-static/tinynote/bulma.css" />
-<script src="/luci-static/tinynote/jquery.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/theme/monokai.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/dialog/dialog.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/theme/<%=con.theme%>.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/fold/foldgutter.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/display/fullscreen.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/search/matchesonscrollbar.min.css">
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/keymap/emacs.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/keymap/sublime.min.js"></script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/dialog/dialog.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/fold/xml-fold.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/fold/foldcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/fold/foldgutter.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/fold/brace-fold.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/fold/indent-fold.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/fold/markdown-fold.min.js"></script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/search/search.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/search/jump-to-line.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/search/searchcursor.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/search/match-highlighter.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/search/matchesonscrollbar.min.js"></script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/selection/active-line.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/selection/mark-selection.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/scroll/annotatescrollbar.min.js"></script>
-
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/edit/closetag.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/edit/matchtags.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/edit/matchbrackets.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/edit/closebrackets.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/display/fullscreen.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/display/autorefresh.min.js"></script>
-<!-- mode -->
-<%
-local keys = {}
-local languages = {
-  xml = true,
-  css = true,
-  json = true,
-  yaml = true,
-  html = true,
-  javascript = false,
-  coffeescript = true,
-}
-for v, k in pairs(con) do
-    if v:find("model_") or v:find("note_suffix") then
-        if not keys[k] then
-          if k == 'sh' or k == 'py' then
-            k = k == 'sh' and 'shell' or 'python'
-          end
-%>
-          <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/<%=k%>/<%=k%>.min.js"></script>
-<%        keys[k] = true
-        end
-        if languages[k] then
-%>
-          <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/lint/lint.min.js"></script>
-          <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/hint/show-hint.min.js"></script>
-          <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/lint/<%=k%>-lint.min.js"></script>
-          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/lint/lint.min.css">
-          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/hint/show-hint.min.css">
-<%      end
-    end
-end
-%>
 <script>//<![CDATA[
-// 定义 gutter 类型常量。
-const GUTTERS = ["CodeMirror-lint-markers", "CodeMirror-foldgutter", "CodeMirror-linenumbers", "breakpoints"];
+    var NEED_LINT = <%=needLint and "true" or "false"%>;
+    var GUTTERS = ["CodeMirror-lint-markers", "CodeMirror-foldgutter", "CodeMirror-linenumbers", "breakpoints"];
+    var CDN_CANDIDATES = [
+        { id: 'bootcdn',    base: 'https://cdn.bootcdn.net/ajax/libs/codemirror/6.65.7' },
+        { id: 'jsdelivr',   base: 'https://cdn.jsdelivr.net/npm/codemirror@6.65.7' },
+        { id: 'staticfile', base: 'https://cdn.staticfile.net/codemirror/6.65.7' },
+        { id: 'cdnjs',      base: 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7' }
+    ];
 
-// 切换全屏函数，如果编辑器不在全屏模式下，则设置其为全屏模式，否则取消全屏模式。
-const toggleFullScreen = (cm) => cm.setOption("fullScreen", !cm.getOption("fullScreen") ? true : false);
+    function getpaths(item) {
+        var pkgPath  = item.base;
+        var corePath = item.id === 'jsdelivr' ? item.base + '/lib' : item.base;
+        var ext      = item.id === 'jsdelivr' ? '.js' : '.min.js';
+        return { corePath: corePath, pkgPath: pkgPath, ext: ext };
+    }
 
-// 创建 marker 函数，返回一个包含样式和内容的标记符号元素。
-const makeMarker = () => {
-    const marker = document.createElement("div");
-    marker.style.color = "#822";
-    marker.innerHTML = "●";
-    return marker;
-};
+    function loadStyle(url) {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = url;
+        document.head.appendChild(link);
+    }
 
-/**
- * 创建 CodeMirror 编辑器实例。
- *
- * @param {string} id - HTML 元素的 ID，用于将编辑器附加到 DOM 中。
- * @param {string} mode - 编辑器的语言模式。
- * @param {boolean} readOnly - 是否启用只读模式。
- * @returns {Object} 返回创建的 CodeMirror 编辑器实例。
- */
-const editor = (id, mode, readOnly) => {
-    // 定义 CodeMirror 编辑器选项。
-    const options = {
-        mode,                       // 编辑器的语言模式。
-        autoRefresh: true,          // 自动刷新。
-        lint: true,                 // 启用代码检查。
-        indentUnit: 4,              // 缩进单位，默认为 2 个空格。
-        keyMap: 'sublime',          // 映射键盘。
-        theme: "<%=con.theme%>" ? "<%=con.theme%>" : "monokai",    // 主题。
-        readOnly,                   // 是否启用只读模式。
-        foldGutter: true,           // 启用折叠 gutter。
-        autocorrect: true,          // 自动更正。
-        spellcheck: true,           // 拼写检查。
-        autoCloseBrackets: true,    // 自动关闭括号和引号。
-        smartIndent: true,          // 智能缩进。
-        lineNumbers: true,          // 显示行号。
-        matchBrackets: true,        // 光标匹配括号。
-        styleActiveLine: true,      // 选中行高亮。
-        lineWrapping: true,         // 是否应滚动或换行以显示长行。
-        lineWiseCopyCut: true,      // 行内复制剪切。
-        showCursorWhenSelecting: true,   // 聚焦时显示光标。
-        maxHighlightLength: Infinity,    // 最大高亮长度，Infinity 表示渲染所有行。
-        viewportMargin: 15,         // 滚动可视范围前后的行数。
-        gutters: GUTTERS,           // gutter 类型。
-        extraKeys: {
-            "F11": toggleFullScreen,  // 切换全屏。
-            "Esc": toggleFullScreen,  // 退出全屏。
-            "Shift-Tab": cm => cm.somethingSelected() ? cm.indentSelection('subtract') : cm.replaceSelection(cm.getOption("indentUnit")),   // Shift-Tab 键缩进。
-            "Alt-F": "findPersistent",// 查找。
-            "Ctrl-J": "toMatchingTag",// 标签匹配。
-        },
-    };
+    function loadScript(url) {
+        return new Promise(function(resolve, reject) {
+            var script = document.createElement('script');
+            script.src = url;
+            script.onload = resolve;
+            script.onerror = function() {
+                reject(new Error('Failed: ' + url));
+            };
+            document.head.appendChild(script);
+        });
+    }
 
-    // 创建 CodeMirror 实例。
-    const editor = CodeMirror.fromTextArea(document.getElementById(id), options);
+    function loadCDN(index) {
+        if (index >= CDN_CANDIDATES.length) {
+            return Promise.reject(new Error('All CDNs failed'));
+        }
+        var item = CDN_CANDIDATES[index];
+        var p = getpaths(item);
 
-    // 设置编辑器大小。
-    editor.setSize("<%=con.width%>", "<%=con.height%>");
+        return loadScript(p.corePath + '/codemirror' + p.ext).then(function() {
+            return p;
+        }).catch(function() {
+            console.warn(item.id + ' 失败，尝试下一个');
+            return loadCDN(index + 1);
+        });
+    }
 
-    // 注册事件处理程序。
-    editor.on("gutterClick", (cm, n) => {
-        const info = cm.lineInfo(n);
-        cm.setGutterMarker(
-            n,
-            "breakpoints",
-            info.gutterMarkers ? null : makeMarker()
-        );
-    }); // 点击 gutter 切换 marker。
+    loadCDN(0).then(function(p) {
+        loadStyle(p.corePath + '/codemirror.css');
+        loadStyle(p.pkgPath + '/theme/<%=theme%>.css');
+        loadStyle(p.pkgPath + '/addon/dialog/dialog.css');
+        loadStyle(p.pkgPath + '/addon/fold/foldgutter.css');
+        loadStyle(p.pkgPath + '/addon/display/fullscreen.css');
+        loadStyle(p.pkgPath + '/addon/search/matchesonscrollbar.css');
+        if (NEED_LINT) {
+            loadStyle(p.pkgPath + '/addon/lint/lint.css');
+            loadStyle(p.pkgPath + '/addon/hint/show-hint.css');
+        }
 
-    // 返回创建的 CodeMirror 编辑器实例。
-    return editor;
-};
+        var plugins = [
+            p.pkgPath + '/keymap/sublime' + p.ext,
+            p.pkgPath + '/keymap/emacs' + p.ext,
+            p.pkgPath + '/addon/dialog/dialog' + p.ext,
+            p.pkgPath + '/addon/fold/xml-fold' + p.ext,
+            p.pkgPath + '/addon/fold/foldcode' + p.ext,
+            p.pkgPath + '/addon/fold/foldgutter' + p.ext,
+            p.pkgPath + '/addon/fold/brace-fold' + p.ext,
+            p.pkgPath + '/addon/fold/indent-fold' + p.ext,
+            p.pkgPath + '/addon/fold/markdown-fold' + p.ext,
+            p.pkgPath + '/addon/search/search' + p.ext,
+            p.pkgPath + '/addon/search/jump-to-line' + p.ext,
+            p.pkgPath + '/addon/search/searchcursor' + p.ext,
+            p.pkgPath + '/addon/search/match-highlighter' + p.ext,
+            p.pkgPath + '/addon/search/matchesonscrollbar' + p.ext,
+            p.pkgPath + '/addon/selection/active-line' + p.ext,
+            p.pkgPath + '/addon/selection/mark-selection' + p.ext,
+            p.pkgPath + '/addon/scroll/annotatescrollbar' + p.ext,
+            p.pkgPath + '/addon/edit/closetag' + p.ext,
+            p.pkgPath + '/addon/edit/matchtags' + p.ext,
+            p.pkgPath + '/addon/edit/matchbrackets' + p.ext,
+            p.pkgPath + '/addon/edit/closebrackets' + p.ext,
+            p.pkgPath + '/addon/display/fullscreen' + p.ext,
+            p.pkgPath + '/addon/display/autorefresh' + p.ext
+        ];
 
-function jqid(id) {
-    return (id) ? '#' + id.replace(/([#;?%&,.+*~\':"!^$[\]()=>|\/@_])/g, '\\$1') : null;
-};
+        if (NEED_LINT) {
+            plugins.push(p.pkgPath + '/addon/lint/lint' + p.ext);
+            plugins.push(p.pkgPath + '/addon/hint/show-hint' + p.ext);
+        }
 
-<%
-for sum_str = 1, con.note_sum do
-    local sum   = string.format("%02d", sum_str)
-    local only  = con.only or con['only_note'  .. sum] or false
-    local model = con['model_note' .. sum] or con.note_suffix
-    local id    = string.format('note%s', sum)
-    if model == 'sh' or model == 'py' then
-      model = model == 'sh' and 'shell' or 'python'
-    end
-%>
-    editor('<%=id%>', '<%=model%>', '<%=only%>');
-<%end%>
+        <% for _, m in ipairs(modes) do %>
+            plugins.push(p.pkgPath + '/mode/<%=m%>/<%=m%>' + p.ext);
+            <% if lintModes[m] then %>
+                plugins.push(p.pkgPath + '/addon/lint/<%=m%>-lint' + p.ext);
+            <% end %>
+        <% end %>
 
+        return Promise.all(plugins.map(function(src) {
+            return loadScript(src).catch(function(err) {
+                console.warn(err.message);
+            });
+        }));
+    }).then(function() {
+        initEditors();
+    }).catch(function(err) {
+        console.error('CodeMirror 加载失败:', err);
+    });
+
+    function initEditors() {
+        var toggleFullScreen = function(cm) {
+            cm.setOption("fullScreen", !cm.getOption("fullScreen"));
+        };
+
+        var makeMarker = function() {
+            var el = document.createElement("div");
+            el.style.color = "#822";
+            el.innerHTML = "●";
+            return el;
+        };
+
+        var BASE_OPTIONS = {
+            autoRefresh: true,
+            lint: true,
+            indentUnit: 4,
+            keyMap: 'sublime',
+            theme: '<%=theme%>',
+            foldGutter: true,
+            autocorrect: true,
+            spellcheck: true,
+            autoCloseBrackets: true,
+            smartIndent: true,
+            lineNumbers: true,
+            matchBrackets: true,
+            styleActiveLine: true,
+            lineWrapping: true,
+            lineWiseCopyCut: true,
+            showCursorWhenSelecting: true,
+            maxHighlightLength: Infinity,
+            viewportMargin: 15,
+            gutters: GUTTERS,
+            extraKeys: {
+                "F11": toggleFullScreen,
+                "Esc": toggleFullScreen,
+                "Shift-Tab": function(cm) {
+                    cm.somethingSelected()
+                        ? cm.indentSelection('subtract')
+                        : cm.replaceSelection(cm.getOption("indentUnit"));
+                },
+                "Alt-F": "findPersistent",
+                "Ctrl-J": "toMatchingTag",
+            },
+        };
+
+        var createEditor = function(id, mode, readOnly) {
+            var options = Object.assign({}, BASE_OPTIONS, { mode: mode, readOnly: readOnly });
+            var cm = CodeMirror.fromTextArea(document.getElementById(id), options);
+            cm.setSize('<%=con.width%>', '<%=con.height%>');
+            cm.on("gutterClick", function(cm, n) {
+                var info = cm.lineInfo(n);
+                cm.setGutterMarker(n, "breakpoints", info.gutterMarkers ? null : makeMarker());
+            });
+            return cm;
+        };
+
+        <% for sum_str = 1, con.note_sum do
+            local sum   = string.format("%02d", sum_str)
+            local only  = con.only or con['only_note' .. sum] or false
+            local model = con['model_note' .. sum] or con.note_suffix
+            if model == 'sh' then model = 'shell'
+            elseif model == 'py' then model = 'python' end
+        %>
+        createEditor('note<%=sum%>', '<%=model%>', '<%=only%>');
+        <% end %>
+    }
 //]]>
 </script>
