@@ -325,7 +325,7 @@ aceline_spacing:depends("aceenable", 1)
 
 local aceheight = f:taboption("ace", Value, "aceheight",
     translate("Display Height"))
-aceheight.default = "500"
+aceheight.default = "350"
 addValues(aceheight, 'auto', 300, 400, 500, 600)
 aceheight:depends("aceenable", 1)
 
@@ -344,13 +344,13 @@ local note_suffix = f:taboption("note", ListValue, "note_suffix",
 note_suffix.default = "txt"
 addValues(note_suffix, 'txt', 'sh', 'lua', 'py', 'js')
 
-local enable = f:taboption("note", Flag, "enable",
+local cmenable = f:taboption("note", Flag, "cmenable",
     translate("Enable CodeMirror Support"))
-enable:depends("aceenable", 0)
+cmenable:depends("aceenable", 0)
 
 local aceenable = f:taboption("note", Flag, "aceenable",
     translate("Enable Ace Support"))
-aceenable:depends("enable", 0)
+aceenable:depends("cmenable", 0)
 
 local theme = f:taboption("codemirror", ListValue, "theme",
     translate("Design"))
@@ -358,26 +358,26 @@ theme.default = "monokai"
 for _, k in ipairs(note_theme_array) do
     theme:value(k[1], k[2])
 end
-theme:depends("enable", 1)
+theme:depends("cmenable", 1)
 
 local font_size = f:taboption("codemirror", Value, "font_size",
     translate("Font Size"))
 font_size.default = "14"
 addValues(font_size, 10, 12, 14, 16)
 font_size.datatype = "uinteger"
-font_size:depends("enable", 1)
+font_size:depends("cmenable", 1)
 
 local cmline_spacing = f:taboption("codemirror", Value, "cmline_spacing",
     translate("Line Spacing"))
 cmline_spacing.default = "1.2"
 addValues(cmline_spacing, '1.0', '1.2', '1.3', '1.5')
-cmline_spacing:depends("enable", 1)
+cmline_spacing:depends("cmenable", 1)
 
 local height = f:taboption("codemirror", Value, "height",
     translate("Display Height"))
-height.default = "500"
+height.default = "350"
 addValues(height, 'auto', 500, 600, 800)
-height:depends("enable", 1)
+height:depends("cmenable", 1)
 
 local width = f:taboption("codemirror", Value, "width",
     translate("Display Width"))
@@ -386,14 +386,14 @@ width:value("100%", translate("Auto"))
 width:value("1000", "1000px")
 width:value("1300", "1300px")
 width:value("1500", "1500px")
-width:depends("enable", 1)
+width:depends("cmenable", 1)
 
 local only = f:taboption("codemirror", Flag, "only",
     translate("Read-Only Mode"), translate("maximum authority"))
 only.enabled = 'true'
 only.disabled = 'false'
 only.default = only.disabled
-only:depends("enable", 1)
+only:depends("cmenable", 1)
 
 local s = m:section(TypedSection, "tinynote")
 s.anonymous = true
@@ -401,7 +401,7 @@ s.addremove = false
 
 local con         = uci:get_all("luci", "tinynote")
 local note_sum    = con.note_sum    or "1"
-local code_enable = con.enable      or nil
+local code_cmenable = con.cmenable      or nil
 local code_aceenable = con.aceenable or nil
 local note_suffix = con.note_suffix or "txt"
 local note_path   = con.note_path   or "/etc/tinynote"
@@ -448,7 +448,7 @@ for sum_str = 1, note_sum do
 
         local a = s:taboption(note, TextValue, "note" .. sum)
         a.template = "tinynote/tvalue"
-        if code_enable or code_aceenable then
+        if code_cmenable or code_aceenable then
             a.id = "note" .. sum
         end
         a.rows = 20
@@ -503,7 +503,7 @@ for file_name in fs.dir(note_path) do
     end
 end
 
-if code_enable then
+if code_cmenable then
     m:append(Template("tinynote/codemirror"))
 elseif code_aceenable then
     m:append(Template("tinynote/ace"))

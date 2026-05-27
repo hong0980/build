@@ -1,214 +1,193 @@
 <%
 local uci = require "luci.model.uci".cursor()
-local con = uci:get_all("luci", "tinynote")
-local modes = {}
-local needLint = false
-local lintModes = { xml=true, css=true, json=true, yaml=true, html=true, javascript=true }
-local keys = {}
+local con = uci:get_all("luci", "tinynote") or {}
+local modes, needLint, keys = {}, false, {}
 
-for v, k in pairs(con) do
-    if v:find("model_") or v:find("note_suffix") then
-        if not keys[k] then
-            local m = (k == 'sh') and 'shell' or (k == 'py') and 'python' or k
-            modes[#modes+1] = m
-            keys[k] = true
-            if lintModes[m] then needLint = true end
+if type(con) == "table" then
+    for v, k in pairs(con) do
+        if v:find("model_") or v:find("note_suffix") then
+            if not keys[k] then
+                local m = (k == 'sh') and 'shell' or (k == 'py') and 'python' or k
+                modes[#modes+1] = m
+                keys[k] = true
+                if ({xml=true, css=true, json=true, yaml=true, html=true, javascript=true})[m] then
+                    needLint = true
+                end
+            end
         end
     end
 end
-
 local theme = con.theme or "monokai"
 %>
-
 <style>
     .CodeMirror {
-        font-size: <%=con.font_size%>px;
-        line-height: <%=con.cmline_spacing%>;
-        resize: both !important;
-        text-align: left !important;
-        font-family: Consolas, monospace !important;
+        font-size: <%=con.font_size or 13%>px;
+        line-height: <%=con.cmline_spacing or "1.2"%>;
+        resize: both;
+        font-family: Consolas, monospace;
         border-top: 1px solid black;
         border-bottom: 1px solid black;
     }
 </style>
-
 <script>//<![CDATA[
-    var NEED_LINT = <%=needLint and "true" or "false"%>;
-    var GUTTERS = ["CodeMirror-lint-markers", "CodeMirror-foldgutter", "CodeMirror-linenumbers", "breakpoints"];
-    var CDN_CANDIDATES = [
-        { id: 'bootcdn',    base: 'https://cdn.bootcdn.net/ajax/libs/codemirror/6.65.7' },
-        { id: 'jsdelivr',   base: 'https://cdn.jsdelivr.net/npm/codemirror@6.65.7' },
-        { id: 'staticfile', base: 'https://cdn.staticfile.net/codemirror/6.65.7' },
-        { id: 'cdnjs',      base: 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7' }
+    var CM_VERSION = '5.65.17';
+    var CM_THEME = '<%=theme%>';
+    var CM_MODES = [<% for i,m in ipairs(modes) do %>'<%=m%>'<%=i<#modes and ',' or ''%><% end %>];
+    var CM_NEED_LINT = <%=needLint and "true" or "false"%>;
+
+    var CM_CDNS = [
+        { base: 'https://lib.baomitu.com/codemirror/' + CM_VERSION, js: 'codemirror.min.js', css: 'codemirror.min.css' },
+        { base: 'https://cdn.bootcdn.net/ajax/libs/codemirror/' + CM_VERSION, js: 'codemirror.min.js', css: 'codemirror.min.css' },
+        { base: 'https://cdn.jsdelivr.net/npm/codemirror@' + CM_VERSION, js: 'lib/codemirror.min.js', css: 'lib/codemirror.min.css' },
+        { base: 'https://cdn.staticfile.net/codemirror/' + CM_VERSION, js: 'codemirror.min.js', css: 'codemirror.min.css' }
     ];
 
-    function getpaths(item) {
-        var pkgPath  = item.base;
-        var corePath = item.id === 'jsdelivr' ? item.base + '/lib' : item.base;
-        var ext      = item.id === 'jsdelivr' ? '.js' : '.min.js';
-        return { corePath: corePath, pkgPath: pkgPath, ext: ext };
-    }
-
-    function loadStyle(url) {
-        var link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = url;
-        document.head.appendChild(link);
-    }
-
-    function loadScript(url) {
-        return new Promise(function(resolve, reject) {
+    function loadJS(src, timeout) {
+        return new Promise(function(resolve) {
             var script = document.createElement('script');
-            script.src = url;
-            script.onload = resolve;
-            script.onerror = function() {
-                reject(new Error('Failed: ' + url));
-            };
+            var done = false;
+            var timer = setTimeout(function() { done = true; resolve(false); }, timeout || 5000);
+            script.src = src;
+            script.onload = function() { if (!done) { clearTimeout(timer); resolve(true); } };
+            script.onerror = function() { if (!done) { clearTimeout(timer); resolve(false); } };
             document.head.appendChild(script);
         });
     }
 
-    function loadCDN(index) {
-        if (index >= CDN_CANDIDATES.length) {
-            return Promise.reject(new Error('All CDNs failed'));
-        }
-        var item = CDN_CANDIDATES[index];
-        var p = getpaths(item);
-
-        return loadScript(p.corePath + '/codemirror' + p.ext).then(function() {
-            return p;
-        }).catch(function() {
-            console.warn(item.id + ' 失败，尝试下一个');
-            return loadCDN(index + 1);
+    function loadCSS(url) {
+        return new Promise(function(resolve) {
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = url;
+            link.onload = link.onerror = function() { resolve(true); };
+            document.head.appendChild(link);
         });
     }
 
-    loadCDN(0).then(function(p) {
-        loadStyle(p.corePath + '/codemirror.css');
-        loadStyle(p.pkgPath + '/theme/<%=theme%>.css');
-        loadStyle(p.pkgPath + '/addon/dialog/dialog.css');
-        loadStyle(p.pkgPath + '/addon/fold/foldgutter.css');
-        loadStyle(p.pkgPath + '/addon/display/fullscreen.css');
-        loadStyle(p.pkgPath + '/addon/search/matchesonscrollbar.css');
-        if (NEED_LINT) {
-            loadStyle(p.pkgPath + '/addon/lint/lint.css');
-            loadStyle(p.pkgPath + '/addon/hint/show-hint.css');
+    (async function() {
+        var base = null;
+
+        // 加载 Core
+        for (var i = 0; i < CM_CDNS.length; i++) {
+            var cdn = CM_CDNS[i];
+            var ok = await loadJS(cdn.base + '/' + cdn.js);
+            if (ok && window.CodeMirror) {
+                await loadCSS(cdn.base + '/' + cdn.css);
+                base = cdn.base;
+                break;
+            }
         }
 
-        var plugins = [
-            p.pkgPath + '/keymap/sublime' + p.ext,
-            p.pkgPath + '/keymap/emacs' + p.ext,
-            p.pkgPath + '/addon/dialog/dialog' + p.ext,
-            p.pkgPath + '/addon/fold/xml-fold' + p.ext,
-            p.pkgPath + '/addon/fold/foldcode' + p.ext,
-            p.pkgPath + '/addon/fold/foldgutter' + p.ext,
-            p.pkgPath + '/addon/fold/brace-fold' + p.ext,
-            p.pkgPath + '/addon/fold/indent-fold' + p.ext,
-            p.pkgPath + '/addon/fold/markdown-fold' + p.ext,
-            p.pkgPath + '/addon/search/search' + p.ext,
-            p.pkgPath + '/addon/search/jump-to-line' + p.ext,
-            p.pkgPath + '/addon/search/searchcursor' + p.ext,
-            p.pkgPath + '/addon/search/match-highlighter' + p.ext,
-            p.pkgPath + '/addon/search/matchesonscrollbar' + p.ext,
-            p.pkgPath + '/addon/selection/active-line' + p.ext,
-            p.pkgPath + '/addon/selection/mark-selection' + p.ext,
-            p.pkgPath + '/addon/scroll/annotatescrollbar' + p.ext,
-            p.pkgPath + '/addon/edit/closetag' + p.ext,
-            p.pkgPath + '/addon/edit/matchtags' + p.ext,
-            p.pkgPath + '/addon/edit/matchbrackets' + p.ext,
-            p.pkgPath + '/addon/edit/closebrackets' + p.ext,
-            p.pkgPath + '/addon/display/fullscreen' + p.ext,
-            p.pkgPath + '/addon/display/autorefresh' + p.ext
-        ];
-
-        if (NEED_LINT) {
-            plugins.push(p.pkgPath + '/addon/lint/lint' + p.ext);
-            plugins.push(p.pkgPath + '/addon/hint/show-hint' + p.ext);
+        if (!base) {
+            document.querySelectorAll('textarea').forEach(function(ta) {
+                ta.style.cssText = 'width:100%;min-height:200px;font-family:monospace;font-size:13px;padding:8px;box-sizing:border-box;';
+            });
+            return;
         }
 
-        <% for _, m in ipairs(modes) do %>
-            plugins.push(p.pkgPath + '/mode/<%=m%>/<%=m%>' + p.ext);
-            <% if lintModes[m] then %>
-                plugins.push(p.pkgPath + '/addon/lint/<%=m%>-lint' + p.ext);
-            <% end %>
-        <% end %>
+        var loadedFeatures = { keymaps: [], addons: [] };
+        var tasks = [];
 
-        return Promise.all(plugins.map(function(src) {
-            return loadScript(src).catch(function(err) {
-                console.warn(err.message);
-            });
-        }));
-    }).then(function() {
-        initEditors();
-    }).catch(function(err) {
-        console.error('CodeMirror 加载失败:', err);
-    });
+        function loadResource(type, name) {
+            var url;
+            if (type === 'theme') url = base + '/theme/' + name + '.min.css';
+            else if (type === 'mode') url = base + '/mode/' + name + '/' + name + '.min.js';
+            else if (type === 'keymap') url = base + '/keymap/' + name + '.min.js';
+            else url = base + '/addon/' + name + '.min.js';
 
-    function initEditors() {
-        var toggleFullScreen = function(cm) {
-            cm.setOption("fullScreen", !cm.getOption("fullScreen"));
-        };
+            var loader = (type === 'theme') ? loadCSS : loadJS;
+            return loader(url).then(function(ok) {
+                if (ok && type !== 'theme') {
+                    if (type === 'keymap') loadedFeatures.keymaps.push(name);
+                    else if (type === 'addon') loadedFeatures.addons.push(name);
+                }
+                return true;
+            }).catch(function() { return true; });
+        }
 
-        var makeMarker = function() {
-            var el = document.createElement("div");
-            el.style.color = "#822";
-            el.innerHTML = "●";
-            return el;
-        };
+        // 加载资源
+        if (CM_THEME) tasks.push(loadResource('theme', CM_THEME));
 
-        var BASE_OPTIONS = {
-            autoRefresh: true,
-            lint: true,
-            indentUnit: 4,
-            keyMap: 'sublime',
-            theme: '<%=theme%>',
-            foldGutter: true,
-            autocorrect: true,
-            spellcheck: true,
-            autoCloseBrackets: true,
-            smartIndent: true,
-            lineNumbers: true,
-            matchBrackets: true,
-            styleActiveLine: true,
-            lineWrapping: true,
-            lineWiseCopyCut: true,
-            showCursorWhenSelecting: true,
-            maxHighlightLength: Infinity,
-            viewportMargin: 15,
-            gutters: GUTTERS,
-            extraKeys: {
-                "F11": toggleFullScreen,
-                "Esc": toggleFullScreen,
-                "Shift-Tab": function(cm) {
-                    cm.somethingSelected()
-                        ? cm.indentSelection('subtract')
-                        : cm.replaceSelection(cm.getOption("indentUnit"));
-                },
-                "Alt-F": "findPersistent",
-                "Ctrl-J": "toMatchingTag",
-            },
-        };
+        CM_MODES.forEach(function(mode) {
+            tasks.push(loadResource('mode', mode));
+            if (CM_NEED_LINT && {xml:true,css:true,json:true,yaml:true,html:true,javascript:true}[mode]) {
+                tasks.push(loadResource('addon', 'lint/' + mode + '-lint'));
+            }
+        });
 
-        var createEditor = function(id, mode, readOnly) {
-            var options = Object.assign({}, BASE_OPTIONS, { mode: mode, readOnly: readOnly });
-            var cm = CodeMirror.fromTextArea(document.getElementById(id), options);
-            cm.setSize('<%=con.width%>', '<%=con.height%>');
-            cm.on("gutterClick", function(cm, n) {
-                var info = cm.lineInfo(n);
-                cm.setGutterMarker(n, "breakpoints", info.gutterMarkers ? null : makeMarker());
-            });
-            return cm;
-        };
+        tasks.push(loadResource('keymap', 'sublime'));
+        tasks.push(loadResource('keymap', 'emacs'));
 
-        <% for sum_str = 1, con.note_sum do
-            local sum   = string.format("%02d", sum_str)
-            local only  = con.only or con['only_note' .. sum] or false
+        var addons = ['dialog/dialog','search/searchcursor','search/search','search/jump-to-line',
+            'search/match-highlighter','search/matchesonscrollbar','fold/foldcode',
+            'fold/foldgutter','fold/brace-fold','fold/indent-fold','fold/markdown-fold',
+            'fold/xml-fold','edit/closebrackets','edit/closetag','edit/matchbrackets',
+            'edit/matchtags','selection/active-line','selection/mark-selection',
+            'scroll/annotatescrollbar','display/fullscreen','display/autorefresh'];
+
+        addons.forEach(function(addon) { tasks.push(loadResource('addon', addon)); });
+
+        if (CM_NEED_LINT) {
+            tasks.push(loadResource('addon', 'lint/lint'));
+            tasks.push(loadResource('addon', 'hint/show-hint'));
+            loadCSS(base + '/addon/lint/lint.css');
+            loadCSS(base + '/addon/hint/show-hint.css');
+        }
+
+        loadCSS(base + '/addon/dialog/dialog.css');
+        loadCSS(base + '/addon/fold/foldgutter.css');
+        loadCSS(base + '/addon/display/fullscreen.css');
+        loadCSS(base + '/addon/search/matchesonscrollbar.css');
+
+        await Promise.all(tasks);
+
+        var keyMap = loadedFeatures.keymaps.indexOf('sublime') >= 0 ? 'sublime' : 'default';
+
+        function createEditor(id, mode, readOnly) {
+            var ta = document.getElementById(id);
+            if (!ta) return;
+            try {
+                var cm = CodeMirror.fromTextArea(ta, {
+                    autoRefresh: true,
+                    lint: CM_NEED_LINT,
+                    indentUnit: 4,
+                    keyMap: keyMap,
+                    theme: CM_THEME,
+                    foldGutter: true,
+                    lineNumbers: true,
+                    matchBrackets: true,
+                    styleActiveLine: true,
+                    lineWrapping: true,
+                    autoCloseBrackets: true,
+                    gutters: ["CodeMirror-lint-markers", "CodeMirror-foldgutter", "CodeMirror-linenumbers", "breakpoints"],
+                    extraKeys: {
+                        "F11": function(cm) { cm.setOption("fullScreen", !cm.getOption("fullScreen")); },
+                        "Esc": function(cm) { cm.setOption("fullScreen", !cm.getOption("fullScreen")); },
+                        "Shift-Tab": function(cm) { cm.indentSelection(cm.somethingSelected() ? 'subtract' : 'add'); }
+                    }
+                });
+                cm.setSize('<%=con.width or "100"%>', '<%=con.height or "300"%>');
+                cm.on("gutterClick", function(cm, n) {
+                    var info = cm.lineInfo(n);
+                    var marker = info.gutterMarkers ? null : (function() {
+                        var d = document.createElement('div');
+                        d.style.color = '#822';
+                        d.innerHTML = '●';
+                        return d;
+                    })();
+                    cm.setGutterMarker(n, "breakpoints", marker);
+                });
+            } catch(e) {}
+        }
+
+        <% for sum_str = 1, (tonumber(con.note_sum) or 0) do
+            local sum = string.format("%02d", sum_str)
+            local only = con.only or con['only_note' .. sum] or false
             local model = con['model_note' .. sum] or con.note_suffix
-            if model == 'sh' then model = 'shell'
-            elseif model == 'py' then model = 'python' end
+            if model == 'sh' then model = 'shell' elseif model == 'py' then model = 'python' end
         %>
-        createEditor('note<%=sum%>', '<%=model%>', '<%=only%>');
+        createEditor('note<%=sum%>', '<%=model%>', <%=only and "true" or "false"%>);
         <% end %>
-    }
+    })();
 //]]>
 </script>
