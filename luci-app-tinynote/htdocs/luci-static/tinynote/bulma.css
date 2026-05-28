@@ -2179,11 +2179,13 @@ fieldset[disabled] .button {
 }
 
 .icon {
-  align-items: center;
+/*  align-items: center;
   display: inline-flex;
-  justify-content: center;
+  justify-content: center;*/
   height: 1.5rem;
   width: 1.5rem;
+  vertical-align: middle;
+  display: inline-block;
 }
 
 .icon.is-small {
@@ -7872,7 +7874,7 @@ label.panel-block:hover {
   }
   .column.is-2-desktop {
     flex: none;
-    width: 16.66667%;
+    width: 12%;
   }
   .column.is-offset-2-desktop {
     margin-left: 16.66667%;
@@ -11857,17 +11859,6 @@ a.has-text-danger-dark:hover, a.has-text-danger-dark:focus {
     font-weight: 700
 }
 
-/* @font-face {
-    font-family: 'Material Icons';
-    font-style: normal;
-    font-weight: 400;
-    src: url(https://fonts.gstatic.com/s/materialicons/v55/flUhRq6tzZclQEJ-Vdg-IuiaDsNc.woff2) format('woff2');
-} */
-
-.icon {
-    cursor: pointer;
-}
-
 .material-icons {
     font-family: 'Material Icons';
     font-weight: normal;
@@ -11905,22 +11896,20 @@ a.has-text-danger-dark:hover, a.has-text-danger-dark:focus {
     width: 100%;
     height: 36px;
     margin: 0;
-    -moz-box-sizing: border-box;
-    -webkit-box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     box-sizing: border-box;
     color: #fff;
-    background-color: #727272;
-    border-bottom: 1px solid #727272
+    background-color: #363636;
+    border-bottom: 1px solid #363636;
 }
 
 .aceEditorMenu a {
     margin: 0 4px;
+    cursor: pointer;
     padding-top: 7px;
     color: #f5f5f5
-}
-
-.aceEditorBorder {
-    border: 1px solid #4a4a4a
 }
 
 .editortoolbar {
@@ -11932,33 +11921,46 @@ a.has-text-danger-dark:hover, a.has-text-danger-dark:focus {
     float: right;
 }
 
+.editortoolbar .icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.editortoolbar .icon::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -4px;
+    transform: translateX(-50%);
+    width: 110%;
+    max-width: 32px;
+    height: 2px;
+    background: currentColor;
+    border-radius: 1px;
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out;
+}
+.editortoolbar .icon:hover::after {
+    opacity: 1;
+}
+
 .twoEditor {
     height: 60vh;
     width: 100%
 }
 
-.aceEditorBorder .aceEditorMenu {
-    background-color: #363636;
-    border-bottom: 1px solid #363636;
-    /* padding: 6px; */
+.aceEditorBorder {
+    border: 1px solid #4a4a4a
 }
 
-.aceEditorBorder .aceStatusBar {
+.aceStatusBar {
     background-color: #363636;
     border-bottom: 1px solid #363636;
     color: #f5f5f5;
     padding: 5px;
     display: flex;
     align-items: center;
-}
-
-.aceEditorBorder .aceStatusBar .status-left {
-    flex-grow: 1;
-    padding-left: 10px;
-}
-
-.aceEditorBorder .aceStatusBar .status-right {
-    padding-right: 10px;
 }
 
 .column .button {
@@ -11980,4 +11982,8 @@ a.has-text-danger-dark:hover, a.has-text-danger-dark:focus {
     left: 0;
     bottom: 0;
     width: 100%;
+}
+
+.btn-text-sm {
+    font-size: 14px;
 }

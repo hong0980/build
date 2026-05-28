@@ -1,32 +1,4 @@
-<style>
-.aceEditorMenu .editortoolbar .icon {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-}
-
-.aceEditorMenu .editortoolbar .icon::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    bottom: -3px;
-    transform: translateX(-50%);
-    width: 120%;
-    max-width: 30px;
-    height: 2px;
-    background: currentColor;
-    border-radius: 1px;
-    opacity: 0;
-    transition: opacity 0.15s ease-in-out;
-}
-
-.aceEditorMenu .editortoolbar .icon:hover::after {
-    opacity: 1;
-}
-</style>
-<link rel="stylesheet" href="/luci-static/tinynote/bulma.css"/><br>
+<link rel="stylesheet" href="/luci-static/tinynote/bulma.css"/>
 <script src="/luci-static/tinynote/jquery.min.js"></script>
 <script src="/luci-static/tinynote/clipboard.min.js"></script>
 <script
@@ -48,228 +20,152 @@
     })(this)
   "
 ></script>
-<div class="columns is-centered" style="display: none;"></div>
-<progress class="progress is-success is-small" max="100" style="display:none">50%</progress>
-<div class="columns mb-0 is-desktop">
+
+<div class="columns is-desktop" style="margin-top:.4em;">
     <div class="column">
         <div id="inputDiv" class="aceEditorBorder">
             <div class="aceEditorMenu">
-                <a style="float:left;">
-                    <i class="is-size-6 is-family-primary">输入</i>
-                </a>
-                <div class="editortoolbar btn-group-sm">
-                    <!-- <a  class="icon is-hidden-mobile" onclick="setFromLocalStorage()" title="从本地存储加载以前的数据">
-                        <i class="material-icons">history</i>
+                <span class="has-text-left">
+                    <i class="is-size-6 is-family-primary"><%:输入%></i>
+                </span>
+                <div class="editortoolbar">
+                    <a title="<%:清除%>" class="icon" onclick="clearAll(event, editor1);">
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"></path>
+                        </svg>
                     </a>
-                    <a id="fileopen" class="icon" title="打开文件">
-                        <i class="material-icons">folder_open</i>
+                    <a id='copyeditor1' class="icon" title="<%:复制输入代码%>">
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path>
+                        </svg>
                     </a>
-                    <a  class="icon is-hidden-mobile" title="保存" onclick="openSaveModal(true)">
-                        <i class="material-icons">save</i>
-                    </a> -->
-                    <a class="icon" title="清除" onclick="clearAll(event, editor1);">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"></path>
-                            </svg>
-                        </i>
+                    <a id="inputFullScreen" class="icon" onclick="addFullScreen('input');" title="<%:全屏%>">
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"></path>
+                        </svg>
                     </a>
-                    <a id='copyeditor1' class="icon" title="复制输入代码">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path>
-                            </svg>
-                        </i>
-                    </a>
-                    <a id="inputFullScreen" class="icon" onclick="addFullScreen('input');" title="全屏">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"></path>
-                            </svg>
-                        </i>
-                    </a>
-                    <a id="inputCloseScreen" style="display:none" class="icon" onclick="removeFullScreen('input');" title="关闭全屏">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"></path>
-                            </svg>
-                        </i>
+                    <a id="inputCloseScreen" class="icon" style="display:none" onclick="removeFullScreen('input');" title="<%:关闭全屏%>">
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"></path>
+                        </svg>
                     </a>
                 </div>
             </div>
-            <div id="editor1" style="height: 60vh; width: 100%"></div>
+            <div id="editor1" class="twoEditor"></div>
             <div class="columns is-mobile m-0 aceStatusBar" id="inputStatusBar">
-                <div class="column is-two-thirds p-0 pl-0 status-left" id="inputAceLineColumn">Ln: 1 Col: 0; Max Col: 0</div>
-                <div class="column is-one-thirds p-0 has-text-centered status-right" id="inputTextSize">Size: 0 Byte</div>
+                <div class="column is-two-thirds p-0 pl-0" id="inputAceLineColumn"><%:Ln: 1 Col: 0; Max Col: 0%></div>
+                <div class="column is-one-thirds p-0 has-text-right" id="inputTextSize"><%:Size: 0 Byte%></div>
             </div>
         </div>
     </div>
-    <div class="column is-12-mobile is-2-desktop has-text-centered">
+
+    <div class="column is-2-desktop">
         <div class="columns mb-0">
             <div class="column">
-                <label class="button is-fullwidth" title="上传文件" for="fileInput">
-                    <input id="fileInput" class="file-input" type="file" onchange="changeToFileContent(this)" style="display: none;" />
-                    <span class="icon is-hidden-desktop-only">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"></path>
-                            </svg>
-                        </i>
+                <label class="button is-fullwidth btn-text-sm" title="<%:上传文件%>" for="fileInput">
+                    <input id="fileInput" class="file-input" type="file" onchange="changeToFileContent(this)" />
+                    <span class="is-hidden-desktop-only icon">
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"></path>
+                        </svg>
                     </span>
-                    <span>文件</span>
+                    <span><%:文件%></span>
                 </label>
             </div>
         </div>
         <div class="field">
             <p class="control">
-                <button class="button is-fullwidth" title="下载文件" onclick="downloadFile(event);">
+                <button class="button is-fullwidth btn-text-sm" title="<%:下载文件%>" onclick="downloadFile(event);">
                     <span class="icon">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"></path>
-                            </svg>
-                        </i>
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"></path>
+                        </svg>
                     </span>
-                    <span>下载</span>
+                    <span><%:下载%></span>
                 </button>
             </p>
         </div>
         <div class="field">
             <p class="control">
-                <button class="button is-fullwidth" title="清空全部" onclick="clearAll(event);">
+                <button class="button is-fullwidth btn-text-sm" title="<%:清空全部%>" onclick="clearAll(event);">
                     <span class="icon">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"></path>
-                            </svg>
-                        </i>
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"></path>
+                        </svg>
                     </span>
-                    <span>清空全部</span>
+                    <span><%:清空全部%></span>
                 </button>
             </p>
         </div>
         <div class="field">
+            <select id="indent_size" class="select">
+                <option value="1"><%:1 个空格缩进%></option>
+                <option value="2"><%:2 个空格缩进%></option>
+                <option value="3"><%:3 个空格缩进%></option>
+                <option value="4" selected="selected"><%:4 个空格缩进%></option>
+                <option value="8"><%:8 个空格缩进%></option>
+            </select>
+        </div>
+        <div class="field">
             <p class="control">
-                <select id="indent_size" class="select is-fullwidth">
-                    <option value="1">1 个制表符缩进</option>
-                    <option value="2">2 个空格缩进</option>
-                    <option value="3">3 个空格缩进</option>
-                    <option value="4" selected="selected">4 个空格缩进</option>
-                    <option value="8">8 个空格缩进</option>
-                </select>
+                <select id="aceTheme" class="select"></select>
             </p>
         </div>
         <div class="field">
             <p class="control">
-                <select id="aceTheme" class="select is-fullwidth"></select>
+                <select id="fontSize" class="select"></select>
             </p>
         </div>
-        <div class="field">
-            <p class="control">
-                <select id="fontSize" class="select is-fullwidth"></select>
-            </p>
-        </div>
-        <div class="field state" style="display: none;"></div>
-        <div class="field success" style="display: none;"></div>
+        <div class="field state navbar-menu"></div>
+        <div class="field success navbar-menu"></div>
     </div>
+
     <div class="column">
         <div id="outputDiv" class="aceEditorBorder">
             <div class="aceEditorMenu">
-                <a style="float:left;">
-                    <i class="is-size-6 is-family-primary" style="margin: 0;">输出</i>
-                </a>
-                <div class="editortoolbar btn-group-sm">
-                    <a class="icon" title="保存" onclick="openSaveModal(true)">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"></path>
-                            </svg>
-                        </i>
+                <span class="has-text-left">
+                    <i class="is-size-6 is-family-primary "><%:输出%></i>
+                </span>
+                <div class="editortoolbar">
+                    <a title="<%:保存%>" class="icon" onclick="openSaveModal(true)">
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"></path>
+                        </svg>
                     </a>
-                    <a class="icon" title="清除" onclick="clearAll(event, editor2);">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"></path>
-                            </svg>
-                        </i>
+                    <a title="<%:清除%>" class="icon" onclick="clearAll(event, editor2);">
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"></path>
+                        </svg>
                     </a>
-                    <a id="copyeditor2" class="icon" title="复制输出代码">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path>
-                            </svg>
-                        </i>
+                    <a id="copyeditor2" class="icon" title="<%:复制输出代码%>">
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path>
+                        </svg>
                     </a>
-                    <a class="icon" title="下载" onclick="downloadFile(event);">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"></path>
-                            </svg>
-                        </i>
+                    <a title="<%:下载%>" class="icon" onclick="downloadFile(event);">
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"></path>
+                        </svg>
                     </a>
-                    <a id="outputFullScreen" class="icon" onclick="addFullScreen('output');" title="全屏">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"></path>
-                            </svg>
-                        </i>
+                    <a id="outputFullScreen" class="icon" onclick="addFullScreen('output');" title="<%:全屏%>">
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"></path>
+                        </svg>
                     </a>
-                    <a id="outputCloseScreen" class="icon" style="display:none" onclick="removeFullScreen('output');" title="关闭全屏">
-                        <i class="material-icons">
-                            <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle">
-                                <path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"></path>
-                            </svg>
-                        </i>
+                    <a id="outputCloseScreen" class="icon" style="display:none" onclick="removeFullScreen('output');" title="<%:关闭全屏%>">
+                        <svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"></path>
+                        </svg>
                     </a>
                 </div>
             </div>
-            <div id="editor2" style="height: 60vh; width: 100%"></div>
+            <div id="editor2" class="twoEditor"></div>
             <div class="columns is-mobile m-0 aceStatusBar" id="outputStatusBar">
-                <div class="column is-two-thirds p-0 pl-0 status-left" id="outputAceLineColumn">Ln: 1 Col: 0; Max Col: 0</div>
-                <div class="column is-one-thirds p-0 has-text-centered status-right" id="outputTextSize">Size: 0 Byte</div>
+                <div class="column is-two-thirds p-0 pl-0" id="outputAceLineColumn"><%:Ln: 1 Col: 0; Max Col: 0%></div>
+                <div class="column is-one-thirds p-0 has-text-right" id="outputTextSize"><%:Size: 0 Byte%></div>
             </div>
         </div>
     </div>
 </div>
+
 <script src="/luci-static/tinynote/lib.js"></script>
-<script>
-    var TAB_MODE_MAP = {
-        'JS': 'javascript', 'HTML': 'html', 'CSS': 'css',
-        'JSON': 'json', 'YAML': 'yaml', 'Lua': 'lua', 'SH': 'sh'
-    };
-
-    function watchTabChange() {
-        var tabContents = { 'JS': '', 'HTML': '', 'CSS': '', 'JSON': '', 'YAML': '', 'Lua': '', 'SH': '' };
-        var $tabMenu = $('.cbi-tabmenu');
-        if (!$tabMenu.length) return;
-        var getActiveTab = () => {
-            return $tabMenu.find('li.cbi-tab').first().attr('data-tab') || '';
-        };
-
-        var lastTab = getActiveTab();
-        var switchTab = (from, to) => {
-            if (from) tabContents[from] = editor1.getValue();
-
-            var mode = TAB_MODE_MAP[to];
-            if (mode) {
-                editor1.session.setMode('ace/mode/' + mode);
-                editor2.session.setMode('ace/mode/' + mode);
-            }
-            editor1.setValue(tabContents[to] || '', -1);
-            editor2.setValue('', -1);
-        };
-
-        if (lastTab) switchTab(null, lastTab);
-        $tabMenu.on('click', 'li[data-tab]', function() {
-            setTimeout(() => {
-                var current = getActiveTab();
-                if (current && current !== lastTab) {
-                    switchTab(lastTab, current);
-                    lastTab = current;
-                }
-            }, 10);
-        });
-    }
-
-    $(function() { setTimeout(watchTabChange, 500); });
-</script>

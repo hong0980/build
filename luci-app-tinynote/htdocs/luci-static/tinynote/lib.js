@@ -43,24 +43,21 @@
 // mode: 编辑器的语言模式
 var editor1 = ace.edit("editor1"),
     editor2 = ace.edit("editor2");
-editor1.setOptions({
-    fontFamily: "Consolas, monospace",
-    printMarginColumn: -1,
-    wrap: true,
-    showPrintMargin: true
+
+[editor1, editor2].forEach(function (ed) {
+    ed.setOptions({
+        fontFamily: "Consolas, monospace",
+        printMarginColumn: -1,
+        wrap: true,
+        showPrintMargin: true
+    });
 });
 
-editor2.setOptions({
-    fontFamily: "Consolas, monospace",
-    printMarginColumn: -1,
-    wrap: true,
-    showPrintMargin: true
-});
 var output = '',
     indent_char = ' ',
     indent_size = calculateTabSize();
 
-$(document).ready(function () {
+$(function () {
     var themes = [
         { value: "ambiance",                 name: "Ambiance"                },
         { value: "chaos",                    name: "Chaos"                   },
@@ -109,673 +106,636 @@ $(document).ready(function () {
         { value: "xcode",                    name: "Xcode"                   }
     ],
         fontSizes = ['12px', '14px', '16px', '18px'],
-        selectTheme = $('#aceTheme'),
-        selectFontSize = $('#fontSize');
+        $selTheme = $('#aceTheme'),
+        $selFontSize = $('#fontSize');
 
-    function updateTheme(theme, fontSize) {
-        if (theme) {
-            var themePath = 'ace/theme/' + theme;
-            editor1.setTheme(themePath);
-            editor2.setTheme(themePath);
-        }
-        if (fontSize) {
-            editor1.setFontSize(fontSize);
-            editor2.setFontSize(fontSize);
-        }
-    }
-
-    themes.forEach(function (theme) {
-        selectTheme.append($('<option>', { value: theme.value, text: theme.name }));
+    themes.forEach(function (t) {
+        $selTheme.append($('<option>', { value: t.value, text: t.name }));
+    });
+    fontSizes.forEach(function (s) {
+        $selFontSize.append($('<option>', { value: s, text: s }));
     });
 
-    fontSizes.forEach(function (size) {
-        selectFontSize.append($('<option>', { value: size, text: size }));
-    });
-    selectTheme.val('monokai');
-    selectFontSize.val('14px');
+    $selTheme.val('monokai');
+    $selFontSize.val('14px');
 
-    updateTheme(selectTheme.val(), selectFontSize.val());
+    var applyTheme = function (theme, fontSize) {
+        if (theme) { editor1.setTheme('ace/theme/' + theme); editor2.setTheme('ace/theme/' + theme); }
+        if (fontSize) { editor1.setFontSize(fontSize); editor2.setFontSize(fontSize); }
+    };
+    applyTheme($selTheme.val(), $selFontSize.val());
 
-    selectTheme.on('change', function () {
-        updateTheme(selectTheme.val(), null);
-    });
+    $selTheme.on('change', function () { applyTheme($selTheme.val(), null); });
+    $selFontSize.on('change', function () { applyTheme(null, $selFontSize.val()); });
 
-    selectFontSize.on('change', function () {
-        updateTheme(null, selectFontSize.val());
-    });
+    $('#indent_size').on('change', function () { indent_size = calculateTabSize(); });
 
-    $('#indent_size').on('change', function () {
-        indent_size = calculateTabSize();
+    setTimeout(watchTabChange, 500);
+});
+
+editor1.on("input", function () { updateDisplay(editor1, "input"); });
+editor2.on("input", function () { updateDisplay(editor2, "output"); });
+editor1.selection.on("changeCursor", function () { updateDisplay(editor1, "input"); });
+editor2.selection.on("changeCursor", function () { updateDisplay(editor2, "output"); });
+
+function updateDisplay(editor, prefix) {
+    var content = editor.getValue().trim();
+    var size = content.length;
+    var $sz = $("#" + prefix + "TextSize");
+    var $lc = $("#" + prefix + "AceLineColumn");
+
+    $sz.html(size === 0 ? "Size: 0 Byte" :
+        size < 1024 ? "Size: " + size + " Bytes" :
+            "Size: " + (size / 1024).toFixed(2) + " KB");
+
+    var cursor = editor.selection.getCursor();
+    var maxCol = 0, lines = editor.session.getLength();
+    for (var i = 0; i < lines; i++) maxCol = Math.max(maxCol, editor.session.getLine(i).length);
+    $lc.html("Ln: " + (cursor.row + 1) + "; Col: " + (cursor.column + 1) + "; Max Col: " + maxCol);
+}
+
+["copyeditor1", "copyeditor2"].forEach(function (btnId) {
+    var ed = btnId === "copyeditor1" ? editor1 : editor2;
+    new ClipboardJS('#' + btnId, {
+        text: function () { return ed.getValue().trim(); }
+    }).on('success', function (e) {
+        ed.execCommand('selectAll');
+        showSuccessMessage("已复制");
+        e.clearSelection();
+    }).on('error', function (e) {
+        e.clearSelection();
+        showErrorMessage(ed.getValue().trim() === '' ? '内容为空' : '复制出错' + e.action, true);
     });
 });
 
-if (indent_size === '\t') {
-    indent_size = '1';
-    indent_char = '\t';
-}
-
-function timeStart() {
-    return window.performance.now();
-}
-
-function timeEnd(start) {
-    return (window.performance.now() - start).toFixed(3);
-}
-
-function FormatSH(a) {
-    var content = getContent().content;
-    if (!content) return;
-    output = a === 'format' ? formatShCode(content, indent_size) : undefined;
-    editor2.setValue(output || '没有返回值');
-    editor1.session.setMode("ace/mode/sh");
-    editor2.session.setMode("ace/mode/sh");
-    state(getContent().time);
-}
-
-class Stack {
-    constructor() {
-        this.items = []; // 用于存储堆栈元素的数组
-    }
-
-    /**
-     * 向堆栈顶部添加一个元素
-     * @param {any} item 要添加的元素
-     */
-    push(item) {
-        this.items.push(item);
-    }
-
-    /**
-     * 从堆栈顶部移除元素，直到遇到指定的字符串为止
-     * @param {string} target 指定的字符串
-     */
-    popUntil(target) {
-        while (this.items.length > 0) {
-            var item = this.pop();
-            if (item === target) {
-                break;
-            }
-        }
-    }
-
-    /**
-     * 从堆栈顶部移除并返回元素
-     * @returns {any} 移除的元素，如果堆栈为空，则返回 null
-     */
-    pop() {
-        if (this.size() > 0) {
-            return this.items.pop();
-        } else {
-            return null;
-        }
-    }
-
-    /**
-     * 返回堆栈顶部的元素，但不移除它
-     * @returns {any} 堆栈顶部的元素，如果堆栈为空，则返回 null
-     */
-    peek() {
-        if (this.size() > 0) {
-            return this.items[this.size() - 1];
-        } else {
-            return null;
-        }
-    }
-
-    /**
-     * 判断堆栈是否为空
-     * @returns {boolean} 如果堆栈为空，则返回 true，否则返回 false
-     */
-    isEmpty() {
-        return this.size() === 0;
-    }
-
-    /**
-     * 返回堆栈中元素的数量
-     * @returns {number} 堆栈中元素的数量
-     */
-    size() {
-        return this.items.length;
-    }
-
-    /**
-     * 清空堆栈，将所有元素移除
-     */
-    clear() {
-        this.items.length = 0;
-    }
-}
-
-function formatShCode(content, indentSize) {
-    function createIndentation(indentSize, indentLevel = 1) {
-        return isNaN(parseInt(indentSize)) ? '\t'.repeat(indentLevel) : ' '.repeat(indentSize * indentLevel)
-    }
-
-    var casestack = [],
-        indentLevel = 0,
-        identifier = '',
-        formattedCode = '',
-        isInCat, isInFunction,
-        caseregex = /^case\s+(.+)\s+in$/,
-        catregex = /^cat.*<<-?\\?\s*(\w+)>?/,
-        functionRegex = /(function\s+)?(\w+)\s*\(\)\s*{/,
-        endBlockRegex = /^(esac|fi|done|elif|else|\})/,
-        keywordRegex = /^(case|while|until|for|if|elif|else)|[({]$/;
-
-    content.replace(/(.*\))\s+(case\s+.*\s+in)/g, '$1\n$2')
-           .split('\n').forEach(function (line) {
-
-        if (!isInCat) line = line.replace(/^(?!#!)#.*$|\s+#.*$/gm, '');
-        line = line.trim();
-
-        if (!line) return;
-        if (endBlockRegex.test(line)) indentLevel = (indentLevel > 0) ? indentLevel - 1 : 0;
-        var spaces = createIndentation(indentSize, indentLevel);
-
-        if (line.match(functionRegex)) isInFunction = true;
-        else if (isInFunction && line === '}') {
-            indentLevel = (indentLevel > 0) ? indentLevel - 1 : 0;
-            isInFunction = false;
-        }
-
-        if (caseregex.test(line)) casestack.push('case');
-        else if (line.startsWith('esac')) casestack.pop();
-        else if (casestack.length && line.match(/\)$/)) indentLevel++;
-        else if (casestack.length && line.match(/^;;$/) && indentLevel > 0) indentLevel--;
-
-        var isCat = line.match(catregex);
-        if (isCat) {
-            isInCat = true;
-            identifier = isCat[1];
-        }
-        else if (line.startsWith(identifier)) isInCat = false;
-        else if (isInCat) spaces = createIndentation('\t');
-
-        formattedCode += spaces + line + '\n';
-        if (keywordRegex.test(line)) indentLevel++;
-        if (/^[^{]*[({]$/.test(line) && !isInFunction) formattedCode += '\n';
+$(document).on("keydown", function (e) {
+    if (e.key !== "F11") return;
+    e.preventDefault();
+    var active = editor1.isFocused() ? editor1 : editor2.isFocused() ? editor2 : null;
+    if (!active) return;
+    loadScripts("https://cdn.jsdelivr.net/npm/screenfull@6.0.2/index.min.js").then(function () {
+        if (screenfull.isEnabled) screenfull.toggle(active.container);
     });
+});
 
-    // formattedCode = formattedCode.replace(/(.*\))\n\s+(case\s+.*\s+in)/g, '$1 $2');
-    return formattedCode;
+var _savedHeight = {};
+
+function addFullScreen(mode) {
+    var divId = mode === 'input' ? 'inputDiv' : 'outputDiv',
+        edId = mode === 'input' ? 'editor1' : 'editor2',
+        fsBtn = mode === 'input' ? 'inputFullScreen' : 'outputFullScreen',
+        clBtn = mode === 'input' ? 'inputCloseScreen' : 'outputCloseScreen',
+        ed = mode === 'input' ? editor1 : editor2;
+
+    _savedHeight[mode] = $('#' + edId).height();
+    $('#' + divId).addClass('fullScreen');
+    $('#' + fsBtn).hide();
+    $('#' + clBtn).show();
+    ed.focus();
+    $('#' + edId).css('height', 'calc(100% - 65px)');
+    $('body').css({ overflow: 'hidden', position: 'fixed' });
 }
 
-function JsCompression(a) {
-    var content = getContent().content;
-    if (!content) return;
-    loadScripts(["/luci-static/tinynote/format.js", "/luci-static/tinynote/beautifier.js"])
-        .then(function() {
-            var packer = new Packer();
-            if (a === "minify") output = packer.minify(content);
-            else if (a === "pack") output = packer.pack(content, true, true);
-            else if (a === "beautify") {
-                output = beautifier.js(content, {
-                    indent_size,
-                    indent_char,
-                    jslint_happy: true,
-                    wrap_line_length: 0,
-                    templating: ["auto"],
-                    end_with_newline: true,
-                    max_preserve_newlines: 1,
-                    space_in_empty_paren: true,
-                    operator_position: "before-newline",
-                    indent_with_tabs: indent_size === '\t'
-                });
-            }
-            editor1.session.setMode("ace/mode/javascript");
-            editor2.session.setMode("ace/mode/javascript");
-            editor2.setValue(output || '没有返回值');
-        });
-        state(getContent().time);
-}
+function removeFullScreen(mode) {
+    var divId = mode === 'input' ? 'inputDiv' : 'outputDiv',
+        edId = mode === 'input' ? 'editor1' : 'editor2',
+        fsBtn = mode === 'input' ? 'inputFullScreen' : 'outputFullScreen',
+        clBtn = mode === 'input' ? 'inputCloseScreen' : 'outputCloseScreen',
+        ed = mode === 'input' ? editor1 : editor2;
 
-function examineJavaScript() {
-    var content = getContent().content;
-    if (!content) return;
-    editor1.session.setMode("ace/mode/javascript");
-    loadScripts("/luci-static/tinynote/jshint.min.js")
-        .then(function() {
-            var output = JSHINT(content, { asi: true, esversion: 8 });
-            if (output) showSuccessMessage("语法通过");
-            else {
-                var errorMessage = "";
-                JSHINT.errors.forEach(function(e) {
-                    var errorEvidence = e.evidence ? '"<b style="color: red;">' + e.evidence + '</b>"，' : '';
-                    errorMessage += '在第 ' + e.line + ' 行，第 ' + e.character + ' 列，' + errorEvidence + '错误代码：' + e.code + ' :' + getErrorMessage(e.code) + '<br>';
-                });
-                showErrorMessage(errorMessage);
-            }
-        });
-        state(getContent().time);
-}
-
-function CSSFormat(a) {
-    var content = getContent().content;
-    if (!content) return;
-    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/beautifier.js"])
-        .then(function() {
-            if (a === "format") output = beautifier.css(content, {
-                // indent_size: 指定每一级缩进的空格数，默认值为4。
-                // indent_char: 指定用于缩进的字符，默认为一个空格。
-                // selector_separator_newline: 布尔值，表示是否在选择器分隔符后换行，默认为true。
-                // end_with_newline: 布尔值，表示是否在CSS文件末尾添加一个空行，默认为false。
-                // newline_between_rules: 布尔值，表示是否在每个规则之间添加一个空行，默认为true。
-                // space_around_combinator: 布尔值，表示是否在组合器（如空格、加号等）周围添加空格，默认为false。
-                // preserve_newlines: 布尔值，表示是否保留原始CSS代码中的所有换行符，默认为false。
-                // max_preserve_newlines: 数字，表示最多保留原始CSS代码中的几个换行符，默认为10。
-                indent_size,
-                indent_char,
-                end_with_newline: true,
-                preserve_newlines: false,
-                selector_separator_newline: true,
-                indent_with_tabs: indent_size === '\t'
-            });
-            else if (a === "min") output = vkbeautify.cssmin(content);
-            else if (a === "pack") output = vkbeautify.csspack(content);
-            editor1.session.setMode("ace/mode/css");
-            editor2.session.setMode("ace/mode/css");
-            editor2.setValue(output || '没有返回值');
-        });
-        state(getContent().time);
-}
-
-function formatLua(a) {
-    var content = getContent().content;
-    if (!content) return;
-    loadScripts(["/luci-static/tinynote/luaparse.js", "/luci-static/tinynote/lua-fmt-lib.js", "/luci-static/tinynote/luamin.min.js"])
-        .then(function() {
-            try {
-                editor1.session.setMode("ace/mode/lua");
-                output = a === undefined ? beautifyLuaCode(content, createShiftArr(indent_size)) : luamin.minify(content);
-                if (a === 'examine' && output) showSuccessMessage("语法通过");
-                if (a !== 'examine') {
-                    editor2.session.setMode("ace/mode/lua");
-                    editor2.setValue(output || '没有返回值');
-                }
-            } catch (e) {
-                showErrorMessage(e.message);
-            }
-        })
-        .catch(function() {
-            showErrorMessage("加载错误", true);
-        });
-        state(getContent().time);
-}
-
-function jsonFormat(a) {
-    var content = getContent().content;
-    if (!content) return;
-    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/jsonlint.min.js"])
-        .then(function() {
-            editor1.session.setMode("ace/mode/json");
-            try {
-                if (a === 'min') output = vkbeautify.jsonmin(content);
-                else if (a === 'format') output = vkbeautify.json(content, indent_size);
-                // output = JSON.stringify($.parseJSON(content), null, indent_size);
-                else if (a === 'safeLoad') {
-                    jsonlint.parse(content);
-                    showSuccessMessage("语法通过");
-                }
-                if (a !== 'safeLoad') {
-                    editor2.session.setMode("ace/mode/json");
-                    editor2.setValue(output || '没有返回值');
-                }
-            } catch (e) {
-                showErrorMessage(e.message);
-            }
-        })
-        .catch(function() {
-            showErrorMessage("加载错误", true);
-        });
-        state(getContent().time);
-}
-
-function FormatHTML(a) {
-    var content = getContent().content;
-    if (!content) return;
-    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/beautifier.js"])
-        .then(function() {
-            try {
-                editor1.session.setMode("ace/mode/html");
-                editor2.session.setMode("ace/mode/html");
-                if (a === "format") output = beautifier.html(content, {
-                    // templating: 一个数组，表示模板引擎的选择。如果长度为1且值为'auto'，则默认使用['django', 'erb', 'handlebars', 'php']作为模板引擎。
-                    // indent_inner_html: 一个布尔值，表示是否缩进内部HTML代码。
-                    // indent_body_inner_html: 一个布尔值，表示是否缩进body标签内部的HTML代码，默认为true。
-                    // indent_head_inner_html: 一个布尔值，表示是否缩进head标签内部的HTML代码，默认为true。
-                    // indent_handlebars: 一个布尔值，表示是否缩进handlebars代码，默认为true。
-                    // wrap_attributes: 一个字符串，表示如何包装HTML属性。可选值为['auto', 'force', 'force-aligned', 'force-expand-multiline', 'aligned-multiple', 'preserve', 'preserve-aligned']。
-                    // wrap_attributes_min_attrs: 一个数字，表示多少个属性以上才会进行属性换行包装，默认为2。
-                    // wrap_attributes_indent_size: 一个数字，表示属性包装时的缩进大小，默认与indent_size相同。
-                    // extra_liners: 一个数组，表示额外的需要换行的标签，如['head', 'body', '/html']。
-                    // inline: 一个数组，表示内联元素的列表。
-                    // inline_custom_elements: 一个布尔值，表示是否内联自定义元素，默认为true。
-                    // void_elements: 一个数组，表示空元素的列表。
-                    // unformatted: 一个数组，表示不需要格式化的标签列表。
-                    // content_unformatted: 一个数组，表示内部内容不需要格式化的标签列表。
-                    // unformatted_content_delimiter: 一个字符串，表示内部不需要格式化的内容的分隔符。
-                    // indent_scripts: 一个字符串，表示脚本标签的缩进方式。可选值为['normal', 'keep', 'separate']。
-                    indent_size, indent_char, templating: ["auto"], indent_with_tabs: indent_size === '\t'
-                });
-                else if (a === "min") output = vkbeautify.xmlmin(content);
-                editor2.setValue(output || '没有返回值');
-            } catch (e) {
-                showErrorMessage(e.message);
-            }
-        })
-        .catch(function() {
-            showErrorMessage("加载错误", true);
-        });
-        state(getContent().time);
-}
-
-function FormatYAML(a) {
-    var content = getContent().content;
-    if (!content) return;
-    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/js-yaml.min.js"])
-        .then(function() {
-            try {
-                editor1.session.setMode("ace/mode/yaml");
-                editor2.session.setMode("ace/mode/yaml");
-                if (a === 'json') {
-                    editor2.session.setMode("ace/mode/json");
-                    output = vkbeautify.json(jsyaml.load(content), indent_size);
-                } else if (a === 'format') {
-                    output = jsyaml.dump(jsyaml.load(content), { indent: indent_size, lineWidth: -1 });
-                } else if (a === 'yaml') {
-                    editor1.session.setMode("ace/mode/json");
-                    output = jsyaml.dump(JSON.parse(content), { indent: indent_size, quotingType: "" });
-                } else if (a === 'safeLoad') {
-                    if (jsyaml.load(content)) showSuccessMessage("语法通过");
-                }
-                if (a !== 'safeLoad') editor2.setValue(output || '没有返回值');
-            } catch (e) {
-                showErrorMessage(e.message);
-            }
-        })
-        .catch(function() {
-            showErrorMessage("加载错误", true)
-        });
-        state(getContent().time);
-}
-
-function yamlToxml() {
-    var content = getContent().content;
-    if (!content) return;
-    loadScripts(["/luci-static/tinynote/ObjTree.min.js", "/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/js-yaml.min.js"])
-        .then(function () {
-            var xmlData = new XML.ObjTree().writeXML(jsyaml.load(content));
-            xmlData = xmlData.substr(0, 39) + "<root>" + xmlData.substr(39) + "</root>";
-            output = vkbeautify.xml(xmlData);
-            editor2.session.setMode("ace/mode/xml");
-            editor2.setValue(output || '没有返回值');
-        })
-        .catch(function () {
-            showErrorMessage("加载错误", true)
-        });
-    state(getContent().time);
-}
-
-function jsonTocsv() {
-    var content = getContent().content;
-    if (!content) return;
-
-    loadScripts("/luci-static/tinynote/tocsv.js")
-        .then(function () {
-            output = jsonToCsv(content, ",", !0, !1, !1);
-            editor1.session.setMode("ace/mode/json");
-            editor2.setValue(output || '没有返回值');
-        })
-        .catch(function () {
-            showErrorMessage("加载错误", true)
-        });
-    state(getContent().time);
-}
-
-function jsonToXML() {
-    var content = getContent().content;
-    if (!content) return;
-    loadScripts(["/luci-static/tinynote/vkbeautify.js", '/luci-static/tinynote/ObjTree.min.js'])
-        .then(function() {
-            try {
-                var x = content.replace(/([ :$&]+)(?=[(\w* *]*":)/g, "_"),
-                    xml = new XML.ObjTree().writeXML(JSON.parse(x));
-                xml = xml.substr(0, 39) + "<root>" + xml.substr(39) + "</root>";
-                output = vkbeautify.xml(xml);
-                editor1.session.setMode("ace/mode/json");
-                editor2.session.setMode("ace/mode/xml");
-                editor2.setValue(output || '没有返回值');
-            } catch (e) {
-                showErrorMessage(e.message);
-            }
-        })
-        .catch(function() {
-            showErrorMessage("加载错误", true);
-        });
-        state(getContent().time);
+    $('#' + divId).removeClass('fullScreen');
+    $('#' + fsBtn).show();
+    $('#' + clBtn).hide();
+    ed.focus();
+    $('#' + edId).css('height', _savedHeight[mode] || '60vh');
+    $('body').css({ overflow: '', position: '' });
 }
 
 function downloadFile(event) {
     event.preventDefault();
-    var content = getContent(editor2).content;
-    if (!content) return;
-    loadScripts("https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js")
-        .then(function() {
-            var blob = new Blob(["" + content], {
-                type: "text/plain; charset=utf-8"
-            });
-            saveAs(blob, "data.txt");
+    var content = editor2.getValue().trim();
+    if (!content) { showErrorMessage('内容为空', true); return; }
+    loadScripts("/luci-static/tinynote/FileSaver.min.js").then(function () {
+        saveAs(new Blob([content], { type: "text/plain; charset=utf-8" }), "data.txt");
+    });
+}
+
+function clearAll(event, a) {
+    event.preventDefault();
+    if (a) { a.setValue(''); }
+    else { editor1.setValue(''); editor2.setValue(''); }
+}
+
+function changeToFileContent(input) {
+    var file = input.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+        if (editor1) editor1.setValue(e.target.result);
+        input.value = "";
+    };
+    reader.readAsText(file, "UTF-8");
+}
+
+function getContent(editor) {
+    var time = timeStart();
+    var content = (editor || editor1).getValue().trim();
+    if (!content) { showErrorMessage('内容为空', true); return false; }
+    return { content: content, time: time };
+}
+
+var loadedScripts = new Set();
+
+function loadScripts(scripts) {
+    scripts = typeof scripts === 'string' ? [scripts] : scripts;
+    return Promise.all(scripts.map(function (src) {
+        if (loadedScripts.has(src)) return Promise.resolve();
+        return new Promise(function (resolve, reject) {
+            $.getScript(src).done(function () { loadedScripts.add(src); resolve(); }).fail(reject);
         });
+    }));
 }
 
-editor1.on("input", function() {
-    updateDisplay(editor1, $("#inputTextSize"), $("#inputAceLineColumn"));
-});
+function timeStart() { return window.performance.now(); }
+function timeEnd(start) { return (window.performance.now() - start).toFixed(3); }
 
-editor2.on("input", function() {
-    updateDisplay(editor2, $("#outputTextSize"), $("#outputAceLineColumn"));
-});
-
-$(document).on("keydown", function(event) {
-    if (event.key === "F11") {
-        event.preventDefault();
-        var activeEditor = editor1.isFocused() ? editor1 : editor2.isFocused() ? editor2 : null;
-        if (activeEditor) toggleFullScreen(activeEditor.container);
-    }
-});
-
-function toggleFullScreen(editor) {
-    loadScripts("https://cdn.jsdelivr.net/npm/screenfull@6.0.2/index.min.js")
-        .then(function() {
-            if (screenfull.isEnabled) screenfull.toggle(editor);
-        });
+function calculateTabSize() {
+    var v = parseInt($('#indent_size').val(), 10);
+    return v === 1 ? '\t' : v;
 }
 
-var editor1Height, editor2Height;
-
-function addFullScreen(mode) {
-    if (mode === 'input') { // 如果是输入编辑器
-        $('#inputDiv').addClass('fullScreen'); // 给输入编辑器的div添加fullScreen类，实现全屏效果
-        $('#inputFullScreen').hide(); // 隐藏输入编辑器的全屏按钮
-        $('#inputCloseScreen').show(); // 显示输入编辑器的关闭全屏按钮
-        editor1.focus(); // 让输入编辑器获得焦点
-        editor1Height = $('#editor1').height(); // 记录输入编辑器进入全屏前的高度
-        $('#editor1').css('height', 'calc(100% - 65px)'); // 修改输入编辑器的高度为浏览器窗口高度减去一个固定值
-    } else if (mode === 'output') { // 如果是输出编辑器
-        $('#outputDiv').addClass('fullScreen'); // 给输出编辑器的div添加fullScreen类，实现全屏效果
-        $('#outputFullScreen').hide(); // 隐藏输出编辑器的全屏按钮
-        $('#outputCloseScreen').show(); // 显示输出编辑器的关闭全屏按钮
-        editor2.focus(); // 让输出编辑器获得焦点
-        editor2Height = $('#editor2').height(); // 记录输出编辑器进入全屏前的高度
-        $('#editor2').css('height', 'calc(100% - 65px)'); // 修改输出编辑器的高度为浏览器窗口高度减去一个固定值
-    }
-    $('body').css({
-        overflow: 'hidden', position: 'fixed'
-    }); // 将页面的滚动和定位属性进行设置，使页面内容固定不动
-}
-// 退出全屏模式的函数，根据mode参数决定是将输入编辑器还是输出编辑器从全屏状态切换回普通状态
-function removeFullScreen(mode) {
-    if (mode === 'input') { // 如果是输入编辑器
-        $('#inputDiv').removeClass('fullScreen'); // 移除输入编辑器的div的fullScreen类，退出全屏状态
-        $('#inputFullScreen').show(); // 显示输入编辑器的全屏按钮
-        $('#inputCloseScreen').hide(); // 隐藏输入编辑器的关闭全屏按钮
-        editor1.focus(); // 让输入编辑器获得焦点
-        $('#editor1').css('height', editor1Height); // 恢复输入编辑器的高度为进入全屏前记录的高度值
-    } else if (mode === 'output') { // 如果是输出编辑器
-        $('#outputDiv').removeClass('fullScreen'); // 移除输出编辑器的div的fullScreen类，退出全屏状态
-        $('#outputFullScreen').show(); // 显示输出编辑器的全屏按钮
-        $('#outputCloseScreen').hide(); // 隐藏输出编辑器的关闭全屏按钮
-        editor2.focus(); // 让输出编辑器获得焦点
-        $('#editor2').css('height', editor2Height); // 恢复输出编辑器的高度为进入全屏前记录的高度值
-    }
-    $('body').css({
-        overflow: '', position: ''
-    }); // 恢复页面的滚动和定位属性
+function createShiftArr(indent_size) {
+    return typeof indent_size !== 'number' ? '\t' : ' '.repeat(indent_size);
 }
 
 function Progress(action) {
     $('.progress.is-success.is-small')[action]();
 }
 
-function createShiftArr(indent_size) {
-    if (typeof indent_size !== 'number') return '\t';
-    var space = ' ',
-        shift = space.repeat(indent_size);
-    return shift;
-}
-
-function getContent(editor) {
-    var time = timeStart(),
-        content = $.trim((editor ? editor : editor1).getValue());
-    if (content === '') {
-        showErrorMessage('内容为空', true)
-        return false;
-    }
-    return { content, time };
-}
-
-function updateDisplay(editor, sizeOutput, lineColumnOutput) {
-    var content = $.trim(editor.getValue());
-    if (!content) return;
-    var size = content.length;
-    sizeOutput.html("Size: " + (size < 1024 ? size + " Bytes" : (size / 1024).toFixed(2) + " KB"));
-
-    var lineNumber = editor.session.getLength(),
-        columnNumber = editor.selection.getCursor().column + 1,
-        maxColumnCount = 0;
-    for (var i = 0; i < lineNumber; i++) {
-        maxColumnCount = Math.max(maxColumnCount, editor.session.getLine(i).length);
-    }
-    lineColumnOutput.html("Ln: " + lineNumber + "; Col: " + columnNumber + "; Max Col: " + maxColumnCount);
-}
-
-var loadedScripts = [];
-
-function loadScripts(scripts) {
-    scripts = $.isArray(scripts) ? scripts : [scripts];
-
-    return Promise.resolve($.when.apply($,
-        scripts.map(function(src) {
-            if (loadedScripts.includes(src)) return $.Deferred().resolve();
-            return $.getScript(src).done(function() {
-                loadedScripts.push(src);
-            });
-        })
-    ));
-}
-
-function clearAll(event, a) {
-    event.preventDefault();
-    if (a) {
-        return a.setValue('');
-    } else if (editor1 && editor2) {
-        editor1.setValue('');
-        editor2.setValue('');
-    }
-}
-
-function calculateTabSize() {
-    var parsedValue = parseInt($('#indent_size').val(), 10);
-    if (parsedValue === 1) parsedValue = '\t';
-    return parsedValue;
-}
-
-function changeToFileContent(input) {
-    var file = input.files[0];
-    if (file) {
-        var reader = new FileReader();
-        var content = '';
-        reader.onload = function (event) {
-            content += event.target.result;
-            if (reader.readyState === FileReader.DONE) {
-                if (editor1) editor1.setValue(content);
-                input.value = "";
-            } else {
-                reader.readAsText(file.slice(content.length), "UTF-8");
-            }
-        };
-        reader.readAsText(file.slice(0, Math.min(1024 * 1024, file.size)), "UTF-8");
-    }
-}
-
-$("#copyeditor1").click(function() {
-    setupClipboard(editor1, 'copyeditor1');
-});
-
-$("#copyeditor2").click(function() {
-    setupClipboard(editor2, 'copyeditor2');
-});
-
-function setupClipboard(editor, buttonId) {
-    return new ClipboardJS('#' + buttonId, {
-        text: function() {
-            var value = editor.getValue().trim();
-            if (value) return value;
-        }
-    }).on('success', function(e) {
-        if (editor) editor.execCommand('selectAll');
-        showSuccessMessage("已复制");
-        e.clearSelection();
-    }).on('error', function(e) {
-        e.clearSelection();
-        if (editor.getValue().trim() === '') {
-            showErrorMessage('内容为空', true)
-        } else showErrorMessage('复制出错' + e.action);
-    });
-}
-
-function showSuccessMessage(message, a) {
-    var backgroundColor = "style='background:" + (a ? 'red' : '#3488ce') + ";'";
-    $(".field.success").html('<div class="button is-fullwidth alert-message"' + backgroundColor + '>' + message + '</div>').show().delay(3000).fadeOut();
+function showSuccessMessage(message, isRed) {
+    var bg = isRed ? 'red' : '#3488ce';
+    $(".field.success")
+        .html('<div class="button is-fullwidth alert-message" style="background:' + bg + ';font-size:14px;">' + message + '</div>')
+        .show().delay(3000).fadeOut();
 }
 
 function state(time) {
-    $(".field.state").html('<div class="button is-fullwidth alert-message" style="color:black;">用时: ' + timeEnd(time) + 'ms</div>').show().delay(3000).fadeOut();
+    $(".field.state")
+        .html('<div class="button is-fullwidth alert-message" style="color:black;font-size:14px;">用时: ' + timeEnd(time) + 'ms</div>')
+        .show().delay(3000).fadeOut();
 }
 
 function showErrorMessage(message, a) {
-    if (a === undefined) {
-        clearTimeout(window.hideTimer);
-        $(".columns.is-centered").html('<div class="notification alert-message" style="color:black; border:0px; background:#f8d7da;"><p class="subtitle" style="color:red;">语法错误：</p><p>' + message + '</p><button class="is-medium delete"></button></div>').fadeIn();
-        $(".delete").on("click", function(event) {
-            event.preventDefault();
-            $(".columns.is-centered").fadeOut();
-        });
-        var mouseEntered = false;
-        $(".columns.is-centered").on({
-            mouseenter: function() {
-                mouseEntered = true;
-                if (window.hideTimer) clearTimeout(window.hideTimer);
-            },
-            mouseleave: function() {
-                window.hideTimer = setTimeout(function() {
-                    if (!mouseEntered) $(".columns.is-centered").fadeOut();
-                }, 5000);
-            }
-        }).trigger('mouseleave');
-    } else {
-        showSuccessMessage(message, true);
+    if (a !== undefined) { showSuccessMessage(message, true); return; }
+    clearTimeout(window.hideTimer);
+    $(".columns.is-centered").html(
+        '<div class="notification alert-message" style="color:black;border:0;background:#f8d7da;">' +
+        '<p class="subtitle" style="color:red;">语法错误：</p><p>' + message + '</p>' +
+        '<button class="is-medium delete"></button></div>'
+    ).fadeIn();
+    $(".delete").on("click", function (e) {
+        e.preventDefault();
+        $(".columns.is-centered").fadeOut();
+    });
+    var mouseEntered = false;
+    $(".columns.is-centered").on({
+        mouseenter: function () { mouseEntered = true; clearTimeout(window.hideTimer); },
+        mouseleave: function () {
+            window.hideTimer = setTimeout(function () {
+                if (!mouseEntered) $(".columns.is-centered").fadeOut();
+            }, 5000);
+        }
+    }).trigger('mouseleave');
+}
+
+var TAB_MODE_MAP = {
+    'JS': 'javascript', 'HTML': 'html', 'CSS': 'css',
+    'JSON': 'json', 'YAML': 'yaml', 'Lua': 'lua', 'SH': 'sh'
+};
+
+function watchTabChange() {
+    var tabContents = { JS: '', HTML: '', CSS: '', JSON: '', YAML: '', Lua: '', SH: '' };
+    var $tabMenu = $('.cbi-tabmenu');
+    if (!$tabMenu.length) return;
+
+    var getActive = function () { return $tabMenu.find('li.cbi-tab').first().attr('data-tab') || ''; };
+    var lastTab = getActive();
+
+    var switchTab = function (from, to) {
+        if (from) tabContents[from] = editor1.getValue();
+        var mode = TAB_MODE_MAP[to];
+        if (mode) {
+            editor1.session.setMode('ace/mode/' + mode);
+            editor2.session.setMode('ace/mode/' + mode);
+        }
+        editor1.setValue(tabContents[to] || '', -1);
+        editor2.setValue('', -1);
+    };
+
+    if (lastTab) switchTab(null, lastTab);
+    $tabMenu.on('click', 'li[data-tab]', function () {
+        setTimeout(function () {
+            var cur = getActive();
+            if (cur && cur !== lastTab) { switchTab(lastTab, cur); lastTab = cur; }
+        }, 10);
+    });
+}
+
+function FormatSH(a) {
+    const res = getContent();
+    if (!res?.content) {
+        return showErrorMessage("没有内容", true);
     }
+    if (a !== 'format') return;
+    output = formatShCode(res.content, indent_size);
+    editor2.setValue(output || '没有返回值');
+    editor1.session.setMode("ace/mode/sh");
+    editor2.session.setMode("ace/mode/sh");
+    state(res.time);
+}
+
+function JsCompression(a) {
+    const res = getContent();
+    if (!res?.content) {
+        return showErrorMessage("没有内容", true);
+    }
+    loadScripts(["/luci-static/tinynote/format.js", "/luci-static/tinynote/beautifier.js"])
+        .then(function () {
+            if (a === "minify") output = new Packer().minify(res.content);
+            else if (a === "pack") output = new Packer().pack(res.content, true, true);
+            else if (a === "beautify") output = beautifier.js(res.content, {
+                indent_size, indent_char,
+                jslint_happy: true, wrap_line_length: 0, templating: ["auto"],
+                end_with_newline: true, max_preserve_newlines: 1,
+                space_in_empty_paren: true, operator_position: "before-newline",
+                indent_with_tabs: indent_size === '\t'
+            });
+            editor1.session.setMode("ace/mode/javascript");
+            editor2.session.setMode("ace/mode/javascript");
+            editor2.setValue(output || '没有返回值');
+            state(res.time);
+        });
+}
+
+function examineJavaScript() {
+    const res = getContent();
+    if (!res?.content) {
+        return showErrorMessage("没有内容", true);
+    }
+    editor1.session.setMode("ace/mode/javascript");
+    loadScripts("/luci-static/tinynote/jshint.min.js").then(function () {
+        if (JSHINT(res.content, { asi: true, esversion: 8 })) {
+            showSuccessMessage("语法通过");
+        } else {
+            var msg = "";
+            JSHINT.errors.forEach(function (e) {
+                var ev = e.evidence ? '"<b style="color:red;">' + e.evidence + '</b>"，' : '';
+                msg += '在第 ' + e.line + ' 行，第 ' + e.character + ' 列，' + ev +
+                    '错误代码：' + e.code + ' :' + getErrorMessage(e.code) + '<br>';
+            });
+            showErrorMessage(msg);
+        }
+        state(res.time);
+    });
+}
+
+function CSSFormat(a) {
+    const res = getContent();
+    if (!res?.content) {
+        return showErrorMessage("没有内容", true);
+    }
+    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/beautifier.js"])
+        .then(function () {
+            if (a === "format") output = beautifier.css(res.content, {
+                indent_size, indent_char, end_with_newline: true,
+                preserve_newlines: false, selector_separator_newline: true,
+                indent_with_tabs: indent_size === '\t'
+            });
+            else if (a === "min") output = vkbeautify.cssmin(res.content);
+            else if (a === "pack") output = vkbeautify.csspack(res.content);
+            editor1.session.setMode("ace/mode/css");
+            editor2.session.setMode("ace/mode/css");
+            editor2.setValue(output || '没有返回值');
+            state(res.time);
+        });
+}
+
+function formatLua(a) {
+    const res = getContent();
+    if (!res?.content) {
+        return showErrorMessage("没有内容", true);
+    }
+    loadScripts(["/luci-static/tinynote/luaparse.js", "/luci-static/tinynote/lua-fmt-lib.js", "/luci-static/tinynote/luamin.min.js"])
+        .then(function () {
+            try {
+                editor1.session.setMode("ace/mode/lua");
+                if (a === 'examine') {
+                    luaparse.parse(res.content);
+                    showSuccessMessage("语法通过");
+                } else {
+                    output = a === undefined
+                        ? beautifyLuaCode(res.content, createShiftArr(indent_size))
+                        : luamin.minify(res.content);
+                    editor2.session.setMode("ace/mode/lua");
+                    editor2.setValue(output || '没有返回值');
+                }
+                state(res.time);
+            } catch (e) { showErrorMessage(e.message); }
+        })
+        .catch(function () { showErrorMessage("加载错误", true); });
+}
+
+function jsonFormat(a) {
+    const res = getContent();
+    if (!res?.content) {
+        return showErrorMessage("没有内容", true);
+    }
+    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/jsonlint.min.js"])
+        .then(function () {
+            editor1.session.setMode("ace/mode/json");
+            try {
+                if (a === 'min') output = vkbeautify.jsonmin(res.content);
+                else if (a === 'format') output = vkbeautify.json(res.content, indent_size);
+                else if (a === 'safeLoad') { jsonlint.parse(res.content); showSuccessMessage("语法通过"); }
+                if (a !== 'safeLoad') { editor2.session.setMode("ace/mode/json"); editor2.setValue(output || '没有返回值'); }
+                state(res.time);
+            } catch (e) { showErrorMessage(e.message); }
+        })
+        .catch(function () { showErrorMessage("加载错误", true); });
+}
+
+function FormatHTML(a) {
+    const res = getContent();
+    if (!res?.content) {
+        return showErrorMessage("没有内容", true);
+    }
+
+    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/beautifier.js"])
+    .then(function () {
+        try {
+            editor1.session.setMode("ace/mode/html");
+            editor2.session.setMode("ace/mode/html");
+
+            var output = "";
+            if (a === "format") {
+                output = beautifier.html(res.content, {
+                    indent_size, indent_char, indent_with_tabs: false, templating: ["auto"]
+                });
+            } 
+            else if (a === "min") {
+                output = vkbeautify.htmlmin
+                    ? vkbeautify.htmlmin(res.content)
+                    : vkbeautify.xmlmin(res.content);
+            }
+
+            editor2.setValue(output || "没有返回值");
+            state(res.time);
+
+        } catch (e) {
+            showErrorMessage(e.message, true);
+        }
+    })
+    .catch(function () {
+        showErrorMessage("加载错误", true);
+    });
+}
+
+function FormatYAML(a) {
+    const res = getContent();
+    if (!res?.content) {
+        return showErrorMessage("没有内容", true);
+    }
+    loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/js-yaml.min.js"])
+        .then(function () {
+            try {
+                editor1.session.setMode("ace/mode/yaml");
+                editor2.session.setMode("ace/mode/yaml");
+                if (a === 'json') { editor2.session.setMode("ace/mode/json"); output = vkbeautify.json(jsyaml.load(res.content), indent_size); }
+                else if (a === 'format') output = jsyaml.dump(jsyaml.load(res.content), { indent: indent_size, lineWidth: -1 });
+                else if (a === 'yaml') { editor1.session.setMode("ace/mode/json"); output = jsyaml.dump(JSON.parse(res.content), { indent: indent_size }); }
+                else if (a === 'safeLoad') { if (jsyaml.load(res.content)) showSuccessMessage("语法通过"); }
+                if (a !== 'safeLoad') editor2.setValue(output || '没有返回值');
+                state(res.time);
+            } catch (e) { showErrorMessage(e.message); }
+        })
+        .catch(function () { showErrorMessage("加载错误", true); });
+}
+
+function yamlToxml() {
+    var res = getContent(); if (!res) return;
+    loadScripts(["/luci-static/tinynote/ObjTree.min.js", "/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/js-yaml.min.js"])
+        .then(function () {
+			var data = jsyaml.load(res.content);
+			var xml = new XML.ObjTree().writeXML({ root: data });
+			xml = vkbeautify.xml(xml);
+			editor2.session.setMode("ace/mode/xml");
+			editor2.setValue(xml || "没有返回值");
+			state(res.time);
+        })
+        .catch(function () { showErrorMessage("加载错误", true); });
+}
+
+function jsonTocsv() {
+    const res = getContent();
+    if (!res?.content) {
+        return showErrorMessage("没有内容", true);
+    }
+
+    loadScripts("/luci-static/tinynote/tocsv.js")
+		.then(() => {
+            const data = JSON.parse(res.content);
+            if (!Array.isArray(data)) {
+                throw new Error("JSON 必须是数组");
+            }
+
+            editor1.session.setMode("ace/mode/json");
+            editor2.session.setMode("ace/mode/csv");
+            editor2.setValue(jsonToCsv(data, ",", true, false, false) || "没有返回值");
+            state(res.time);
+        })
+        .catch(e => showErrorMessage("CSV 转换失败：" + e.message, true));
+}
+
+function jsonToXML() {
+    var res = getContent();
+    if (!res || !res.content) {
+        return showErrorMessage("没有内容", true);
+    }
+
+    loadScripts(["/luci-static/tinynote/vkbeautify.js", '/luci-static/tinynote/ObjTree.min.js'])
+    .then(function () {
+        try {
+            var data = JSON.parse(res.content);
+            var xml = new XML.ObjTree().writeXML({
+                root: data
+            });
+
+            xml = vkbeautify.xml(xml);
+            editor1.session.setMode("ace/mode/json");
+            editor2.session.setMode("ace/mode/xml");
+            editor2.setValue(xml || "没有返回值");
+            state(res.time);
+
+        } catch (e) {
+            showErrorMessage("JSON 转 XML 失败：" + e.message, true);
+        }
+    })
+    .catch(function () {
+        showErrorMessage("加载错误", true);
+    });
+}
+
+class Stack {
+    constructor() { this.items = []; }
+    push(item) { this.items.push(item); }
+    pop() { return this.items.length > 0 ? this.items.pop() : null; }
+    peek() { return this.items.length > 0 ? this.items[this.items.length - 1] : null; }
+    isEmpty() { return this.items.length === 0; }
+    size() { return this.items.length; }
+    clear() { this.items.length = 0; }
+    popUntil(target) { while (this.items.length > 0 && this.pop() !== target); }
+}
+
+function formatShCode(content, indentSize) {
+    if (typeof content !== 'string') return '';
+
+    function ind(level) {
+        if (typeof indentSize !== 'number' || isNaN(indentSize)) return '\t'.repeat(level);
+        return ' '.repeat(indentSize * level);
+    }
+
+    var lines = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n'),
+        out = '',
+        level = 0,
+        inHeredoc = false,
+        heredocEnd = '',
+        heredocStrip = false,
+        blockStack = [];
+
+    var rHeredocStart = /<<(-?)\s*['"`]?(\w+)['"`]?/,
+        rFunction = /^\s*(?:function\s+)?(\w+)\s*\(\s*\)\s*\{?\s*(?:#.*)?$/,
+        rCaseStart = /^case\b/,
+        rCaseIn = /\bin\s*$/,
+        rCasePattern = /^(?:\(?.+\)?)\)\s*(?:#.*)?$/,
+        rCaseDblSemi = /^;;/,
+        rCaseFallthru = /^;[;&]/,
+        rIfStart = /^if\b/,
+        rElifElse = /^(?:elif|else)\b/,
+        rThen = /\bthen\s*(?:#.*)?$/,
+        rFi = /^fi\b/,
+        rLoopStart = /^(?:while|until|for|select)\b/,
+        rDo = /\bdo\s*(?:#.*)?$/,
+        rDone = /^done\b/,
+        rEsac = /^esac\b/,
+        rOpenBrace = /\{\s*(?:#.*)?$/,
+        rCloseBrace = /^\}/,
+        rSubshellOpen = /\(\s*(?:#.*)?$/,
+        rSubshellClose = /^\)/;
+
+    function stripInlineComment(raw) {
+        if (/^#!/.test(raw.trim())) return raw;
+        var result = '', q = '', i = 0;
+        while (i < raw.length) {
+            var ch = raw[i];
+            if (q) {
+                if (ch === '\\' && q !== "'") { result += ch + (raw[i + 1] || ''); i += 2; continue; }
+                if (ch === q) q = '';
+                result += ch;
+            } else {
+                if (ch === '"' || ch === "'" || ch === '`') { q = ch; result += ch; }
+                else if (ch === '#') break;
+                else result += ch;
+            }
+            i++;
+        }
+        return result.trimEnd();
+    }
+
+    function peek() { return blockStack[blockStack.length - 1]; }
+
+    for (var li = 0; li < lines.length; li++) {
+        var raw = lines[li];
+
+        if (inHeredoc) {
+            var check = heredocStrip ? raw.replace(/^\t+/, '') : raw;
+            if (check === heredocEnd) {
+                inHeredoc = false;
+                out += (heredocStrip ? ind(level) : '') + check + '\n';
+            } else {
+                out += raw + '\n';
+            }
+            continue;
+        }
+
+        var line = stripInlineComment(raw).trim();
+        if (!line) { if (out.slice(-2) !== '\n\n') out += '\n'; continue; }
+
+        if (/^#/.test(line) && !/^#!/.test(line)) {
+            out += ind(level) + line + '\n';
+            continue;
+        }
+
+        var hm = rHeredocStart.exec(line);
+        if (hm) { heredocStrip = hm[1] === '-'; heredocEnd = hm[2]; inHeredoc = true; }
+
+        if (rFi.test(line)) {
+            while (peek() === 'then' || peek() === 'else') blockStack.pop();
+            if (peek() === 'if') blockStack.pop();
+            level = Math.max(0, level - 1);
+        } else if (rEsac.test(line)) {
+            while (peek() === 'case_branch') { blockStack.pop(); level = Math.max(0, level - 1); }
+            if (peek() === 'case') blockStack.pop();
+            level = Math.max(0, level - 1);
+        } else if (rDone.test(line)) {
+            while (peek() === 'do') blockStack.pop();
+            if (peek() === 'loop') blockStack.pop();
+            level = Math.max(0, level - 1);
+        } else if (rCloseBrace.test(line) && (peek() === 'func' || peek() === 'brace')) {
+            blockStack.pop();
+            level = Math.max(0, level - 1);
+        } else if (rSubshellClose.test(line) && peek() === 'subshell') {
+            blockStack.pop();
+            level = Math.max(0, level - 1);
+        } else if (rElifElse.test(line)) {
+            level = Math.max(0, level - 1);
+        } else if ((rCaseDblSemi.test(line) || rCaseFallthru.test(line)) && peek() === 'case_branch') {
+            blockStack.pop();
+            level = Math.max(0, level - 1);
+        }
+
+        out += ind(level) + line + '\n';
+
+        if (rIfStart.test(line)) {
+            blockStack.push('if');
+            if (rThen.test(line)) { blockStack.push('then'); level++; }
+        } else if (rElifElse.test(line)) {
+            if (rThen.test(line)) { blockStack.push('then'); level++; }
+            else if (/^else\b/.test(line)) { blockStack.push('else'); level++; }
+        } else if (rThen.test(line) && !rIfStart.test(line) && !rElifElse.test(line)) {
+            blockStack.push('then'); level++;
+        } else if (rCaseStart.test(line)) {
+            blockStack.push('case');
+            if (rCaseIn.test(line)) level++;
+        } else if (rCaseIn.test(line) && !rCaseStart.test(line) && peek() === 'case') {
+            level++;
+        } else if (peek() === 'case' && rCasePattern.test(line) && !rCaseDblSemi.test(line)) {
+            blockStack.push('case_branch'); level++;
+        } else if (rLoopStart.test(line)) {
+            blockStack.push('loop');
+            if (rDo.test(line)) { blockStack.push('do'); level++; }
+        } else if (rDo.test(line) && !rLoopStart.test(line)) {
+            blockStack.push('do'); level++;
+        } else if (rFunction.test(line)) {
+            blockStack.push('func');
+            if (rOpenBrace.test(line)) level++;
+        } else if (rOpenBrace.test(line) && peek() !== 'func') {
+            blockStack.push('brace'); level++;
+        } else if (rSubshellOpen.test(line)) {
+            blockStack.push('subshell'); level++;
+        }
+    }
+
+    return out.replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '')+ '\n';
 }
 
 function getExampleLua() {
@@ -785,7 +745,7 @@ function getExampleLua() {
 }
 
 function getExampleCsv() {
-    return 'id,name,amount,Remark\n1,"Johnson, Smith, and Jones Co.",345.33,Pays on time\n2,"Sam ""Mad Dog"" Smith",993.44,\n3,"Barney & Company",0,"Great to work with\nand always pays with cash."\n4,Johnson\'s Automotive,2344,\n'
+    return 'id,name,amount,Remark\n1,"Johnson, Smith, and Jones Co.",345.33,Pays on time\n2,"Sam ""Mad Dog"" Smith",993.44,\n3,"Barney & Company",0,"Great to work with\nand always pays with cash."\n4,Johnson\'s Automotive,2344,\n';
 }
 
 function getExampleSH() {
@@ -794,8 +754,7 @@ function getExampleSH() {
     editor1.setValue(output);
 }
 
-function getExampleXml(e) {
-    e = (e || 1) - 1;
+function getExampleXml() {
     return '<?xml version="1.0"?>\n<ROWSET>\n<ROW>\n<id>1</id>\n<name>Johnson, Smith, and Jones Co.</name>\n<amount>345.33</amount>\n<Remark>Pays on time</Remark>\n</ROW>\n<ROW>\n<id>2</id>\n<name>Sam &quot;Mad Dog&quot; Smith</name>\n<amount>993.44</amount>\n<Remark></Remark>\n</ROW>\n<ROW>\n<id>3</id>\n<name>Barney &amp; Company</name>\n<amount>0</amount>\n<Remark>Great to work with\nand always pays with cash.</Remark>\n</ROW>\n<ROW>\n<id>4</id>\n<name>Johnson&apos;s Automotive</name>\n<amount>2344</amount>\n<Remark></Remark>\n</ROW>\n</ROWSET>'
 }
 
@@ -818,7 +777,7 @@ function getExampleCSS() {
 }
 
 function getExampleHTML() {
-    var output = '<!DOCTYPE html>\n<html><head>\n    <title>Sample Page</title>\n    <link rel="stylesheet" type="text/css" href="styles.css">\n</head>\n<body>\n    <header>\n        <h1>Welcome to My Website</h1>\n    </header>\n    <div class="container">\n        <p>This is a sample paragraph.</p>\n   <a href="#">Click here</a>\n    </div>\n    <script src="scripts.js"></script></body>\n</html>\n';
+    var output = '<!DOCTYPE html>\n<html><head>\n <title>Sample Page</title>\n <link rel="stylesheet" type="text/css" href="styles.css">\n</head>\n<body>\n <header>\n <h1>Welcome to My Website</h1>\n </header>\n <div class="container">\n <p>This is a sample paragraph.</p>\n <a href="#">Click here</a>\n    </div>\n <script src="scripts.js"></script></body>\n</html>\n';
     editor1.session.setMode("ace/mode/html");
     editor1.setValue(output);
 }

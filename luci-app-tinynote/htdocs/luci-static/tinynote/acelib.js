@@ -2,65 +2,42 @@ var loadedScripts = new Set();
 
 function renderAceEditor(id, model, only, theme = 'monokai', font_size, height, spacing) {
     var ic = {
-        copy: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"/></svg>',
-        save: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>',
-        wrap: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M4,6H20V8H4V6M4,11H17A3,3 0 0,1 20,14A3,3 0 0,1 17,17H15V19L12,16L15,13V15H17A1,1 0 0,0 18,14A1,1 0 0,0 17,13H4V11M4,18H10V20H4V18Z"/></svg>',
-        delete: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>',
-        Upload: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"/></svg>',
-        download: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>',
-        open_fullscreen: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"/></svg>',
-        close_fullscreen: '<svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align:middle;"><path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"/></svg>'
+        copy: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"/></svg>',
+        save: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>',
+        wrap: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M4,6H20V8H4V6M4,11H17A3,3 0 0,1 20,14A3,3 0 0,1 17,17H15V19L12,16L15,13V15H17A1,1 0 0,0 18,14A1,1 0 0,0 17,13H4V11M4,18H10V20H4V18Z"/></svg>',
+        delete: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>',
+        Upload: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"/></svg>',
+        download: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>',
+        open_fullscreen: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"/></svg>',
+        close_fullscreen: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"/></svg>'
     };
 
     $(`.cbi-value#cbi-luci-tinynote-${id}`)
         .prepend(`
-            <style>
-            .editortoolbar .icon {
-                position: relative;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .editortoolbar .icon::after {
-                content: "";
-                position: absolute;
-                left: 50%;
-                bottom: -4px;
-                transform: translateX(-50%);
-                width: 110%;
-                max-width: 32px;
-                height: 2px;
-                background: currentColor;
-                border-radius: 1px;
-                opacity: 0;
-                transition: opacity 0.15s ease-in-out;
-            }
-            .editortoolbar .icon:hover::after {
-                opacity: 1;
-            }
-            </style>
             <div class="aceEditorMenu">
-                <a style="float:left;"><i class="is-size-6 is-family-primary">输入</i></a>
-                <div class="editortoolbar btn-group-sm">
+                <span class="has-text-left">
+                    <i class="is-size-6 is-family-primary ">输入</i>
+                </span>
+                <div class="has-text-right editortoolbar">
                     <a id="fileInput${id}" class="icon is-hidden-mobile" title="上传文件">${ic.Upload}</a>
                     <a class="icon" title="保存" onclick="cbi_submit(this,'cbi.save')">${ic.save}</a>
                     <a id="down${id}"         class="icon" title="下载">${ic.download}</a>
                     <a id="clear${id}"        class="icon" title="清除">${ic.delete}</a>
                     <a id="copy${id}"         class="icon" title="复制输入代码">${ic.copy}</a>
-                    <a id="${id}FullScreen"   class="icon" title="全屏"    onclick="toggleFullScreenUI('${id}',true)">${ic.open_fullscreen}</a>
-                    <a id="${id}CloseScreen"  class="icon" title="关闭全屏" onclick="toggleFullScreenUI('${id}',false)" style="display:none">${ic.close_fullscreen}</a>
+                    <a id="${id}FullScreen"   class="icon" title="全屏" onclick="toggleFullScreenUI('${id}',true)">${ic.open_fullscreen}</a>
+                    <a id="${id}CloseScreen" class="icon" style="display:none;" title="关闭全屏" onclick="toggleFullScreenUI('${id}',false)">${ic.close_fullscreen}</a>
                 </div>
             </div>`)
         .append(`
             <div class="columns is-mobile m-0 aceStatusBar" id="StatusBar">
-                <div class="column is-two-thirds p-0 pl-0 status-left"  id="${id}AceLineColumn">Ln: 1; Col: 1; Max Col: 0</div>
-                <div class="column is-one-thirds p-0 has-text-centered status-right" id="${id}TextSize">Size: 0 Byte</div>
+                <div class="column is-two-thirds p-0 pl-0"  id="${id}AceLineColumn">Ln: 1; Col: 1; Max Col: 0</div>
+                <div class="column is-one-thirds p-0 has-text-right" id="${id}TextSize">Size: 0 Byte</div>
             </div>`)
         .addClass('column')
         .wrapInner(`<div class='aceEditorBorder' id='ace${id}'></div>`)
         .before(`
             <div class="columns is-centered" style="display:none;"></div>
-            <div class="field state"   style="display:none;"></div>
+            <div class="field state" style="display:none;"></div>
             <div class="field success" style="display:none;"></div>`);
 
     var $textarea = $('#' + id);

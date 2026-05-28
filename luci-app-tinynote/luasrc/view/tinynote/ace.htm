@@ -16,7 +16,25 @@
     }
 </style>
 <link rel="stylesheet" href="/luci-static/tinynote/bulma.css"/>
-<script src="https://cdn.jsdelivr.net/npm/ace-builds@1.43.3/src-min-noconflict/ace.min.js"></script>
+<script
+  src="https://lib.baomitu.com/ace/1.43.3/ace.min.js"
+  onerror="
+    (function(el) {
+      var fallbacks = [
+        'https://cdn.bootcdn.net/ajax/libs/ace/1.43.3/ace.min.js',
+        'https://cdn.staticfile.net/ace/1.43.3/ace.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/ace/1.43.3/ace.min.js',
+        'https://cdn.jsdelivr.net/npm/ace-builds@1.43.3/src-min-noconflict/ace.min.js'
+      ];
+      var i = 0;
+      el.onerror = function() {
+        if (i < fallbacks.length) el.src = fallbacks[i++];
+        else console.error('All ACE CDNs failed');
+      };
+      el.src = fallbacks[i++];
+    })(this)
+  "
+></script>
 <script src="/luci-static/tinynote/jquery.min.js"></script>
 <script src="/luci-static/tinynote/clipboard.min.js"></script>
 <script>
