@@ -55,6 +55,8 @@ var editor1 = ace.edit("editor1"),
 
 var output = '',
     indent_char = ' ',
+    removeComments = false,
+    removeEmptyLines = false,
     indent_size = calculateTabSize();
 
 $(function () {
@@ -127,8 +129,12 @@ $(function () {
 
     $selTheme.on('change', function () { applyTheme($selTheme.val(), null); });
     $selFontSize.on('change', function () { applyTheme(null, $selFontSize.val()); });
-
     $('#indent_size').on('change', function () { indent_size = calculateTabSize(); });
+
+    removeComments   = $('#chk-comments').prop('checked');
+    removeEmptyLines = $('#chk-empty-lines').prop('checked');
+    $('#chk-comments').on('change', function () { removeComments = $(this).prop('checked'); });
+    $('#chk-empty-lines').on('change', function () { removeEmptyLines = $(this).prop('checked'); });
 
     setTimeout(watchTabChange, 500);
 });
@@ -138,83 +144,75 @@ editor2.on("input", function () { updateDisplay(editor2, "output"); });
 editor1.selection.on("changeCursor", function () { updateDisplay(editor1, "input"); });
 editor2.selection.on("changeCursor", function () { updateDisplay(editor2, "output"); });
 
-function updateDisplay(editor, prefix) {
-    var content = editor.getValue().trim();
-    var size = content.length;
-    var $sz = $("#" + prefix + "TextSize");
-    var $lc = $("#" + prefix + "AceLineColumn");
-
-    $sz.html(size === 0 ? "Size: 0 Byte" :
-        size < 1024 ? "Size: " + size + " Bytes" :
-            "Size: " + (size / 1024).toFixed(2) + " KB");
-
-    var cursor = editor.selection.getCursor();
-    var maxCol = 0, lines = editor.session.getLength();
-    for (var i = 0; i < lines; i++) maxCol = Math.max(maxCol, editor.session.getLine(i).length);
-    $lc.html("Ln: " + (cursor.row + 1) + "; Col: " + (cursor.column + 1) + "; Max Col: " + maxCol);
-}
-
 ["copyeditor1", "copyeditor2"].forEach(function (btnId) {
     var ed = btnId === "copyeditor1" ? editor1 : editor2;
     new ClipboardJS('#' + btnId, {
         text: function () { return ed.getValue().trim(); }
     }).on('success', function (e) {
         ed.execCommand('selectAll');
-        showSuccessMessage("已复制");
+        showMessage("已复制", 'success');
         e.clearSelection();
     }).on('error', function (e) {
         e.clearSelection();
-        showErrorMessage(ed.getValue().trim() === '' ? '内容为空' : '复制出错' + e.action, true);
+        showMessage(ed.getValue().trim() === '' ? '内容为空' : '复制出错' + e.action);
     });
 });
 
 $(document).on("keydown", function (e) {
     if (e.key !== "F11") return;
     e.preventDefault();
-    var active = editor1.isFocused() ? editor1 : editor2.isFocused() ? editor2 : null;
-    if (!active) return;
-    loadScripts("https://cdn.jsdelivr.net/npm/screenfull@6.0.2/index.min.js").then(function () {
-        if (screenfull.isEnabled) screenfull.toggle(active.container);
-    });
+    var container = (editor1.isFocused() ? editor1 : editor2.isFocused() ? editor2 : null)?.container;
+    if (!container) return;
+    var isFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+    var exit = document.exitFullscreen || document.webkitExitFullscreen;
+    var request = container.requestFullscreen || container.webkitRequestFullscreen;
+    isFullscreen ? exit?.call(document) : request?.call(container).catch(console.warn);
 });
 
-var _savedHeight = {};
-
-function addFullScreen(mode) {
-    var divId = mode === 'input' ? 'inputDiv' : 'outputDiv',
-        edId = mode === 'input' ? 'editor1' : 'editor2',
-        fsBtn = mode === 'input' ? 'inputFullScreen' : 'outputFullScreen',
-        clBtn = mode === 'input' ? 'inputCloseScreen' : 'outputCloseScreen',
-        ed = mode === 'input' ? editor1 : editor2;
-
-    _savedHeight[mode] = $('#' + edId).height();
-    $('#' + divId).addClass('fullScreen');
-    $('#' + fsBtn).hide();
-    $('#' + clBtn).show();
-    ed.focus();
-    $('#' + edId).css('height', 'calc(100% - 65px)');
-    $('body').css({ overflow: 'hidden', position: 'fixed' });
+function updateDisplay(editor, prefix) {
+    var content = editor.getValue().trim();
+    var size = content.length;
+    var $sz = $("#" + prefix + "TextSize");
+    var $lc = $("#" + prefix + "AceLineColumn");
+    $sz.html(size === 0 ? "Size: 0 Byte" :
+        size < 1024 ? "Size: " + size + " Bytes" :
+            "Size: " + (size / 1024).toFixed(2) + " KB");
+    var cursor = editor.selection.getCursor();
+    var maxCol = 0, lines = editor.session.getLength();
+    for (var i = 0; i < lines; i++) maxCol = Math.max(maxCol, editor.session.getLine(i).length);
+    $lc.html("Ln: " + (cursor.row + 1) + "; Col: " + (cursor.column + 1) + "; Max Col: " + maxCol);
 }
 
-function removeFullScreen(mode) {
+var _savedHeight = {};
+function toggleFullScreen(mode) {
     var divId = mode === 'input' ? 'inputDiv' : 'outputDiv',
-        edId = mode === 'input' ? 'editor1' : 'editor2',
-        fsBtn = mode === 'input' ? 'inputFullScreen' : 'outputFullScreen',
+        edId  = mode === 'input' ? 'editor1'  : 'editor2',
+        fsBtn = mode === 'input' ? 'inputFullScreen'  : 'outputFullScreen',
         clBtn = mode === 'input' ? 'inputCloseScreen' : 'outputCloseScreen',
-        ed = mode === 'input' ? editor1 : editor2;
+        ed    = mode === 'input' ? editor1 : editor2;
 
-    $('#' + divId).removeClass('fullScreen');
-    $('#' + fsBtn).show();
-    $('#' + clBtn).hide();
-    ed.focus();
-    $('#' + edId).css('height', _savedHeight[mode] || '60vh');
-    $('body').css({ overflow: '', position: '' });
+    if ($('#' + divId).hasClass('fullScreen')) {
+        $('#' + divId).removeClass('fullScreen');
+        $('#' + fsBtn).show();
+        $('#' + clBtn).hide();
+        ed.focus();
+        $('#' + edId).css('height', _savedHeight[mode] || '60vh');
+        $('body').css({ overflow: '', position: '' });
+    } else {
+        _savedHeight[mode] = $('#' + edId).height();
+        $('#' + divId).addClass('fullScreen');
+        $('#' + fsBtn).hide();
+        $('#' + clBtn).show();
+        ed.focus();
+        $('#' + edId).css('height', 'calc(100% - 65px)');
+        $('body').css({ overflow: 'hidden', position: 'fixed' });
+    }
 }
 
 function downloadFile(event) {
     event.preventDefault();
     var content = editor2.getValue().trim();
-    if (!content) { showErrorMessage('内容为空', true); return; }
+    if (!content) { showMessage('内容为空'); return; }
     loadScripts("/luci-static/tinynote/FileSaver.min.js").then(function () {
         saveAs(new Blob([content], { type: "text/plain; charset=utf-8" }), "data.txt");
     });
@@ -240,7 +238,7 @@ function changeToFileContent(input) {
 function getContent(editor) {
     var time = timeStart();
     var content = (editor || editor1).getValue().trim();
-    if (!content) { showErrorMessage('内容为空', true); return false; }
+    if (!content) { showMessage('内容为空'); return false; }
     return { content: content, time: time };
 }
 
@@ -272,10 +270,9 @@ function Progress(action) {
     $('.progress.is-success.is-small')[action]();
 }
 
-function showSuccessMessage(message, isRed) {
-    var bg = isRed ? 'red' : '#3488ce';
+function showSuccessMessage(message) {
     $(".field.success")
-        .html('<div class="button is-fullwidth alert-message" style="background:' + bg + ';font-size:14px;">' + message + '</div>')
+        .html('<div class="button is-fullwidth alert-message" style="background:#3488ce;font-size:14px;">' + message + '</div>')
         .show().delay(3000).fadeOut();
 }
 
@@ -285,27 +282,135 @@ function state(time) {
         .show().delay(3000).fadeOut();
 }
 
-function showErrorMessage(message, a) {
-    if (a !== undefined) { showSuccessMessage(message, true); return; }
-    clearTimeout(window.hideTimer);
-    $(".columns.is-centered").html(
-        '<div class="notification alert-message" style="color:black;border:0;background:#f8d7da;">' +
-        '<p class="subtitle" style="color:red;">语法错误：</p><p>' + message + '</p>' +
-        '<button class="is-medium delete"></button></div>'
-    ).fadeIn();
-    $(".delete").on("click", function (e) {
-        e.preventDefault();
-        $(".columns.is-centered").fadeOut();
+var _notificationQueue = [];
+
+function showMessage(message, type) {
+    if (type === true) { showSuccessMessage(message); return; }
+
+    type = type || 'danger';
+
+    var colorMap         = { success: 'success', error: 'danger', warning: 'warning', info: 'info', danger: 'danger' };
+    var titleMap         = { success: '成功', error: '错误', warning: '警告', info: '提示', danger: '错误' };
+    var progressColorMap = { success: '#48c78e', warning: '#ffe08a', danger: '#f14668', info: '#3e8ed0' };
+
+    var color = colorMap[type] || 'danger';
+    var title = titleMap[type] || '错误';
+
+    if ($('.file-notification .message-body').filter(function () {
+        return $(this).html() === message;
+    }).length) return;
+
+    if (!document.getElementById('msg-progress-style')) {
+        $('<style id="msg-progress-style">').text(
+            '@keyframes msgCountdown {' +
+            'from { transform: scaleX(1); }' +
+            'to { transform: scaleX(0); }' +
+            '}'
+        ).appendTo('head');
+    }
+
+    var $n = $('<article class="file-notification message is-' + color + ' is-small">').css({
+        position: 'fixed',
+        right: 20,
+        opacity: 0,
+        zIndex: 20000,
+        maxWidth: '45vw',
+        overflow: 'hidden',
+        width: 'fit-content',
+        transition: 'all .3s',
+        transform: 'translateX(30px)',
+        boxShadow: '0 4px 12px rgba(0,0,0,.12)',
+        top: 20 + _notificationQueue.length * 80
     });
-    var mouseEntered = false;
-    $(".columns.is-centered").on({
-        mouseenter: function () { mouseEntered = true; clearTimeout(window.hideTimer); },
+
+    var $header = $('<div class="message-header">').append(
+        $('<p>').text(title),
+        $('<button class="delete">').css({ opacity: 0, transition: 'opacity .2s' })
+    );
+    var $body = $('<div class="message-body">').html(message);
+    var $progress = $('<div class="msg-progress">').css({ // 底部进度条
+        position: 'absolute',
+        left: 0,
+        bottom: 0,
+        height: '3px',
+        width: '100%',
+        transformOrigin: 'left',
+        background: progressColorMap[color] || '#fff',
+        animation: 'msgCountdown 5s linear forwards'
+    });
+
+    $n.append($header, $body, $progress).appendTo('body');
+    _notificationQueue.push($n[0]);
+
+    function remove() {
+        clearTimeout($n.data('timer'));
+        $n.css({ opacity: 0, transform: 'translateX(30px)' })
+            .one('transitionend', function () {
+                $n.remove();
+                _notificationQueue.splice(_notificationQueue.indexOf($n[0]), 1);
+                _notificationQueue.forEach(function (el, i) {
+                    $(el).css('top', 20 + i * 80);
+                });
+            });
+    }
+
+    $n.on({
+        mouseenter: function () {
+            $header.find('.delete').css('opacity', 1);
+            clearTimeout($n.data('timer'));
+            $progress.css('animation-play-state', 'paused');
+        },
+
         mouseleave: function () {
-            window.hideTimer = setTimeout(function () {
-                if (!mouseEntered) $(".columns.is-centered").fadeOut();
-            }, 5000);
+            $header.find('.delete').css('opacity', 0);
+            $progress.css('animation-play-state', 'running');
         }
-    }).trigger('mouseleave');
+    });
+
+    $header.find('.delete').on('click', function (e) {
+        e.stopPropagation();
+        remove();
+    });
+    $n.data('timer', setTimeout(remove, 5000));
+    requestAnimationFrame(function () {
+        $n.css({ opacity: 1, transform: 'translateX(0)' });
+    });
+}
+
+function postProcess(output, lang) {
+    if (!output) return output;
+
+    if (removeComments) {
+        switch (lang) {
+            case 'js':
+                output = removeJsComments(output);
+                break;
+            case 'css':
+                output = output.replace(/\/\*[\s\S]*?\*\//g, '');
+                break;
+            case 'html':
+                output = output.replace(/<!--[\s\S]*?-->/g, '');
+                break;
+            case 'lua':
+                output = output.replace(/--\[\[[\s\S]*?\]\]/g, '');
+                output = output.replace(/--[^\r\n]*/g, '');
+                break;
+			case 'yaml':
+				output = output.replace(/^[ \t]*#.*$/gm, '');
+				output = output.replace(/([^\s'"])\s+#.*$/gm, '$1');
+				break;
+            case 'sh':
+                output = output.replace(/^([ \t]*)#[^\r\n]*/gm, '');
+                break;
+        }
+    }
+
+    if (removeEmptyLines) {
+        output = output.replace(/^[ \t]+$/gm, '');
+        output = output.replace(/(\r?\n){2,}/g, '\n');
+    }
+
+    return output.trim() + '\n';
 }
 
 var TAB_MODE_MAP = {
@@ -341,35 +446,58 @@ function watchTabChange() {
     });
 }
 
-function FormatSH(a) {
-    const res = getContent();
-    if (!res?.content) {
-        return showErrorMessage("没有内容", true);
-    }
-    if (a !== 'format') return;
-    output = formatShCode(res.content, indent_size);
-    editor2.setValue(output || '没有返回值');
-    editor1.session.setMode("ace/mode/sh");
-    editor2.session.setMode("ace/mode/sh");
-    state(res.time);
+function examineJavaScript() {
+    var res = getContent();
+    if (!res?.content) return showMessage('内容为空');
+    loadScripts("/luci-static/tinynote/jshint.min.js").then(function () {
+        editor1.session.setMode("ace/mode/javascript");
+        if (JSHINT(res.content, { asi: true, esversion: 8 })) {
+            showMessage("语法通过", true)
+        } else {
+            var msg = "";
+            JSHINT.errors.filter(Boolean).forEach(function (e) {
+                try {
+                    var ev = e.evidence ? '"<b style="color:red;">' + e.evidence + '</b>"，' : '';
+                    var errMsg = e.code ? getErrorMessage(e.code) : (e.reason || e.raw || '未知错误');
+                    msg += '在第 ' + e.line + ' 行，第 ' + (e.character || 0) + ' 列，' + ev +
+                        '错误代码：' + (e.code || 'N/A') + ' : ' + errMsg + '<br>';
+                } catch (err) {
+                    msg += '在第 ' + e.line + ' 行，解析错误信息失败：' + (e.raw || '') + '<br>';
+                }
+            });
+            showMessage(msg);
+        }
+        state(res.time);
+    });
 }
 
 function JsCompression(a) {
-    const res = getContent();
-    if (!res?.content) {
-        return showErrorMessage("没有内容", true);
-    }
+    var res = getContent();
+    if (!res?.content) return showMessage('内容为空');
     loadScripts(["/luci-static/tinynote/format.js", "/luci-static/tinynote/beautifier.js"])
         .then(function () {
-            if (a === "minify") output = new Packer().minify(res.content);
-            else if (a === "pack") output = new Packer().pack(res.content, true, true);
-            else if (a === "beautify") output = beautifier.js(res.content, {
-                indent_size, indent_char,
-                jslint_happy: true, wrap_line_length: 0, templating: ["auto"],
-                end_with_newline: true, max_preserve_newlines: 1,
-                space_in_empty_paren: true, operator_position: "before-newline",
-                indent_with_tabs: indent_size === '\t'
-            });
+            var output;
+            if (a === "minify") {
+                output = new Packer().minify(res.content);
+            } else if (a === "pack") {
+                output = new Packer().pack(res.content, true, true);
+            } else if (a === "beautify") {
+                var src = res.content;
+                if (removeComments) src = removeJsComments(src);
+                output = beautifier.js(src, {
+                    indent_size, indent_char,
+                    jslint_happy: true, wrap_line_length: 0, templating: ["auto"],
+                    end_with_newline: true,
+                    max_preserve_newlines: removeEmptyLines ? 0 : 10,
+                    space_in_empty_paren: true, operator_position: "before-newline",
+                    indent_with_tabs: indent_size === '\t', brace_style: "collapse",
+                    preserve_newlines: true
+                });
+                if (removeEmptyLines) {
+                    output = output.replace(/^[ \t]*$/gm, '');
+                    output = output.replace(/(\r?\n){2,}/g, '\n');
+                }
+            }
             editor1.session.setMode("ace/mode/javascript");
             editor2.session.setMode("ace/mode/javascript");
             editor2.setValue(output || '没有返回值');
@@ -377,35 +505,27 @@ function JsCompression(a) {
         });
 }
 
-function examineJavaScript() {
-    const res = getContent();
-    if (!res?.content) {
-        return showErrorMessage("没有内容", true);
-    }
-    editor1.session.setMode("ace/mode/javascript");
-    loadScripts("/luci-static/tinynote/jshint.min.js").then(function () {
-        if (JSHINT(res.content, { asi: true, esversion: 8 })) {
-            showSuccessMessage("语法通过");
-        } else {
-            var msg = "";
-            JSHINT.errors.forEach(function (e) {
-                var ev = e.evidence ? '"<b style="color:red;">' + e.evidence + '</b>"，' : '';
-                msg += '在第 ' + e.line + ' 行，第 ' + e.character + ' 列，' + ev +
-                    '错误代码：' + e.code + ' :' + getErrorMessage(e.code) + '<br>';
-            });
-            showErrorMessage(msg);
+function removeJsComments(src) {
+    return src.replace(
+        /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\*[\s\S]*?\*\/|\/\/[^\r\n]*)/g,
+        function (match) {
+            if (match[0] === '"' || match[0] === "'" || match[0] === '`') return match;
+            if (match.startsWith("//")) return "\n";
+            if (match.startsWith("/*")) {
+                var lines = match.split("\n").length - 1;
+                return "\n".repeat(lines);
+            }
+            return match;
         }
-        state(res.time);
-    });
+    );
 }
 
 function CSSFormat(a) {
-    const res = getContent();
-    if (!res?.content) {
-        return showErrorMessage("没有内容", true);
-    }
+    var res = getContent();
+    if (!res?.content) return showMessage('内容为空');
     loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/beautifier.js"])
         .then(function () {
+            var output;
             if (a === "format") output = beautifier.css(res.content, {
                 indent_size, indent_char, end_with_newline: true,
                 preserve_newlines: false, selector_separator_newline: true,
@@ -413,6 +533,7 @@ function CSSFormat(a) {
             });
             else if (a === "min") output = vkbeautify.cssmin(res.content);
             else if (a === "pack") output = vkbeautify.csspack(res.content);
+            output = postProcess(output, 'css');
             editor1.session.setMode("ace/mode/css");
             editor2.session.setMode("ace/mode/css");
             editor2.setValue(output || '没有返回值');
@@ -421,168 +542,172 @@ function CSSFormat(a) {
 }
 
 function formatLua(a) {
-    const res = getContent();
-    if (!res?.content) {
-        return showErrorMessage("没有内容", true);
-    }
+    var res = getContent();
+    if (!res?.content) return showMessage('内容为空');
     loadScripts(["/luci-static/tinynote/luaparse.js", "/luci-static/tinynote/lua-fmt-lib.js", "/luci-static/tinynote/luamin.min.js"])
         .then(function () {
             try {
                 editor1.session.setMode("ace/mode/lua");
                 if (a === 'examine') {
                     luaparse.parse(res.content);
-                    showSuccessMessage("语法通过");
+                    showMessage("语法通过", true)
                 } else {
-                    output = a === undefined
+                    var output = a === undefined
                         ? beautifyLuaCode(res.content, createShiftArr(indent_size))
                         : luamin.minify(res.content);
+                    output = postProcess(output, 'lua');
                     editor2.session.setMode("ace/mode/lua");
                     editor2.setValue(output || '没有返回值');
+                    state(res.time);
                 }
-                state(res.time);
-            } catch (e) { showErrorMessage(e.message); }
+            } catch (e) { showMessage(e.message); }
         })
-        .catch(function () { showErrorMessage("加载错误", true); });
+        .catch(function () { showMessage('加载错误'); });
 }
 
 function jsonFormat(a) {
-    const res = getContent();
-    if (!res?.content) {
-        return showErrorMessage("没有内容", true);
-    }
+    var res = getContent();
+    if (!res?.content) return showMessage('内容为空');
     loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/jsonlint.min.js"])
         .then(function () {
             editor1.session.setMode("ace/mode/json");
             try {
+                var output;
                 if (a === 'min') output = vkbeautify.jsonmin(res.content);
                 else if (a === 'format') output = vkbeautify.json(res.content, indent_size);
-                else if (a === 'safeLoad') { jsonlint.parse(res.content); showSuccessMessage("语法通过"); }
-                if (a !== 'safeLoad') { editor2.session.setMode("ace/mode/json"); editor2.setValue(output || '没有返回值'); }
-                state(res.time);
-            } catch (e) { showErrorMessage(e.message); }
+                else if (a === 'safeLoad') { jsonlint.parse(res.content); showMessage("语法通过", true) }
+                if (a !== 'safeLoad') {
+                    if (removeEmptyLines) output = postProcess(output, 'json');
+                    editor2.session.setMode("ace/mode/json");
+                    editor2.setValue(output || '没有返回值');
+                    state(res.time);
+                }
+            } catch (e) { showMessage(e.message); }
         })
-        .catch(function () { showErrorMessage("加载错误", true); });
+        .catch(function () { showMessage('加载错误'); });
 }
 
 function FormatHTML(a) {
-    const res = getContent();
-    if (!res?.content) {
-        return showErrorMessage("没有内容", true);
-    }
-
+    var res = getContent();
+    if (!res?.content) return showMessage('内容为空');
     loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/beautifier.js"])
-    .then(function () {
-        try {
-            editor1.session.setMode("ace/mode/html");
-            editor2.session.setMode("ace/mode/html");
-
-            var output = "";
-            if (a === "format") {
-                output = beautifier.html(res.content, {
-                    indent_size, indent_char, indent_with_tabs: false, templating: ["auto"]
-                });
-            } 
-            else if (a === "min") {
-                output = vkbeautify.htmlmin
-                    ? vkbeautify.htmlmin(res.content)
-                    : vkbeautify.xmlmin(res.content);
-            }
-
-            editor2.setValue(output || "没有返回值");
-            state(res.time);
-
-        } catch (e) {
-            showErrorMessage(e.message, true);
-        }
-    })
-    .catch(function () {
-        showErrorMessage("加载错误", true);
-    });
+        .then(function () {
+            try {
+                editor1.session.setMode("ace/mode/html");
+                editor2.session.setMode("ace/mode/html");
+                var output = "";
+                if (a === "format") {
+                    output = beautifier.html(res.content, {
+                        indent_size, indent_char, indent_with_tabs: false, templating: ["auto"]
+                    });
+                } else if (a === "min") {
+                    output = vkbeautify.htmlmin
+                        ? vkbeautify.htmlmin(res.content)
+                        : vkbeautify.xmlmin(res.content);
+                }
+                output = postProcess(output, 'html');
+                editor2.setValue(output || "没有返回值");
+                state(res.time);
+            } catch (e) { showMessage(e.message); }
+        })
+        .catch(function () { showMessage('加载错误'); });
 }
 
 function FormatYAML(a) {
-    const res = getContent();
-    if (!res?.content) {
-        return showErrorMessage("没有内容", true);
-    }
+    var res = getContent();
+    if (!res?.content) return showMessage('内容为空');
     loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/js-yaml.min.js"])
         .then(function () {
             try {
                 editor1.session.setMode("ace/mode/yaml");
                 editor2.session.setMode("ace/mode/yaml");
+                var output;
                 if (a === 'json') { editor2.session.setMode("ace/mode/json"); output = vkbeautify.json(jsyaml.load(res.content), indent_size); }
                 else if (a === 'format') output = jsyaml.dump(jsyaml.load(res.content), { indent: indent_size, lineWidth: -1 });
                 else if (a === 'yaml') { editor1.session.setMode("ace/mode/json"); output = jsyaml.dump(JSON.parse(res.content), { indent: indent_size }); }
-                else if (a === 'safeLoad') { if (jsyaml.load(res.content)) showSuccessMessage("语法通过"); }
-                if (a !== 'safeLoad') editor2.setValue(output || '没有返回值');
-                state(res.time);
-            } catch (e) { showErrorMessage(e.message); }
+                else if (a === 'safeLoad') { if (jsyaml.load(res.content)) showMessage("语法通过", true) }
+                if (a !== 'safeLoad') {
+                    output = postProcess(output, 'yaml');
+                    editor2.setValue(output || '没有返回值');
+                    state(res.time);
+                }
+            } catch (e) { showMessage(e.message); }
         })
-        .catch(function () { showErrorMessage("加载错误", true); });
+        .catch(function () { showMessage('加载错误'); });
 }
 
 function yamlToxml() {
-    var res = getContent(); if (!res) return;
+    var res = getContent();
+    if (!res) return;
     loadScripts(["/luci-static/tinynote/ObjTree.min.js", "/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/js-yaml.min.js"])
         .then(function () {
-			var data = jsyaml.load(res.content);
-			var xml = new XML.ObjTree().writeXML({ root: data });
-			xml = vkbeautify.xml(xml);
-			editor2.session.setMode("ace/mode/xml");
-			editor2.setValue(xml || "没有返回值");
-			state(res.time);
+            try {
+                var data = jsyaml.load(res.content);
+                var xml = new XML.ObjTree().writeXML({ root: data });
+                xml = vkbeautify.xml(xml);
+                editor2.session.setMode("ace/mode/xml");
+                editor2.setValue(xml || "没有返回值");
+                state(res.time);
+            } catch (e) { showMessage(e.message); }
         })
-        .catch(function () { showErrorMessage("加载错误", true); });
+        .catch(function () { showMessage('加载错误'); });
 }
 
 function jsonTocsv() {
-    const res = getContent();
-    if (!res?.content) {
-        return showErrorMessage("没有内容", true);
-    }
-
+    var res = getContent();
+    if (!res?.content) return showMessage('内容为空');
     loadScripts("/luci-static/tinynote/tocsv.js")
-		.then(() => {
-            const data = JSON.parse(res.content);
-            if (!Array.isArray(data)) {
-                throw new Error("JSON 必须是数组");
-            }
-
-            editor1.session.setMode("ace/mode/json");
-            editor2.session.setMode("ace/mode/csv");
-            editor2.setValue(jsonToCsv(data, ",", true, false, false) || "没有返回值");
-            state(res.time);
+        .then(function () {
+            try {
+                var data = JSON.parse(res.content);
+                if (!Array.isArray(data)) throw new Error("JSON 必须是数组");
+                editor1.session.setMode("ace/mode/json");
+                editor2.session.setMode("ace/mode/csv");
+                editor2.setValue(jsonToCsv(data, ",", true, false, false) || "没有返回值");
+                state(res.time);
+            } catch (e) { showMessage("CSV 转换失败：" + e.message); }
         })
-        .catch(e => showErrorMessage("CSV 转换失败：" + e.message, true));
+        .catch(function () { showMessage('加载错误'); });
 }
 
 function jsonToXML() {
     var res = getContent();
-    if (!res || !res.content) {
-        return showErrorMessage("没有内容", true);
-    }
-
+    if (!res?.content) return showMessage('内容为空');
     loadScripts(["/luci-static/tinynote/vkbeautify.js", '/luci-static/tinynote/ObjTree.min.js'])
-    .then(function () {
-        try {
-            var data = JSON.parse(res.content);
-            var xml = new XML.ObjTree().writeXML({
-                root: data
-            });
+        .then(function () {
+            try {
+                var data = JSON.parse(res.content);
+                var xml = new XML.ObjTree().writeXML({ root: data });
+                xml = vkbeautify.xml(xml);
+                editor1.session.setMode("ace/mode/json");
+                editor2.session.setMode("ace/mode/xml");
+                editor2.setValue(xml || "没有返回值");
+                state(res.time);
+            } catch (e) { showMessage("JSON 转 XML 失败：" + e.message); }
+        })
+        .catch(function () { showMessage('加载错误'); });
+}
 
-            xml = vkbeautify.xml(xml);
-            editor1.session.setMode("ace/mode/json");
-            editor2.session.setMode("ace/mode/xml");
-            editor2.setValue(xml || "没有返回值");
-            state(res.time);
-
-        } catch (e) {
-            showErrorMessage("JSON 转 XML 失败：" + e.message, true);
+function FormatSH(a) {
+    var res = getContent();
+    if (!res?.content) return showMessage('内容为空');
+    try {
+        var output = "";
+        if (a === "format") {
+            output = formatShCode(res.content, indent_size);
+        } else if (a === "min") {
+            output = res.content
+                .replace(/^\s*#[^\r\n]*/gm, '')
+                .replace(/[ \t]+/g, ' ')
+                .replace(/(\r?\n){2,}/g, '\n')
+                .trim();
         }
-    })
-    .catch(function () {
-        showErrorMessage("加载错误", true);
-    });
+        output = postProcess(output, 'sh');
+        editor1.session.setMode("ace/mode/sh");
+        editor2.session.setMode("ace/mode/sh");
+        editor2.setValue(output || '没有返回值');
+        state(res.time);
+    } catch (e) { showMessage(e.message); }
 }
 
 class Stack {
@@ -612,24 +737,24 @@ function formatShCode(content, indentSize) {
         heredocStrip = false,
         blockStack = [];
 
-    var rHeredocStart = /<<(-?)\s*['"`]?(\w+)['"`]?/,
-        rFunction = /^\s*(?:function\s+)?(\w+)\s*\(\s*\)\s*\{?\s*(?:#.*)?$/,
-        rCaseStart = /^case\b/,
-        rCaseIn = /\bin\s*$/,
-        rCasePattern = /^(?:\(?.+\)?)\)\s*(?:#.*)?$/,
-        rCaseDblSemi = /^;;/,
-        rCaseFallthru = /^;[;&]/,
-        rIfStart = /^if\b/,
-        rElifElse = /^(?:elif|else)\b/,
-        rThen = /\bthen\s*(?:#.*)?$/,
-        rFi = /^fi\b/,
-        rLoopStart = /^(?:while|until|for|select)\b/,
-        rDo = /\bdo\s*(?:#.*)?$/,
-        rDone = /^done\b/,
-        rEsac = /^esac\b/,
-        rOpenBrace = /\{\s*(?:#.*)?$/,
-        rCloseBrace = /^\}/,
-        rSubshellOpen = /\(\s*(?:#.*)?$/,
+    var rHeredocStart  = /<<(-?)\s*['"`]?(\w+)['"`]?/,
+        rFunction      = /^\s*(?:function\s+)?(\w+)\s*\(\s*\)\s*\{?\s*(?:#.*)?$/,
+        rCaseStart     = /^case\b/,
+        rCaseIn        = /\bin\s*$/,
+        rCasePattern   = /^(?:\(?.+\)?)\)\s*(?:#.*)?$/,
+        rCaseDblSemi   = /^;;/,
+        rCaseFallthru  = /^;[;&]/,
+        rIfStart       = /^if\b/,
+        rElifElse      = /^(?:elif|else)\b/,
+        rThen          = /\bthen\s*(?:#.*)?$/,
+        rFi            = /^fi\b/,
+        rLoopStart     = /^(?:while|until|for|select)\b/,
+        rDo            = /\bdo\s*(?:#.*)?$/,
+        rDone          = /^done\b/,
+        rEsac          = /^esac\b/,
+        rOpenBrace     = /\{\s*(?:#.*)?$/,
+        rCloseBrace    = /^\}/,
+        rSubshellOpen  = /\(\s*(?:#.*)?$/,
         rSubshellClose = /^\)/;
 
     function stripInlineComment(raw) {
@@ -735,7 +860,7 @@ function formatShCode(content, indentSize) {
         }
     }
 
-    return out.replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '')+ '\n';
+    return out.replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '') + '\n';
 }
 
 function getExampleLua() {
@@ -755,7 +880,7 @@ function getExampleSH() {
 }
 
 function getExampleXml() {
-    return '<?xml version="1.0"?>\n<ROWSET>\n<ROW>\n<id>1</id>\n<name>Johnson, Smith, and Jones Co.</name>\n<amount>345.33</amount>\n<Remark>Pays on time</Remark>\n</ROW>\n<ROW>\n<id>2</id>\n<name>Sam &quot;Mad Dog&quot; Smith</name>\n<amount>993.44</amount>\n<Remark></Remark>\n</ROW>\n<ROW>\n<id>3</id>\n<name>Barney &amp; Company</name>\n<amount>0</amount>\n<Remark>Great to work with\nand always pays with cash.</Remark>\n</ROW>\n<ROW>\n<id>4</id>\n<name>Johnson&apos;s Automotive</name>\n<amount>2344</amount>\n<Remark></Remark>\n</ROW>\n</ROWSET>'
+    return '<?xml version="1.0"?>\n<ROWSET>\n<ROW>\n<id>1</id>\n<name>Johnson, Smith, and Jones Co.</name>\n<amount>345.33</amount>\n<Remark>Pays on time</Remark>\n</ROW>\n<ROW>\n<id>2</id>\n<name>Sam &quot;Mad Dog&quot; Smith</name>\n<amount>993.44</amount>\n<Remark></Remark>\n</ROW>\n<ROW>\n<id>3</id>\n<name>Barney &amp; Company</name>\n<amount>0</amount>\n<Remark>Great to work with\nand always pays with cash.</Remark>\n</ROW>\n<ROW>\n<id>4</id>\n<name>Johnson&apos;s Automotive</name>\n<amount>2344</amount>\n<Remark></Remark>\n</ROW>\n</ROWSET>';
 }
 
 function getExampleYaml() {
@@ -783,35 +908,29 @@ function getExampleHTML() {
 }
 
 function getExampleJson(e) {
-    var output = ['[\n  {\n    "id":1,    "name":"Johnson, Smith, and Jones Co.",\n    "amount":345.33,    "Remark":"Pays on time"\n  },\n  {\n    "id":2,    "name":"Sam \\"Mad Dog\\" Smith",\n    "amount":993.44,    "Remark":""\n  },\n  {\n    "id":3,    "name":"Barney & Company",\n    "amount":0,    "Remark":"Great to work with\\nand always pays with cash."\n  },\n  {\n    "id":4,    "name":"Johnson\'s Automotive",\n    "amount":2344,    "Remark":""\n  }\n]\n', '{ "data" : [\n  {    "id":1,    "name":"Johnson, Smith, and Jones Co."  },\n  {    "id":2,    "name":"Sam \\"Mad Dog\\" Smith"  },\n  {    "id":3,    "name":"Barney & Company"  },\n  {    "id":4,    "name":"Johnson\'s Automotive"  }\n] }\n', '{ "race" : \n { "entries" : [\n  {    "id":11,    "name":"Johnson, Smith, and Jones Co."  },\n  {    "id":22,    "name":"Sam \\"Mad Dog\\" Smith"  },\n  {    "id":33,    "name":"Barney & Company"  },\n  {    "id":44,    "name":"Johnson\'s Automotive"  }\n] }\n}\n', '{\n    "id":1,    "name":"Johnson, Smith, and Jones Co.",    "amount":345.33,    "Remark":"Pays on time"\n}\n', '[\n    [      1,      "Johnson, Smith, and Jones Co.",      345.33    ],\n    [      99,      "Acme Food Inc.",      2993.55    ]\n]'][e = (e || 1) - 1];
+    var output = ['[\n  {\n    "id":1,    "name":"Johnson, Smith, and Jones Co.",\n    "amount":345.33,    "Remark":"Pays on time"\n  },\n  {\n    "id":2,    "name":"Sam \\"Mad Dog\\" Smith",\n    "amount":993.44,    "Remark":""\n  },\n  {\n    "id":3,    "name":"Barney & Company",\n    "amount":0,    "Remark":"Great to work with\\nand always pays with cash."\n  },\n  {\n    "id":4,    "name":"Johnson\'s Automotive",\n    "amount":2344,    "Remark":""\n  }\n]\n', '{ "data" : [\n  {    "id":1,    "name":"Johnson, Smith, and Jones Co."  },\n  {    "id":2,    "name":"Sam \\"Mad Dog\\" Smith"  },\n  {    "id":3,    "name":"Barney & Company"  },\n  {    "id":4,    "name":"Johnson\'s Automotive"  }\n] }\n', '{ "race" : \n { "entries" : [\n  {    "id":11,    "name":"Johnson, Smith, and Jones Co."  },\n  {    "id":22,    "name":"Sam \\"Mad Dog\\" Smith"  },\n  {    "id":33,    "name":"Barney & Company"  },\n  {    "id":44,    "name":"Johnson\'s Automotive"  }\n] }\n}\n', '{\n    "id":1,    "name":"Johnson, Smith, and Jones Co.",    "amount":345.33,    "Remark":"Pays on time"\n}\n', '[\n    [      1,      "Johnson, Smith, and Jones Co.",      345.33    ],\n    [      99,      "Acme Food Inc.",      2993.55    ]\n]'][(e = (e || 1) - 1)];
     editor1.session.setMode("ace/mode/json");
     editor1.setValue(output);
 }
 
 function getErrorMessage(code) {
     var errorCode = {
-        // JSHint options
         E001: "不好的 {a} 选项: '{b}'。",
         E002: "不好的选项值。",
-        // JSHint input
         E003: "预期为 JSON 值。",
         E004: "输入既不是字符串，也不是字符串数组。",
         E005: "输入为空。",
         E006: "意外的程序提前结束。",
-        // 严格模式
         E007: "缺少 \"use strict\" 声明。",
         E008: "严格模式违例。",
         E009: "全局范围内不能使用 'validthis' 选项。",
         E010: "在严格模式下不允许使用 'with'。",
-        // 常量
         E011: "'{a}' 已经被声明。",
         E012: "常量 '{a}' 缺少初始化器。",
         E013: "试图覆盖常量 '{a}'。",
-        // 正则表达式
         E014: "正则表达式文本可能与 '/=' 混淆。",
         E015: "未关闭的正则表达式。",
         E016: "无效的正则表达式。",
-        // 标记
         E017: "未闭合的注释。",
         E018: "未开始的注释。",
         E019: "不匹配的 '{a}'。",
@@ -825,17 +944,15 @@ function getErrorMessage(code) {
         E027: "缺少 ']' 来匹配行 {a} 的 '['。",
         E028: "非法逗号。",
         E029: "未闭合的字符串。",
-        // 其他
         E030: "期望标识符，实际看到了 '{a}'。",
-        E031: "错误的赋值。",
-        E032: "期望小整数或 'false'，实际看到了 '{a}'。",
+        E031: "非法的赋值目标。",
+        E032: "期望一个小整数或 'false'，实际看到了 '{a}'。",
         E033: "期望操作符，实际看到了 '{a}'。",
         E034: "get/set 是 ES5 特性。",
         E035: "缺少属性名。",
         E036: "预期看到语句，实际看到了代码块。",
-        E037: null,
-        E038: null,
-        E039: "函数声明不可调用。请用括号包裹整个函数调用。",
+        E037: null, E038: null,
+        E039: "函数声明不可直接调用。请将函数表达式用括号包裹后再调用。",
         E040: "每个值应该有自己的 case 标签。",
         E041: "不可恢复的语法错误。",
         E042: "停止。",
@@ -875,11 +992,9 @@ function getErrorMessage(code) {
         W006: "令人困惑的负号。",
         W007: "令人困惑的加号。",
         W008: "前导小数点可能会被误解为点号: '{a}'。",
-        W009: "首选使用数组文本符号 []。",
-        W010: "首选使用对象文本符号 {}。",
-        W011: null,
-        W012: null,
-        W013: null,
+        W009: "首选使用数组字面量 []。",
+        W010: "首选使用对象字面量 {}。",
+        W011: null, W012: null, W013: null,
         W014: "在 '{a}' 前的误导性换行；读者可能会将其解释为表达式边界。",
         W015: null,
         W016: "意外使用 '{a}'。",
@@ -887,7 +1002,7 @@ function getErrorMessage(code) {
         W018: "令人困惑的 '{a}' 使用。",
         W019: "使用 isNaN 函数与 NaN 进行比较。",
         W020: "只读。",
-        W021: "重新赋值 '{a}'，它是一个 {b}。使用 'var' 或 'let' 声明可能会变化的绑定。",
+        W021: "对 '{a}' 重新赋值，它是一个 {b}。若需修改，请用 'let' 声明。",
         W022: "不要对异常参数进行赋值。",
         W023: null,
         W024: "期望标识符，实际看到了 '{a}'（保留字）。",
@@ -896,22 +1011,22 @@ function getErrorMessage(code) {
         W027: "在 '{b}' 之后的 '{a}' 不可达。",
         W028: "{b} 语句上的标签 '{a}'。",
         W030: "期望赋值或函数调用，实际看到的是表达式。",
-        W031: "不要为副作用而使用 'new'。",
+        W031: "不要仅为副作用而使用 'new'，其返回值应被使用。",
         W032: "不必要的分号。",
         W033: "缺少分号。",
         W034: "不需要的指示符 \"{a}\"。",
         W035: "空块。",
-        W036: "意外的 /*member '{a}'。",
+        W036: "意外的成员访问 '{a}'（/*member 标记）。",
         W037: "'{a}' 是一个语句标签。",
         W038: "'{a}' 超出作用域。",
         W039: null,
-        W040: "如果以函数调用的形式执行严格模式函数，其 'this' 值将为 undefined。",
+        W040: "严格模式下以普通函数调用时，'this' 为 undefined。",
         W041: null,
         W042: "避免 EOL 转义。",
         W043: "EOL 转义错误。如有需要，请使用 multistr 选项。",
         W044: "错误或不必要的转义。",
         W045: "由数字字面量描述的值不能准确表示为数值: '{a}'。",
-        W046: "不要使用额外的前导零 '{a}'。",
+        W046: "数字字面量不应有多余的前导零：'{a}'。",
         W047: "尾随小数点可能会被误解为点号: '{a}'。",
         W048: "正则表达式中出现了意外的控制字符。",
         W049: "正则表达式中出现了意外的转义字符 '{a}'。",
@@ -927,13 +1042,13 @@ function getErrorMessage(code) {
         W059: "避免 arguments.{a}。",
         W060: "document.write 可能是一种形式的 eval。",
         W061: "eval 可能具有危害性。",
-        W062: "将立即函数调用用括号包裹起来，以帮助读者理解表达式是函数的结果，而不是函数本身。",
+        W062: "建议用括号包裹立即执行函数（IIFE），以明确其为表达式而非函数声明。",
         W063: "Math 不是一个函数。",
         W064: "调用构造函数时缺少 'new' 前缀。",
         W065: "缺少基数参数。",
         W066: "隐式的 eval。考虑传递一个函数而不是一个字符串。",
         W067: "不规范的函数调用。",
-        W068: "不必要地在非 IIFE 函数文字中使用括号是不必要的。",
+        W068: "非立即执行函数不需要用括号包裹。",
         W069: "['{a}'] 最好用点符号表示。",
         W070: "额外的逗号。（这会破坏较旧版本的 IE）",
         W071: "此函数有太多语句。({a})",
@@ -948,23 +1063,22 @@ function getErrorMessage(code) {
         W080: "将 '{a}' 初始化为 'undefined' 是不必要的。",
         W081: null,
         W082: "函数声明不应该放在块中。使用函数表达式或将语句移到外部函数的顶部。",
-        W083: "在循环中声明的内部函数引用外部作用域的变量可能会导致混乱的语义。({a})",
+        W083: "循环内的函数引用了外部变量 '{a}'，可能导致闭包陷阱。",
         W084: "期望条件表达式，实际看到的是赋值。",
         W085: "不要使用 'with'。",
         W086: "在 '{a}' 前期望 'break' 语句。",
         W087: "忘记 'debugger' 语句？",
-        W088: "创建全局 'for' 变量。应该是 'for (var {a} ...'。",
+        W088: "'for' 循环变量 '{a}' 未声明，将成为全局变量。请使用 'for (var {a} ...'。",
         W089: "for in 循环的主体应该被包裹在 if 语句中，以过滤原型链中不需要的属性。",
         W090: "'{a}' 不是一个语句标签。",
         W091: null,
-        W093: "你是不是想返回条件表达式，而不是一个赋值？",
+        W093: "是否应该返回比较表达式而非赋值表达式？",
         W094: "意外的逗号。",
         W095: "期望字符串，实际看到 {a}。",
-        W096: "'{a}' 键可能会产生意外的结果。",
+        W096: "使用 '{a}' 作为属性键可能产生意外结果。",
         W097: "使用 \"use strict\" 函数形式。",
         W098: "'{a}' 被定义但从未被使用。",
-        W099: null,
-        W100: null,
+        W099: null, W100: null,
         W101: "行太长。",
         W102: null,
         W103: "'{a}' 属性已废弃。",
@@ -988,11 +1102,11 @@ function getErrorMessage(code) {
         W122: "无效的 typeof 值 '{a}'。",
         W123: "'{a}' 已经在外部作用域中定义。",
         W124: "生成器函数应包含至少一个 yield 表达式。",
-        W125: "此行包含不间断空格：http://jshint.com/docs/options/#nonbsp",
+        W125: "此行包含不间断空格（NBSP），可能引发问题。",
         W126: "不必要的分组运算符。",
         W127: "意外使用了逗号操作符。",
         W128: "空数组元素需要 elision=true。",
-        W129: "'{a}' 在 JavaScript 将来的版本中被定义。为避免迁移问题，请使用其他变量名。",
+        W129: "'{a}' 是未来版本 JavaScript 的保留字，建议更换变量名。",
         W130: "rest 元素后面的元素无效。",
         W131: "rest 参数后面的参数无效。",
         W132: "禁止使用 'var' 声明。请使用 'let' 或 'const'。",
@@ -1000,13 +1114,13 @@ function getErrorMessage(code) {
         W134: "'{a}' 选项仅在检查 ECMAScript {b} 代码时才可用。",
         W135: "{a} 可能不被非浏览器环境支持。",
         W136: "'{a}' 必须在函数范围内。",
-        W137: "空解构：这是不必要的，可以删除。",
+        W137: "空的解构赋值没有意义，可以删除。",
         W138: "默认参数之后不应该有常规参数。",
         W139: "不应将函数表达式用作 instanceof 的第二个操作数。",
         W140: "缺少逗号。",
-        W141: "空 {a}：这是不必要的，可以被移除。",
+        W141: "空的 {a} 没有意义，可以移除。",
         W142: "空 {a}：考虑替换为 `import '{b}';`。",
-        W143: "对映射的参数对象的属性进行赋值可能导致形式参数的意外更改。",
+        W143: "修改 arguments 对象的属性可能意外改变对应的形参值。",
         W144: "'{a}' 是一个非标准的语言特性。请使用 '{b}' 不稳定选项启用它。",
         W145: "多余的 'case' 子句。",
         W146: "不必要的 `await` 表达式。",
@@ -1015,11 +1129,7 @@ function getErrorMessage(code) {
         I002: null,
         I003: "ES5 选项现在默认设置。",
     };
-    if (errorCode[code]) {
-        return errorCode[code];
-    } else if (errorCode[code] === null) {
-        return "为'null";
-    } else {
-        return "未知错误。";
-    }
+    if (errorCode[code]) return errorCode[code];
+    if (errorCode[code] === null) return "无描述信息。";
+    return "未知错误。";
 }

@@ -21,6 +21,8 @@
   "
 ></script>
 
+<div id="alertBox" style="display:none; text-align:center; padding:10px 5px;"></div>
+<progress class="progress is-success is-small" max="100" style="display:none">50%</progress>
 <div class="columns is-desktop" style="margin-top:.4em;">
     <div class="column">
         <div id="inputDiv" class="aceEditorBorder">
@@ -39,12 +41,12 @@
                             <path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path>
                         </svg>
                     </a>
-                    <a id="inputFullScreen" class="icon" onclick="addFullScreen('input');" title="<%:全屏%>">
+                    <a id="inputFullScreen" class="icon" onclick="toggleFullScreen('input');" title="<%:全屏%>">
                         <svg viewBox="0 0 24 24">
                             <path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"></path>
                         </svg>
                     </a>
-                    <a id="inputCloseScreen" class="icon" style="display:none" onclick="removeFullScreen('input');" title="<%:关闭全屏%>">
+                    <a id="inputCloseScreen" class="icon" style="display:none" onclick="toggleFullScreen('input');" title="<%:关闭全屏%>">
                         <svg viewBox="0 0 24 24">
                             <path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"></path>
                         </svg>
@@ -52,7 +54,7 @@
                 </div>
             </div>
             <div id="editor1" class="twoEditor"></div>
-            <div class="columns is-mobile m-0 aceStatusBar" id="inputStatusBar">
+            <div class="columns is-mobile m-0 aceStatusBar">
                 <div class="column is-two-thirds p-0 pl-0" id="inputAceLineColumn"><%:Ln: 1 Col: 0; Max Col: 0%></div>
                 <div class="column is-one-thirds p-0 has-text-right" id="inputTextSize"><%:Size: 0 Byte%></div>
             </div>
@@ -60,10 +62,12 @@
     </div>
 
     <div class="column is-2-desktop">
+        <div class="field success navbar-menu"></div>
+        <div class="field state navbar-menu"></div>
         <div class="columns mb-0">
             <div class="column">
                 <label class="button is-fullwidth btn-text-sm" title="<%:上传文件%>" for="fileInput">
-                    <input id="fileInput" class="file-input" type="file" onchange="changeToFileContent(this)" />
+                    <input id="fileInput" class="file-input" type="file" onchange="changeToFileContent(this)"/>
                     <span class="is-hidden-desktop-only icon">
                         <svg viewBox="0 0 24 24">
                             <path fill="currentColor" d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"></path>
@@ -74,31 +78,27 @@
             </div>
         </div>
         <div class="field">
-            <p class="control">
-                <button class="button is-fullwidth btn-text-sm" title="<%:下载文件%>" onclick="downloadFile(event);">
-                    <span class="icon">
-                        <svg viewBox="0 0 24 24">
-                            <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"></path>
-                        </svg>
-                    </span>
-                    <span><%:下载%></span>
-                </button>
-            </p>
+            <button class="button is-fullwidth btn-text-sm" title="<%:下载文件%>" onclick="downloadFile(event);">
+                <span class="icon">
+                    <svg viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"></path>
+                    </svg>
+                </span>
+                <span><%:下载%></span>
+            </button>
         </div>
         <div class="field">
-            <p class="control">
-                <button class="button is-fullwidth btn-text-sm" title="<%:清空全部%>" onclick="clearAll(event);">
-                    <span class="icon">
-                        <svg viewBox="0 0 24 24">
-                            <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"></path>
-                        </svg>
-                    </span>
-                    <span><%:清空全部%></span>
-                </button>
-            </p>
+            <button class="button is-fullwidth btn-text-sm" title="<%:清空全部%>" onclick="clearAll(event);">
+                <span class="icon">
+                    <svg viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"></path>
+                    </svg>
+                </span>
+                <span><%:清空全部%></span>
+            </button>
         </div>
         <div class="field">
-            <select id="indent_size" class="select">
+            <select id="indent_size" class="select" type="text">
                 <option value="1"><%:1 个空格缩进%></option>
                 <option value="2"><%:2 个空格缩进%></option>
                 <option value="3"><%:3 个空格缩进%></option>
@@ -107,17 +107,21 @@
             </select>
         </div>
         <div class="field">
-            <p class="control">
-                <select id="aceTheme" class="select"></select>
-            </p>
+            <select id="fontSize" class="select" type="text"></select>
         </div>
         <div class="field">
-            <p class="control">
-                <select id="fontSize" class="select"></select>
-            </p>
+            <select id="aceTheme" class="select" type="text"></select>
         </div>
-        <div class="field state navbar-menu"></div>
-        <div class="field success navbar-menu"></div>
+        <div class="field">
+            <label>
+                <input type="checkbox" id="chk-empty-lines"/> <%:删除空行%>
+            </label>
+        </div>
+        <div class="field">
+            <label>
+                <input type="checkbox" id="chk-comments"/> <%:删除注释%>
+            </label>
+        </div>
     </div>
 
     <div class="column">
@@ -147,12 +151,12 @@
                             <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"></path>
                         </svg>
                     </a>
-                    <a id="outputFullScreen" class="icon" onclick="addFullScreen('output');" title="<%:全屏%>">
+                    <a id="outputFullScreen" class="icon" onclick="toggleFullScreen('output');" title="<%:全屏%>">
                         <svg viewBox="0 0 24 24">
                             <path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"></path>
                         </svg>
                     </a>
-                    <a id="outputCloseScreen" class="icon" style="display:none" onclick="removeFullScreen('output');" title="<%:关闭全屏%>">
+                    <a id="outputCloseScreen" class="icon" style="display:none" onclick="toggleFullScreen('output');" title="<%:关闭全屏%>">
                         <svg viewBox="0 0 24 24">
                             <path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"></path>
                         </svg>
@@ -160,12 +164,11 @@
                 </div>
             </div>
             <div id="editor2" class="twoEditor"></div>
-            <div class="columns is-mobile m-0 aceStatusBar" id="outputStatusBar">
+            <div class="columns is-mobile m-0 aceStatusBar">
                 <div class="column is-two-thirds p-0 pl-0" id="outputAceLineColumn"><%:Ln: 1 Col: 0; Max Col: 0%></div>
                 <div class="column is-one-thirds p-0 has-text-right" id="outputTextSize"><%:Size: 0 Byte%></div>
             </div>
         </div>
     </div>
 </div>
-
 <script src="/luci-static/tinynote/lib.js"></script>
