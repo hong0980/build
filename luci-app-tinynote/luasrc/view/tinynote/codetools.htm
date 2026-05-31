@@ -1,9 +1,7 @@
-<link rel="stylesheet" href="/luci-static/tinynote/bulma.css"/>
+<link rel="stylesheet" href="/luci-static/tinynote/bulma.css" />
 <script src="/luci-static/tinynote/jquery.min.js"></script>
 <script src="/luci-static/tinynote/clipboard.min.js"></script>
-<script
-  src="https://lib.baomitu.com/ace/1.43.3/ace.min.js"
-  onerror="
+<script src="https://lib.baomitu.com/ace/1.43.3/ace.min.js" onerror="
     (function(el) {
       var fallbacks = [
         'https://cdn.bootcdn.net/ajax/libs/ace/1.43.3/ace.min.js',
@@ -18,8 +16,7 @@
       };
       el.src = fallbacks[i++];
     })(this)
-  "
-></script>
+  "></script>
 
 <div id="alertBox" style="display:none; text-align:center; padding:10px 5px;"></div>
 <progress class="progress is-success is-small" max="100" style="display:none">50%</progress>
@@ -62,29 +59,25 @@
     </div>
 
     <div class="column is-2-desktop">
-        <div class="field success navbar-menu"></div>
-        <div class="field state navbar-menu"></div>
-        <div class="columns mb-0">
-            <div class="column">
-                <label class="button is-fullwidth btn-text-sm" title="<%:上传文件%>" for="fileInput">
-                    <input id="fileInput" class="file-input" type="file" onchange="changeToFileContent(this)"/>
-                    <span class="is-hidden-desktop-only icon">
-                        <svg viewBox="0 0 24 24">
-                            <path fill="currentColor" d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"></path>
-                        </svg>
-                    </span>
-                    <span><%:文件%></span>
-                </label>
-            </div>
+        <div class="field">
+            <label id="btn-upload" class="button is-fullwidth btn-text-sm" title="<%:上传文件%>" for="fileInput">
+                <input id="fileInput" class="file-input" type="file" onchange="upload(this)" />
+                <span class="icon">
+                    <svg viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"></path>
+                    </svg>
+                </span>
+                <span><%:上传文件%></span>
+            </label>
         </div>
         <div class="field">
-            <button class="button is-fullwidth btn-text-sm" title="<%:下载文件%>" onclick="downloadFile(event);">
+            <button id="btn-download" class="button is-fullwidth btn-text-sm" title="<%:下载文件%>" onclick="download(event);">
                 <span class="icon">
                     <svg viewBox="0 0 24 24">
                         <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"></path>
                     </svg>
                 </span>
-                <span><%:下载%></span>
+                <span><%:下载文件%></span>
             </button>
         </div>
         <div class="field">
@@ -112,14 +105,23 @@
         <div class="field">
             <select id="aceTheme" class="select" type="text"></select>
         </div>
-        <div class="field">
-            <label>
-                <input type="checkbox" id="chk-empty-lines"/> <%:删除空行%>
-            </label>
+        <div class="field chk-yaml-flow" style="display:none">
+            <select id="chk-yaml-flow" class="select" title="<%:行折叠%>">
+                <option value="-1" selected="selected"><%:不行内%></option>
+                <option value="0"><%:全部行内%></option>
+                <option value="1"><%:1层行内%></option>
+                <option value="2"><%:2层行内%></option>
+                <option value="3"><%:3层行内%></option>
+                <option value="4"><%:4层行内%></option>
+                <option value="5"><%:5层行内%></option>
+            </select>
         </div>
-        <div class="field">
+        <div class="field chk-empty-lines" style="display:none">
+            <label><input type="checkbox" id="chk-empty-lines" /> <%:删除空行%></label>
+        </div>
+        <div class="field chk-comments" style="display:none">
             <label>
-                <input type="checkbox" id="chk-comments"/> <%:删除注释%>
+                <input type="checkbox" id="chk-comments" /> <%:删除注释%>
             </label>
         </div>
     </div>

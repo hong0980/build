@@ -55,6 +55,7 @@ var editor1 = ace.edit("editor1"),
 
 var output = '',
     indent_char = ' ',
+    FlowLevel = -1,   
     removeComments = false,
     removeEmptyLines = false,
     indent_size = calculateTabSize();
@@ -133,9 +134,10 @@ $(function () {
 
     removeComments   = $('#chk-comments').prop('checked');
     removeEmptyLines = $('#chk-empty-lines').prop('checked');
+    FlowLevel = parseInt($('#chk-yaml-flow').val(), 10);
+    $('#chk-yaml-flow').on('change', function () { FlowLevel = parseInt($(this).val(), 10); });
     $('#chk-comments').on('change', function () { removeComments = $(this).prop('checked'); });
     $('#chk-empty-lines').on('change', function () { removeEmptyLines = $(this).prop('checked'); });
-
     setTimeout(watchTabChange, 500);
 });
 
@@ -150,7 +152,7 @@ editor2.selection.on("changeCursor", function () { updateDisplay(editor2, "outpu
         text: function () { return ed.getValue().trim(); }
     }).on('success', function (e) {
         ed.execCommand('selectAll');
-        showMessage("已复制", 'success');
+        showMessage("复制成功", true);
         e.clearSelection();
     }).on('error', function (e) {
         e.clearSelection();
@@ -224,7 +226,7 @@ function clearAll(event, a) {
     else { editor1.setValue(''); editor2.setValue(''); }
 }
 
-function changeToFileContent(input) {
+function upload(input) {
     var file = input.files[0];
     if (!file) return;
     var reader = new FileReader();
@@ -235,11 +237,14 @@ function changeToFileContent(input) {
     reader.readAsText(file, "UTF-8");
 }
 
+function timeStart() { return window.performance.now(); }
+function timeEnd(start) { return (window.performance.now() - start).toFixed(0); }
+
 function getContent(editor) {
     var time = timeStart();
     var content = (editor || editor1).getValue().trim();
     if (!content) { showMessage('内容为空'); return false; }
-    return { content: content, time: time };
+    return { content, time };
 }
 
 var loadedScripts = new Set();
@@ -254,9 +259,6 @@ function loadScripts(scripts) {
     }));
 }
 
-function timeStart() { return window.performance.now(); }
-function timeEnd(start) { return (window.performance.now() - start).toFixed(3); }
-
 function calculateTabSize() {
     var v = parseInt($('#indent_size').val(), 10);
     return v === 1 ? '\t' : v;
@@ -270,25 +272,31 @@ function Progress(action) {
     $('.progress.is-success.is-small')[action]();
 }
 
-function showSuccessMessage(message) {
-    $(".field.success")
-        .html('<div class="button is-fullwidth alert-message" style="background:#3488ce;font-size:14px;">' + message + '</div>')
-        .show().delay(3000).fadeOut();
-}
+function showSuccessMessage(message, type) {
+    var $btn = type ? $('#btn-download') : $('#btn-upload');
+    var text = typeof message === 'number' ? '用时: ' + timeEnd(message) + 'ms' : message;
+    var styles = type
+        ? { background: '#3488ce', color: '#fff', fontSize: '14px' }
+        : { background: '#eedc94', color: '#000', fontSize: '14px' };
 
-function state(time) {
-    $(".field.state")
-        .html('<div class="button is-fullwidth alert-message" style="color:black;font-size:14px;">用时: ' + timeEnd(time) + 'ms</div>')
-        .show().delay(3000).fadeOut();
+    if (!$btn.data('orig')) $btn.data('orig', { html: $btn.html(), style: $btn.attr('style') || '' });
+
+    clearTimeout($btn.data('timer'));
+    $btn.stop(true, true).html('<span>' + text + '</span>').css(styles).show();
+    $btn.data('timer', setTimeout(function () {
+        var o = $btn.data('orig');
+        $btn.fadeOut(300, function () {
+            $btn.html(o.html).attr('style', o.style).data('orig', null).fadeIn(300);
+        });
+    }, 3000));
 }
 
 var _notificationQueue = [];
 
-function showMessage(message, type) {
-    if (type === true) { showSuccessMessage(message); return; }
+function showMessage(message, type = false) {
+    if (type) { showSuccessMessage(message, true); return; }
 
-    type = type || 'danger';
-
+    type = (typeof type === 'string') ? type : 'danger';
     var colorMap         = { success: 'success', error: 'danger', warning: 'warning', info: 'info', danger: 'danger' };
     var titleMap         = { success: '成功', error: '错误', warning: '警告', info: '提示', danger: '错误' };
     var progressColorMap = { success: '#48c78e', warning: '#ffe08a', danger: '#f14668', info: '#3e8ed0' };
@@ -395,10 +403,10 @@ function postProcess(output, lang) {
                 output = output.replace(/--\[\[[\s\S]*?\]\]/g, '');
                 output = output.replace(/--[^\r\n]*/g, '');
                 break;
-			case 'yaml':
-				output = output.replace(/^[ \t]*#.*$/gm, '');
-				output = output.replace(/([^\s'"])\s+#.*$/gm, '$1');
-				break;
+            case 'yaml':
+                //output = output.replace(/^[ \t]*#.*$/gm, '');
+                //output = output.replace(/([^\s'"])\s+#.*$/gm, '$1');
+                //break;
             case 'sh':
                 output = output.replace(/^([ \t]*)#[^\r\n]*/gm, '');
                 break;
@@ -418,6 +426,16 @@ var TAB_MODE_MAP = {
     'JSON': 'json', 'YAML': 'yaml', 'Lua': 'lua', 'SH': 'sh'
 };
 
+var TAB_EXTRAS_MAP = {
+    'JSON': ['.chk-empty-lines'],
+    'JS':   ['.chk-empty-lines', '.chk-comments'],
+    'CSS':  ['.chk-empty-lines', '.chk-comments'],
+    'HTML': ['.chk-empty-lines', '.chk-comments'],
+    'Lua':  ['.chk-empty-lines', '.chk-comments'],
+    'SH':   ['.chk-empty-lines', '.chk-comments'],
+    'YAML': ['.chk-empty-lines', '.chk-comments', '.chk-yaml-flow']
+};
+
 function watchTabChange() {
     var tabContents = { JS: '', HTML: '', CSS: '', JSON: '', YAML: '', Lua: '', SH: '' };
     var $tabMenu = $('.cbi-tabmenu');
@@ -428,6 +446,10 @@ function watchTabChange() {
 
     var switchTab = function (from, to) {
         if (from) tabContents[from] = editor1.getValue();
+
+        $('.chk-empty-lines, .chk-comments, .chk-yaml-flow').hide();
+        (TAB_EXTRAS_MAP[to] || []).forEach(function (sel) { $(sel).show(); });
+
         var mode = TAB_MODE_MAP[to];
         if (mode) {
             editor1.session.setMode('ace/mode/' + mode);
@@ -451,8 +473,13 @@ function examineJavaScript() {
     if (!res?.content) return showMessage('内容为空');
     loadScripts("/luci-static/tinynote/jshint.min.js").then(function () {
         editor1.session.setMode("ace/mode/javascript");
-        if (JSHINT(res.content, { asi: true, esversion: 8 })) {
-            showMessage("语法通过", true)
+			if (JSHINT(res.content, { 
+				asi: true,
+				esversion: 11,
+				laxbreak: true,
+				laxcomma: true,
+				expr: true,
+			})) { showMessage("语法通过", true)
         } else {
             var msg = "";
             JSHINT.errors.filter(Boolean).forEach(function (e) {
@@ -467,7 +494,7 @@ function examineJavaScript() {
             });
             showMessage(msg);
         }
-        state(res.time);
+        showSuccessMessage(res.time);
     });
 }
 
@@ -482,26 +509,43 @@ function JsCompression(a) {
             } else if (a === "pack") {
                 output = new Packer().pack(res.content, true, true);
             } else if (a === "beautify") {
-                var src = res.content;
-                if (removeComments) src = removeJsComments(src);
-                output = beautifier.js(src, {
-                    indent_size, indent_char,
-                    jslint_happy: true, wrap_line_length: 0, templating: ["auto"],
-                    end_with_newline: true,
-                    max_preserve_newlines: removeEmptyLines ? 0 : 10,
-                    space_in_empty_paren: true, operator_position: "before-newline",
-                    indent_with_tabs: indent_size === '\t', brace_style: "collapse",
-                    preserve_newlines: true
+                output = beautifier.js(res.content, {
+                    // ===== 通用 BaseOptions =====
+                    indent_size,                                    // 缩进大小，默认 4
+                    indent_char,                                    // 缩进字符，默认 ' '
+                    // indent_level: 0,                            // 初始缩进层级，默认 0
+                    indent_with_tabs: indent_size === '\t',         // 用 tab 缩进，默认 false
+                    // indent_empty_lines: false,                   // 空行也缩进，默认 false
+                    preserve_newlines: !removeEmptyLines,           // 保留换行，默认 true
+                    max_preserve_newlines: removeEmptyLines ? 0 : 10, // 最多保留几个连续空行，默认 32786
+                    end_with_newline: true,                         // 末尾加换行，默认 false
+                    wrap_line_length: 0,                            // 行宽限制，0 不限制，默认 0
+                    // eol: 'auto',                                 // 换行符 auto/\n/\r\n，默认 auto
+                    templating: ['auto'],                           // 模板语法 auto/none/django/erb/handlebars/php/smarty，默认 ['auto']
+                    // disabled: false,                             // 禁用格式化，默认 false
+
+                    // ===== JS 专属参数 =====
+                    brace_style: 'collapse',                        // 括号风格 collapse/expand/end-expand/none/preserve-inline，默认 collapse
+                    // unindent_chained_methods: false,             // 链式调用不缩进，默认 false
+                    // break_chained_methods: false,                // 链式调用换行，默认 false
+                    // space_in_paren: false,                       // 括号内加空格，默认 false
+                    space_in_empty_paren: true,                     // 空括号内加空格，默认 false
+                    jslint_happy: true,                             // JSLint 风格，自动开启 space_after_anon_function，默认 false
+                    space_after_anon_function: true,                // 匿名函数后加空格，默认 false（jslint_happy=true 时自动开启）
+                    space_after_named_function: true,               // 命名函数后加空格，默认 false
+                    keep_array_indentation: true,                   // 保持数组原始缩进，默认 false
+                    // space_before_conditional: true,              // if/while 前加空格，默认 true
+                    // unescape_strings: false,                     // 解码转义字符串，默认 false
+                    // e4x: false,                                  // 支持 E4X/JSX，默认 false
+                    // comma_first: false,                          // 逗号放行首，默认 false
+                    operator_position: 'before-newline',            // 运算符换行位置 before-newline/after-newline/preserve-newline，默认 before-newline
                 });
-                if (removeEmptyLines) {
-                    output = output.replace(/^[ \t]*$/gm, '');
-                    output = output.replace(/(\r?\n){2,}/g, '\n');
-                }
+                if (removeComments) output = postProcess(output, 'js');
             }
             editor1.session.setMode("ace/mode/javascript");
             editor2.session.setMode("ace/mode/javascript");
             editor2.setValue(output || '没有返回值');
-            state(res.time);
+            showSuccessMessage(res.time);
         });
 }
 
@@ -526,18 +570,29 @@ function CSSFormat(a) {
     loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/beautifier.js"])
         .then(function () {
             var output;
-            if (a === "format") output = beautifier.css(res.content, {
-                indent_size, indent_char, end_with_newline: true,
-                preserve_newlines: false, selector_separator_newline: true,
-                indent_with_tabs: indent_size === '\t'
-            });
+            if (a === "format") {
+                output = beautifier.css(res.content, {
+                    // ===== 通用 BaseOptions =====
+                    indent_size,                                    // 缩进大小，默认 4
+                    indent_char,                                    // 缩进字符，默认 ' '
+                    indent_with_tabs: indent_size === '\t',         // 用 tab 缩进，默认 false
+                    end_with_newline: true,                         // 末尾加换行，默认 false
+                    preserve_newlines: !removeEmptyLines,           // 保留换行，默认 true
+                    // eol: 'auto',                                 // 换行符 auto/\n/\r\n，默认 auto
+
+                    // ===== CSS 专属参数 =====
+                    selector_separator_newline: true,               // 多选择器各占一行，默认 true
+                    // newline_between_rules: true,                 // 规则之间加空行，默认 true
+                    // space_around_combinator: false,              // 组合选择器周围加空格，默认 false
+                });
+                if (removeComments) output = postProcess(output, 'css');
+            }
             else if (a === "min") output = vkbeautify.cssmin(res.content);
             else if (a === "pack") output = vkbeautify.csspack(res.content);
-            output = postProcess(output, 'css');
             editor1.session.setMode("ace/mode/css");
             editor2.session.setMode("ace/mode/css");
             editor2.setValue(output || '没有返回值');
-            state(res.time);
+            showSuccessMessage(res.time);
         });
 }
 
@@ -558,8 +613,9 @@ function formatLua(a) {
                     output = postProcess(output, 'lua');
                     editor2.session.setMode("ace/mode/lua");
                     editor2.setValue(output || '没有返回值');
-                    state(res.time);
+                    
                 }
+                showSuccessMessage(res.time);
             } catch (e) { showMessage(e.message); }
         })
         .catch(function () { showMessage('加载错误'); });
@@ -577,11 +633,11 @@ function jsonFormat(a) {
                 else if (a === 'format') output = vkbeautify.json(res.content, indent_size);
                 else if (a === 'safeLoad') { jsonlint.parse(res.content); showMessage("语法通过", true) }
                 if (a !== 'safeLoad') {
-                    if (removeEmptyLines) output = postProcess(output, 'json');
+                    output = postProcess(output, 'json');
                     editor2.session.setMode("ace/mode/json");
                     editor2.setValue(output || '没有返回值');
-                    state(res.time);
                 }
+                showSuccessMessage(res.time);
             } catch (e) { showMessage(e.message); }
         })
         .catch(function () { showMessage('加载错误'); });
@@ -595,19 +651,39 @@ function FormatHTML(a) {
             try {
                 editor1.session.setMode("ace/mode/html");
                 editor2.session.setMode("ace/mode/html");
-                var output = "";
+                var output;
                 if (a === "format") {
                     output = beautifier.html(res.content, {
-                        indent_size, indent_char, indent_with_tabs: false, templating: ["auto"]
+                        // ===== 通用 BaseOptions =====
+                        indent_size,                                    // 缩进大小，默认 4
+                        indent_char,                                    // 缩进字符，默认 ' '
+                        indent_with_tabs: indent_size === '\t',         // 用 tab 缩进，默认 false
+                        end_with_newline: true,                         // 末尾加换行，默认 false
+                        templating: ['auto'],                           // 模板语法，默认 ['auto']
+                        // eol: 'auto',                                 // 换行符 auto/\n/\r\n，默认 auto
+                        preserve_newlines: !removeEmptyLines,           // 保留换行，默认 true
+
+                        // ===== HTML 专属参数 =====
+                        // indent_inner_html: false,                    // 缩进 head/body 内容，默认 false
+                        // indent_body_inner_html: true,                // 缩进 body 内容，默认 true
+                        // indent_head_inner_html: true,                // 缩进 head 内容，默认 true
+                        // indent_handlebars: true,                     // 缩进 Handlebars 模板，默认 true
+                        wrap_attributes: 'auto',                        // 属性换行 auto/force/force-aligned/force-expand-multiline/aligned-multiple/preserve/preserve-aligned，默认 auto
+                        wrap_attributes_min_attrs: 3,                   // 至少几个属性才换行，默认 2
+                        wrap_attributes_indent_size: indent_size,       // 属性换行缩进大小，默认同 indent_size
+                        extra_liners: [],                               // 这些标签前加空行，默认 ['head','body','/html']
+                        // inline: [],                                  // 视为行内元素的标签列表
+                        // inline_custom_elements: true,                // 自定义元素视为行内，默认 true
+                        // unformatted: [],                             // 不格式化的标签列表，默认 []
+                        // content_unformatted: ['pre', 'textarea'],    // 不格式化内容的标签，默认 ['pre','textarea']
+                        // indent_scripts: 'normal',                    // script 缩进 normal/keep/separate，默认 normal
                     });
+                    if (removeComments) output = postProcess(output, 'html');
                 } else if (a === "min") {
-                    output = vkbeautify.htmlmin
-                        ? vkbeautify.htmlmin(res.content)
-                        : vkbeautify.xmlmin(res.content);
+                    output = vkbeautify.xmlmin(res.content);
                 }
-                output = postProcess(output, 'html');
                 editor2.setValue(output || "没有返回值");
-                state(res.time);
+                showSuccessMessage(res.time);
             } catch (e) { showMessage(e.message); }
         })
         .catch(function () { showMessage('加载错误'); });
@@ -619,18 +695,33 @@ function FormatYAML(a) {
     loadScripts(["/luci-static/tinynote/vkbeautify.js", "/luci-static/tinynote/js-yaml.min.js"])
         .then(function () {
             try {
-                editor1.session.setMode("ace/mode/yaml");
-                editor2.session.setMode("ace/mode/yaml");
                 var output;
-                if (a === 'json') { editor2.session.setMode("ace/mode/json"); output = vkbeautify.json(jsyaml.load(res.content), indent_size); }
-                else if (a === 'format') output = jsyaml.dump(jsyaml.load(res.content), { indent: indent_size, lineWidth: -1 });
-                else if (a === 'yaml') { editor1.session.setMode("ace/mode/json"); output = jsyaml.dump(JSON.parse(res.content), { indent: indent_size }); }
-                else if (a === 'safeLoad') { if (jsyaml.load(res.content)) showMessage("语法通过", true) }
-                if (a !== 'safeLoad') {
+                editor1.session.setMode("ace/mode/yaml");
+                if (a === 'json') {
+					editor2.session.setMode("ace/mode/json");
+					output = vkbeautify.json(jsyaml.load(res.content), indent_size);
+				} else if (a === 'format') {
+                    output = jsyaml.dump(jsyaml.load(res.content), {
+                            noRefs: true,
+                            lineWidth: -1,
+                            condenseFlow: true,
+                            quotingType: '"',
+                            indent: indent_size,
+                            flowLevel: FlowLevel
+                        });
+                    editor2.session.setMode("ace/mode/yaml");
+                } else if (a === 'yaml') {
+                    editor1.session.setMode("ace/mode/json");
+                    editor2.session.setMode("ace/mode/yaml");
+                    output = jsyaml.dump(JSON.parse(res.content), { indent: indent_size });
+                } else if (a === 'safeLoad') {
+					if (jsyaml.load(res.content)) showMessage("语法通过", true)
+				}
+				if (a !== 'safeLoad') {
                     output = postProcess(output, 'yaml');
                     editor2.setValue(output || '没有返回值');
-                    state(res.time);
                 }
+                showSuccessMessage(res.time);
             } catch (e) { showMessage(e.message); }
         })
         .catch(function () { showMessage('加载错误'); });
@@ -647,7 +738,7 @@ function yamlToxml() {
                 xml = vkbeautify.xml(xml);
                 editor2.session.setMode("ace/mode/xml");
                 editor2.setValue(xml || "没有返回值");
-                state(res.time);
+                showSuccessMessage(res.time);
             } catch (e) { showMessage(e.message); }
         })
         .catch(function () { showMessage('加载错误'); });
@@ -660,11 +751,10 @@ function jsonTocsv() {
         .then(function () {
             try {
                 var data = JSON.parse(res.content);
-                if (!Array.isArray(data)) throw new Error("JSON 必须是数组");
                 editor1.session.setMode("ace/mode/json");
                 editor2.session.setMode("ace/mode/csv");
-                editor2.setValue(jsonToCsv(data, ",", true, false, false) || "没有返回值");
-                state(res.time);
+                editor2.setValue(jsonToCsv(data, ",", true, true, false) || "没有返回值");
+                showSuccessMessage(res.time);
             } catch (e) { showMessage("CSV 转换失败：" + e.message); }
         })
         .catch(function () { showMessage('加载错误'); });
@@ -682,7 +772,7 @@ function jsonToXML() {
                 editor1.session.setMode("ace/mode/json");
                 editor2.session.setMode("ace/mode/xml");
                 editor2.setValue(xml || "没有返回值");
-                state(res.time);
+                showSuccessMessage(res.time);
             } catch (e) { showMessage("JSON 转 XML 失败：" + e.message); }
         })
         .catch(function () { showMessage('加载错误'); });
@@ -706,7 +796,7 @@ function FormatSH(a) {
         editor1.session.setMode("ace/mode/sh");
         editor2.session.setMode("ace/mode/sh");
         editor2.setValue(output || '没有返回值');
-        state(res.time);
+        showSuccessMessage(res.time);
     } catch (e) { showMessage(e.message); }
 }
 
