@@ -11,13 +11,54 @@ function renderAceEditor(id, model, only, theme = 'monokai', font_size, height, 
         open_fullscreen: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"/></svg>',
         close_fullscreen: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"/></svg>'
     };
-
     $(`.cbi-value#cbi-luci-tinynote-${id}`)
         .prepend(`
             <div class="aceEditorMenu">
-                <span class="has-text-left">
-                    <i class="is-size-6 is-family-primary ">输入</i>
-                </span>
+                <div class="inline-form-group status-left">
+                    <span class="inline-form-group">
+                        <span>语法</span>
+                        <select>
+                            <option value="py" ${model === 'py' ? 'selected' : ''}>Python</option>
+                            <option value="js" ${model === 'js' ? 'selected' : ''}>JavaScript</option>
+                            <option value="txt" ${model === 'txt' ? 'selected' : ''}>Plain Text</option>
+                            <option value="lua" ${model === 'lua' ? 'selected' : ''}>Lua</option>
+                            <option value="sh" ${model === 'sh' ? 'selected' : ''}>Shell Script</option>
+                        </select>
+                        <span>主题</span>
+                        <select>
+                            <option value="dracula" ${theme === 'dracula' ? 'selected' : ''}>Dracula (Dark)</option>
+                            <option value="tomorrow_night" ${theme === 'tomorrow_night' ? 'selected' : ''}>Tomorrow Night (Dark)</option>
+                            <option value="one_dark" ${theme === 'one_dark' ? 'selected' : ''}>One Dark (Dark)</option>
+                            <option value="nord_dark" ${theme === 'nord_dark' ? 'selected' : ''}>Nord Dark (Dark)</option>
+                            <option value="gruvbox" ${theme === 'gruvbox' ? 'selected' : ''}>Gruvbox (Dark)</option>
+                            <option value="cobalt" ${theme === 'cobalt' ? 'selected' : ''}>Cobalt (Dark)</option>
+                            <option value="vibrant_ink" ${theme === 'vibrant_ink' ? 'selected' : ''}>Vibrant Ink (Dark)</option>
+                            <option value="monokai" ${theme === 'monokai' ? 'selected' : ''}>Monokai (Dark)</option>
+                            <option value="twilight" ${theme === 'twilight' ? 'selected' : ''}>Twilight (Dark)</option>
+                            <option value="chaos" ${theme === 'chaos' ? 'selected' : ''}>Chaos (Dark)</option>
+                            <option value="terminal" ${theme === 'terminal' ? 'selected' : ''}>Terminal (Dark)</option>
+                            <option value="github" ${theme === 'github' ? 'selected' : ''}>GitHub (Light)</option>
+                            <option value="xcode" ${theme === 'xcode' ? 'selected' : ''}>Xcode (Light)</option>
+                            <option value="chrome" ${theme === 'chrome' ? 'selected' : ''}>Chrome (Light)</option>
+                            <option value="eclipse" ${theme === 'eclipse' ? 'selected' : ''}>Eclipse (Light)</option>
+                            <option value="textmate" ${theme === 'textmate' ? 'selected' : ''}>TextMate (Light)</option>
+                            <option value="dawn" ${theme === 'dawn' ? 'selected' : ''}>Dawn (Light)</option>
+                            <option value="dreamweaver" ${theme === 'dreamweaver' ? 'selected' : ''}>Dreamweaver (Light)</option>
+                            <option value="crimson_editor" ${theme === 'crimson_editor' ? 'selected' : ''}>Crimson Editor (Light)</option>
+                            <option value="clouds" ${theme === 'clouds' ? 'selected' : ''}>Clouds (Light)</option>
+                            <option value="kuroir" ${theme === 'kuroir' ? 'selected' : ''}>Kuroir (Light)</option>
+                        </select>
+                    </span>
+                    </span>
+                    <span>字体</span>
+                    <select>
+                        <option value="12" ${font_size == 12 ? 'selected' : ''}>12px</option>
+                        <option value="13" ${font_size == 13 ? 'selected' : ''}>13px</option>
+                        <option value="14" ${font_size == 14 ? 'selected' : ''}>14px</option>
+                        <option value="15" ${font_size == 15 ? 'selected' : ''}>15px</option>
+                        <option value="16" ${font_size == 16 ? 'selected' : ''}>16px</option>
+                    </select>
+                </div>
                 <div class="has-text-right editortoolbar">
                     <a id="fileInput${id}" class="icon is-hidden-mobile" title="上传文件">${ic.Upload}</a>
                     <a class="icon" title="保存" onclick="cbi_submit(this,'cbi.save')">${ic.save}</a>
@@ -25,6 +66,7 @@ function renderAceEditor(id, model, only, theme = 'monokai', font_size, height, 
                     <a id="clear${id}"        class="icon" title="清除">${ic.delete}</a>
                     <a id="copy${id}"         class="icon" title="复制输入代码">${ic.copy}</a>
                     <a id="${id}FullScreen"   class="icon" title="全屏" onclick="toggleFullScreenUI('${id}',true)">${ic.open_fullscreen}</a>
+                    <a id="wrap${id}"         class="icon" title="换行">${ic.wrap}</a>
                     <a id="${id}CloseScreen" class="icon" style="display:none;" title="关闭全屏" onclick="toggleFullScreenUI('${id}',false)">${ic.close_fullscreen}</a>
                 </div>
             </div>`)
@@ -84,12 +126,18 @@ function renderAceEditor(id, model, only, theme = 'monokai', font_size, height, 
     });
 
     $(`#down${xid}`).click(function () {
-        console.log(id);
         var content = editor.getValue().trim();
         if (!content) { showErrorMessage('内容为空', true); return; }
         loadScripts('/luci-static/tinynote/FileSaver.js').then(function () {
             saveAs(new Blob([content], { type: 'text/plain; charset=utf-8' }), 'data.txt');
         });
+    });
+
+    $(`#wrap${xid}`).click(function () {
+        var session = editor.getSession();
+        var currentWrap = session.getUseWrapMode();
+        session.setUseWrapMode(!currentWrap);
+        $(this).toggleClass('active', !currentWrap);
     });
 
     $(`#fileInput${xid}`).click(function () {
@@ -105,6 +153,20 @@ function renderAceEditor(id, model, only, theme = 'monokai', font_size, height, 
 
     $(document).on('keydown', function (e) {
         if (e.key === 'F11') { e.preventDefault(); toggleFullScreen(editor); }
+    });
+
+    var $menu = $(`.cbi-value#cbi-luci-tinynote-${id} .aceEditorMenu`);
+
+    $menu.find('select').eq(0).on('change', function () {
+        editor.session.setMode('ace/mode/' + $(this).val());
+    });
+
+    $menu.find('select').eq(1).on('change', function () {
+        editor.setTheme('ace/theme/' + $(this).val());
+    });
+
+    $menu.find('select').eq(2).on('change', function () {
+        editor.setFontSize($(this).val() + 'px');
     });
 }
 
