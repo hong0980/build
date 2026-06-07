@@ -26,11 +26,17 @@
     }
 
     .inline-form-group select {
-        width: 8em;
+        width: 11em;
         height: 23px;
         font-size: 12px;
         padding: 0 0 0 5px;
         box-sizing: border-box;
+    }
+
+    @media (max-width: 768px) {
+        .inline-form-group {
+            display: none;
+        }
     }
 </style>
 <link rel="stylesheet" href="/luci-static/tinynote/bulma.css"/>
@@ -58,12 +64,12 @@
 <script>
     $(document).ready(function() {
         <%  local con = require "luci.model.uci".cursor():get_all("luci", "tinynote")
-            for sum_str = 1, con.note_sum do
+            for sum_str = 1, tonumber(con.note_sum) or 0 do
                 local sum = string.format("%02d", sum_str)
                 local id = string.format('note%s', sum)
-                local theme = con.acetheme or false
-                local height = con.aceheight or false
-                local font_size = con.acefont_size or false
+                local theme = con.acetheme or 'monokai'
+                local height = con.aceheight or '350'
+                local font_size = con.acefont_size or '14'
                 local only = con.aceonly or con['only_note' .. sum] or false
                 local model = con['model_note' .. sum] or con.note_suffix
                 local spacing = con.aceline_spacing or 1

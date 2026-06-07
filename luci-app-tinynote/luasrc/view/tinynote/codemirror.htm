@@ -6,11 +6,12 @@ local modes, needLint, keys = {}, false, {}
 if type(con) == "table" then
     for v, k in pairs(con) do
         if v:find("model_") or v:find("note_suffix") then
-            if not keys[k] then
-                local m = (k == 'sh') and 'shell' or (k == 'py') and 'python' or k
+            local m = k:match('^([^|]+)')
+            m = (m == 'sh') and 'shell' or (m == 'py') and 'python' or m
+            if not keys[m] then
                 modes[#modes+1] = m
-                keys[k] = true
-                if ({xml=true, css=true, json=true, yaml=true, html=true, javascript=true})[m] then
+                keys[m] = true
+                if ({xml=true, css=true, yaml=true, html=true, javascript=true})[m] then
                     needLint = true
                 end
             end
@@ -28,19 +29,161 @@ local theme = con.theme or "monokai"
         border-top: 1px solid black;
         border-bottom: 1px solid black;
     }
+    .copy-message {
+        display: flex;
+        position: fixed;
+        align-items: center;
+        justify-content: center;
+        top: 50%;
+        left: 50%;
+        color: white;
+        z-index: 9999;
+        padding: 10px;
+        font-size: 16px;
+        border-radius: 5px;
+        transform: translate(-50%, -50%);
+        background-color: rgba(0, 0, 0, 0.8);
+    }
+    .inline-form-group {
+        gap: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .inline-form-group span {
+        color: #f5f5f5;
+    }
+    .inline-form-group select {
+        width: 8em;
+        height: 23px;
+        font-size: 12px;
+        padding: 0 0 0 5px;
+        box-sizing: border-box;
+    }
+    
+	@media (max-width: 768px) {
+		.inline-form-group {
+			display: none;
+		}
+	}
 </style>
+<link rel="stylesheet" href="/luci-static/tinynote/bulma.css"/>
+<script src="/luci-static/tinynote/jquery.min.js"></script>
 <script>//<![CDATA[
-    var CM_VERSION = '5.65.17';
-    var CM_THEME = '<%=theme%>';
-    var CM_MODES = [<% for i,m in ipairs(modes) do %>'<%=m%>'<%=i<#modes and ',' or ''%><% end %>];
+    var CM_VERSION  = '5.65.17';
+    var CM_THEME    = '<%=theme%>';
+    var CM_MODES    = [<% for i,m in ipairs(modes) do %>'<%=m%>'<%=i<#modes and ',' or ''%><% end %>];
     var CM_NEED_LINT = <%=needLint and "true" or "false"%>;
+    var CM_BASE     = null;
 
     var CM_CDNS = [
-        { base: 'https://lib.baomitu.com/codemirror/' + CM_VERSION, js: 'codemirror.min.js', css: 'codemirror.min.css' },
         { base: 'https://cdn.bootcdn.net/ajax/libs/codemirror/' + CM_VERSION, js: 'codemirror.min.js', css: 'codemirror.min.css' },
+        { base: 'https://lib.baomitu.com/codemirror/' + CM_VERSION, js: 'codemirror.min.js', css: 'codemirror.min.css' },
         { base: 'https://cdn.jsdelivr.net/npm/codemirror@' + CM_VERSION, js: 'lib/codemirror.min.js', css: 'lib/codemirror.min.css' },
         { base: 'https://cdn.staticfile.net/codemirror/' + CM_VERSION, js: 'codemirror.min.js', css: 'codemirror.min.css' }
     ];
+
+	var CM_ALL_MODES = [
+		[ "javascript",              "JavaScript"                     ],
+		[ "lua",                     "Lua"                            ],
+		[ "shell",                   "Shell Script"                   ],
+		[ "htmlmixed",               "HTML"                           ],
+		[ "css",                     "CSS"                            ],
+		[ "json",                    "JSON"                           ],
+		[ "yaml",                    "YAML"                           ],
+		[ "python",                  "Python"                         ],
+		[ "php",                     "PHP"                            ],
+		[ "sql",                     "SQL"                            ],
+		[ "markdown",                "Markdown"                       ],
+		[ "xml",                     "XML"                            ],
+		[ "ruby",                    "Ruby"                           ],
+		[ "rust",                    "Rust"                           ],
+		[ "powershell",              "PowerShell"                     ],
+		[ "toml",                    "TOML"                           ],
+		[ "nginx",                   "Nginx"                          ],
+		[ "diff",                    "Diff"                           ],
+		[ "jsx",                     "JSX"                            ],
+		[ "typescript",              "TypeScript"                     ],
+		[ "go",                      "Go"                             ],
+		[ "java",                    "Java"                           ],
+		[ "cpp",                     "C++"                            ],
+		[ "csharp",                  "C#"                             ],
+		[ "perl",                    "Perl"                           ],
+		[ "dockerfile",              "Dockerfile"                     ],
+	];
+
+	var CM_ALL_THEMES = [
+		[ "monokai",                 "Monokai (Dark)"                 ],
+		[ "dracula",                 "Dracula (Dark)"                 ],
+		[ "material",                "Material (Dark)"                ],
+		[ "darcula",                 "Darcula (Dark)"                 ],
+		[ "solarized",               "Solarized (Medium contrast)"    ],
+		[ "nord",                    "Nord (Dark/Light usable)"       ],
+		[ "oceanic-next",            "Oceanic Next (Dark)"            ],
+		[ "ambiance",                "Ambiance (Dark)"                ],
+		[ "twilight",                "Twilight (Dark)"                ],
+		[ "zenburn",                 "Zenburn (Dark)"                 ],
+
+		/* 高人气 / 经典 (Dark) */
+		[ "cobalt",                  "Cobalt (Dark)"                  ],
+		[ "midnight",                "Midnight (Dark)"                ],
+		[ "night",                   "Night (Dark)"                   ],
+		[ "tomorrow-night-bright",   "Tomorrow Night Bright (Dark)"   ],
+		[ "tomorrow-night-eighties", "Tomorrow Night Eighties (Dark)" ],
+		[ "vibrant-ink",             "Vibrant Ink (Dark)"             ],
+		[ "pastel-on-dark",          "Pastel on dark (Dark)"          ],
+		[ "railscasts",              "Railscasts (Dark)"              ],
+		[ "gruvbox-dark",            "Gruvbox (Dark)"                 ],
+		[ "paraiso-dark",            "Paraiso (Dark)"                 ],
+		[ "bespin",                  "Bespin (Dark)"                  ],
+		[ "blackboard",              "Blackboard (Dark)"              ],
+		[ "erlang-dark",             "Erlang (Dark)"                  ],
+		[ "base16-dark",             "Base16 (Dark)"                  ],
+		[ "duotone-dark",            "Duotone (Dark)"                 ],
+		[ "lucario",                 "Lucario (Dark)"                 ],
+		[ "seti",                    "Seti (Dark)"                    ],
+		[ "shadowfox",               "Shadowfox (Dark)"               ],
+		[ "the-matrix",              "Matrix (Dark)"                  ],
+		[ "panda-syntax",            "Panda (Dark)"                   ],
+		/* 浅色主题 (Light) */
+		[ "eclipse",                 "Eclipse (Light)"                ],
+		[ "idea",                    "Idea (Light)"                   ],
+		[ "mdn-like",                "MDN-like (Light)"               ],
+		[ "xq-light",                "XQ (Light)"                     ],
+		[ "paraiso-light",           "Paraiso (Light)"                ],
+		[ "duotone-light",           "Duotone (Light)"                ],
+		[ "yeti",                    "Yeti (Light)"                   ],
+		[ "neat",                    "Neat (Light)"                   ],
+		[ "elegant",                 "Elegant (Light)"                ],
+		[ "abcdef",                  "Abcdef (Light)"                 ],
+		/* 特殊 / 辅助主题 */
+		[ "3024-day",                "3024 Day (Light)"               ],
+		[ "3024-night",              "3024 Night (Dark)"              ],
+		[ "ambiance-mobile",         "Ambiance Mobile (Dark)"         ],
+		[ "colorforth",              "Colorforth (Dark)"              ],
+		[ "hopscotch",               "Hopscotch (Dark)"               ],
+		[ "icecoder",                "Icecoder (Dark)"                ],
+		[ "isotope",                 "Isotope (Dark)"                 ],
+		[ "lesser-dark",             "Lesser Dark (Dark)"             ],
+		[ "liquibyte",               "Liquibyte (Dark)"               ],
+		[ "mbo",                     "MBO (Dark)"                     ],
+		[ "neo",                     "Neo (Dark)"                     ],
+		[ "rubyblue",                "Rubyblue (Dark)"                ],
+		[ "ssms",                    "SSMS (Light-like)"              ],
+		[ "ttcn",                    "TTCN (Neutral)"                 ],
+		[ "xq-dark",                 "XQ (Dark)"                      ],
+		[ "yonce",                   "Yonce (Dark)"                   ]
+	];
+
+    function parseCMMode(mode) {
+        if (mode === 'json') return { name: 'javascript', json: true };
+        return mode;
+    }
+
+    function showToast(msg, duration) {
+        var el = $('<div>').addClass('copy-message').text(msg).appendTo('body');
+        setTimeout(function () { el.remove(); }, duration);
+    }
 
     function loadJS(src, timeout) {
         return new Promise(function(resolve) {
@@ -64,129 +207,320 @@ local theme = con.theme or "monokai"
         });
     }
 
-    (async function() {
-        var base = null;
+    function loadResource(type, name) {
+        var url;
+        if      (type === 'theme')  url = CM_BASE + '/theme/'  + name + '.min.css';
+        else if (type === 'mode')   url = CM_BASE + '/mode/'   + name + '/' + name + '.min.js';
+        else if (type === 'keymap') url = CM_BASE + '/keymap/' + name + '.min.js';
+        else                        url = CM_BASE + '/addon/'  + name + '.min.js';
+        return (type === 'theme' ? loadCSS : loadJS)(url).catch(function() { return false; });
+    }
 
-        // 加载 Core
+    var CM_LOADED_MODES = {};
+
+	function ensureMode(modeName) {
+		if (CM_LOADED_MODES[modeName]) return Promise.resolve();
+		return loadResource('mode', modeName).then(function() {
+			CM_LOADED_MODES[modeName] = true;
+		});
+	}
+
+    function renderCMEditor(id, cm, mode, font_size) {
+        var ic = {
+            copy:           '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"/></svg>',
+            save:           '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>',
+            wrap:           '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M4,6H20V8H4V6M4,11H17A3,3 0 0,1 20,14A3,3 0 0,1 17,17H15V19L12,16L15,13V15H17A1,1 0 0,0 18,14A1,1 0 0,0 17,13H4V11M4,18H10V20H4V18Z"/></svg>',
+            delete:         '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>',
+            upload:         '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"/></svg>',
+            download:       '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>',
+            fullscreen:     '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M21,11V3H13L16.29,6.29L6.29,16.29L3,13V21H11L7.71,17.71L17.71,7.71L21,11Z"/></svg>',
+            exitFullscreen: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M22,3.41L16.71,8.7L20,12H12V4L15.29,7.29L20.59,2L22,3.41M3.41,22L8.7,16.71L12,20V12H4L7.29,15.29L2,20.59L3.41,22Z"/></svg>'
+        };
+
+        var $wrapper  = $(cm.getWrapperElement());
+        var $cbiValue = $wrapper.parent();
+
+        $cbiValue.wrapInner(`<div class="aceEditorBorder" id="cm${id}"></div>`);
+        var $border = $(`#cm${id}`);
+        $border.css({ width: '100%', boxSizing: 'border-box' });
+
+        var modeOptions = CM_ALL_MODES.map(function(m) {
+            var selected = (m[0] === mode) ? 'selected' : '';
+            return `<option value="${m[0]}" ${selected}>${m[1]}</option>`;
+        }).join('');
+
+        var themeOptions = CM_ALL_THEMES.map(function(t) {
+            var selected = (CM_THEME === t[0]) ? 'selected' : '';
+            return `<option value="${t[0]}" ${selected}>${t[1]}</option>`;
+        }).join('');
+
+        var fontOptions = [12, 13, 14, 15, 16].map(function(s) {
+            var selected = (font_size == s) ? 'selected' : '';
+            return `<option value="${s}" ${selected}>${s}px</option>`;
+        }).join('');
+
+        $border.prepend(`
+            <div class="aceEditorMenu">
+                <div class="inline-form-group status-left">
+                    <span>语法</span>
+                    <select id="cmMode${id}">${modeOptions}</select>
+                    <span>主题</span>
+                    <select id="cmTheme${id}">${themeOptions}</select>
+                    <span>字体</span>
+                    <select id="cmFont${id}">${fontOptions}</select>
+                </div>
+                <div class="has-text-right editortoolbar">
+                    <a id="cmUpload${id}"        class="icon" title="上传文件">${ic.upload}</a>
+                    <a id="cmDown${id}"          class="icon" title="下载">${ic.download}</a>
+                    <a class="icon" title="保存" onclick="cbi_submit(this,'cbi.save')">${ic.save}</a>
+                    <a id="cmClear${id}"         class="icon" title="清除">${ic.delete}</a>
+                    <a id="cmCopy${id}"          class="icon" title="复制">${ic.copy}</a>
+                    <a id="cmWrap${id}"          class="icon" title="关闭换行" style="opacity:1">${ic.wrap}</a>
+                    <a id="cmFullscreen${id}"    class="icon" title="全屏">${ic.fullscreen}</a>
+                    <a id="cmExitFullscreen${id}" class="icon" title="关闭全屏" style="display:none;">${ic.exitFullscreen}</a>
+                </div>
+            </div>`);
+
+        $border.append(`
+            <div class="columns is-mobile m-0 aceStatusBar">
+                <div class="column is-two-thirds p-0 pl-0" id="cmLineCol${id}">Ln: 1; Col: 1</div>
+                <div class="column is-one-thirds p-0 has-text-right" id="cmSize${id}">Size: 0 Byte</div>
+            </div>`);
+
+        function updateStatus() {
+            var cur  = cm.getCursor();
+            var size = new Blob([cm.getValue()]).size;
+            var unit = size >= 1024 ? (size / 1024).toFixed(1) + ' KB' : size + ' Byte';
+            $(`#cmLineCol${id}`).text('Ln: ' + (cur.line + 1) + '; Col: ' + (cur.ch + 1));
+            $(`#cmSize${id}`).text('Size: ' + unit);
+        }
+        cm.on('cursorActivity', updateStatus);
+        cm.on('change', updateStatus);
+        updateStatus();
+
+		$(`#cmMode${id}`).on('change', function () {
+			var val      = $(this).val();
+			var cmMode   = parseCMMode(val);
+			var modeName = (typeof cmMode === 'object') ? cmMode.name : cmMode;
+			ensureMode(modeName).then(function() {
+				cm.setOption('mode', cmMode);
+			});
+		});
+
+        $(`#cmTheme${id}`).on('change', function () {
+            var val = $(this).val();
+            if (val === 'default') {
+                cm.setOption('theme', 'default');
+                return;
+            }
+            loadResource('theme', val).then(function() {
+                cm.setOption('theme', val);
+            });
+        });
+
+        $(`#cmFont${id}`).on('change', function () {
+            $wrapper.css('font-size', $(this).val() + 'px');
+            cm.refresh();
+        });
+
+		$(`#cmUpload${id}`).on('click', function () {
+			var input = document.createElement('input');
+			input.type = 'file';
+			input.onchange = function (e) {
+				var file = e.target.files[0];
+				if (!file) return;
+				var reader = new FileReader();
+				reader.readAsText(file, 'UTF-8');
+				reader.onload = function (ev) { cm.setValue(ev.target.result); };
+				input.value = '';
+			};
+			input.click();
+		});
+
+        $(`#cmSave${id}`).on('click', function () {
+            $('[name="cbi.save"]').click();
+        });
+
+        $(`#cmDown${id}`).on('click', function () {
+            var content = cm.getValue().trim();
+            if (!content) { showToast('内容为空', 3000); return; }
+            var a = $('<a>').attr({
+                href: URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' })),
+                download: 'data.txt'
+            })[0];
+            a.click();
+            URL.revokeObjectURL(a.href);
+        });
+
+        $(`#cmClear${id}`).on('click', function () {
+            cm.setValue('');
+        });
+
+        $(`#cmCopy${id}`).on('click', function () {
+            var content = cm.getValue().trim();
+            if (!content) { showToast('内容为空', 3000); return; }
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(content)
+                    .then(function () { showToast('内容已复制', 1000); })
+                    .catch(function () { showToast('复制出错', 3000); });
+            } else {
+                var $ta = $('<textarea>').val(content).css({ position: 'fixed', opacity: 0 }).appendTo('body');
+                $ta[0].select();
+                try { document.execCommand('copy'); showToast('内容已复制', 1000); }
+                catch (e) { showToast('复制出错', 3000); }
+                $ta.remove();
+            }
+        });
+
+        $(`#cmWrap${id}`).on('click', function () {
+            var wrapped = cm.getOption('lineWrapping');
+            cm.setOption('lineWrapping', !wrapped);
+            this.style.opacity = wrapped ? '1' : '0.45';
+            this.title = wrapped ? '关闭换行' : '换行';
+        });
+
+        $(`#cmFullscreen${id}`).on('click', function () {
+            var entering = !$border.hasClass('fullScreen');
+            $border.toggleClass('fullScreen', entering);
+            $(this).toggle(!entering);
+            $(`#cmExitFullscreen${id}`).toggle(entering);
+            $wrapper.css('height', entering ? 'calc(100% - 65px)' : '<%=con.height or "300"%>px');
+            cm.refresh();
+            $('body').css({ overflow: entering ? 'hidden' : '', position: entering ? 'fixed' : '' });
+        });
+
+        $(`#cmExitFullscreen${id}`).on('click', function () {
+            $border.toggleClass('fullScreen', false);
+            $(this).hide();
+            $(`#cmFullscreen${id}`).show();
+            $wrapper.css('height', '<%=con.height or "300"%>px');
+            cm.refresh();
+            $('body').css({ overflow: '', position: '' });
+        });
+    }
+
+    (async function() {
         for (var i = 0; i < CM_CDNS.length; i++) {
             var cdn = CM_CDNS[i];
-            var ok = await loadJS(cdn.base + '/' + cdn.js);
+            var ok  = await loadJS(cdn.base + '/' + cdn.js);
             if (ok && window.CodeMirror) {
                 await loadCSS(cdn.base + '/' + cdn.css);
-                base = cdn.base;
+                CM_BASE = cdn.base;
                 break;
             }
         }
 
-        if (!base) {
+        if (!CM_BASE) {
             document.querySelectorAll('textarea').forEach(function(ta) {
                 ta.style.cssText = 'width:100%;min-height:200px;font-family:monospace;font-size:13px;padding:8px;box-sizing:border-box;';
             });
             return;
         }
 
-        var loadedFeatures = { keymaps: [], addons: [] };
-        var tasks = [];
+        var loadedKeymaps = [], tasks = [];
+        if (CM_THEME && CM_THEME !== 'default') tasks.push(loadResource('theme', CM_THEME));
 
-        function loadResource(type, name) {
-            var url;
-            if (type === 'theme') url = base + '/theme/' + name + '.min.css';
-            else if (type === 'mode') url = base + '/mode/' + name + '/' + name + '.min.js';
-            else if (type === 'keymap') url = base + '/keymap/' + name + '.min.js';
-            else url = base + '/addon/' + name + '.min.js';
+		CM_MODES.forEach(function(m) {
+			var fileName = (m === 'json') ? 'javascript' : m;
+			tasks.push(loadResource('mode', fileName).then(function() {
+				CM_LOADED_MODES[fileName] = true;
+			}));
+			if (CM_NEED_LINT && { xml:true, css:true, yaml:true, htmlmixed:true, javascript:true }[fileName]) {
+				var lintName = (fileName === 'htmlmixed') ? 'html' : fileName;
+				tasks.push(loadResource('addon', 'lint/' + lintName + '-lint'));
+			}
+		});
 
-            var loader = (type === 'theme') ? loadCSS : loadJS;
-            return loader(url).then(function(ok) {
-                if (ok && type !== 'theme') {
-                    if (type === 'keymap') loadedFeatures.keymaps.push(name);
-                    else if (type === 'addon') loadedFeatures.addons.push(name);
-                }
-                return true;
-            }).catch(function() { return true; });
-        }
-
-        // 加载资源
-        if (CM_THEME) tasks.push(loadResource('theme', CM_THEME));
-
-        CM_MODES.forEach(function(mode) {
-            tasks.push(loadResource('mode', mode));
-            if (CM_NEED_LINT && {xml:true,css:true,json:true,yaml:true,html:true,javascript:true}[mode]) {
-                tasks.push(loadResource('addon', 'lint/' + mode + '-lint'));
-            }
-        });
-
-        tasks.push(loadResource('keymap', 'sublime'));
+        tasks.push(loadResource('keymap', 'sublime').then(function(ok) { if (ok) loadedKeymaps.push('sublime'); }));
         tasks.push(loadResource('keymap', 'emacs'));
 
-        var addons = ['dialog/dialog','search/searchcursor','search/search','search/jump-to-line',
-            'search/match-highlighter','search/matchesonscrollbar','fold/foldcode',
-            'fold/foldgutter','fold/brace-fold','fold/indent-fold','fold/markdown-fold',
-            'fold/xml-fold','edit/closebrackets','edit/closetag','edit/matchbrackets',
-            'edit/matchtags','selection/active-line','selection/mark-selection',
-            'scroll/annotatescrollbar','display/fullscreen','display/autorefresh'];
-
+        var addons = [
+            'dialog/dialog', 'search/searchcursor', 'search/search', 'search/jump-to-line',
+            'search/match-highlighter', 'search/matchesonscrollbar', 'fold/foldcode',
+            'fold/foldgutter', 'fold/brace-fold', 'fold/indent-fold', 'fold/markdown-fold',
+            'fold/xml-fold', 'edit/closebrackets', 'edit/closetag', 'edit/matchbrackets',
+            'edit/matchtags', 'selection/active-line', 'selection/mark-selection',
+            'scroll/annotatescrollbar', 'display/autorefresh'
+        ];
         addons.forEach(function(addon) { tasks.push(loadResource('addon', addon)); });
 
         if (CM_NEED_LINT) {
             tasks.push(loadResource('addon', 'lint/lint'));
             tasks.push(loadResource('addon', 'hint/show-hint'));
-            loadCSS(base + '/addon/lint/lint.css');
-            loadCSS(base + '/addon/hint/show-hint.css');
+            loadCSS(CM_BASE + '/addon/lint/lint.css');
+            loadCSS(CM_BASE + '/addon/hint/show-hint.css');
         }
 
-        loadCSS(base + '/addon/dialog/dialog.css');
-        loadCSS(base + '/addon/fold/foldgutter.css');
-        loadCSS(base + '/addon/display/fullscreen.css');
-        loadCSS(base + '/addon/search/matchesonscrollbar.css');
+        loadCSS(CM_BASE + '/addon/dialog/dialog.css');
+        loadCSS(CM_BASE + '/addon/fold/foldgutter.css');
+        loadCSS(CM_BASE + '/addon/search/matchesonscrollbar.css');
 
         await Promise.all(tasks);
 
-        var keyMap = loadedFeatures.keymaps.indexOf('sublime') >= 0 ? 'sublime' : 'default';
+        var keyMap = loadedKeymaps.indexOf('sublime') >= 0 ? 'sublime' : 'default';
 
-        function createEditor(id, mode, readOnly) {
+        function createEditor(id, mode, font_size, readOnly) {
             var ta = document.getElementById(id);
             if (!ta) return;
             try {
                 var cm = CodeMirror.fromTextArea(ta, {
-                    autoRefresh: true,
-                    lint: CM_NEED_LINT,
-                    indentUnit: 4,
-                    keyMap: keyMap,
-                    theme: CM_THEME,
-                    foldGutter: true,
-                    lineNumbers: true,
-                    matchBrackets: true,
-                    styleActiveLine: true,
-                    lineWrapping: true,
+                    autoRefresh:       true,
+                    lint:              CM_NEED_LINT,
+                    indentUnit:        4,
+                    keyMap:            keyMap,
+                    theme:             CM_THEME,
+                    foldGutter:        true,
+                    lineNumbers:       true,
+                    matchBrackets:     true,
+                    styleActiveLine:   true,
+                    lineWrapping:      true,
                     autoCloseBrackets: true,
+                    readOnly:          readOnly,
+                    mode:              parseCMMode(mode),
                     gutters: ["CodeMirror-lint-markers", "CodeMirror-foldgutter", "CodeMirror-linenumbers", "breakpoints"],
                     extraKeys: {
-                        "F11": function(cm) { cm.setOption("fullScreen", !cm.getOption("fullScreen")); },
-                        "Esc": function(cm) { cm.setOption("fullScreen", !cm.getOption("fullScreen")); },
-                        "Shift-Tab": function(cm) { cm.indentSelection(cm.somethingSelected() ? 'subtract' : 'add'); }
+                        "F11": function(cm) {
+                            var el = cm.getWrapperElement();
+                            if (document.fullscreenElement) { document.exitFullscreen(); }
+                            else { el.requestFullscreen(); }
+                        },
+                        "Esc": function(cm) {
+                            if (document.fullscreenElement) { document.exitFullscreen(); }
+                        },
+                        "Shift-Tab": function(cm) {
+                            cm.indentSelection(cm.somethingSelected() ? 'subtract' : 'add');
+                        }
                     }
                 });
-                cm.setSize('<%=con.width or "100"%>', '<%=con.height or "300"%>');
+
+                cm.setSize('<%=con.width or "100%"%>', '<%=con.height or "300"%>px');
+                renderCMEditor(id, cm, mode, font_size);
+
                 cm.on("gutterClick", function(cm, n) {
-                    var info = cm.lineInfo(n);
+                    var info   = cm.lineInfo(n);
                     var marker = info.gutterMarkers ? null : (function() {
                         var d = document.createElement('div');
                         d.style.color = '#822';
-                        d.innerHTML = '●';
+                        d.innerHTML   = '●';
                         return d;
                     })();
                     cm.setGutterMarker(n, "breakpoints", marker);
                 });
-            } catch(e) {}
+            } catch(e) {
+                console.error('createEditor error:', e);
+            }
         }
 
         <% for sum_str = 1, (tonumber(con.note_sum) or 0) do
             local sum = string.format("%02d", sum_str)
             local only = con.only or con['only_note' .. sum] or false
-            local model = con['model_note' .. sum] or con.note_suffix
-            if model == 'sh' then model = 'shell' elseif model == 'py' then model = 'python' end
+            local font_size = con.font_size or 14
+            local model = con['model_note' .. sum] or con.note_suffix or ''
+            if model == 'sh' then model = 'shell'
+            elseif model == 'py' then model = 'python'
+            end
         %>
-        createEditor('note<%=sum%>', '<%=model%>', <%=only and "true" or "false"%>);
+        createEditor('note<%=sum%>', '<%=model%>', <%=font_size%>, <%=only and "true" or "false"%>);
         <% end %>
     })();
 //]]>

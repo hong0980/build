@@ -1,6 +1,72 @@
 var loadedScripts = new Set();
+var ace_mode = [
+    [ "javascript",            "js"         ],
+    [ "shell",                 "sh"         ],
+    [ "lua",                   "lua"        ],
+    [ "html",                  "html"       ],
+    [ "css",                   "css"        ],
+    [ "json",                  "json"       ],
+    [ "yaml",                  "yaml"       ],
+    [ "toml",                  "toml"       ],
+    [ "python",                "py"         ],
+    [ "markdown",              "md"         ],
+    [ "diff",                  "patch"      ],
+    [ "makefile",              "mk"         ],
+    [ "jsx",                   "jsx"        ],
+    [ "vue",                   "vue"        ],
+    [ "typescript",            "ts"         ],
+    [ "php",                   "php"        ],
+    [ "rust",                  "rust"       ],
+    [ "ruby",                  "ruby"       ],
+    [ "sql",                   "sql"        ],
+    [ "xml",                   "xml"        ],
+    [ "nginx",                 "nginx"      ],
+    [ "dockerfile",            "dockerfile" ],
+    [ "cmake",                 "cmake"      ]
+];
 
-function renderAceEditor(id, model, only, theme = 'monokai', font_size, height, spacing) {
+var ace_theme = [
+    [ "monokai",                  "Monokai (Dark)"               ],
+    [ "dracula",                  "Dracula (Dark)"               ],
+    [ "solarized_dark",           "Solarized (Dark)"             ],
+    [ "solarized_light",          "Solarized (Light)"            ],
+    [ "github",                   "GitHub (Light)"               ],
+    [ "github_dark",              "GitHub Dark (Dark)"           ],
+    [ "one_dark",                 "One Dark (Dark)"              ],
+    [ "nord_dark",                "Nord Dark (Dark)"             ],
+    [ "tomorrow_night_bright",    "Tomorrow Night Bright (Dark)" ],
+    [ "ambiance",                 "Ambiance (Dark)"              ],
+    [ "twilight",                 "Twilight (Dark)"              ],
+    [ "cobalt",                   "Cobalt (Dark)"                ],
+    [ "vibrant_ink",              "Vibrant Ink (Dark)"           ],
+    [ "pastel_on_dark",           "Pastel on Dark (Dark)"        ],
+    [ "clouds_midnight",          "Clouds Midnight (Dark)"       ],
+    [ "merbivore",                "Merbivore (Dark)"             ],
+    [ "idle_fingers",             "Idle Fingers (Dark)"          ],
+    [ "gruvbox",                  "Gruvbox (Dark)"               ],
+    [ "eclipse",                  "Eclipse (Light)"              ],
+    [ "chrome",                   "Chrome (Light)"               ],
+    [ "clouds",                   "Clouds (Light)"               ],
+    [ "dawn",                     "Dawn (Light)"                 ],
+    [ "dreamweaver",              "Dreamweaver (Light)"          ],
+    [ "textmate",                 "TextMate (Light)"             ],
+    [ "xcode",                    "Xcode (Light)"                ],
+    [ "chaos",                    "Chaos (Dark)"                 ],
+    [ "sqlserver",                "SQL Server (Light)"           ],
+    [ "terminal",                 "Terminal (Dark)"              ]
+];
+
+function renderAceEditor(id, model, only, theme = 'monokai', size, height, spacing) {
+	var modeOptions = ace_mode.map(function(m) {
+		var selected = (m[0] === model) ? 'selected' : '';
+		return `<option value="${m[0]}" ${selected}>${m[1]}</option>`;
+	}).join('');
+
+	var themeOptions = ace_theme.map(function(t) {
+		var selected = (theme === t[0]) ? 'selected' : '';
+		return `<option value="${t[0]}" ${selected}>${t[1]}</option>`;
+	}).join('');
+
     var ic = {
         copy: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"/></svg>',
         save: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>',
@@ -17,57 +83,28 @@ function renderAceEditor(id, model, only, theme = 'monokai', font_size, height, 
                 <div class="inline-form-group status-left">
                     <span class="inline-form-group">
                         <span>语法</span>
-                        <select>
-                            <option value="py" ${model === 'py' ? 'selected' : ''}>Python</option>
-                            <option value="js" ${model === 'js' ? 'selected' : ''}>JavaScript</option>
-                            <option value="txt" ${model === 'txt' ? 'selected' : ''}>Plain Text</option>
-                            <option value="lua" ${model === 'lua' ? 'selected' : ''}>Lua</option>
-                            <option value="sh" ${model === 'sh' ? 'selected' : ''}>Shell Script</option>
-                        </select>
+                        <select id="mode${id}">${modeOptions}</select>
                         <span>主题</span>
-                        <select>
-                            <option value="dracula" ${theme === 'dracula' ? 'selected' : ''}>Dracula (Dark)</option>
-                            <option value="tomorrow_night" ${theme === 'tomorrow_night' ? 'selected' : ''}>Tomorrow Night (Dark)</option>
-                            <option value="one_dark" ${theme === 'one_dark' ? 'selected' : ''}>One Dark (Dark)</option>
-                            <option value="nord_dark" ${theme === 'nord_dark' ? 'selected' : ''}>Nord Dark (Dark)</option>
-                            <option value="gruvbox" ${theme === 'gruvbox' ? 'selected' : ''}>Gruvbox (Dark)</option>
-                            <option value="cobalt" ${theme === 'cobalt' ? 'selected' : ''}>Cobalt (Dark)</option>
-                            <option value="vibrant_ink" ${theme === 'vibrant_ink' ? 'selected' : ''}>Vibrant Ink (Dark)</option>
-                            <option value="monokai" ${theme === 'monokai' ? 'selected' : ''}>Monokai (Dark)</option>
-                            <option value="twilight" ${theme === 'twilight' ? 'selected' : ''}>Twilight (Dark)</option>
-                            <option value="chaos" ${theme === 'chaos' ? 'selected' : ''}>Chaos (Dark)</option>
-                            <option value="terminal" ${theme === 'terminal' ? 'selected' : ''}>Terminal (Dark)</option>
-                            <option value="github" ${theme === 'github' ? 'selected' : ''}>GitHub (Light)</option>
-                            <option value="xcode" ${theme === 'xcode' ? 'selected' : ''}>Xcode (Light)</option>
-                            <option value="chrome" ${theme === 'chrome' ? 'selected' : ''}>Chrome (Light)</option>
-                            <option value="eclipse" ${theme === 'eclipse' ? 'selected' : ''}>Eclipse (Light)</option>
-                            <option value="textmate" ${theme === 'textmate' ? 'selected' : ''}>TextMate (Light)</option>
-                            <option value="dawn" ${theme === 'dawn' ? 'selected' : ''}>Dawn (Light)</option>
-                            <option value="dreamweaver" ${theme === 'dreamweaver' ? 'selected' : ''}>Dreamweaver (Light)</option>
-                            <option value="crimson_editor" ${theme === 'crimson_editor' ? 'selected' : ''}>Crimson Editor (Light)</option>
-                            <option value="clouds" ${theme === 'clouds' ? 'selected' : ''}>Clouds (Light)</option>
-                            <option value="kuroir" ${theme === 'kuroir' ? 'selected' : ''}>Kuroir (Light)</option>
-                        </select>
+                        <select id="theme${id}">${themeOptions}</select>
+						<span>字体</span>
+						<select id="size${id}">
+							<option value="12" ${size == 12 ? 'selected' : ''}>12px</option>
+							<option value="13" ${size == 13 ? 'selected' : ''}>13px</option>
+							<option value="14" ${size == 14 ? 'selected' : ''}>14px</option>
+							<option value="15" ${size == 15 ? 'selected' : ''}>15px</option>
+							<option value="16" ${size == 16 ? 'selected' : ''}>16px</option>
+						</select>
                     </span>
-                    </span>
-                    <span>字体</span>
-                    <select>
-                        <option value="12" ${font_size == 12 ? 'selected' : ''}>12px</option>
-                        <option value="13" ${font_size == 13 ? 'selected' : ''}>13px</option>
-                        <option value="14" ${font_size == 14 ? 'selected' : ''}>14px</option>
-                        <option value="15" ${font_size == 15 ? 'selected' : ''}>15px</option>
-                        <option value="16" ${font_size == 16 ? 'selected' : ''}>16px</option>
-                    </select>
                 </div>
                 <div class="has-text-right editortoolbar">
-                    <a id="fileInput${id}" class="icon is-hidden-mobile" title="上传文件">${ic.Upload}</a>
-                    <a class="icon" title="保存" onclick="cbi_submit(this,'cbi.save')">${ic.save}</a>
+                    <a id="fileInput${id}"    class="icon is-hidden-mobile" title="上传文件">${ic.Upload}</a>
                     <a id="down${id}"         class="icon" title="下载">${ic.download}</a>
+                    <a class="icon" title="保存" onclick="cbi_submit(this,'cbi.save')">${ic.save}</a>
                     <a id="clear${id}"        class="icon" title="清除">${ic.delete}</a>
                     <a id="copy${id}"         class="icon" title="复制输入代码">${ic.copy}</a>
-                    <a id="${id}FullScreen"   class="icon" title="全屏" onclick="toggleFullScreenUI('${id}',true)">${ic.open_fullscreen}</a>
-                    <a id="wrap${id}"         class="icon" title="换行">${ic.wrap}</a>
-                    <a id="${id}CloseScreen" class="icon" style="display:none;" title="关闭全屏" onclick="toggleFullScreenUI('${id}',false)">${ic.close_fullscreen}</a>
+                    <a id="wrap${id}"         class="icon" title="取消换行">${ic.wrap}</a>
+                    <a id="${id}FullScreen"   class="icon" title="全屏" onclick="toggleFullScreen('${id}',null,true)">${ic.open_fullscreen}</a>
+                    <a id="${id}CloseScreen"  class="icon" style="display:none;" title="关闭全屏" onclick="toggleFullScreen('${id}',null,false)">${ic.close_fullscreen}</a>
                 </div>
             </div>`)
         .append(`
@@ -75,8 +112,7 @@ function renderAceEditor(id, model, only, theme = 'monokai', font_size, height, 
                 <div class="column is-two-thirds p-0 pl-0"  id="${id}AceLineColumn">Ln: 1; Col: 1; Max Col: 0</div>
                 <div class="column is-one-thirds p-0 has-text-right" id="${id}TextSize">Size: 0 Byte</div>
             </div>`)
-        .addClass('column')
-        .wrapInner(`<div class='aceEditorBorder' id='ace${id}'></div>`)
+        .wrapInner(`<div class='column' style='padding:0.4rem;'><div class='aceEditorBorder' id='ace${id}'></div></div>`)
         .before(`
             <div class="columns is-centered" style="display:none;"></div>
             <div class="field state" style="display:none;"></div>
@@ -93,7 +129,7 @@ function renderAceEditor(id, model, only, theme = 'monokai', font_size, height, 
         readOnly: only,
         mode: 'ace/mode/' + model,
         theme: 'ace/theme/' + theme,
-        fontSize: font_size + 'px',
+        fontSize: size + 'px',
         fontFamily: 'Consolas, monospace',
         printMarginColumn: -1,
         wrap: true,
@@ -137,7 +173,8 @@ function renderAceEditor(id, model, only, theme = 'monokai', font_size, height, 
         var session = editor.getSession();
         var currentWrap = session.getUseWrapMode();
         session.setUseWrapMode(!currentWrap);
-        $(this).toggleClass('active', !currentWrap);
+        this.style.opacity = currentWrap ? '0.45' : '1';
+        this.title = currentWrap ? '换行' : '取消换行';
     });
 
     $(`#fileInput${xid}`).click(function () {
@@ -152,20 +189,18 @@ function renderAceEditor(id, model, only, theme = 'monokai', font_size, height, 
     });
 
     $(document).on('keydown', function (e) {
-        if (e.key === 'F11') { e.preventDefault(); toggleFullScreen(editor); }
+        if (e.key === 'F11') { e.preventDefault(); toggleFullScreen(null, editor); }
     });
 
-    var $menu = $(`.cbi-value#cbi-luci-tinynote-${id} .aceEditorMenu`);
-
-    $menu.find('select').eq(0).on('change', function () {
+    $(`#mode${id}`).on('change', function () {
         editor.session.setMode('ace/mode/' + $(this).val());
     });
 
-    $menu.find('select').eq(1).on('change', function () {
+    $(`#theme${id}`).on('change', function () {
         editor.setTheme('ace/theme/' + $(this).val());
     });
 
-    $menu.find('select').eq(2).on('change', function () {
+    $(`#size${id}`).on('change', function () {
         editor.setFontSize($(this).val() + 'px');
     });
 }
@@ -186,18 +221,21 @@ function updateDisplay(editor, xid) {
     $(`#${xid}AceLineColumn`).html(`Ln: ${cursor.row + 1}; Col: ${cursor.column + 1}; Max Col: ${maxCol}`);
 }
 
-function toggleFullScreenUI(id, enter) {
-    $(`#ace${id}.aceEditorBorder`).toggleClass('fullScreen', enter);
-    $(`#${id}FullScreen`).toggle(!enter);
-    $(`#${id}CloseScreen`).toggle(enter);
-    $('.ace_editor').css('height', enter ? 'calc(100% - 65px)' : '60vh');
-    $('body').css({ overflow: enter ? 'hidden' : '', position: enter ? 'fixed' : '' });
-}
-
-function toggleFullScreen(editor) {
-    loadScripts('/luci-static/tinynote/screenfull.js').then(function () {
-        if (screenfull.isEnabled && editor.isFocused()) screenfull.toggle(editor.container);
-    });
+function toggleFullScreen(id, editor, enter) {
+    if (enter !== undefined) {
+        $(`#ace${id}.aceEditorBorder`).toggleClass('fullScreen', enter);
+        $(`#${id}FullScreen`).toggle(!enter);
+        $(`#${id}CloseScreen`).toggle(enter);
+        $('.ace_editor').css('height', enter ? 'calc(100% - 65px)' : '60vh');
+        $('body').css({ overflow: enter ? 'hidden' : '', position: enter ? 'fixed' : '' });
+    } else {
+        var el = editor.container;
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        } else {
+            el.requestFullscreen();
+        }
+    }
 }
 
 function showToast(text, duration) {
