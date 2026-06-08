@@ -2,22 +2,18 @@
 	"luci-app-wizard": {
 		"description": "Grant UCI access for luci-app-wizard",
 		"read": {
-			"uci": [ "file" ],
+			"uci": [ "wizard" ],
 			"file": {
 				"/bin/sh": [ "exec" ],
 				"/etc/hosts": [ "read" ],
 				"/etc/config/*": [ "read" ],
 				"/etc/rc.local": [ "read" ],
 				"/etc/dnsmasq.conf": [ "read" ],
-				"/etc/init.d/wizard": [ "exec" ],
 				"/etc/crontabs/root": [ "read" ]
-			},
-			"ubus": {
-				"file": [ "read" ]
 			}
 		},
 		"write": {
-			"uci": [ "file" ],
+			"uci": [ "wizard" ],
 			"file": {
 				"/etc/hosts": [ "write" ],
 				"/etc/rc.local": [ "write" ],
@@ -26,9 +22,6 @@
 				"/etc/crontabs/root": [ "write" ],
 				"/sbin/wifi": [ "exec" ],
 				"/etc/init.d/*": [ "exec" ]
-			},
-			"ubus": {
-				"file": [ "write" ]
 			}
 		}
 	}

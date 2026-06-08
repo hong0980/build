@@ -120,7 +120,16 @@ add_wizard() {
 				uci_set network wan device "$device"
 				uci_set network wan username "$wan_pppoe_user"
 				uci_set network wan password "$wan_pppoe_pass"
-				uci_set network wan ipv6 "$ipv6"
+				if [ "$ipv6" = '0' ]; then
+					uci_remove dhcp lan dhcpv6
+					uci_set network wan ipv6 0
+					uci_remove network wan6
+					uci_set network wan multipath off
+					uci show firewall | grep "name='wan'" | while read line; do
+						section=$(echo "$line" | cut -d. -f2)
+						uci_remove_list firewall ${section} network wan6
+					done
+				fi
 				[ -n "$ifname" ] && uci_set network wan ifname "$ifname"
 			fi
 			;;

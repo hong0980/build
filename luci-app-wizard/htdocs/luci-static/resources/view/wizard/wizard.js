@@ -12,7 +12,7 @@ return view.extend({
 			L.resolveDefault(fs.stat('/etc/config/wireless'), null),
 			L.resolveDefault(network.getWifiDevices(), []),
 			uci.load('wizard').then(function (data) {
-				if (!uci.get(data, 'default', 'wan_proto')) {
+				if (!uci.get(data, 'default', 'ap_ip_mode')) {
 					return fs.exec_direct('/etc/init.d/wizard', ['reconfig'])
 						.then(function () {
 							uci.unload('wizard');
@@ -69,13 +69,10 @@ return view.extend({
 		o.rmempty = false;
 		o.password = true;
 
-		o = s.taboption('wansetup', form.ListValue, 'ppp_ipv6', _('Obtain IPv6 address'),
+		o = s.taboption('wansetup', form.Flag, 'ipv6', _('IPv6'),
 			_('Enable IPv6 negotiation on the PPP link'));
 		o.depends('wan_proto', 'pppoe');
-		o.value('auto', _('Automatic'));
-		o.value('0',    _('Disabled'));
-		o.value('1',    _('Manual'));
-		o.default = 'auto';
+		o.default = '1';
 
 		o = s.taboption('wansetup', form.ListValue, 'ap_ip_mode',
 			_('AP management IP'),

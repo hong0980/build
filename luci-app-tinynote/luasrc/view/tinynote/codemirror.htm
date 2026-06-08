@@ -54,7 +54,7 @@ local theme = con.theme or "monokai"
         color: #f5f5f5;
     }
     .inline-form-group select {
-        width: 8em;
+        width: 11em;
         height: 23px;
         font-size: 12px;
         padding: 0 0 0 5px;
@@ -82,6 +82,18 @@ local theme = con.theme or "monokai"
         { base: 'https://cdn.jsdelivr.net/npm/codemirror@' + CM_VERSION, js: 'lib/codemirror.min.js', css: 'lib/codemirror.min.css' },
         { base: 'https://cdn.staticfile.net/codemirror/' + CM_VERSION, js: 'codemirror.min.js', css: 'codemirror.min.css' }
     ];
+
+    var _lastCDN = localStorage.getItem('cm_cdn_base');
+    if (_lastCDN) {
+        var _idx = CM_CDNS.findIndex(function(c) { return c.base === _lastCDN; });
+        if (_idx > 0) CM_CDNS.unshift(CM_CDNS.splice(_idx, 1)[0]);
+
+        var _pl = document.createElement('link');
+        _pl.rel = 'preload';
+        _pl.as = 'script';
+        _pl.href = _lastCDN + '/' + CM_CDNS[0].js;
+        document.head.appendChild(_pl);
+    }
 
 	var CM_ALL_MODES = [
 		[ "javascript",              "JavaScript"                     ],
@@ -123,8 +135,6 @@ local theme = con.theme or "monokai"
 		[ "ambiance",                "Ambiance (Dark)"                ],
 		[ "twilight",                "Twilight (Dark)"                ],
 		[ "zenburn",                 "Zenburn (Dark)"                 ],
-
-		/* 高人气 / 经典 (Dark) */
 		[ "cobalt",                  "Cobalt (Dark)"                  ],
 		[ "midnight",                "Midnight (Dark)"                ],
 		[ "night",                   "Night (Dark)"                   ],
@@ -145,7 +155,6 @@ local theme = con.theme or "monokai"
 		[ "shadowfox",               "Shadowfox (Dark)"               ],
 		[ "the-matrix",              "Matrix (Dark)"                  ],
 		[ "panda-syntax",            "Panda (Dark)"                   ],
-		/* 浅色主题 (Light) */
 		[ "eclipse",                 "Eclipse (Light)"                ],
 		[ "idea",                    "Idea (Light)"                   ],
 		[ "mdn-like",                "MDN-like (Light)"               ],
@@ -156,7 +165,6 @@ local theme = con.theme or "monokai"
 		[ "neat",                    "Neat (Light)"                   ],
 		[ "elegant",                 "Elegant (Light)"                ],
 		[ "abcdef",                  "Abcdef (Light)"                 ],
-		/* 特殊 / 辅助主题 */
 		[ "3024-day",                "3024 Day (Light)"               ],
 		[ "3024-night",              "3024 Night (Dark)"              ],
 		[ "ambiance-mobile",         "Ambiance Mobile (Dark)"         ],
@@ -280,7 +288,6 @@ local theme = con.theme or "monokai"
                     <a id="cmExitFullscreen${id}" class="icon" title="关闭全屏" style="display:none;">${ic.exitFullscreen}</a>
                 </div>
             </div>`);
-
         $border.append(`
             <div class="columns is-mobile m-0 aceStatusBar">
                 <div class="column is-two-thirds p-0 pl-0" id="cmLineCol${id}">Ln: 1; Col: 1</div>
@@ -336,10 +343,6 @@ local theme = con.theme or "monokai"
 			};
 			input.click();
 		});
-
-        $(`#cmSave${id}`).on('click', function () {
-            $('[name="cbi.save"]').click();
-        });
 
         $(`#cmDown${id}`).on('click', function () {
             var content = cm.getValue().trim();
@@ -406,6 +409,7 @@ local theme = con.theme or "monokai"
             if (ok && window.CodeMirror) {
                 await loadCSS(cdn.base + '/' + cdn.css);
                 CM_BASE = cdn.base;
+                localStorage.setItem('cm_cdn_base', CM_BASE);
                 break;
             }
         }
@@ -420,16 +424,19 @@ local theme = con.theme or "monokai"
         var loadedKeymaps = [], tasks = [];
         if (CM_THEME && CM_THEME !== 'default') tasks.push(loadResource('theme', CM_THEME));
 
-		CM_MODES.forEach(function(m) {
-			var fileName = (m === 'json') ? 'javascript' : m;
-			tasks.push(loadResource('mode', fileName).then(function() {
-				CM_LOADED_MODES[fileName] = true;
-			}));
-			if (CM_NEED_LINT && { xml:true, css:true, yaml:true, htmlmixed:true, javascript:true }[fileName]) {
-				var lintName = (fileName === 'htmlmixed') ? 'html' : fileName;
-				tasks.push(loadResource('addon', 'lint/' + lintName + '-lint'));
-			}
-		});
+        CM_MODES.forEach(function(m) {
+            var fileName = (m === 'json') ? 'javascript' : m;
+            tasks.push(loadResource('mode', fileName).then(function() {
+                CM_LOADED_MODES[fileName] = true;
+            }));
+            if (CM_NEED_LINT && { xml:true, css:true, yaml:true, htmlmixed:true, javascript:true }[fileName]) {
+                var lintName = (fileName === 'htmlmixed') ? 'html' : fileName;
+                tasks.push(loadResource('addon', 'lint/' + lintName + '-lint'));
+            }
+            if (m === 'json') {
+                tasks.push(loadResource('addon', 'lint/json-lint'));
+            }
+        });
 
         tasks.push(loadResource('keymap', 'sublime').then(function(ok) { if (ok) loadedKeymaps.push('sublime'); }));
         tasks.push(loadResource('keymap', 'emacs'));
@@ -444,16 +451,50 @@ local theme = con.theme or "monokai"
         ];
         addons.forEach(function(addon) { tasks.push(loadResource('addon', addon)); });
 
-        if (CM_NEED_LINT) {
-            tasks.push(loadResource('addon', 'lint/lint'));
-            tasks.push(loadResource('addon', 'hint/show-hint'));
-            loadCSS(CM_BASE + '/addon/lint/lint.css');
-            loadCSS(CM_BASE + '/addon/hint/show-hint.css');
+        var _lintBase, _lintStyle;
+        if (CM_BASE.indexOf('cdn.bootcdn.net') >= 0) {
+            _lintBase  = 'https://cdn.bootcdn.net/ajax/libs';
+            _lintStyle = 'cdnjs';
+        } else if (CM_BASE.indexOf('lib.baomitu.com') >= 0) {
+            _lintBase  = 'https://lib.baomitu.com';
+            _lintStyle = 'cdnjs';
+        } else if (CM_BASE.indexOf('cdn.staticfile.net') >= 0) {
+            _lintBase  = 'https://cdn.staticfile.net';
+            _lintStyle = 'cdnjs';
+        } else if (CM_BASE.indexOf('cdn.jsdelivr.net') >= 0) {
+            _lintBase  = 'https://cdn.jsdelivr.net/npm';
+            _lintStyle = 'jsdelivr';
+        } else {
+            _lintBase  = 'https://cdn.bootcdn.net/ajax/libs';
+            _lintStyle = 'cdnjs';
         }
 
-        loadCSS(CM_BASE + '/addon/dialog/dialog.css');
-        loadCSS(CM_BASE + '/addon/fold/foldgutter.css');
-        loadCSS(CM_BASE + '/addon/search/matchesonscrollbar.css');
+        var _lintLibs = (_lintStyle === 'jsdelivr') ? [
+            _lintBase + '/jshint@2.13.6/dist/jshint.js',
+            _lintBase + '/jsonlint@1.6.0/jsonlint.js',
+            _lintBase + '/csslint@1.0.5/dist/csslint.js',
+            _lintBase + '/htmlhint@1.1.4/dist/htmlhint.min.js',
+            _lintBase + '/js-yaml@4.1.0/dist/js-yaml.min.js',
+        ] : [
+            _lintBase + '/jshint/2.13.6/jshint.min.js',
+            _lintBase + '/jsonlint/1.6.0/jsonlint.min.js',
+            _lintBase + '/csslint/1.0.5/csslint.min.js',
+            'https://cdn.jsdelivr.net/npm/htmlhint@1.1.4/dist/htmlhint.min.js',
+            _lintBase + '/js-yaml/4.1.0/js-yaml.min.js',
+        ];
+
+        if (CM_NEED_LINT) {
+            await Promise.all(_lintLibs.map(function(url) { return loadJS(url); }));
+
+            tasks.push(loadResource('addon', 'lint/lint'));
+            tasks.push(loadResource('addon', 'hint/show-hint'));
+            loadCSS(CM_BASE + '/addon/lint/lint.min.css');
+            loadCSS(CM_BASE + '/addon/hint/show-hint.min.css');
+        }
+
+        loadCSS(CM_BASE + '/addon/dialog/dialog.min.css');
+        loadCSS(CM_BASE + '/addon/fold/foldgutter.min.css');
+        loadCSS(CM_BASE + '/addon/search/matchesonscrollbar.min.css');
 
         await Promise.all(tasks);
 
