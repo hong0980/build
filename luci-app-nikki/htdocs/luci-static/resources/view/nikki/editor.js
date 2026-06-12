@@ -81,14 +81,10 @@ return view.extend({
             return L.resolveDefault(fs.read_direct(value), '').then((c) => {
                 if (aceEditor) {
                     aceEditor.setValue(c, -1);
-                    requestAnimationFrame(() => {
-                        const hbar = aceEditor.renderer.scrollBarH.element;
-                        if (!aceEditor.renderer.scrollBarH.isVisible) hbar.style.display = 'none';
-                        aceEditor.renderer.onResize(true);
-                    });
+                    requestAnimationFrame(() => aceEditor.renderer.onResize(true));
                     return;
                 }
-                s.getUIElement(section_id, '_file_content')?.setValue(c);
+                s.getUIElement(section_id, '_file_content').setValue(c);
             });
         };
 
@@ -104,9 +100,8 @@ return view.extend({
                 E('button', {
                     title: _('Fullscreen'),
                     style: 'position:absolute;top:3px;right:15px;padding:3px 8px;font-size:18px;z-index:1000;background:#557ef1;color:#fff;border:none;cursor:pointer;border-radius:3px;line-height:1;',
-                    click: ui.createHandlerFn(this, (ev) =>
-                        (aceDiv.requestFullscreen || aceDiv.webkitRequestFullscreen).call(aceDiv)
-                    )
+                    click: ui.createHandlerFn(this, () =>
+                        (aceDiv.requestFullscreen || aceDiv.webkitRequestFullscreen).call(aceDiv))
                 }, '⛶')
             ]);
 
@@ -123,9 +118,6 @@ return view.extend({
                     fontFamily: 'Consolas',
                     theme: 'ace/theme/monokai'
                 });
-                aceEditor.renderer.scrollBarH.on('hide', () => {
-                    aceEditor.renderer.scrollBarH.element.style.display = 'none';
-                });
             }).catch(() => Object.assign(ta.style, { fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4' }));
 
             return frameEl;
@@ -135,6 +127,7 @@ return view.extend({
         };
         o.write = function (section_id, value) {
             const path = s.getUIElement(section_id, '_file')?.getValue();
+            if (!path) return;
             return fs.write(path, value.replace(/^\s+$/gm, '').trim()).then(() =>
                 ui.addTimeLimitedNotification(null, E('p', _('Config saved, files updated')), 5000, 'info')
             );
