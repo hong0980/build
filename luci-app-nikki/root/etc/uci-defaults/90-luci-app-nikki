@@ -1,0 +1,13 @@
+#!/bin/sh
+mkdir -p /etc/nikki/subscriptions \
+		 /etc/nikki/providers/proxy \
+		 /etc/nikki/providers/rule \
+		 /etc/nikki/run/providers
+
+chmod +x /etc/init.d/nikki \
+		 /etc/nikki/scripts/debug.sh \
+		 /etc/nikki/scripts/include.sh \
+		 /etc/nikki/scripts/firewall_include.sh
+
+rm -f /tmp/luci-*
+exit 0
