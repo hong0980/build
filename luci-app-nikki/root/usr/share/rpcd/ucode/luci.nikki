@@ -10,14 +10,14 @@ const methods = {
 		call: function() {
 			let process;
 			let app = '';
-			if (system('command -v opkg') == 0) {
-				process = popen('opkg list-installed luci-app-nikki | cut -d " " -f 3');
+			if (system('command -v apk') == 0) {
+				process = popen('apk list -I luci-app-nikki | cut -d " " -f 1 | cut -d "-" -f 4');
 				if (process) {
 					app = trim(process.read('all'));
 					process.close();
 				}
-			} else if (system('command -v apk') == 0) {
-				process = popen('apk list -I luci-app-nikki | cut -d " " -f 1 | cut -d "-" -f 4');
+			} else if (system('command -v opkg') == 0) {
+				process = popen('opkg list-installed luci-app-nikki | cut -d " " -f 3');
 				if (process) {
 					app = trim(process.read('all'));
 					process.close();

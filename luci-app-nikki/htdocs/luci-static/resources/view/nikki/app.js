@@ -40,14 +40,14 @@ return view.extend({
         s = m.section(form.TableSection, 'status', _('Status'));
         s.anonymous = true;
 
-        o = s.option(form.Value, '_app_version', _('App Version'));
+        o = s.option(form.DummyValue, '_app_version', _('App Version'));
         o.readonly = true;
         o.load = function () {
             return appVersion;
         };
         o.write = function () { };
 
-        o = s.option(form.Value, '_core_version', _('Core Version'));
+        o = s.option(form.DummyValue, '_core_version', _('Core Version'));
         o.readonly = true;
         o.load = function () {
             return coreVersion;
