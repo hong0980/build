@@ -10,9 +10,9 @@ function preloadAce() {
     if (window.ace?.edit) return Promise.resolve(true);
     if (window._acePromise) return window._acePromise;
     return window._acePromise = new Promise((resolve, reject) => {
-        const script = E('script', { src: '/luci-static/resources/ace/ace.js' });
+        const script = E('script', { src: '/luci-static/resources/view/nikki/ace/ace.js' });
         script.onload = () => {
-            ace.config.set('basePath', '/luci-static/resources/ace');
+            ace.config.set('basePath', '/luci-static/resources/view/nikki/ace');
             resolve(true);
         };
         script.onerror = () => {
