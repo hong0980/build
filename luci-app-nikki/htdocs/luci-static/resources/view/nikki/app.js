@@ -6,13 +6,13 @@
 'require tools.nikki as nikki';
 
 function renderStatus(running) {
-    return updateStatus(E('input', { id: 'core_status', style: 'border: unset; font-style: italic; font-weight: bold;', readonly: '' }), running);
+    return updateStatus(E('span', { id: 'core_status', style: 'font-style: italic; font-weight: bold;' }), running);
 }
 
 function updateStatus(element, running) {
     if (element) {
         element.style.color = running ? 'green' : 'red';
-        element.value = running ? _('Running') : _('Not Running');
+        element.textContent = running ? _('Running') : _('Not Running');
     }
     return element;
 }
@@ -86,6 +86,7 @@ return view.extend({
         };
 
         o = s.option(form.Button, 'open_dashboard');
+        o.inputstyle = 'action';
         o.inputtitle = _('Open Dashboard');
         o.onclick = function () {
             return nikki.openDashboard();
@@ -134,12 +135,6 @@ return view.extend({
 
         s.tab('rlimit', _('RLIMIT Config'));
 
-        o = s.taboption('rlimit', form.Value, 'rlimit_nproc_soft', _('Number of Processes Soft Limit'));
-        o.datatype = 'uinteger';
-
-        o = s.taboption('rlimit', form.Value, 'rlimit_nproc_hard', _('Number of Processes Hard Limit'));
-        o.datatype = 'uinteger';
-
         o = s.taboption('rlimit', form.Value, 'rlimit_address_space_soft', _('Address Space Size Soft Limit'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unlimited');
@@ -171,14 +166,6 @@ return view.extend({
         o.datatype = 'uinteger';
 
         s.tab('environment_variable', _('Environment Variable Config'));
-
-        o = s.taboption('environment_variable', form.Value, 'env_go_max_procs', 'GOMAXPROCS');
-        o.datatype = 'uinteger';
-        o.placeholder = _('Unlimited');
-
-        o = s.taboption('environment_variable', form.Value, 'env_go_mem_limit', 'GOMEMLIMIT');
-        o.datatype = 'uinteger';
-        o.placeholder = _('Unlimited');
 
         o = s.taboption('environment_variable', form.DynamicList, 'env_safe_paths', _('Safe Paths'));
         o.load = function (section_id) {
