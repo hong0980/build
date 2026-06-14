@@ -1,6 +1,7 @@
 'use strict';
 'require form';
 'require view';
+'require ui';
 'require uci';
 'require poll';
 'require tools.nikki as nikki';
@@ -17,6 +18,14 @@ function updateStatus(element, running) {
     return element;
 }
 
+const ui_array = [
+    ["https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip", "Zashboard (CDN Fonts)"],
+    ["https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip", "Zashboard"],
+    ["https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip", "MetaCubeXD"],
+    ["https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip", "YACD"],
+    ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]
+];
+
 return view.extend({
     load: function () {
         return Promise.all([
@@ -32,6 +41,8 @@ return view.extend({
         const coreVersion = data[1].core ?? '';
         const running = data[2];
         const profiles = data[3];
+        const ui_url = uci.get('nikki', 'status', 'ui_url')
+        const ui_entry = ui_array.find(x => x[0] === ui_url);
 
         let m, s, o;
 
@@ -45,14 +56,14 @@ return view.extend({
         o.load = function () {
             return appVersion;
         };
-        o.write = function () { };
+        o.write = function () {};
 
         o = s.option(form.DummyValue, '_core_version', _('Core Version'));
         o.readonly = true;
         o.load = function () {
             return coreVersion;
         };
-        o.write = function () { };
+        o.write = function () {};
 
         o = s.option(form.DummyValue, '_core_status', _('Core Status'));
         o.cfgvalue = function () {
@@ -78,16 +89,40 @@ return view.extend({
             return nikki.restart();
         };
 
-        o = s.option(form.Button, 'update_dashboard');
-        o.inputstyle = 'positive';
-        o.inputtitle = _('Update Dashboard');
-        o.onclick = function () {
-            return nikki.updateDashboard();
+        o = s.option(form.ListValue, 'ui_url');
+        ui_array.forEach(([url, name]) => {
+            o.value(url, name);
+        });
+        o.onchange = function (ev, section_id, value) {
+            this.default = value;
         };
+        o.renderWidget = function () {
+            let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            el.classList.add('control-group');
+            el.firstChild.style.width = '8em';
+            const self = this;
+            const btn = E('button', {
+                'class': 'btn cbi-button cbi-button-positive',
+                'click': ui.createHandlerFn(this, function () {
+                    uci.set('nikki', 'status', 'ui_url', self.default);
+                    return uci.save()
+                        .then(() => uci.apply())
+                        .then(() => {
+                            nikki.restart();
+                            return nikki.updateDashboard();
+                        }).then(() => {
+                            window.location.reload();
+                        });
+                })
+            }, [_('Update Dashboard')]);
+            el.appendChild(btn);
+            return el;
+        };
+        o.write = function () {};
 
         o = s.option(form.Button, 'open_dashboard');
         o.inputstyle = 'action';
-        o.inputtitle = _('Open Dashboard');
+        o.inputtitle = ui_entry ? _('Open Dashboard') + ' ' + ui_entry[1] : _('Open Dashboard');
         o.onclick = function () {
             return nikki.openDashboard();
         };
@@ -135,6 +170,12 @@ return view.extend({
 
         s.tab('rlimit', _('RLIMIT Config'));
 
+        o = s.taboption('rlimit', form.Value, 'rlimit_nproc_soft', _('Number of Processes Soft Limit'));
+        o.datatype = 'uinteger';
+
+        o = s.taboption('rlimit', form.Value, 'rlimit_nproc_hard', _('Number of Processes Hard Limit'));
+        o.datatype = 'uinteger';
+
         o = s.taboption('rlimit', form.Value, 'rlimit_address_space_soft', _('Address Space Size Soft Limit'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unlimited');
@@ -166,6 +207,14 @@ return view.extend({
         o.datatype = 'uinteger';
 
         s.tab('environment_variable', _('Environment Variable Config'));
+
+        o = s.taboption('environment_variable', form.Value, 'env_go_max_procs', 'GOMAXPROCS');
+        o.datatype = 'uinteger';
+        o.placeholder = _('Unlimited');
+
+        o = s.taboption('environment_variable', form.Value, 'env_go_mem_limit', 'GOMEMLIMIT');
+        o.datatype = 'uinteger';
+        o.placeholder = _('Unlimited');
 
         o = s.taboption('environment_variable', form.DynamicList, 'env_safe_paths', _('Safe Paths'));
         o.load = function (section_id) {
