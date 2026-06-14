@@ -1,23 +1,17 @@
 'use strict';
+'require fs';
 'require form';
 'require view';
-'require uci';
-'require fs';
-'require poll';
 'require tools.nikki as nikki';
 
 return view.extend({
     load: function () {
         return Promise.all([
-            uci.load('nikki'),
             nikki.getAppLog(),
             nikki.getCoreLog()
         ]);
     },
-    render: function (data) {
-        const appLog = data[1];
-        const coreLog = data[2];
-
+    render: function ([appLog, coreLog]) {
         let m, s, o;
 
         m = new form.Map('nikki');
@@ -57,7 +51,7 @@ return view.extend({
         o.inputstyle = 'negative';
         o.inputtitle = _('Clear Log');
         o.onclick = function (_, section_id) {
-            m.lookupOption('_app_log', section_id)[0].getUIElement(section_id).setValue('');
+            s.getUIElement(section_id, '_app_log').setValue('');
             return nikki.clearAppLog();
         };
 
@@ -70,17 +64,11 @@ return view.extend({
         o.write = function (section_id, formvalue) {
             return true;
         };
-        poll.add(L.bind(function () {
-            const option = this;
-            return L.resolveDefault(nikki.getAppLog()).then(function (log) {
-                option.getUIElement('log').setValue(log);
-            });
-        }, o));
 
         o = s.taboption('app_log', form.Button, 'scroll_app_log_to_bottom');
         o.inputtitle = _('Scroll To Bottom');
         o.onclick = function (_, section_id) {
-            const element = m.lookupOption('_app_log', section_id)[0].getUIElement(section_id).node.firstChild;
+            const element = s.getUIElement(section_id, '_app_log').node.firstChild;
             element.scrollTop = element.scrollHeight;
         };
 
@@ -90,7 +78,7 @@ return view.extend({
         o.inputstyle = 'negative';
         o.inputtitle = _('Clear Log');
         o.onclick = function (_, section_id) {
-            m.lookupOption('_core_log', section_id)[0].getUIElement(section_id).setValue('');
+            s.getUIElement(section_id, '_core_log').setValue('');
             return nikki.clearCoreLog();
         };
 
@@ -103,17 +91,11 @@ return view.extend({
         o.write = function (section_id, formvalue) {
             return true;
         };
-        poll.add(L.bind(function () {
-            const option = this;
-            return L.resolveDefault(nikki.getCoreLog()).then(function (log) {
-                option.getUIElement('log').setValue(log);
-            });
-        }, o));
 
         o = s.taboption('core_log', form.Button, 'scroll_core_log_to_bottom');
         o.inputtitle = _('Scroll To Bottom');
         o.onclick = function (_, section_id) {
-            const element = m.lookupOption('_core_log', section_id)[0].getUIElement(section_id).node.firstChild;
+            const element = s.getUIElement(section_id, '_core_log').node.firstChild;
             element.scrollTop = element.scrollHeight;
         };
 
@@ -142,6 +124,19 @@ return view.extend({
                 });
             });
         };
+
+        L.Poll.add(L.bind(function () {
+            const option = this;
+            return Promise.all([
+                L.resolveDefault(nikki.getAppLog(), ''),
+                L.resolveDefault(nikki.getCoreLog(), '')
+            ]).then(function ([app_log, core_log]) {
+                const appEl = document.getElementById(`${option.cbid('log')}_app_log`);
+                if (appEl) appEl.value = app_log;
+                const coreEl = document.getElementById(`${option.cbid('log')}_core_log`);
+                if (coreEl) coreEl.value = core_log;
+            });
+        }, o));
 
         return m.render();
     }

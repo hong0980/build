@@ -28,12 +28,12 @@ uname -a
 ## application
 \`\`\`
 `
-if [ -x "/bin/opkg" ]; then
-	opkg list-installed "nikki"
-	opkg list-installed "luci-app-nikki"
-elif [ -x "/usr/bin/apk" ]; then
+if [ -x "/usr/bin/apk" ]; then
 	apk list -I "nikki"
 	apk list -I "luci-app-nikki"
+elif [ -x "/bin/opkg" ]; then
+	opkg list-installed "nikki"
+	opkg list-installed "luci-app-nikki"
 fi
 `
 \`\`\`

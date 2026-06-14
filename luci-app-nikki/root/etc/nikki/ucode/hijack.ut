@@ -90,12 +90,6 @@
 		}
 	});
 
-	const has_router_default_rule = length(filter(router_access_control, (x) =>
-		length(x['user']) == 0 &&
-		length(x['group']) == 0 &&
-		length(x['cgroup']) == 0
-	)) > 0;
-
 	const lan_proxy = uci_bool(uci.get('nikki', 'proxy', 'lan_proxy'));
 	const lan_inbound_interface = uci_array(uci.get('nikki', 'proxy', 'lan_inbound_interface'));
 	const lan_inbound_device = [];
@@ -119,10 +113,12 @@
 		}
 	});
 
+	const has_router_default_rule = length(filter(router_access_control, (x) =>
+	    length(x['user']) == 0 && length(x['group']) == 0 && length(x['cgroup']) == 0
+	)) > 0;
+
 	const has_lan_default_rule = length(filter(lan_access_control, (x) =>
-		length(x['ip']) == 0 &&
-		length(x['ip6']) == 0 &&
-		length(x['mac']) == 0
+	    length(x['ip']) == 0 && length(x['ip6']) == 0 && length(x['mac']) == 0
 	)) > 0;
 
 	const reserved_ip = uci_array(uci.get('nikki', 'proxy', 'reserved_ip'));
