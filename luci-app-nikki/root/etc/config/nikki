@@ -70,12 +70,6 @@ config mixin 'mixin'
 	option 'rule' '0'
 	option 'rule_provider' '0'
 	option 'mixin_file_content' '0'
-	option geoip_mmdb_url 'https://testingcf.jsdelivr.net/gh/alecthw/mmdb_china_ip_list@release/lite/Country.mmdb'
-	option geosite_url 'https://testingcf.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat'
-	option geoip_dat_url 'https://testingcf.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geoip.dat'
-	option geoip_asn_url 'https://testingcf.jsdelivr.net/gh/xishang0128/geoip@release/GeoLite2-ASN.mmdb'
-	option geoip_format 'mmdb'
-	option geodata_loader 'standard'
 
 config authentication
 	option 'enabled' '1'
