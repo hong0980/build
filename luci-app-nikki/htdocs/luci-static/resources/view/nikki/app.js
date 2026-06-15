@@ -89,10 +89,7 @@ return view.extend({
         ui_array.forEach(([url, name]) => {
             o.value(url, name);
         });
-        o.onchange = function (ev, section_id, value) {
-            this.default = value;
-        };
-        o.renderWidget = function () {
+        o.renderWidget = function (section_id) {
             let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
             el.classList.add('control-group');
             el.firstChild.style.width = '8em';
@@ -100,19 +97,19 @@ return view.extend({
             const btn = E('button', {
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function () {
-                    uci.set('nikki', 'mixin', 'ui_url', self.default);
-                    return uci.save().then(() => uci.apply())
+                    const current_url = el.firstChild.value;
+                    uci.set('nikki', 'mixin', 'ui_url', current_url);
+                    return uci.save()
+                        .then(() => uci.apply())
                         .then(() => {
-                            uci.state.changes = {};
                             if (ui.changes) ui.changes.setIndicator(0);
-                            nikki.reload();
-                            return nikki.updateDashboard();
-                        }).then(() => {
-                            const ui_entry = ui_array.find(x => x[0] === self.default);
-                            if (ui_entry) {
-                                const openBtn = document.querySelector('#cbi-nikki-status-open_dashboard button');
-                                if (openBtn) openBtn.textContent = _('Open Dashboard') + ' ' + ui_entry[1];
-                            }
+                            nikki.restart();
+                            return nikki.updateDashboard()
+                        })
+                        .then(() => {
+                            const ui_entry = ui_array.find(x => x[0] === current_url);
+                            const openBtn = document.querySelector('#cbi-nikki-status-open_dashboard button');
+                            if (openBtn) openBtn.textContent = _('Open Dashboard') + ' ' + ui_entry[1];
                         });
                 })
             }, [_('Update Dashboard')]);
