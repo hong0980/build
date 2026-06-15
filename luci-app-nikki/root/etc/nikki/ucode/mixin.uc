@@ -28,7 +28,7 @@ config['keep-alive-interval'] = uci_int(uci.get('nikki', 'mixin', 'tcp_keep_aliv
 
 config['external-ui'] = uci.get('nikki', 'mixin', 'ui_path');
 config['external-ui-name'] = uci.get('nikki', 'mixin', 'ui_name');
-config['external-ui-url'] = uci.get('nikki', 'status', 'ui_url');
+config['external-ui-url'] = uci.get('nikki', 'nikki', 'ui_url');
 config['external-controller'] = uci.get('nikki', 'mixin', 'api_listen');
 config['external-controller-tls'] = uci.get('nikki', 'mixin', 'api_tls_listen');
 config['tls'] = {};

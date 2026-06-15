@@ -3,7 +3,6 @@
 'require view';
 'require ui';
 'require uci';
-'require poll';
 'require tools.nikki as nikki';
 
 function renderStatus(running) {
@@ -29,20 +28,15 @@ const ui_array = [
 return view.extend({
     load: function () {
         return Promise.all([
-            uci.load('nikki'),
             nikki.version(),
             nikki.status(),
-            nikki.listProfiles()
+            nikki.listProfiles(),
+            uci.load('nikki')
         ]);
     },
-    render: function (data) {
-        const subscriptions = uci.sections('nikki', 'subscription');
-        const appVersion = data[1].app ?? '';
-        const coreVersion = data[1].core ?? '';
-        const running = data[2];
-        const profiles = data[3];
-        const ui_url = uci.get('nikki', 'status', 'ui_url')
-        const ui_entry = ui_array.find(x => x[0] === ui_url);
+    render: function ([version, running, profiles]) {
+        const appVersion = version.app ?? '';
+        const coreVersion = version.core ?? '';
 
         let m, s, o;
 
@@ -69,8 +63,8 @@ return view.extend({
         o.cfgvalue = function () {
             return renderStatus(running);
         };
-        poll.add(function () {
-            return L.resolveDefault(nikki.status()).then(function (running) {
+        L.Poll.add(function () {
+            return L.resolveDefault(nikki.status(), false).then(function (running) {
                 updateStatus(document.getElementById('core_status'), running);
             });
         });
@@ -90,6 +84,8 @@ return view.extend({
         };
 
         o = s.option(form.ListValue, 'ui_url');
+        o.ucisection = 'mixin';
+        o.ucioption = 'ui_url';
         ui_array.forEach(([url, name]) => {
             o.value(url, name);
         });
@@ -102,24 +98,30 @@ return view.extend({
             el.firstChild.style.width = '8em';
             const self = this;
             const btn = E('button', {
-                'class': 'btn cbi-button cbi-button-positive',
+                'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function () {
-                    uci.set('nikki', 'status', 'ui_url', self.default);
-                    return uci.save()
-                        .then(() => uci.apply())
+                    uci.set('nikki', 'mixin', 'ui_url', self.default);
+                    return uci.save().then(() => uci.apply())
                         .then(() => {
-                            nikki.restart();
+                            uci.state.changes = {};
+                            if (ui.changes) ui.changes.setIndicator(0);
+                            nikki.reload();
                             return nikki.updateDashboard();
                         }).then(() => {
-                            window.location.reload();
+                            const ui_entry = ui_array.find(x => x[0] === self.default);
+                            if (ui_entry) {
+                                const openBtn = document.querySelector('#cbi-nikki-status-open_dashboard button');
+                                if (openBtn) openBtn.textContent = _('Open Dashboard') + ' ' + ui_entry[1];
+                            }
                         });
                 })
             }, [_('Update Dashboard')]);
             el.appendChild(btn);
             return el;
         };
-        o.write = function () {};
 
+        const ui_url = uci.get('nikki', 'mixin', 'ui_url')
+        const ui_entry = ui_array.find(x => x[0] === ui_url);
         o = s.option(form.Button, 'open_dashboard');
         o.inputstyle = 'action';
         o.inputtitle = ui_entry ? _('Open Dashboard') + ' ' + ui_entry[1] : _('Open Dashboard');
@@ -139,9 +141,9 @@ return view.extend({
             o.value('file:' + profile.name, _('File:') + profile.name);
         };
 
-        for (const subscription of subscriptions) {
-            o.value('subscription:' + subscription['.name'], _('Subscription:') + subscription.name);
-        };
+        uci.sections('nikki', 'subscription', function (s, sid) {
+            o.value('subscription:' + sid, _('Subscription:') + s['name']);
+        });
 
         o = s.option(form.Value, 'start_delay', _('Start Delay'));
         o.datatype = 'uinteger';
