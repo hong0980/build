@@ -7,6 +7,7 @@ USE_PROCD=1
 PROG="/usr/bin/mihomo"
 
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
+TEMP_RUN_PATH="/tmp/config.temp"
 
 extra_command 'update_subscription' 'Update subscription by section id'
 extra_command 'clear_logs' 'Clear logs if size exceeds the limit'
@@ -130,7 +131,7 @@ start_service() {
 			log "App" "Exit."
 			return
 		fi
-		cp -f "$profile_file" "$RUN_PROFILE_PATH"
+		cp -f "$profile_file" "$TEMP_RUN_PATH"
 	elif [ "$profile_type" = "subscription" ]; then
 		local subscription_section; subscription_section="$profile_id"
 		local subscription_name subscription_prefer
@@ -146,7 +147,7 @@ start_service() {
 			log "App" "Exit."
 			return
 		fi
-		cp -f "$subscription_file" "$RUN_PROFILE_PATH"
+		cp -f "$subscription_file" "$TEMP_RUN_PATH"
 	else
 		log "Profile" "No profile/subscription selected."
 		log "App" "Exit."
@@ -156,46 +157,53 @@ start_service() {
 	if [ "$core_only" = 0 ]; then
 		log "Mixin" "Mixin config."
 		if [ "$overwrite_authentication" = 1 ]; then
-			yq -M -i 'del(.authentication)' "$RUN_PROFILE_PATH"
+			yq -Mi 'del(.authentication)' "$TEMP_RUN_PATH"
 		fi
 		if [ "$overwrite_tun_dns_hijack" = 1 ]; then
-			yq -M -i 'del(.tun.dns-hijack)' "$RUN_PROFILE_PATH"
+			yq -Mi 'del(.tun.dns-hijack)' "$TEMP_RUN_PATH"
 		fi
 		if [ "$overwrite_fake_ip_filter" = 1 ]; then
-			yq -M -i 'del(.dns.fake-ip-filter)' "$RUN_PROFILE_PATH"
+			yq -Mi 'del(.dns.fake-ip-filter)' "$TEMP_RUN_PATH"
 		fi
 		if [ "$overwrite_hosts" = 1 ]; then
-			yq -M -i 'del(.hosts)' "$RUN_PROFILE_PATH"
+			yq -Mi 'del(.hosts)' "$TEMP_RUN_PATH"
 		fi
 		if [ "$overwrite_dns_nameserver" = 1 ]; then
-			yq -M -i 'del(.dns.default-nameserver) | del(.dns.proxy-server-nameserver) | del(.dns.direct-nameserver) | del(.dns.nameserver) | del(.dns.fallback) ' "$RUN_PROFILE_PATH"
+			yq -Mi 'del(.dns.default-nameserver) | del(.dns.proxy-server-nameserver) | del(.dns.direct-nameserver) | del(.dns.nameserver) | del(.dns.fallback) ' "$TEMP_RUN_PATH"
 		fi
 		if [ "$overwrite_dns_nameserver_policy" = 1 ]; then
-			yq -M -i 'del(.dns.nameserver-policy)' "$RUN_PROFILE_PATH"
+			yq -Mi 'del(.dns.nameserver-policy)' "$TEMP_RUN_PATH"
 		fi
 		if [ "$overwrite_sniffer_force_domain_name" = 1 ]; then
-			yq -M -i 'del(.sniffer.force-domain)' "$RUN_PROFILE_PATH"
+			yq -Mi 'del(.sniffer.force-domain)' "$TEMP_RUN_PATH"
 		fi
 		if [ "$overwrite_sniffer_ignore_domain_name" = 1 ]; then
-			yq -M -i 'del(.sniffer.skip-domain)' "$RUN_PROFILE_PATH"
+			yq -Mi 'del(.sniffer.skip-domain)' "$TEMP_RUN_PATH"
 		fi
 		if [ "$overwrite_sniffer_sniff" = 1 ]; then
-			yq -M -i 'del(.sniffer.sniff)' "$RUN_PROFILE_PATH"
+			yq -Mi 'del(.sniffer.sniff)' "$TEMP_RUN_PATH"
 		fi
 
 		local MIXIN_EXTRA_FILE=""
-		if [ "$mixin_file_content" = 1 ]; then
-			grep -q '^proxy-providers' "$RUN_PROFILE_PATH" || MIXIN_EXTRA_FILE="$MIXIN_FILE_PATH"
+		if [ "$mixin_file_content" = 1 ] && ! yq -Me 'has("proxy-providers")' "$TEMP_RUN_PATH" 2>/dev/null; then
+			MIXIN_EXTRA_FILE="$MIXIN_FILE_PATH"
 		fi
 
-		ucode -S "$MIXIN_UC" | yq -M -p json -o yaml | yq -M -i eval-all '... comments="" | . as $item ireduce ({}; . * $item ) | .proxies = .nikki-proxies + .proxies | del(.nikki-proxies) | .proxy-groups = .nikki-proxy-groups + .proxy-groups | del(.nikki-proxy-groups) | .rules = .nikki-rules + .rules | del(.nikki-rules) | explode(.) | .rule-providers? |= with_entries(.value.path = "./rule_provider/" + .key)' "$RUN_PROFILE_PATH" $MIXIN_EXTRA_FILE -
+		ucode -S "$MIXIN_UC" | yq -Mp json -o yaml | yq -Mi eval-all '
+				... comments="" | . as $item ireduce ({}; . * $item ) |
+				.rules        = .nikki-rules        + .rules        | del(.nikki-rules)        |
+				.proxies      = .nikki-proxies      + .proxies      | del(.nikki-proxies)      |
+				.proxy-groups = .nikki-proxy-groups + .proxy-groups | del(.nikki-proxy-groups) |
+				explode(.) |
+				.rule-providers? |= with_entries(.value.path = "./rule_provider/" + .key)
+				' "$TEMP_RUN_PATH" $MIXIN_EXTRA_FILE -
 
 		if [ "$proxy_enabled" = 1 ]; then
-			if yq -M -e 'has("tun")' "$RUN_PROFILE_PATH" > /dev/null 2>&1; then
-				yq -M -i '(.tun) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$RUN_PROFILE_PATH"
+			if yq -Me 'has("tun")' "$TEMP_RUN_PATH" > /dev/null 2>&1; then
+				yq -Mi '(.tun) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$TEMP_RUN_PATH"
 			fi
-			if yq -M -e 'has("listeners")' "$RUN_PROFILE_PATH" > /dev/null 2>&1; then
-				yq -M -i '(.listeners[] | select(.type == "tun")) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$RUN_PROFILE_PATH"
+			if yq -Me 'has("listeners")' "$TEMP_RUN_PATH" > /dev/null 2>&1; then
+				yq -Mi '(.listeners[] | select(.type == "tun")) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$TEMP_RUN_PATH"
 			fi
 		fi
 	fi
@@ -203,7 +211,7 @@ start_service() {
 	if [ "$core_only" = 0 ] && [ "$proxy_enabled" = 1 ]; then
 		log "Profile" "Checking..."
 		if [ "$ipv4_dns_hijack" = 1 ] || [ "$ipv6_dns_hijack" = 1 ]; then
-			if yq -M -e '(has("dns") and (.dns | .enable) and (.dns | has("listen"))) | not' "$RUN_PROFILE_PATH" > /dev/null 2>&1; then
+			if yq -Me '(has("dns") and (.dns | .enable) and (.dns | has("listen"))) | not' "$TEMP_RUN_PATH" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "DNS should be enabled and listen should be defined."
 				log "App" "Exit."
@@ -211,7 +219,7 @@ start_service() {
 			fi
 		fi
 		if [ "$tcp_mode" = "redirect" ]; then
-			if yq -M -e "(has(\"redir-port\") or (has(\"listeners\") and .listeners | any_c(.name == \"$redirect_listener_name\" and .type == \"redir\"))) | not" "$RUN_PROFILE_PATH" > /dev/null 2>&1; then
+			if yq -Me "(has(\"redir-port\") or (has(\"listeners\") and .listeners | any_c(.name == \"$redirect_listener_name\" and .type == \"redir\"))) | not" "$TEMP_RUN_PATH" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "Redirect Port/Listener should be defined."
 				log "App" "Exit."
@@ -219,7 +227,7 @@ start_service() {
 			fi
 		fi
 		if [ "$tcp_mode" = "tproxy" ] || [ "$udp_mode" = "tproxy" ]; then
-			if yq -M -e "(has(\"tproxy-port\") or (has(\"listeners\") and .listeners | any_c(.name == \"$tproxy_listener_name\" and .type == \"tproxy\"))) | not" "$RUN_PROFILE_PATH" > /dev/null 2>&1; then
+			if yq -Me "(has(\"tproxy-port\") or (has(\"listeners\") and .listeners | any_c(.name == \"$tproxy_listener_name\" and .type == \"tproxy\"))) | not" "$TEMP_RUN_PATH" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "TPROXY Port/Listener should be defined."
 				log "App" "Exit."
@@ -227,7 +235,7 @@ start_service() {
 			fi
 		fi
 		if [ "$tcp_mode" = "tun" ] || [ "$udp_mode" = "tun" ]; then
-			if yq -M -e "(has(\"tun\") and (.tun | .enable) and (.tun | has(\"device\"))) or (has(\"listeners\") and .listeners | any_c(.name == \"$tun_listener_name\" and .type == \"tun\" and has(\"device\")))) | not" "$RUN_PROFILE_PATH" > /dev/null 2>&1; then
+			if yq -Me "(has(\"tun\") and (.tun | .enable) and (.tun | has(\"device\"))) or (has(\"listeners\") and .listeners | any_c(.name == \"$tun_listener_name\" and .type == \"tun\" and has(\"device\")))) | not" "$TEMP_RUN_PATH" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "TUN should be defined."
 				log "App" "Exit."
@@ -248,6 +256,8 @@ start_service() {
 			return
 		fi
 	fi
+
+	mv -f "$TEMP_RUN_PATH" "$RUN_PROFILE_PATH"
 	# start core
 	log "Core" "Start."
 	procd_open_instance nikki
@@ -585,7 +595,7 @@ update_subscription() {
 		if [ ! -f "$subscription_info_file" ] && grep -q -i "subscription-userinfo:" "$subscription_header_tmpfile"; then
 			subscription_info_file="$subscription_header_tmpfile"
 		fi
-		if yq -M -p yaml -o yaml -e 'has("proxies") or has("proxy-providers")' "$subscription_tmpfile" > /dev/null 2>&1; then
+		if yq -Mp yaml -o yaml -e 'has("proxies") or has("proxy-providers")' "$subscription_tmpfile" > /dev/null 2>&1; then
 			log "Profile" "Subscription is valid."
 			success=1
 		else
