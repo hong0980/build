@@ -5,11 +5,16 @@
 'require rpc';
 'require request';
 
-const callRCList = rpc.declare({
-    object: 'rc',
+const callServiceList = rpc.declare({
+    object: 'service',
     method: 'list',
     params: ['name'],
-    expect: { '': {} }
+    expect: { '': {} },
+    filter: (data, { name }, extra) =>
+        extra.reduce((res, key) =>
+            (res && typeof res === 'object' ? res[key] : null),
+            data[name] || null
+        )
 });
 
 const callRCInit = rpc.declare({
@@ -17,6 +22,12 @@ const callRCInit = rpc.declare({
     method: 'init',
     params: ['name', 'action'],
     expect: { '': {} }
+});
+
+const callFileWrite = rpc.declare({
+    object: 'file',
+    method: 'write',
+    params: ['path', 'data', 'append', 'mode']
 });
 
 const callNikkiVersion = rpc.declare({
@@ -86,8 +97,8 @@ return baseclass.extend({
     coreLogPath: coreLogPath,
     debugLogPath: debugLogPath,
 
-    status: async function () {
-        return (await callRCList('nikki'))?.nikki?.running;
+    status: function () {
+        return callServiceList('nikki', ['instances', 'nikki', 'running']).then(Boolean);
     },
 
     reload: function () {
@@ -96,6 +107,31 @@ return baseclass.extend({
 
     restart: function () {
         return callRCInit('nikki', 'restart');
+    },
+
+    writefile: function (path, data, mode) {
+        data = (data != null) ? String(data) : '';
+        mode = (mode != null) ? mode : 0o644;
+
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+        const chunkSize = 8 * 1024;
+
+        const bytes = encoder.encode(data);
+
+        if (bytes.length <= chunkSize) {
+            return callFileWrite(path, data, false, mode);
+        }
+
+        let promise = Promise.resolve();
+        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+            const chunkBytes = bytes.slice(offset, Math.min(offset + chunkSize, bytes.length));
+            const chunk = decoder.decode(chunkBytes);
+            const append = offset > 0;
+            promise = promise.then(() => callFileWrite(path, chunk, append, mode));
+        }
+
+        return promise;
     },
 
     version: function () {
@@ -175,19 +211,19 @@ return baseclass.extend({
     },
 
     getAppLog: function () {
-        return L.resolveDefault(fs.read_direct(this.appLogPath));
+        return L.resolveDefault(fs.read_direct(this.appLogPath), '');
     },
 
     getCoreLog: function () {
-        return L.resolveDefault(fs.read_direct(this.coreLogPath));
+        return L.resolveDefault(fs.read_direct(this.coreLogPath), '');
     },
 
     clearAppLog: function () {
-        return fs.write(this.appLogPath);
+        return this.writefile(this.appLogPath, '');
     },
 
     clearCoreLog: function () {
-        return fs.write(this.coreLogPath);
+        return this.writefile(this.coreLogPath, '');
     },
 
     debug: function () {

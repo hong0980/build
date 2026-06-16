@@ -128,7 +128,7 @@ return view.extend({
         o.write = function (section_id, value) {
             const path = s.getUIElement(section_id, '_file')?.getValue();
             if (!path) return;
-            return fs.write(path, value.replace(/^\s+$/gm, '').trim()).then(() =>
+            return nikki.writefile(path, value.replace(/^\s+$/gm, '').trim()).then(() =>
                 ui.addTimeLimitedNotification(null, E('p', _('Config saved, files updated')), 5000, 'info')
             );
         };
