@@ -61,12 +61,8 @@ function decodeBase64Str(str) {
     }
 }
 
-function calcStringMD5(str) {
-    let hash = 5381;
-    for (let i = 0; i < str.length; i++)
-        hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
-    hash = (hash >>> 0).toString(16).padStart(8, '0');
-    return (hash + hash + hash + hash).slice(0, 32);
+function getRandom() {
+    return Math.random().toString(36).slice(2, 12);
 }
 
 function loadDefaultLabel(uciconfig, section_id) {
@@ -1256,7 +1252,7 @@ return view.extend({
         o.value('mihomo');
 
         o = s.option(form.ListValue, 'prefer', _('Prefer'));
-        o.default = 'remote';
+        o.default = 'local';
         o.modalonly = true;
         o.rmempty = false;
         o.value('remote', _('Remote'));
@@ -1288,8 +1284,7 @@ return view.extend({
                             input_links.forEach(l => {
                                 let config = parseShareLink(l);
                                 if (config) {
-                                    let nameHash = calcStringMD5(config.label);
-                                    let sid = uci.add('nikki', 'node', nameHash);
+                                    let sid = uci.add('nikki', 'node', getRandom());
                                     Object.keys(config).forEach(k => {
                                         uci.set('nikki', sid, k, config[k]);
                                     });
@@ -1305,7 +1300,7 @@ return view.extend({
                                         .format(imported_node, input_links.length)));
 
                             return uci.save()
-                                .then(() => uci.apply())
+                                // .then(() => uci.apply())
                                 .then(L.bind(this.map.load, this.map))
                                 .then(L.bind(this.map.reset, this.map))
                                 .then(L.ui.hideModal)
