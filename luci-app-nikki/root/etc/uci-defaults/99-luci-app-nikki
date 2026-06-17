@@ -232,25 +232,6 @@ config_get val routing tproxy_fw_mask
 config_get val routing tun_fw_mask
 [ -z "$val" ] && uci -q set nikki.routing.tun_fw_mask=0xFF
 
-config_get section_procd procd ''
-[ -z "$section_procd" ] && {
-	uci -q set nikki.procd=procd
-	config_get val config fast_reload
-	uci -q set nikki.procd.fast_reload=$val
-	config_get val env safe_paths
-	uci -q set nikki.procd.env_safe_paths=$val
-	config_get val env disable_loopback_detector
-	uci -q set nikki.procd.env_disable_loopback_detector=$val
-	config_get val env disable_quic_go_gso
-	uci -q set nikki.procd.env_disable_quic_go_gso=$val
-	config_get val env disable_quic_go_ecn
-	uci -q set nikki.procd.env_disable_quic_go_ecn=$val
-	config_get val env skip_system_ipv6_check
-	uci -q set nikki.procd.env_skip_system_ipv6_check=$val
-	uci -q del nikki.config.fast_reload
-	uci -q del nikki.env
-}
-
 # since v1.25.1
 
 config_get val routing dummy_device

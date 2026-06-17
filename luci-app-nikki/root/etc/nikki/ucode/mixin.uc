@@ -4,6 +4,7 @@
 
 import { cursor } from 'uci';
 import { connect } from 'ubus';
+import { build_proxies } from '/etc/nikki/ucode/node.uc';
 import { uci_bool, uci_int, uci_array, trim_all } from '/etc/nikki/ucode/include.uc';
 
 const uci = cursor();
@@ -200,5 +201,6 @@ config['geox-url']['geoip'] = uci.get('nikki', 'mixin', 'geoip_dat_url');
 config['geox-url']['asn'] = uci.get('nikki', 'mixin', 'geoip_asn_url');
 config['geo-auto-update'] = uci_bool(uci.get('nikki', 'mixin', 'geox_auto_update'));
 config['geo-update-interval'] = uci_int(uci.get('nikki', 'mixin', 'geox_update_interval'));
+config['node'] = build_proxies();
 
 print(trim_all(config));
