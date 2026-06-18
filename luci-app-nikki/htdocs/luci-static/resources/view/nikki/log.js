@@ -18,6 +18,9 @@ return view.extend({
 
         s = m.section(form.NamedSection, 'log', 'log', _('Log'));
 
+        s.tab('core_log', _('Core Log'));
+        s.tab('app_log', _('App Log'));
+        s.tab('debug_log', _('Debug Log'));
         s.tab('log_config', _('Log Config'));
 
         o = s.taboption('log_config', form.Flag, 'clear_at_stop', _('Clear At Stop'));
@@ -45,8 +48,6 @@ return view.extend({
         o.value('MB', 'MB');
         o.value('GB', 'GB');
 
-        s.tab('app_log', _('App Log'));
-
         o = s.taboption('app_log', form.Button, 'clear_app_log');
         o.inputstyle = 'negative';
         o.inputtitle = _('Clear Log');
@@ -55,14 +56,16 @@ return view.extend({
             return nikki.clearAppLog();
         };
 
-        o = s.taboption('app_log', form.TextValue, '_app_log');
+        o = s.taboption('app_log', form.DummyValue, '_app_log');
         o.rows = 25;
         o.wrap = false;
+        o.renderWidget = function (section_id, option_index, cfgvalue) {
+            let frameEl = form.TextValue.prototype.renderWidget.apply(this, arguments);
+            frameEl.firstElementChild.style.cssText = 'width: 100%; font-family: Consolas;';
+            return frameEl;
+        };
         o.load = function (section_id) {
             return appLog;
-        };
-        o.write = function (section_id, formvalue) {
-            return true;
         };
 
         o = s.taboption('app_log', form.Button, 'scroll_app_log_to_bottom');
@@ -72,8 +75,6 @@ return view.extend({
             element.scrollTop = element.scrollHeight;
         };
 
-        s.tab('core_log', _('Core Log'));
-
         o = s.taboption('core_log', form.Button, 'clear_core_log');
         o.inputstyle = 'negative';
         o.inputtitle = _('Clear Log');
@@ -82,14 +83,16 @@ return view.extend({
             return nikki.clearCoreLog();
         };
 
-        o = s.taboption('core_log', form.TextValue, '_core_log');
+        o = s.taboption('core_log', form.DummyValue, '_core_log');
         o.rows = 25;
         o.wrap = false;
+        o.renderWidget = function (section_id, option_index, cfgvalue) {
+            let frameEl = form.TextValue.prototype.renderWidget.apply(this, arguments);
+            frameEl.firstElementChild.style.cssText = 'width: 100%; font-family: Consolas;';
+            return frameEl;
+        };
         o.load = function (section_id) {
             return coreLog;
-        };
-        o.write = function (section_id, formvalue) {
-            return true;
         };
 
         o = s.taboption('core_log', form.Button, 'scroll_core_log_to_bottom');
@@ -98,8 +101,6 @@ return view.extend({
             const element = s.getUIElement(section_id, '_core_log').node.firstChild;
             element.scrollTop = element.scrollHeight;
         };
-
-        s.tab('debug_log', _('Debug Log'));
 
         o = s.taboption('debug_log', form.Button, '_generate_download_debug_log');
         o.inputstyle = 'negative';

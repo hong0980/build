@@ -1125,3 +1125,42 @@ msgstr "用户名"
 #: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:128
 msgid "procd Config"
 msgstr "procd 配置"
+
+msgid "Expecting: %s"
+msgstr "请输入：%s"
+
+msgid "unique value"
+msgstr "独立值"
+
+msgid "Are you sure to allow insecure?"
+msgstr "确定要允许不安全连接吗？"
+
+msgid "Write proxy protocol in the connection header."
+msgstr "在连接头中写入代理协议。"
+
+msgid "Idle session check timeout"
+msgstr "空闲会话检查超时"
+
+msgid "Proxy protocol"
+msgstr "代理协议"
+
+msgid "Idle session check interval"
+msgstr "空闲会话检查间隔"
+
+msgid "Minimum idle sessions"
+msgstr "最小空闲会话数"
+
+msgid "Hop interval"
+msgstr "跳跃间隔"
+
+msgid "Port hopping interval in seconds."
+msgstr "端口跳跃间隔（单位：秒）。"
+
+msgid "Authentication payload"
+msgstr "认证载荷"
+
+msgid "Obfuscate type"
+msgstr "混淆类型"
+
+msgid "The QUIC stream-level flow control window for receiving data."
+msgstr "用于接收数据的 QUIC 流级流控制窗口。"

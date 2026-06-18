@@ -250,6 +250,7 @@ start_service() {
 		fi
 		log "Profile" "Check passed."
 	fi
+	mv -f "$TEMP_RUN_PATH" "$RUN_PROFILE_PATH"
 	# test profile
 	if [ "$test_profile" = 1 ]; then
 		log "Profile" "Testing..."
@@ -263,7 +264,6 @@ start_service() {
 		fi
 	fi
 
-	mv -f "$TEMP_RUN_PATH" "$RUN_PROFILE_PATH"
 	# start core
 	log "Core" "Start."
 	procd_open_instance nikki
