@@ -56,7 +56,7 @@ return view.extend({
             return nikki.clearAppLog();
         };
 
-        o = s.taboption('app_log', form.DummyValue, '_app_log');
+        o = s.taboption('app_log', form.TextValue, '_app_log');
         o.rows = 25;
         o.wrap = false;
         o.renderWidget = function (section_id, option_index, cfgvalue) {
@@ -64,9 +64,8 @@ return view.extend({
             frameEl.firstElementChild.style.cssText = 'width: 100%; font-family: Consolas;';
             return frameEl;
         };
-        o.load = function (section_id) {
-            return appLog;
-        };
+        o.write = function () { return true; };
+        o.load = function () { return appLog; };
 
         o = s.taboption('app_log', form.Button, 'scroll_app_log_to_bottom');
         o.inputtitle = _('Scroll To Bottom');
@@ -83,7 +82,7 @@ return view.extend({
             return nikki.clearCoreLog();
         };
 
-        o = s.taboption('core_log', form.DummyValue, '_core_log');
+        o = s.taboption('core_log', form.TextValue, '_core_log');
         o.rows = 25;
         o.wrap = false;
         o.renderWidget = function (section_id, option_index, cfgvalue) {
@@ -91,9 +90,8 @@ return view.extend({
             frameEl.firstElementChild.style.cssText = 'width: 100%; font-family: Consolas;';
             return frameEl;
         };
-        o.load = function (section_id) {
-            return coreLog;
-        };
+        o.write = function () { return true; };
+        o.load = function () { return coreLog; };
 
         o = s.taboption('core_log', form.Button, 'scroll_core_log_to_bottom');
         o.inputtitle = _('Scroll To Bottom');

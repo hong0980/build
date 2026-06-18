@@ -93,12 +93,12 @@ function apply_transport(target, section, allowed) {
 	}
 };
 
-function apply_tls_common(target, section) {
+function apply_tls_common(target, section, sni_field) {
 	if (!uci_bool(section.tls)) {
 		return;
 	}
 	target['tls'] = true;
-	target['servername'] = section.tls_sni;
+	target[sni_field ?? 'servername'] = section.tls_sni;
 
 	const alpn = uci_array(section.tls_alpn);
 	if (length(alpn) > 0) {
@@ -155,7 +155,7 @@ function build_http(section, base) {
 	proxy['type'] = 'http';
 	proxy['username'] = section.username;
 	proxy['password'] = section.password;
-	apply_tls_common(proxy, section);
+	apply_tls_common(proxy, section, 'sni');
 	return proxy;
 };
 
@@ -226,14 +226,21 @@ function build_shadowsocks(section, base) {
 };
 
 function build_shadowtls(section, base) {
+	/* 官方示例 ss4-shadow-tls 显示：
+	 *   - proxy.password       底层 Shadowsocks 自身密码
+	 *   - plugin-opts.password shadow-tls 隧道认证密码（独立字段，跟 SS 密码不同）
+	 * client-fingerprint 是外层字段（跟 type 同级），不是 plugin-opts 里面。 */
 	const proxy = base;
 	proxy['type'] = 'ss';
 	proxy['cipher'] = section.shadowsocks_encrypt_method ?? 'none';
 	proxy['password'] = section.password;
 	proxy['plugin'] = 'shadow-tls';
+	if (section.tls_utls) {
+		proxy['client-fingerprint'] = map_utls(section.tls_utls);
+	}
 	proxy['plugin-opts'] = trim_all({
 		host: section.tls_sni,
-		password: section.password,
+		password: section.shadowtls_password,
 		version: uci_int(section.shadowtls_version),
 	});
 	return proxy;
@@ -244,8 +251,8 @@ function build_trojan(section, base) {
 	proxy['type'] = 'trojan';
 	proxy['password'] = section.password;
 	proxy['udp'] = true;
-	apply_tls_common(proxy, section);
-	apply_transport(proxy, section, ['ws', 'grpc']);
+	apply_tls_common(proxy, section, 'sni');
+	apply_transport(proxy, section, ['ws', 'grpc', 'httpupgrade']);
 	apply_multiplex(proxy, section);
 	return proxy;
 };
@@ -297,11 +304,9 @@ function build_hysteria(section, base) {
 	const proxy = base;
 	proxy['type'] = 'hysteria';
 	proxy['auth-str'] = section.hysteria_auth_type == 'string' ? section.hysteria_auth_payload : null;
-	proxy['auth_str'] = proxy['auth-str'];
 	proxy['up'] = uci_int(section.hysteria_up_mbps);
 	proxy['down'] = uci_int(section.hysteria_down_mbps);
-	proxy['obfs'] = section.hysteria_obfs_password ? 'xplus' : null;
-	proxy['obfs-param'] = section.hysteria_obfs_password;
+	proxy['obfs'] = section.hysteria_obfs_password;
 	proxy['protocol'] = section.hysteria_protocol ?? 'udp';
 	proxy['disable_mtu_discovery'] = uci_bool(section.hysteria_disable_mtu_discovery);
 	proxy['recv-window-conn'] = uci_int(section.hysteria_recv_window_conn);
@@ -377,7 +382,7 @@ function build_anytls(section, base) {
 	proxy['idle-session-timeout'] = uci_int(section.anytls_idle_session_timeout);
 	proxy['min-idle-session'] = uci_int(section.anytls_min_idle_session);
 
-	apply_tls_common(proxy, section);
+	apply_tls_common(proxy, section, 'sni');
 	return proxy;
 };
 

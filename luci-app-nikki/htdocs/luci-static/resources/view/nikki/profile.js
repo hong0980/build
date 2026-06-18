@@ -219,18 +219,17 @@ function renderNodeSettings(section) {
     o.depends('type', 'http');
     o.depends('type', 'hysteria2');
     o.depends('type', 'shadowsocks');
+    o.depends('type', 'shadowtls');
     o.depends('type', 'ssh');
     o.depends('type', 'trojan');
     o.depends('type', 'tuic');
-    o.depends({ 'type': 'shadowtls', 'shadowtls_version': '2' });
-    o.depends({ 'type': 'shadowtls', 'shadowtls_version': '3' });
     o.depends({ 'type': 'socks', 'socks_version': '5' });
     o.validate = function (section_id, value) {
         if (section_id) {
             let type = this.section.formvalue(section_id, 'type');
             let required_type = ['anytls', 'shadowsocks', 'shadowtls', 'trojan'];
             if (required_type.includes(type)) {
-                if (type === 'shadowsocks') {
+                if (type === 'shadowsocks' || type === 'shadowtls') {
                     let encmode = this.section.formvalue(section_id, 'shadowsocks_encrypt_method');
                     if (encmode === 'none') return true;
                 }
@@ -361,6 +360,7 @@ function renderNodeSettings(section) {
     o.value('rc4-md5');
     o.default = 'aes-128-gcm';
     o.depends('type', 'shadowsocks');
+    o.depends('type', 'shadowtls');
     o.rmempty = false;
     o.modalonly = true;
 
@@ -383,6 +383,13 @@ function renderNodeSettings(section) {
     o.default = '1';
     o.depends('type', 'shadowtls');
     o.rmempty = false;
+    o.modalonly = true;
+
+    o = s.option(form.Value, 'shadowtls_password', _('ShadowTLS tunnel password'),
+        _('Authentication password for the shadow-tls plugin layer itself, separate from the underlying Shadowsocks password above.'));
+    o.password = true;
+    o.depends({ 'type': 'shadowtls', 'shadowtls_version': '2' });
+    o.depends({ 'type': 'shadowtls', 'shadowtls_version': '3' });
     o.modalonly = true;
 
     o = s.option(form.ListValue, 'socks_version', _('Socks version'));
@@ -502,6 +509,7 @@ function renderNodeSettings(section) {
         _('No TCP transport, plain HTTP is merged into the HTTP transport.'));
     o.value('', _('None'));
     o.value('grpc', _('gRPC'));
+    o.value('httpupgrade', _('HTTPUpgrade'));
     o.value('ws', _('WebSocket'));
     o.depends('type', 'trojan');
     o.modalonly = true;
@@ -823,7 +831,7 @@ function renderNodeSettings(section) {
     o.value('chrome');
     o.value('firefox');
     o.value('safari');
-    o.value('ios');
+    o.value('iOS');
     o.value('android');
     o.value('edge');
     o.value('360');
@@ -833,6 +841,7 @@ function renderNodeSettings(section) {
     o.depends({ 'tls': '1', 'type': 'vless' });
     o.depends({ 'tls': '1', 'type': 'trojan' });
     o.depends({ 'tls': '1', 'type': 'anytls' });
+    o.depends('type', 'shadowtls');
     o.validate = function (section_id, value) {
         if (section_id) {
             let tls_reality = this.map.findElement('id', 'cbid.nikki.%s.tls_reality'.format(section_id)).firstElementChild;
@@ -869,6 +878,12 @@ function renderNodeSettings(section) {
     o.modalonly = true;
 
     return s;
+}
+
+function map_utls_fp_alias(fp) {
+    if (!fp) return fp;
+    if (fp.toLowerCase() === 'ios') return 'iOS';
+    return fp;
 }
 
 function parseShareLink(uri) {
@@ -1084,7 +1099,7 @@ function parseShareLink(uri) {
                     tls_reality: (params.get('security') === 'reality') ? '1' : '0',
                     tls_reality_public_key: params.get('pbk') ? decodeURIComponent(params.get('pbk')) : null,
                     tls_reality_short_id: params.get('sid'),
-                    tls_utls: params.get('fp'),
+                    tls_utls: map_utls_fp_alias(params.get('fp')),
                     vless_flow: ['tls', 'reality'].includes(params.get('security')) ? params.get('flow') : null
                 };
                 switch (params.get('type')) {
@@ -1136,7 +1151,7 @@ function parseShareLink(uri) {
                     tls: vmess.tls === 'tls' ? '1' : '0',
                     tls_sni: vmess.sni || vmess.host,
                     tls_alpn: vmess.alpn ? vmess.alpn.split(',') : null,
-                    tls_utls: vmess.fp
+                    tls_utls: map_utls_fp_alias(vmess.fp)
                 };
                 switch (vmess.net) {
                     case 'grpc':

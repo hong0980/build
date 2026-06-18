@@ -18,8 +18,7 @@ function updateStatus(element, running) {
 }
 
 const ui_array = [
-    ["https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip", "Zashboard (CDN Fonts)"],
-    ["https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip", "Zashboard"],
+    ["https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip", "Zashboard"],
     ["https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip", "MetaCubeXD"],
     ["https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip", "YACD"],
     ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]
@@ -92,7 +91,7 @@ return view.extend({
         o.renderWidget = function (section_id) {
             let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
             el.classList.add('control-group');
-            el.firstChild.style.width = '8em';
+            // el.firstChild.style.width = '8em';
             const self = this;
             const btn = E('button', {
                 'class': 'btn cbi-button-positive',
