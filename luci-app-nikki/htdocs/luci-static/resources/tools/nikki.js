@@ -150,14 +150,14 @@ return baseclass.extend({
         return callNikkiAPI('POST', '/upgrade/ui');
     },
 
-    openDashboard: async function () {
+    openDashboard: async function (overrideUiName) {
         const profile = await callNikkiProfile({
             'external-ui-name': null,
             'external-controller': null,
             'external-controller-tls': null,
             'secret': null
         });
-        const uiName = profile['external-ui-name'];
+        const uiName = overrideUiName ?? profile['external-ui-name'];
         const apiListen = profile['external-controller'];
         const apiTLSListen = profile['external-controller-tls'];
         const apiSecret = profile['secret'] ?? '';
@@ -165,8 +165,7 @@ return baseclass.extend({
             return Promise.reject('API has not been configured');
         }
 
-        let protocol;
-        let port;
+        let protocol, port;
         if (apiTLSListen) {
             protocol = 'https';
             port = apiTLSListen.substring(apiTLSListen.lastIndexOf(':') + 1);
@@ -182,12 +181,9 @@ return baseclass.extend({
             secret: apiSecret
         };
         const query = new URLSearchParams(params).toString();
-        let url;
-        if (uiName) {
-            url = `${protocol}://${window.location.hostname}:${port}/ui/${uiName}/?${query}`;
-        } else {
-            url = `${protocol}://${window.location.hostname}:${port}/ui/?${query}`;
-        }
+        const url = uiName
+            ? `${protocol}://${window.location.hostname}:${port}/ui/${uiName}/?${query}`
+            : `${protocol}://${window.location.hostname}:${port}/ui/?${query}`;
 
         setTimeout(function () { window.open(url, '_blank') }, 0);
 

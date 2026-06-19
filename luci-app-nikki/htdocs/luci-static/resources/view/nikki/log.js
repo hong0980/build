@@ -1,45 +1,175 @@
 'use strict';
 'require fs';
+'require ui';
+'require uci';
 'require form';
 'require view';
 'require tools.nikki as nikki';
 
+// curl -N -H "Authorization: Bearer $api_secret" "http://$api_listen/logs?format=structured" >> "$CORE_LOG_PATH" &
+
+const parseCoreLogLine = (line, dateObj) => {
+    const m = line.match(/^time="([^"]+)"\s+level=(\w+)\s+msg="(.*)"$/);
+    if (!m) return null;
+    const [, time, level, msg] = m;
+    const t = dateObj.format(new Date(time));
+    return { level, display: `[${t}] [${level.toUpperCase()}]: ${msg}` };
+};
+
 return view.extend({
     load: function () {
         return Promise.all([
-            nikki.getAppLog(),
-            nikki.getCoreLog()
+            L.resolveDefault(nikki.getAppLog(), ''),
+            L.resolveDefault(nikki.getCoreLog(), ''),
+            uci.load('system')
         ]);
     },
+
+    formatted: function (rawLog, dateObj) {
+        if (!rawLog) return '';
+        return rawLog
+            .split('\n')
+            .map(parseLine)
+            .filter(Boolean)
+            .map(({ time, level, msg }) => {
+                const d = new Date(time);
+                const t = dateObj.format(d);
+                return `[${t}] [${level.toUpperCase()}]: ${msg}`;
+            })
+            .join('\n');
+    },
+
     render: function ([appLog, coreLog]) {
         let m, s, o;
+        const self = this;
+        const tz = uci.get('system', '@system[0]', 'zonename')?.replaceAll(' ', '_');
+        const ts = uci.get('system', '@system[0]', 'clock_timestyle') || 0;
+        const hc = uci.get('system', '@system[0]', 'clock_hourcycle') || 0;
+        const dateObj = new Intl.DateTimeFormat(undefined, {
+            dateStyle: 'medium',
+            timeStyle: ts === 0 ? 'long' : 'full',
+            hourCycle: hc === 0 ? undefined : hc,
+            timeZone: tz
+        });
 
         m = new form.Map('nikki');
-
         s = m.section(form.NamedSection, 'log', 'log', _('Log'));
-
         s.tab('core_log', _('Core Log'));
         s.tab('app_log', _('App Log'));
         s.tab('debug_log', _('Debug Log'));
         s.tab('log_config', _('Log Config'));
 
+        const createLogOption = (tab, initialLog, parseFn = null, withLevelFilter = false) => {
+            const opt = s.taboption(tab, form.DummyValue, `_${tab}`);
+            opt.rows = 25;
+            opt.wrap = false;
+            opt.renderWidget = function (section_id, option_index, cfgvalue) {
+                let el = form.TextValue.prototype.renderWidget.apply(this, arguments);
+                const textareaEl = el.firstElementChild;
+                textareaEl.style.cssText = 'width: 100%; font-family: Consolas;';
+                textareaEl.wrap = 'off';
+                const state = { raw: cfgvalue || '', reversed: false, level: 'all' };
+                const renderText = () => {
+                    let items = parseFn
+                        ? state.raw.split('\n').map(parseFn).filter(Boolean)
+                        : state.raw.split('\n').map((line) => ({ level: null, display: line }));
+                    if (withLevelFilter && state.level !== 'all') {
+                        items = items.filter((item) => item.level === state.level);
+                    }
+                    if (state.reversed) items = items.slice().reverse();
+                    textareaEl.value = items.map((item) => item.display).join('\n');
+                };
+
+                textareaEl._logState = state;
+                textareaEl._logRender = renderText;
+                renderText();
+
+
+                const buttons = [
+                    E('button', {
+                        'class': 'btn cbi-button-negative',
+                        'click': ui.createHandlerFn(this, function () {
+                            state.raw = '';
+                            renderText();
+                            return tab === 'core_log'
+                                ? nikki.clearCoreLog()
+                                : nikki.clearAppLog();
+                        })
+                    }, _('Clear Log')),
+                    E('button', {
+                        'class': 'btn cbi-button-positive',
+                        'click': ui.createHandlerFn(this, function () {
+                            textareaEl.wrap = textareaEl.wrap === 'off' ? 'soft' : 'off';
+                        })
+                    }, _('Wrap')),
+                    E('button', {
+                        'class': 'btn cbi-button-action',
+                        'click': ui.createHandlerFn(this, function () {
+                            state.reversed = !state.reversed;
+                            renderText();
+                        })
+                    }, _('Reverse'))
+                ];
+
+                if (withLevelFilter) {
+                    buttons.push(E('select', {
+                        'class': 'cbi-input-select',
+                        'style': 'width: auto; margin-left: auto;',
+                        'change': function (ev) {
+                            state.level = ev.target.value;
+                            renderText();
+                        }
+                    }, [
+                        E('option', { value: 'all' }, _('All Levels')),
+                        E('option', { value: 'debug' }, _('Debug')),
+                        E('option', { value: 'info' }, _('Info')),
+                        E('option', { value: 'warning' }, _('Warning')),
+                        E('option', { value: 'error' }, _('Error'))
+                    ]));
+                }
+
+                const toolbar = E('div', { 'style': 'display: flex; gap: 12px; margin-bottom: 6px;' }, buttons);
+                el.insertBefore(toolbar, textareaEl);
+                return el;
+            };
+            opt.load = () => initialLog;
+            return opt;
+        };
+
+        createLogOption('app_log', appLog);
+        createLogOption('core_log', coreLog, (line) => parseCoreLogLine(line, dateObj), true);
+
+        o = s.taboption('debug_log', form.Button, '_generate_download_debug_log');
+        o.inputstyle = 'negative';
+        o.inputtitle = _('Generate & Download');
+        o.onclick = function () {
+            return nikki.debug().then(function () {
+                fs.read_direct(nikki.debugLogPath, 'blob').then(function (data) {
+                    const url = window.URL.createObjectURL(data, { type: 'text/markdown' });
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'debug.log';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                });
+            });
+        };
+
         o = s.taboption('log_config', form.Flag, 'clear_at_stop', _('Clear At Stop'));
         o.rmempty = false;
-
         o = s.taboption('log_config', form.Flag, 'scheduled_clear', _('Scheduled Clear'));
         o.rmempty = false;
-
         o = s.taboption('log_config', form.Value, 'scheduled_clear_cron', _('Scheduled Clear Cron'));
         o.retain = true;
         o.rmempty = false;
         o.depends('scheduled_clear', '1');
-
         o = s.taboption('log_config', form.Value, 'scheduled_clear_size_limit', _('Scheduled Clear Size Limit'));
         o.retain = true;
         o.rmempty = false;
         o.datatype = 'uinteger';
         o.depends('scheduled_clear', '1');
-
         o = s.taboption('log_config', form.ListValue, 'scheduled_clear_size_limit_unit', _('Scheduled Clear Size Limit Unit'));
         o.retain = true;
         o.rmempty = false;
@@ -48,92 +178,21 @@ return view.extend({
         o.value('MB', 'MB');
         o.value('GB', 'GB');
 
-        o = s.taboption('app_log', form.Button, 'clear_app_log');
-        o.inputstyle = 'negative';
-        o.inputtitle = _('Clear Log');
-        o.onclick = function (_, section_id) {
-            s.getUIElement(section_id, '_app_log').setValue('');
-            return nikki.clearAppLog();
-        };
-
-        o = s.taboption('app_log', form.TextValue, '_app_log');
-        o.rows = 25;
-        o.wrap = false;
-        o.renderWidget = function (section_id, option_index, cfgvalue) {
-            let frameEl = form.TextValue.prototype.renderWidget.apply(this, arguments);
-            frameEl.firstElementChild.style.cssText = 'width: 100%; font-family: Consolas;';
-            return frameEl;
-        };
-        o.write = function () { return true; };
-        o.load = function () { return appLog; };
-
-        o = s.taboption('app_log', form.Button, 'scroll_app_log_to_bottom');
-        o.inputtitle = _('Scroll To Bottom');
-        o.onclick = function (_, section_id) {
-            const element = s.getUIElement(section_id, '_app_log').node.firstChild;
-            element.scrollTop = element.scrollHeight;
-        };
-
-        o = s.taboption('core_log', form.Button, 'clear_core_log');
-        o.inputstyle = 'negative';
-        o.inputtitle = _('Clear Log');
-        o.onclick = function (_, section_id) {
-            s.getUIElement(section_id, '_core_log').setValue('');
-            return nikki.clearCoreLog();
-        };
-
-        o = s.taboption('core_log', form.TextValue, '_core_log');
-        o.rows = 25;
-        o.wrap = false;
-        o.renderWidget = function (section_id, option_index, cfgvalue) {
-            let frameEl = form.TextValue.prototype.renderWidget.apply(this, arguments);
-            frameEl.firstElementChild.style.cssText = 'width: 100%; font-family: Consolas;';
-            return frameEl;
-        };
-        o.write = function () { return true; };
-        o.load = function () { return coreLog; };
-
-        o = s.taboption('core_log', form.Button, 'scroll_core_log_to_bottom');
-        o.inputtitle = _('Scroll To Bottom');
-        o.onclick = function (_, section_id) {
-            const element = s.getUIElement(section_id, '_core_log').node.firstChild;
-            element.scrollTop = element.scrollHeight;
-        };
-
-        o = s.taboption('debug_log', form.Button, '_generate_download_debug_log');
-        o.inputstyle = 'negative';
-        o.inputtitle = _('Generate & Download');
-        o.onclick = function () {
-            return nikki.debug().then(function () {
-                fs.read_direct(nikki.debugLogPath, 'blob').then(function (data) {
-                    // create url
-                    const url = window.URL.createObjectURL(data, { type: 'text/markdown' });
-                    // create link
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = 'debug.log';
-                    // append to body
-                    document.body.appendChild(link);
-                    // download
-                    link.click();
-                    // remove from body
-                    document.body.removeChild(link);
-                    // revoke url
-                    window.URL.revokeObjectURL(url);
-                });
-            });
-        };
-
         L.Poll.add(L.bind(function () {
-            const option = this;
             return Promise.all([
                 L.resolveDefault(nikki.getAppLog(), ''),
                 L.resolveDefault(nikki.getCoreLog(), '')
             ]).then(function ([app_log, core_log]) {
-                const appEl = document.getElementById(`${option.cbid('log')}_app_log`);
-                if (appEl) appEl.value = app_log;
-                const coreEl = document.getElementById(`${option.cbid('log')}_core_log`);
-                if (coreEl) coreEl.value = core_log;
+                const appEl = document.getElementById(`widget.cbid.nikki.log._app_log`);
+                if (appEl && appEl._logState) {
+                    appEl._logState.raw = app_log;
+                    appEl._logRender();
+                }
+                const coreEl = document.getElementById(`widget.cbid.nikki.log._core_log`);
+                if (coreEl && coreEl._logState) {
+                    coreEl._logState.raw = core_log;
+                    coreEl._logRender();
+                }
             });
         }, o));
 

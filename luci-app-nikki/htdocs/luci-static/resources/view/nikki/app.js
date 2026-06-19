@@ -2,6 +2,7 @@
 'require form';
 'require view';
 'require ui';
+'require fs';
 'require uci';
 'require tools.nikki as nikki';
 
@@ -91,38 +92,38 @@ return view.extend({
         o.renderWidget = function (section_id) {
             let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
             el.classList.add('control-group');
-            // el.firstChild.style.width = '8em';
-            const self = this;
+            const NIKKI_WORKDIR = '/etc/nikki/run';
             const btn = E('button', {
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function () {
                     const current_url = el.firstChild.value;
-                    uci.set('nikki', 'mixin', 'ui_url', current_url);
-                    return uci.save()
-                        .then(() => uci.apply())
-                        .then(() => {
-                            if (ui.changes) ui.changes.setIndicator(0);
-                            nikki.restart();
-                            return nikki.updateDashboard()
-                        })
-                        .then(() => {
-                            const ui_entry = ui_array.find(x => x[0] === current_url);
-                            const openBtn = document.querySelector('#cbi-nikki-status-open_dashboard button');
-                            if (openBtn) openBtn.textContent = _('Open Dashboard') + ' ' + ui_entry[1];
-                        });
+                    const ui_entry = ui_array.find(x => x[0] === current_url);
+                    const ui_path = uci.get('nikki', 'mixin', 'ui_path');
+
+                    const applyConfig = () => {
+                        const current_ui_url = uci.get('nikki', 'mixin', 'ui_url');
+                        if (current_url === current_ui_url) return Promise.resolve();
+                        uci.set('nikki', 'mixin', 'ui_url', current_url);
+                        uci.set('nikki', 'mixin', 'ui_name', ui_entry[1]);
+                        return uci.save()
+                            .then(() => uci.apply())
+                            .then(() => { if (ui.changes) ui.changes.setIndicator(0); });
+                    };
+
+                    return fs.stat(`${NIKKI_WORKDIR}/${ui_path}/${ui_entry[1]}/index.html`)
+                        .then(() => true, () => false)
+                        .then((d) => {
+                            if (d) return nikki.openDashboard(ui_entry[1]).then(() => applyConfig());
+                            return applyConfig()
+                                .then(() => nikki.restart())
+                                .then(() => nikki.updateDashboard())
+                                .then(() => nikki.openDashboard(ui_entry[1]));
+                        }).catch((e) => ui.addNotification(null, E('p', _('Update failed: ') + e), 'error'));
                 })
-            }, [_('Update Dashboard')]);
+            }, _('Open Dashboard'));
+
             el.appendChild(btn);
             return el;
-        };
-
-        const ui_url = uci.get('nikki', 'mixin', 'ui_url')
-        const ui_entry = ui_array.find(x => x[0] === ui_url);
-        o = s.option(form.Button, 'open_dashboard');
-        o.inputstyle = 'action';
-        o.inputtitle = ui_entry ? _('Open Dashboard') + ' ' + ui_entry[1] : _('Open Dashboard');
-        o.onclick = function () {
-            return nikki.openDashboard();
         };
 
         s = m.section(form.NamedSection, 'config', 'config', _('App Config'));

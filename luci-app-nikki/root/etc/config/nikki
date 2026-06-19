@@ -89,6 +89,12 @@ config hosts
 
 config nameserver
 	option enabled '1'
+	option type 'nameserver'
+	list nameserver 'https://doh.pub/dns-query'
+	list nameserver 'https://dns.alidns.com/dns-query'
+
+config nameserver
+	option enabled '1'
 	option type 'default-nameserver'
 	list nameserver '223.5.5.5'
 	list nameserver '223.6.6.6'
@@ -104,12 +110,6 @@ config nameserver
 	option type 'direct-nameserver'
 	list nameserver '223.5.5.5'
 	list nameserver '119.29.29.29'
-
-config nameserver
-	option enabled '1'
-	option type 'nameserver'
-	list nameserver 'https://1.1.1.1/dns-query'
-	list nameserver 'https://8.8.8.8/dns-query'
 
 config nameserver_policy
 	option enabled '1'
