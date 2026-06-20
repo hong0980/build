@@ -6,6 +6,53 @@ import { access, popen, writefile } from 'fs';
 import { get_users, get_groups, get_cgroups, load_profile } from '/etc/nikki/ucode/include.uc';
 
 const methods = {
+	update_ui: {
+		args: { url: 'url', name: 'name' },
+		call: function(req) {
+
+			const url = req.args?.url;
+			const name = req.args?.name;
+
+			if (!url || !name
+				|| !match(name, /^[A-Za-z0-9_-]+$/)
+				|| match(url, /['"`$\\;&|<>(){}\n]/)) {
+				return { status: 'error', message: 'invalid url/name' };
+			};
+
+			const filepath = '/etc/nikki/run/config.yaml';
+			const profile = load_profile();
+			const listen = profile['external-controller'];
+			const secret = profile['secret'];
+			const external_ui = profile['external-ui'];
+
+			if (!listen) return { status: 'error', message: 'external-controller not set' };
+			if (!external_ui) return { status: 'error', message: 'external-ui not set' };
+			if (!access(filepath, 'r')) return { status: 'error', message: 'config.yaml not readable' };
+
+			function run(cmd) {
+				const p = popen(cmd);
+				if (!p) return null;
+				const out = trim(p.read('all'));
+				p.close();
+				return out;
+			};
+
+			const yq_out = run(`yq -Mi '.external-ui-url="${url}"|.external-ui-name="${name}"' ${filepath} 2>&1`);
+			if (yq_out) return { status: 'error', message: `yq: ${yq_out}` };
+
+			const reload_code = run(`curl -X PUT -H 'Authorization: Bearer ${secret}' -H 'Content-Type: application/json' 'http://${listen}/configs?force=true' -d '{"path": "${filepath}", "payload": ""}'`);
+			if (reload_code) return { status: 'error', message: `reload http ${reload_code}` };
+
+			const upgrade_out = run(`curl -X POST -H 'Authorization: Bearer ${secret}' http://${listen}/upgrade/ui`);
+			let result;
+			try { result = json(upgrade_out); } catch (e) {
+				return { status: 'error', message: upgrade_out || 'empty response' };
+			};
+			return result?.status === 'ok'
+				? { status: 'ok' }
+				: { status: 'error', message: result?.message || upgrade_out };
+		}
+	},
 	version: {
 		call: function() {
 			let process;

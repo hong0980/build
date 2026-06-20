@@ -3,8 +3,16 @@
 'require view';
 'require ui';
 'require fs';
+'require rpc';
 'require uci';
 'require tools.nikki as nikki';
+
+const update_ui = rpc.declare({
+    object: 'luci.nikki',
+    method: 'update_ui',
+    params: ['url', 'name'],
+    expect: { '': {} }
+});
 
 function renderStatus(running) {
     return updateStatus(E('span', { id: 'core_status', style: 'font-style: italic; font-weight: bold;' }), running);
@@ -100,25 +108,14 @@ return view.extend({
                     const ui_entry = ui_array.find(x => x[0] === current_url);
                     const ui_path = uci.get('nikki', 'mixin', 'ui_path');
 
-                    const applyConfig = () => {
-                        const current_ui_url = uci.get('nikki', 'mixin', 'ui_url');
-                        if (current_url === current_ui_url) return Promise.resolve();
-                        uci.set('nikki', 'mixin', 'ui_url', current_url);
-                        uci.set('nikki', 'mixin', 'ui_name', ui_entry[1]);
-                        return uci.save()
-                            .then(() => uci.apply())
-                            .then(() => { if (ui.changes) ui.changes.setIndicator(0); });
-                    };
-
                     return fs.stat(`${NIKKI_WORKDIR}/${ui_path}/${ui_entry[1]}/index.html`)
-                        .then(() => true, () => false)
-                        .then((d) => {
-                            if (d) return nikki.openDashboard(ui_entry[1]).then(() => applyConfig());
-                            return applyConfig()
-                                .then(() => nikki.restart())
-                                .then(() => nikki.updateDashboard())
-                                .then(() => nikki.openDashboard(ui_entry[1]));
-                        }).catch((e) => ui.addNotification(null, E('p', _('Update failed: ') + e), 'error'));
+                        .then(() => nikki.openDashboard(ui_entry[1]))
+                        .catch(() => update_ui(current_url, ui_entry[1])
+                            .then(result => {
+                                if (result.status === 'ok') return nikki.openDashboard(ui_entry[1]);
+                                throw new Error(result?.message || 'Update failed');
+                            }))
+                        .catch(e => ui.addNotification(null, E('p', _('Update failed: ') + e), 'error'));
                 })
             }, _('Open Dashboard'));
 

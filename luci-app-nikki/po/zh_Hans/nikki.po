@@ -1164,3 +1164,15 @@ msgstr "混淆类型"
 
 msgid "The QUIC stream-level flow control window for receiving data."
 msgstr "用于接收数据的 QUIC 流级流控制窗口。"
+
+msgid "All Levels"
+msgstr "所有级别"
+
+msgid "Reverse"
+msgstr "倒序"
+
+msgid "Wrap"
+msgstr "换行"
+
+msgid ""
+msgstr ""
