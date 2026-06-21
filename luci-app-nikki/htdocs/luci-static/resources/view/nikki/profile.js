@@ -1203,7 +1203,7 @@ return view.extend({
 
         m = new form.Map('nikki');
 
-        s = m.section(form.NamedSection, 'config', 'config', _('Profile'));
+        s = m.section(form.NamedSection, 'config', 'config', _('File'));
 
         o = s.option(form.FileUpload, '_upload_profile', _('Upload Profile'));
         o.browser = true;
@@ -1211,6 +1211,51 @@ return view.extend({
         o.root_directory = nikki.profilesDir;
         o.write = function (section_id, formvalue) {
             return true;
+        };
+
+        o = s.option(form.DummyValue, '_upload_mixin', _('Upload Mixin'),
+            _('Select a local file to upload, it will directly overwrite %s').format(nikki.mixinFilePath));
+        o.renderWidget = function (section_id, option_index, cfgvalue) {
+            const status = E('span', { style: 'margin-left: 8px; color: #888;' });
+            const input = E('input', {
+                type: 'file', style: 'display:none',
+                change: ui.createHandlerFn(this, function (ev) {
+                    const file = ev.target.files[0];
+                    if (!file) return;
+
+                    const data = new FormData();
+                    data.append('sessionid', L.env.sessionid);
+                    data.append('filename', nikki.mixinFilePath);
+                    data.append('filedata', file); 4
+
+                    status.textContent = _('Uploading...');
+
+                    return L.Request.post(`${L.env.cgi_base}/cgi-upload`, data, {
+                        timeout: 0,
+                        progress: L.bind(function (pev) {
+                            status.textContent = '%.2f%%'.format((pev.loaded / pev.total) * 100);
+                        }, this)
+                    }).then(function (res) {
+                        const reply = res.json();
+                        if (L.isObject(reply) && reply.failure)
+                            throw new Error(reply.message || _('Upload failed'));
+                        status.textContent = '';
+                        ui.addNotification(null, E('p', _('Upload succeeded, %s has been overwritten').format(nikki.mixinFilePath)), 'success');
+                    }).catch(function (err) {
+                        status.textContent = '';
+                        ui.addNotification(null, E('p', _('Upload failed: %s').format(err.message || err)), 'error');
+                    }).finally(function () {
+                        input.value = '';
+                    });
+                })
+            });
+
+            return E('div', {}, [
+                E('button', {
+                    class: 'btn cbi-button-action',
+                    click: ui.createHandlerFn(this, function () { input.click(); })
+                }, _('Select File')),
+                input, status]);
         };
 
         s = m.section(form.GridSection, 'subscription', _('Subscription'));
