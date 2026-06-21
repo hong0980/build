@@ -37,7 +37,7 @@ const methods = {
 				return out;
 			};
 
-			const yq_out = run(`yq -Mi '.external-ui-url="${url}"|.external-ui-name="${name}"' ${filepath} 2>&1`);
+			const yq_out = run(`yq -Mi '.["external-ui-url"]="${url}" | .["external-ui-name"]="${name}"' ${filepath} 2>&1`);
 			if (yq_out) return { status: 'error', message: `yq: ${yq_out}` };
 
 			const reload_code = run(`curl -X PUT -H 'Authorization: Bearer ${secret}' -H 'Content-Type: application/json' 'http://${listen}/configs?force=true' -d '{"path": "${filepath}", "payload": ""}'`);

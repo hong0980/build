@@ -83,7 +83,7 @@ return view.extend({
                 textareaEl._logState = state;
                 textareaEl._logRender = renderText;
                 renderText();
-
+                const reverseLabel = () => state.reversed ? _('△ Show Newest First') : _('▽ Show Oldest First');
 
                 const buttons = [
                     E('button', {
@@ -98,17 +98,18 @@ return view.extend({
                     }, _('Clear Log')),
                     E('button', {
                         'class': 'btn cbi-button-positive',
-                        'click': ui.createHandlerFn(this, function () {
+                        'click': ui.createHandlerFn(this, function (ev) {
                             textareaEl.wrap = textareaEl.wrap === 'off' ? 'soft' : 'off';
                         })
                     }, _('Wrap')),
                     E('button', {
                         'class': 'btn cbi-button-action',
-                        'click': ui.createHandlerFn(this, function () {
+                        'click': ui.createHandlerFn(this, function (ev) {
                             state.reversed = !state.reversed;
                             renderText();
+                            ev.target.textContent = reverseLabel();
                         })
-                    }, _('Reverse'))
+                    }, reverseLabel())
                 ];
 
                 if (withLevelFilter) {

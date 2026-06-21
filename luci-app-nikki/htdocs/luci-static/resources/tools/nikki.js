@@ -157,35 +157,48 @@ return baseclass.extend({
             'external-controller-tls': null,
             'secret': null
         });
-        const uiName = overrideUiName ?? profile['external-ui-name'];
+
+        let uiName = (overrideUiName ?? profile['external-ui-name'] ?? '').trim();
         const apiListen = profile['external-controller'];
         const apiTLSListen = profile['external-controller-tls'];
         const apiSecret = profile['secret'] ?? '';
+
         if (!apiListen && !apiTLSListen) {
             return Promise.reject('API has not been configured');
         }
 
-        let protocol, port;
+        let protocol = 'http', port = '', hash = '';
+        const host = window.location.hostname;
+        const uiLower = uiName.toLowerCase();
+
         if (apiTLSListen) {
             protocol = 'https';
             port = apiTLSListen.substring(apiTLSListen.lastIndexOf(':') + 1);
         } else {
-            protocol = 'http';
             port = apiListen.substring(apiListen.lastIndexOf(':') + 1);
         }
 
-        const params = {
-            host: window.location.hostname,
-            hostname: window.location.hostname,
-            port: port,
-            secret: apiSecret
-        };
-        const query = new URLSearchParams(params).toString();
-        const url = uiName
-            ? `${protocol}://${window.location.hostname}:${port}/ui/${uiName}/?${query}`
-            : `${protocol}://${window.location.hostname}:${port}/ui/?${query}`;
+        if (uiLower.includes('metacubexd') || uiLower === 'metacube') {
+            hash = '#/setup';
+        } else if (uiLower.includes('zashboard')) {
+            hash = '#/setup';
+        } else if (uiLower.includes('yacd')) {
+            hash = '';
+        } else if (uiLower.includes('dashboard') || uiLower.includes('razord')) {
+            hash = '#/';
+        }
 
-        setTimeout(function () { window.open(url, '_blank') }, 0);
+        const params = { hostname: host, host: host, port: port, secret: apiSecret };
+        const query = new URLSearchParams(params).toString();
+        const baseUrl = uiName
+            ? `${protocol}://${host}:${port}/ui/${uiName}`
+            : `${protocol}://${host}:${port}/ui`;
+
+        const finalUrl = hash
+            ? `${baseUrl}/${hash}?${query}`
+            : `${baseUrl}/?${query}`;
+
+        setTimeout(() => window.open(finalUrl, '_blank'), 0);
 
         return Promise.resolve();
     },
