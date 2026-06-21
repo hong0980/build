@@ -56,7 +56,6 @@ return view.extend({
         s = m.section(form.NamedSection, 'log', 'log', _('Log'));
         s.tab('core_log', _('Core Log'));
         s.tab('app_log', _('App Log'));
-        s.tab('debug_log', _('Debug Log'));
         s.tab('log_config', _('Log Config'));
 
         const createLogOption = (tab, initialLog, parseFn = null, withLevelFilter = false) => {
@@ -87,7 +86,7 @@ return view.extend({
 
                 const buttons = [
                     E('button', {
-                        'class': 'btn cbi-button-negative',
+                        'class': 'btn cbi-button-remove',
                         'click': ui.createHandlerFn(this, function () {
                             state.raw = '';
                             renderText();
@@ -133,30 +132,12 @@ return view.extend({
                 el.insertBefore(toolbar, textareaEl);
                 return el;
             };
-            opt.load = () => initialLog;
+            opt.load = () => initialLog.trim();
             return opt;
         };
 
         createLogOption('app_log', appLog);
         createLogOption('core_log', coreLog, (line) => parseCoreLogLine(line, dateObj), true);
-
-        o = s.taboption('debug_log', form.Button, '_generate_download_debug_log');
-        o.inputstyle = 'negative';
-        o.inputtitle = _('Generate & Download');
-        o.onclick = function () {
-            return nikki.debug().then(function () {
-                fs.read_direct(nikki.debugLogPath, 'blob').then(function (data) {
-                    const url = window.URL.createObjectURL(data, { type: 'text/markdown' });
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = 'debug.log';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    window.URL.revokeObjectURL(url);
-                });
-            });
-        };
 
         o = s.taboption('log_config', form.Flag, 'clear_at_stop', _('Clear At Stop'));
         o.rmempty = false;
@@ -178,6 +159,23 @@ return view.extend({
         o.value('KB', 'KB');
         o.value('MB', 'MB');
         o.value('GB', 'GB');
+        o = s.taboption('log_config', form.Button, '_generate_download_debug_log', _('Debug Log'));
+        o.inputstyle = 'action';
+        o.inputtitle = _('Generate & Download');
+        o.onclick = function () {
+            return nikki.debug().then(function () {
+                fs.read_direct(nikki.debugLogPath, 'blob').then(function (data) {
+                    const url = window.URL.createObjectURL(data, { type: 'text/markdown' });
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'debug.log';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                });
+            });
+        };
 
         L.Poll.add(L.bind(function () {
             return Promise.all([
@@ -186,12 +184,12 @@ return view.extend({
             ]).then(function ([app_log, core_log]) {
                 const appEl = document.getElementById(`widget.cbid.nikki.log._app_log`);
                 if (appEl && appEl._logState) {
-                    appEl._logState.raw = app_log;
+                    appEl._logState.raw = app_log.trim();
                     appEl._logRender();
                 }
                 const coreEl = document.getElementById(`widget.cbid.nikki.log._core_log`);
                 if (coreEl && coreEl._logState) {
-                    coreEl._logState.raw = core_log;
+                    coreEl._logState.raw = core_log.trim();
                     coreEl._logRender();
                 }
             });
