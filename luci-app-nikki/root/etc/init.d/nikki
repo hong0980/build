@@ -7,15 +7,11 @@ USE_PROCD=1
 PROG="/usr/bin/mihomo"
 
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
-TEMP_RUN_PATH="/tmp/config.temp"
 
 extra_command 'update_subscription' 'Update subscription by section id'
 extra_command 'clear_logs' 'Clear logs if size exceeds the limit'
 
 boot_func() {
-	# prepare files
-	prepare_files
-	# load config
 	config_load nikki
 	# start delay
 	local enabled start_delay
@@ -34,29 +30,15 @@ boot() {
 }
 
 start_service() {
-	# prepare files
-	prepare_files
-	# load config
 	config_load nikki
 	# check if enabled
 	local enabled
 	config_get_bool enabled "config" "enabled" 0
-	if [ "$enabled" = 0 ]; then
-		log "App" "Disabled."
-		log "App" "Exit."
-		return
-	fi
+	[ "$enabled" = 0 -o ! -x $PROG ] && return
 	# start
 	log "App" "Enabled."
 	log "App" "Start."
-	# check if executable
-	if [ ! -x $PROG ]; then
-		log "App" "Core is not executable."
-		log "App" "Exit."
-		return
-	fi
-	# get config
-	## app config
+
 	local scheduled_restart scheduled_restart_cron profile test_profile core_only
 	config_get_bool scheduled_restart "config" "scheduled_restart" 0
 	config_get scheduled_restart_cron "config" "scheduled_restart_cron"
@@ -119,11 +101,8 @@ start_service() {
 	local log_scheduled_clear log_scheduled_clear_cron
 	config_get_bool log_scheduled_clear "log" "scheduled_clear" 0
 	config_get log_scheduled_clear_cron "log" "scheduled_clear_cron"
-	# get profile
-	local profile_type; profile_type=$(echo "$profile" | cut -d ':' -f 1)
-	local profile_id; profile_id=$(echo "$profile" | cut -d ':' -f 2)
-	if [ "$profile_type" = "file" ]; then
-		local profile_name; profile_name="$profile_id"
+	if [ "${profile%%:*}" = "file" ]; then
+		local profile_name; profile_name="${profile#*:}"
 		local profile_file; profile_file="$PROFILES_DIR/$profile_name"
 		log "Profile" "Use file: $profile_name."
 		if [ ! -f "$profile_file" ]; then
@@ -132,8 +111,8 @@ start_service() {
 			return
 		fi
 		cp -f "$profile_file" "$TEMP_RUN_PATH"
-	elif [ "$profile_type" = "subscription" ]; then
-		local subscription_section; subscription_section="$profile_id"
+	elif [ "${profile%%:*}" = "subscription" ]; then
+		local subscription_section; subscription_section="${profile#*:}"
 		local subscription_name subscription_prefer
 		config_get subscription_name "$subscription_section" "name"
 		config_get subscription_prefer "$subscription_section" "prefer" "remote"
@@ -190,19 +169,19 @@ start_service() {
 		fi
 
 		ucode -S "$MIXIN_UC" | yq -Mp json -o yaml | yq -Mi eval-all '
-				... comments="" | . as $item ireduce ({}; . * $item ) |
-				.rules        = .nikki-rules        + .rules        | del(.nikki-rules)        |
-				.proxies      = .nikki-proxies      + .proxies      | del(.nikki-proxies)      |
-				.proxy-groups = .nikki-proxy-groups + .proxy-groups | del(.nikki-proxy-groups) |
-				(.node // []) as $local_nodes |
-				($local_nodes | map(.name)) as $local_names |
-				.proxies      = $local_nodes        + .proxies      | del(.node)               |
-				(.proxy-groups[] | select(.name == "NCloud")).proxies  += $local_names |
-				(.proxy-groups[] | select(.name == "自动选择")).proxies += $local_names |
-				(.proxy-groups[] | select(.name == "故障转移")).proxies += $local_names |
-				explode(.) |
-				.rule-providers? |= with_entries(.value.path = "./rule_provider/" + .key)
-				' "$TEMP_RUN_PATH" $MIXIN_EXTRA_FILE -
+			... comments="" | . as $item ireduce ({}; . * $item ) |
+			.rules        = .nikki-rules        + .rules        | del(.nikki-rules)        |
+			.proxies      = .nikki-proxies      + .proxies      | del(.nikki-proxies)      |
+			.proxy-groups = .nikki-proxy-groups + .proxy-groups | del(.nikki-proxy-groups) |
+			(.node // []) as $local_nodes |
+			($local_nodes | map(.name)) as $local_names |
+			.proxies      = $local_nodes        + .proxies      | del(.node)               |
+			(.proxy-groups[] | select(.name == "NCloud")).proxies  += $local_names |
+			(.proxy-groups[] | select(.name == "自动选择")).proxies += $local_names |
+			(.proxy-groups[] | select(.name == "故障转移")).proxies += $local_names |
+			explode(.) |
+			.rule-providers? |= with_entries(.value.path = "./rule_provider/" + .key)
+			' "$TEMP_RUN_PATH" $MIXIN_EXTRA_FILE -
 
 		if [ "$proxy_enabled" = 1 ]; then
 			if yq -Me 'has("tun")' "$TEMP_RUN_PATH" > /dev/null 2>&1; then
@@ -497,11 +476,11 @@ cleanup() {
 	# delete hijack
 	nft delete table inet nikki > /dev/null 2>&1
 	local handles handle
-	handles=$(nft --json list table inet fw4 | jsonfilter -q -e "@['nftables'][*]['rule']" | jsonfilter -q -a -e "@[@['chain']='input']" | jsonfilter -q -a -e "@[@['comment']='nikki']" | jsonfilter -q -a -e "@[*]['handle']")
+	handles=$(nft --json list table inet fw4 | jsonfilter -q -e "@.nftables[@.rule.chain='input' && @.rule.comment='nikki'].rule.handle")
 	for handle in $handles; do
 		nft delete rule inet fw4 input handle "$handle"
 	done
-	handles=$(nft --json list table inet fw4 | jsonfilter -q -e "@['nftables'][*]['rule']" | jsonfilter -q -a -e "@[@['chain']='forward']" | jsonfilter -q -a -e "@[@['comment']='nikki']" | jsonfilter -q -a -e "@[*]['handle']")
+	handles=$(nft --json list table inet fw4 | jsonfilter -q -e "@.nftables[@.rule.chain='forward' && @.rule.comment='nikki'].rule.handle")
 	for handle in $handles; do
 		nft delete rule inet fw4 forward handle "$handle"
 	done

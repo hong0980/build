@@ -101,6 +101,7 @@ return view.extend({
             let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
             el.classList.add('control-group');
             const NIKKI_WORKDIR = '/etc/nikki/run';
+            const default_label = _('Open Dashboard');
             const btn = E('button', {
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function () {
@@ -110,14 +111,19 @@ return view.extend({
 
                     return fs.stat(`${NIKKI_WORKDIR}/${ui_path}/${ui_entry[1]}/index.html`)
                         .then(() => nikki.openDashboard(ui_entry[1]))
-                        .catch(() => update_ui(current_url, ui_entry[1])
-                            .then(result => {
-                                if (result.status === 'ok') return nikki.openDashboard(ui_entry[1]);
-                                throw new Error(result?.message || 'Update failed');
-                            }))
+                        .catch(() => {
+                            btn.textContent = _('Loading data…');
+                            return update_ui(current_url, ui_entry[1])
+                                .then(result => {
+                                    if (result.status === 'ok')
+                                        return nikki.openDashboard(ui_entry[1]);
+                                    throw new Error(result?.message);
+                                })
+                                .finally(() => btn.textContent = default_label);
+                        })
                         .catch(e => ui.addNotification(null, E('p', _('Update failed: ') + e), 'error'));
                 })
-            }, _('Open Dashboard'));
+            }, default_label);
 
             el.appendChild(btn);
             return el;
@@ -136,7 +142,7 @@ return view.extend({
         };
 
         uci.sections('nikki', 'subscription', function (s, sid) {
-            o.value('subscription:' + sid, _('Subscription:') + s['name']);
+            o.value('subscription:' + s['.name'], _('Subscription:') + s.name);
         });
 
         o = s.option(form.Value, 'start_delay', _('Start Delay'));

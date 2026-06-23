@@ -48,12 +48,10 @@ config['tproxy-port'] = uci_int(uci.get('nikki', 'mixin', 'tproxy_port'));
 if (uci_bool(uci.get('nikki', 'mixin', 'authentication'))) {
 	config['authentication'] = [];
 	uci.foreach('nikki', 'authentication', (section) => {
-		if (!uci_bool(section.enabled)) {
-			return;
-		}
+		if (!uci_bool(section.enabled)) return;
 		push(config['authentication'], `${section.username}:${section.password}`);
 	});
-}
+};
 
 config['tun'] = {};
 config['tun']['enable'] = uci_bool(uci.get('nikki', 'mixin', 'tun_enabled'));
@@ -64,7 +62,7 @@ config['tun']['gso'] = uci_bool(uci.get('nikki', 'mixin', 'tun_gso'));
 config['tun']['gso-max-size'] = uci_int(uci.get('nikki', 'mixin', 'tun_gso_max_size'));
 if (uci_bool(uci.get('nikki', 'mixin', 'tun_dns_hijack'))) {
 	config['tun']['dns-hijack'] = uci_array(uci.get('nikki', 'mixin', 'tun_dns_hijacks'));
-}
+};
 
 config['dns'] = {};
 config['dns']['enable'] = uci_bool(uci.get('nikki', 'mixin', 'dns_enabled'));
@@ -77,7 +75,7 @@ config['dns']['fake-ip-range6'] = uci.get('nikki', 'mixin', 'fake_ip6_range');
 config['dns']['fake-ip-ttl'] = uci_int(uci.get('nikki', 'mixin', 'fake_ip_ttl'));
 if (uci_bool(uci.get('nikki', 'mixin', 'fake_ip_filter'))) {
 	config['dns']['fake-ip-filter'] = uci_array(uci.get('nikki', 'mixin', 'fake_ip_filters'));
-}
+};
 config['dns']['fake-ip-filter-mode'] = uci.get('nikki', 'mixin', 'fake_ip_filter_mode');
 
 config['dns']['respect-rules'] = uci_bool(uci.get('nikki', 'mixin', 'dns_respect_rules'));
@@ -87,12 +85,10 @@ config['dns']['use-hosts'] = uci_bool(uci.get('nikki', 'mixin', 'dns_hosts'));
 if (uci_bool(uci.get('nikki', 'mixin', 'hosts'))) {
 	config['hosts'] = {};
 	uci.foreach('nikki', 'hosts', (section) => {
-		if (!uci_bool(section.enabled)) {
-			return;
-		}
+		if (!uci_bool(section.enabled)) return;
 		config['hosts'][section.domain_name] = uci_array(section.ip);
 	});
-}
+};
 if (uci_bool(uci.get('nikki', 'mixin', 'dns_nameserver'))) {
 	config['dns']['default-nameserver'] = [];
 	config['dns']['proxy-server-nameserver'] = [];
@@ -100,31 +96,25 @@ if (uci_bool(uci.get('nikki', 'mixin', 'dns_nameserver'))) {
 	config['dns']['nameserver'] = [];
 	config['dns']['fallback'] = [];
 	uci.foreach('nikki', 'nameserver', (section) => {
-		if (!uci_bool(section.enabled)) {
-			return;
-		}
+		if (!uci_bool(section.enabled)) return;
 		push(config['dns'][section.type], ...uci_array(section.nameserver));
-	})
-}
+	});
+};
 if (uci_bool(uci.get('nikki', 'mixin', 'dns_proxy_server_nameserver_policy'))) {
 	config['dns']['proxy-server-nameserver-policy'] = {};
 	uci.foreach('nikki', 'proxy_server_nameserver_policy', (section) => {
-		if (!uci_bool(section.enabled)) {
-			return;
-		}
+		if (!uci_bool(section.enabled)) return;
 		config['dns']['proxy-server-nameserver-policy'][section.matcher] = uci_array(section.nameserver);
 	});
-}
+};
 config['dns']['direct-nameserver-follow-policy'] = uci_bool(uci.get('nikki', 'mixin', 'dns_direct_nameserver_follow_policy'));
 if (uci_bool(uci.get('nikki', 'mixin', 'dns_nameserver_policy'))) {
 	config['dns']['nameserver-policy'] = {};
 	uci.foreach('nikki', 'nameserver_policy', (section) => {
-		if (!uci_bool(section.enabled)) {
-			return;
-		}
+		if (!uci_bool(section.enabled)) return;
 		config['dns']['nameserver-policy'][section.matcher] = uci_array(section.nameserver);
 	});
-}
+};
 
 config['sniffer'] = {};
 config['sniffer']['enable'] = uci_bool(uci.get('nikki', 'mixin', 'sniffer'));
@@ -132,34 +122,30 @@ config['sniffer']['force-dns-mapping'] = uci_bool(uci.get('nikki', 'mixin', 'sni
 config['sniffer']['parse-pure-ip'] = uci_bool(uci.get('nikki', 'mixin', 'sniffer_sniff_pure_ip'));
 if (uci_bool(uci.get('nikki', 'mixin', 'sniffer_force_domain_name'))) {
 	config['sniffer']['force-domain'] = uci_array(uci.get('nikki', 'mixin', 'sniffer_force_domain_names'));
-}
+};
 if (uci_bool(uci.get('nikki', 'mixin', 'sniffer_ignore_domain_name'))) {
 	config['sniffer']['skip-domain'] = uci_array(uci.get('nikki', 'mixin', 'sniffer_ignore_domain_names'));
-}
+};
 if (uci_bool(uci.get('nikki', 'mixin', 'sniffer_sniff'))) {
 	config['sniffer']['sniff'] = {};
 	config['sniffer']['sniff']['HTTP'] = {};
 	config['sniffer']['sniff']['TLS'] = {};
 	config['sniffer']['sniff']['QUIC'] = {};
 	uci.foreach('nikki', 'sniff', (section) => {
-		if (!uci_bool(section.enabled)) {
-			return;
-		}
+		if (!uci_bool(section.enabled)) return;
 		config['sniffer']['sniff'][section.protocol]['port'] = uci_array(section.port);
 		config['sniffer']['sniff'][section.protocol]['override-destination'] = uci_bool(section.overwrite_destination);
 	});
-}
+};
 
 config['profile'] = {};
 config['profile']['store-selected'] = uci_bool(uci.get('nikki', 'mixin', 'selection_cache'));
 config['profile']['store-fake-ip'] = uci_bool(uci.get('nikki', 'mixin', 'fake_ip_cache'));
 
-if (uci_bool(uci.get('nikki', 'mixin', 'rule_provider'))) {
+// if (uci_bool(uci.get('nikki', 'mixin', 'rule_provider'))) {
 	config['rule-providers'] = {};
 	uci.foreach('nikki', 'rule_provider', (section) => {
-		if (!uci_bool(section.enabled)) {
-			return;
-		}
+		if (!uci_bool(section.enabled)) return;
 		if (section.type == 'http') {
 			config['rule-providers'][section.name] = {
 				type: section.type,
@@ -169,27 +155,25 @@ if (uci_bool(uci.get('nikki', 'mixin', 'rule_provider'))) {
 				format: section.file_format,
 				behavior: section.behavior,
 				interval: section.update_interval,
-			}
+			};
 		} else if (section.type == 'file') {
 			config['rule-providers'][section.name] = {
 				type: section.type,
 				path: section.file_path,
 				format: section.file_format,
 				behavior: section.behavior,
-			}
-		}
-	})
-}
-if (uci_bool(uci.get('nikki', 'mixin', 'rule'))) {
+			};
+		};
+	});
+// }
+// if (uci_bool(uci.get('nikki', 'mixin', 'rule'))) {
 	config['nikki-rules'] = [];
 	uci.foreach('nikki', 'rule', (section) => {
-		if (!uci_bool(section.enabled)) {
-			return;
-		}
+		if (!uci_bool(section.enabled)) return;
 		const rule = [ section.type, section.matcher, section.node, uci_bool(section.no_resolve) ? 'no-resolve' : null ];
 		push(config['nikki-rules'], join(',', filter(rule, (item) => item != null && item != '')));
-	})
-}
+	});
+// }
 
 const geoip_format = uci.get('nikki', 'mixin', 'geoip_format');
 config['geodata-mode'] = geoip_format == null ? null : geoip_format == 'dat';
