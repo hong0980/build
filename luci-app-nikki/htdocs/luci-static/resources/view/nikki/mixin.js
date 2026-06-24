@@ -5,7 +5,6 @@
 'require fs';
 'require ui';
 'require network';
-'require poll';
 'require tools.widgets as widgets';
 'require tools.nikki as nikki';
 
@@ -115,13 +114,11 @@ function toRuleProviderConfig(cfg) {
 return view.extend({
     load: function () {
         return Promise.all([
-            uci.load('nikki'),
             network.getNetworks(),
+            uci.load('nikki')
         ]);
     },
-    render: function (data) {
-        const networks = data[1];
-
+    render: function ([networks]) {
         let m, s, o, so;
 
         m = new form.Map('nikki');
@@ -327,7 +324,7 @@ return view.extend({
         o.retain = true;
         o.depends('tun_dns_hijack', '1');
         o.value('tcp://any:53');
-        o.value('udp://any:53');
+        o.value('any:53');
 
         s.tab('dns', _('DNS Config'));
 
@@ -642,7 +639,7 @@ return view.extend({
         o.subsection.handleYamlImport = function () {
             const section = this;
             const textarea = E('textarea', {
-                'style': 'width:100%; height:260px;',
+                'style': 'width:100%; height:260px; font-family: Consolas;',
                 'placeholder':
                     'rule-providers:\n' +
                     '  cn_domain:\n' +
@@ -699,8 +696,8 @@ return view.extend({
                                 return;
                             }
 
-                            ui.addNotification(null, E('p',
-                                _('Successfully imported %s of %s entries.').format(count, parsed.length)), 'info');
+                            ui.addTimeLimitedNotification(null, E('p',
+                                _('Successfully imported %s of %s entries.').format(count, parsed.length)), 4000, 'info');
 
                             return uci.save().then(() => location.reload());
                         })
@@ -739,17 +736,18 @@ return view.extend({
 
         so = o.subsection.option(form.RichListValue, 'type', _('Type'));
         so.rmempty = false;
-        so.value('RULE-SET', _('Rule Set'), _('规则集：引入外部或本地规则集文件进行批量匹配。'));
-        so.value('DOMAIN', _('Domain Name'), _('域名：精确匹配完整的域名（例如 google.com）。'));
-        so.value('DOMAIN-SUFFIX', _('Domain Name Suffix'), _('域名后缀：匹配该域名及其所有子域名（例如 google.com 匹配 abc.google.com）。'));
-        so.value('DOMAIN-WILDCARD', _('Domain Name Wildcard'), _('域名通配符：使用通配符匹配（例如 *.google.com）。'));
-        so.value('DOMAIN-KEYWORD', _('Domain Name Keyword'), _('域名关键字：只要域名中包含该关键字即匹配（例如包含 google）。'));
-        so.value('DOMAIN-REGEX', _('Domain Name Regex'), _('域名正则：使用正则表达式自由匹配域名。'));
-        so.value('IP-CIDR', _('Destination IP'), _('目标 IP 段：匹配指定的 IPv4 或 IPv6 CIDR 地址（例如 192.168.1.0/24）。'));
-        so.value('DST-PORT', _('Destination Port'), _('目标端口：匹配请求的目标端口号或端口范围（例如 80 或 80-443）。'));
-        so.value('PROCESS-NAME', _('Process Name'), _('进程名：匹配发起请求的本地进程或程序名称。'));
-        so.value('GEOSITE', _('Domain Name Geo'), _('地理域名库：匹配 GeoSite 预设类别（例如 geosite:cn）。'));
-        so.value('GEOIP', _('Destination IP Geo'), _('地理 IP 库：匹配目标 IP 所属国家或地区的 GeoIP 库（例如 geoip:cn）。'));
+        so.value('RULE-SET', _('Rule Set'), _('Import external or local rule set files for batch matching.'));
+        so.value('DOMAIN', _('Domain Name'), _('Match the exact full domain name (e.g., google.com).'));
+        so.value('DOMAIN-SUFFIX', _('Domain Name Suffix'), _('Match the domain and all its subdomains (e.g., google.com matches abc.google.com).'));
+        so.value('DOMAIN-WILDCARD', _('Domain Name Wildcard'), _('Match domains using wildcards (e.g., *.google.com).'));
+        so.value('DOMAIN-KEYWORD', _('Domain Name Keyword'), _('Match if the domain contains this keyword (e.g., containing google).'));
+        so.value('DOMAIN-REGEX', _('Domain Name Regex'), _('Match domains using regular expressions.'));
+        so.value('IP-CIDR', _('Destination IP'), _('Match specified IPv4 or IPv6 CIDR addresses (e.g., 192.168.1.0/24).'));
+        so.value('DST-PORT', _('Destination Port'), _('Match the target port number or range (e.g., 80 or 80-443).'));
+        so.value('PROCESS-NAME', _('Process Name'), _('Match the local process or application name that initiated the request.'));
+        so.value('GEOSITE', _('Domain Name Geo'), _('Match predefined GeoSite categories (e.g., geosite:cn).'));
+        so.value('GEOIP', _('Destination IP Geo'), _('Match the country/region of the destination IP (e.g., geoip:cn).'));
+        so.value('MATCH', _('Match All'), _('Match All: Catch-all rule that matches any remaining traffic not handled by previous rules.'));
 
         so = o.subsection.option(form.Value, 'matcher', _('Matcher'));
         so.rmempty = false;
@@ -758,11 +756,11 @@ return view.extend({
         so = o.subsection.option(form.RichListValue, 'node', _('Node'));
         so.default = 'GLOBAL';
         so.rmempty = false;
-        so.value('GLOBAL', _('GLOBAL'), _('全局策略：将流量导向 Mihomo 的全局（GLOBAL）策略组。'));
-        so.value('DIRECT', _('DIRECT'), _('直连：流量不经过代理，直接由本地网络发送。'));
-        so.value('REJECT', _('REJECT'), _('拒绝连接：直接阻断该请求，并向客户端返回错误（通常用于去广告）。'));
-        so.value('REJECT-DROP', _('REJECT-DROP'), _('悄悄丢弃：直接丢弃请求的数据包，客户端会一直等待直到超时。'));
-
+        so.value('GLOBAL', _('GLOBAL'), _('Route traffic to the Mihomo GLOBAL policy group.'));
+        so.value('DIRECT', _('DIRECT'), _('Traffic bypasses the proxy and is sent directly via the local network.'));
+        so.value('REJECT', _('REJECT'), _('Block the request immediately and return an error to the client (commonly used for ad blocking).'));
+        so.value('REJECT-DROP', _('REJECT-DROP'), _('Silently drop the request packets, causing the client to wait until it times out.'));
+        so.value('NCloud', _('NCloud'), _('Default auto-select node. <font color="red">Required: "NCloud" must exist in proxy-groups.</font>'));
         so.renderWidget = function (section_id, option_index, cfgvalue) {
             const choices = this.transformChoices();
             const widget = new ui.Dropdown((cfgvalue != null) ? cfgvalue : this.default, choices, {
@@ -770,7 +768,7 @@ return view.extend({
                 sort: this.keylist,
                 multiple: false,
                 optional: false,           // rmempty=false,不允许清空选择
-                create: true,              // 关键:允许用户输入预设之外的自定义值
+                create: true,              // 允许用户输入预设之外的自定义值
                 select_placeholder: this.placeholder,
                 custom_placeholder: this.placeholder,
                 validate: L.bind(this.validate, this, section_id),
@@ -790,7 +788,7 @@ return view.extend({
         o.subsection.handleRuleImport = function () {
             const section = this;
             const textarea = E('textarea', {
-                'style': 'width:100%; height:260px;',
+                'style': 'width:100%; height:260px; font-family: Consolas;',
                 'placeholder':
                     'rules:\n' +
                     '  - RULE-SET,netflix_domain,流媒体\n' +
@@ -816,8 +814,6 @@ return view.extend({
 
                                 const config = parseRuleLine(line);
                                 if (!config) return;
-                                console.log(config)
-
 
                                 const sid = uci.add('nikki', 'rule');
                                 uci.set('nikki', sid, 'enabled', '1');
