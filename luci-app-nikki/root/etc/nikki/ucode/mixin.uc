@@ -142,13 +142,14 @@ config['profile'] = {};
 config['profile']['store-selected'] = uci_bool(uci.get('nikki', 'mixin', 'selection_cache'));
 config['profile']['store-fake-ip'] = uci_bool(uci.get('nikki', 'mixin', 'fake_ip_cache'));
 
-// if (uci_bool(uci.get('nikki', 'mixin', 'rule_provider'))) {
+if (uci_bool(uci.get('nikki', 'mixin', 'rule_provider'))) {
 	config['rule-providers'] = {};
 	uci.foreach('nikki', 'rule_provider', (section) => {
 		if (!uci_bool(section.enabled)) return;
 		if (section.type == 'http') {
 			config['rule-providers'][section.name] = {
 				type: section.type,
+				path: section.path,
 				url: section.url,
 				proxy: section.node,
 				size_limit: section.file_size_limit,
@@ -165,15 +166,15 @@ config['profile']['store-fake-ip'] = uci_bool(uci.get('nikki', 'mixin', 'fake_ip
 			};
 		};
 	});
-// }
-// if (uci_bool(uci.get('nikki', 'mixin', 'rule'))) {
+};
+if (uci_bool(uci.get('nikki', 'mixin', 'rule'))) {
 	config['nikki-rules'] = [];
 	uci.foreach('nikki', 'rule', (section) => {
 		if (!uci_bool(section.enabled)) return;
 		const rule = [ section.type, section.matcher, section.node, uci_bool(section.no_resolve) ? 'no-resolve' : null ];
 		push(config['nikki-rules'], join(',', filter(rule, (item) => item != null && item != '')));
 	});
-// }
+};
 
 const geoip_format = uci.get('nikki', 'mixin', 'geoip_format');
 config['geodata-mode'] = geoip_format == null ? null : geoip_format == 'dat';

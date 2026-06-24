@@ -180,7 +180,7 @@ start_service() {
 			(.proxy-groups[] | select(.name == "自动选择")).proxies += $local_names |
 			(.proxy-groups[] | select(.name == "故障转移")).proxies += $local_names |
 			explode(.) |
-			.rule-providers? |= with_entries(.value.path = "./rule_provider/" + .key)
+			.rule-providers? |= with_entries(.key as $k | ((.value.path | select(. != "")) // ("./rule_provider/" + $k)) as $base | .value.path = (($base | select(test("/$")) | . + $k) // $base))
 			' "$TEMP_RUN_PATH" $MIXIN_EXTRA_FILE -
 
 		if [ "$proxy_enabled" = 1 ]; then

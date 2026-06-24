@@ -3,10 +3,114 @@
 'require view';
 'require uci';
 'require fs';
+'require ui';
 'require network';
 'require poll';
 'require tools.widgets as widgets';
 'require tools.nikki as nikki';
+
+const RULE_PROVIDER_TYPE = /^(http|file)$/;
+const RULE_PROVIDER_FORMAT = /^(text|yaml|mrs)$/;
+const RULE_PROVIDER_BEHAVIOR = /^(classical|domain|ipcidr)$/;
+const RULE_TYPES = /^(RULE-SET|DOMAIN|DOMAIN-SUFFIX|DOMAIN-WILDCARD|DOMAIN-KEYWORD|DOMAIN-REGEX|IP-CIDR|DST-PORT|PROCESS-NAME|GEOSITE|GEOIP)$/i;
+
+function normalizePath(path) {
+    if (!path)
+        return path;
+
+    path = path.trim();
+    const isDir = /\/$/.test(path) || !path.includes('/');
+    path = path.replace(/^\.?\/+/, '').replace(/\/+$/, '');
+
+    if (!path) return path;
+    return './' + path + (isDir ? '/' : '');
+}
+
+function parseRuleLine(line) {
+    let l = line.trim();
+    if (!l || /^#/.test(l)) return null;
+
+    l = l.replace(/^-\s*/, '');
+    l = l.replace(/\s*#.*$/, '');
+    l = l.replace(/^["']|["']$/g, '');
+
+    const parts = l.split(',').map(s => s.trim());
+    if (parts.length < 2) return null;
+
+    const type = parts[0].toUpperCase();
+    if (!RULE_TYPES.test(type)) return null;
+
+    let no_resolve = false;
+    if (/^no-resolve$/i.test(parts[parts.length - 1])) {
+        no_resolve = true;
+        parts.pop();
+    }
+
+    if (parts.length < 3) return null;
+
+    return { type, matcher: parts[1], node: parts[2], no_resolve };
+}
+
+function parseRuleProviderYaml(text) {
+    const raw_lines = text.split('\n');
+
+    let start = 0;
+    while (start < raw_lines.length && !raw_lines[start].trim()) start++;
+    if (/^rule-providers\s*:\s*$/.test(raw_lines[start] || '')) start++;
+
+    const lines = raw_lines.slice(start).filter(l => l.trim() && !/^\s*#/.test(l));
+    if (!lines.length) return [];
+
+    const nameRe = /^(\s*)([^\s:#][^:]*):\s*$/;
+    const kvRe = /^(\s*)([\w-]+):\s*(.+?)\s*$/;
+
+    const baseIndent = (lines[0].match(/^(\s*)/) || ['', ''])[1].length;
+
+    const providers = [];
+    let current = null;
+
+    for (const line of lines) {
+        const indent = (line.match(/^(\s*)/) || ['', ''])[1].length;
+        const nameMatch = line.match(nameRe);
+
+        if (nameMatch && indent === baseIndent) {
+            current = { name: nameMatch[2].trim() };
+            providers.push(current);
+            continue;
+        }
+
+        if (current && indent > baseIndent) {
+            const kvMatch = line.match(kvRe);
+            if (kvMatch) {
+                let val = kvMatch[3].replace(/\s+#.*$/, '').replace(/^["']|["']$/g, '');
+                current[kvMatch[2]] = val;
+            }
+        }
+    }
+
+    return providers;
+}
+
+function toRuleProviderConfig(cfg) {
+    if (!cfg.name) return null;
+    if (cfg.type !== 'http' || !RULE_PROVIDER_TYPE.test(cfg.type)) return null;
+    if (!cfg.url) return null;
+
+    const format = RULE_PROVIDER_FORMAT.test(cfg.format) ? cfg.format : 'yaml';
+    const behavior = RULE_PROVIDER_BEHAVIOR.test(cfg.behavior) ? cfg.behavior : 'classical';
+
+    return {
+        name: cfg.name,
+        type: 'http',
+        url: cfg.url,
+        path: cfg.path,
+        node: cfg.proxy || 'DIRECT',
+        file_format: format,
+        behavior: behavior,
+        file_size_limit: cfg['size-limit'] || '0',
+        update_interval: cfg.interval || '86400'
+    };
+}
 
 return view.extend({
     load: function () {
@@ -521,11 +625,102 @@ return view.extend({
         so.value('domain');
         so.value('ipcidr');
 
+        so = o.subsection.option(form.Value, 'path', _('Path'));
+        so.write = function (section_id, value) {
+            return form.Value.prototype.write.call(
+                this, section_id, normalizePath(value)
+            );
+        };
+
         so = o.subsection.option(form.Value, 'update_interval', _('Update Interval'));
         so.datatype = 'uinteger';
         so.default = 86400;
         so.modalonly = true;
         so.depends('type', 'http');
+
+        /* Import mihomo config START */
+        o.subsection.handleYamlImport = function () {
+            const section = this;
+            const textarea = E('textarea', {
+                'style': 'width:100%; height:260px;',
+                'placeholder':
+                    'rule-providers:\n' +
+                    '  cn_domain:\n' +
+                    '    type: http\n' +
+                    '    behavior: domain\n' +
+                    '    format: mrs\n' +
+                    '    interval: 86400\n' +
+                    '    size-limit: 0\n' +
+                    '    proxy: DIRECT\n' +
+                    '    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"\n' +
+                    '  ban_ad:\n' +
+                    '    type: http\n' +
+                    '    behavior: classical\n' +
+                    '    format: yaml\n' +
+                    '    interval: 600\n' +
+                    '    proxy: GLOBAL\n' +
+                    '    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/BanAD.yaml"\n'
+            });
+
+            ui.showModal(_('Import mihomo config'), [
+                E('p', {}, _('Please paste the %s field of a mihomo config.').format('<code>rule-providers</code>')),
+                E('p', { 'class': 'alert-message warning' },
+                    _('Only %s type entries can be imported this way; %s entries will be skipped (please add them manually).')
+                        .format('http', 'file')),
+                textarea,
+                E('div', { 'class': 'right' }, [
+                    E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel')),
+                    ' ',
+                    E('button', {
+                        'class': 'btn cbi-button-action important',
+                        'click': ui.createHandlerFn(section, function () {
+                            const parsed = parseRuleProviderYaml(textarea.value);
+                            let count = 0;
+
+                            parsed.forEach(cfg => {
+                                const config = toRuleProviderConfig(cfg);
+                                if (!config) return;
+
+                                const sid = uci.add('nikki', 'rule_provider');
+                                uci.set('nikki', 'mixin', 'rule_provider', '1');
+                                uci.set('nikki', sid, 'enabled', '1');
+                                for (const k in config) {
+                                    if (k === 'path') config[k] = normalizePath(config[k]);
+                                    uci.set('nikki', sid, k, config[k]);
+                                }
+
+                                count++;
+                            });
+
+                            ui.hideModal();
+
+                            if (count === 0) {
+                                ui.addNotification(null, E('p', _('No valid rule-provider entry found.')));
+                                return;
+                            }
+
+                            ui.addNotification(null, E('p',
+                                _('Successfully imported %s of %s entries.').format(count, parsed.length)), 'info');
+
+                            return uci.save().then(() => location.reload());
+                        })
+                    }, _('Import'))
+                ])
+            ]);
+        };
+
+        o.subsection.renderSectionAdd = function (/* ... */) {
+            let el = form.GridSection.prototype.renderSectionAdd.apply(this, arguments);
+
+            el.appendChild(E('button', {
+                'class': 'cbi-button cbi-button-add',
+                'title': _('Import mihomo config'),
+                'click': ui.createHandlerFn(this, 'handleYamlImport')
+            }, [_('Import mihomo config')]));
+
+            return el;
+        };
+        /* Import mihomo config END */
 
         o = s.taboption('rule', form.Flag, 'rule', _('Append Rule'));
         o.rmempty = false;
@@ -567,13 +762,102 @@ return view.extend({
         so.value('DIRECT', _('DIRECT'), _('直连：流量不经过代理，直接由本地网络发送。'));
         so.value('REJECT', _('REJECT'), _('拒绝连接：直接阻断该请求，并向客户端返回错误（通常用于去广告）。'));
         so.value('REJECT-DROP', _('REJECT-DROP'), _('悄悄丢弃：直接丢弃请求的数据包，客户端会一直等待直到超时。'));
-        so.value('NCloud', _('NCloud'));
+
+        so.renderWidget = function (section_id, option_index, cfgvalue) {
+            const choices = this.transformChoices();
+            const widget = new ui.Dropdown((cfgvalue != null) ? cfgvalue : this.default, choices, {
+                id: this.cbid(section_id),
+                sort: this.keylist,
+                multiple: false,
+                optional: false,           // rmempty=false,不允许清空选择
+                create: true,              // 关键:允许用户输入预设之外的自定义值
+                select_placeholder: this.placeholder,
+                custom_placeholder: this.placeholder,
+                validate: L.bind(this.validate, this, section_id),
+                disabled: (this.readonly != null) ? this.readonly : this.map.readonly
+            });
+            return widget.render();
+        };
 
         so = o.subsection.option(form.Flag, 'no_resolve', _('No Resolve'));
         so.rmempty = false;
         so.depends('type', /IP-CIDR6?/i);
         so.depends('type', /IP-ASN/i);
+        so.depends('type', /RULE-SET/i);
         so.depends('type', /GEOIP/i);
+
+        /* Import mihomo config START */
+        o.subsection.handleRuleImport = function () {
+            const section = this;
+            const textarea = E('textarea', {
+                'style': 'width:100%; height:260px;',
+                'placeholder':
+                    'rules:\n' +
+                    '  - RULE-SET,netflix_domain,流媒体\n' +
+                    '  - DOMAIN-SUFFIX,google.com,DIRECT\n' +
+                    '  - GEOIP,cn,DIRECT,no-resolve\n'
+            });
+
+            ui.showModal(_('Import mihomo config'), [
+                E('p', {}, _('Please paste the %s field of a mihomo config, one rule per line.').format('<code>rules</code>')),
+                textarea,
+                E('div', { 'class': 'right' }, [
+                    E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel')),
+                    ' ',
+                    E('button', {
+                        'class': 'btn cbi-button-action important',
+                        'click': ui.createHandlerFn(section, function () {
+                            const raw_lines = textarea.value.split('\n');
+                            let count = 0, total = 0;
+
+                            raw_lines.forEach(line => {
+                                if (!line.trim() || /^\s*rules\s*:\s*$/i.test(line)) return;
+                                total++;
+
+                                const config = parseRuleLine(line);
+                                if (!config) return;
+                                console.log(config)
+
+
+                                const sid = uci.add('nikki', 'rule');
+                                uci.set('nikki', sid, 'enabled', '1');
+                                uci.set('nikki', 'mixin', 'rule', '1');
+                                for (const k in config)
+                                    uci.set('nikki', sid, k, config[k]);
+                                if (config.no_resolve) uci.set('nikki', sid, 'no_resolve', '1');
+
+                                count++;
+                            });
+
+                            ui.hideModal();
+
+                            if (count === 0) {
+                                ui.addNotification(null, E('p', _('No valid rule found.')));
+                                return;
+                            }
+
+                            ui.addNotification(null, E('p',
+                                _('Successfully imported %s of %s line(s).').format(count, total)), 'info');
+
+                            return uci.save().then(() => location.reload());
+                        })
+                    }, _('Import'))
+                ])
+            ]);
+        };
+
+        o.subsection.renderSectionAdd = function (/* ... */) {
+            let el = form.TableSection.prototype.renderSectionAdd.apply(this, arguments);
+
+            el.appendChild(E('button', {
+                'class': 'cbi-button cbi-button-add',
+                'title': _('Import mihomo config'),
+                'click': ui.createHandlerFn(this, 'handleRuleImport')
+            }, [_('Import mihomo config')]));
+
+            return el;
+        };
+        /* Import mihomo config END */
 
         s.tab('geox', _('GeoX Config'));
 
