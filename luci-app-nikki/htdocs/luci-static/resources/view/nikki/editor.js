@@ -1,8 +1,6 @@
 'use strict';
 'require fs';
 'require ui';
-'require uci';
-'require form';
 'require view';
 'require tools.nikki as nikki';
 
@@ -24,120 +22,133 @@ function preloadAce() {
 }
 
 return view.extend({
+    aceEditor: null,
+    currentPath: null,
+
     load: function () {
         return Promise.all([
-            nikki.listProfiles(),
-            nikki.listRuleProviders(),
-            nikki.listProxyProviders(),
-            uci.load('nikki'),
-        ]).then(([pf, rp, pp]) => {
-            const sp = uci.sections('nikki', 'subscription');
+            nikki.listfiles(nikki.profilesDir),
+            nikki.listfiles(nikki.ruleProvidersDir),
+            nikki.listfiles(nikki.proxyProvidersDir),
+            nikki.listfiles(nikki.subscriptionsDir),
+            L.resolveDefault(fs.stat(nikki.mixinFilePath), { path: null }),
+            L.resolveDefault(fs.stat(nikki.runProfilePath), { path: null }),
+        ]).then(([pf, rp, pp, sp, mp, yp]) => {
+            const build = (files, prefix, dir) => files.map(f => ({
+                path: `${dir}/${f.name}`, mtime: f.mtime, size: f.size, name: prefix + f.name
+            }));
+
             const allFiles = [
-                ...pf.map(p => ({ path: `${nikki.profilesDir}/${p.name}`, name: _('File:') + p.name })),
-                ...sp.map(s => ({ path: `${nikki.subscriptionsDir}/${s['.name']}.yaml`, name: _('Subscription:') + s.name })),
-                ...rp.map(r => ({ path: `${nikki.ruleProvidersDir}/${r.name}`, name: _('Rule Provider:') + r.name })),
-                ...pp.map(p => ({ path: `${nikki.proxyProvidersDir}/${p.name}`, name: _('Proxy Provider:') + p.name })),
-                { path: nikki.mixinFilePath, name: _('File for Mixin') },
-                { path: nikki.runProfilePath, name: _('Profile for Startup') },
+                ...build(pf, _('File:'), nikki.profilesDir),
+                ...build(sp, _('Subscription:'), nikki.subscriptionsDir),
+                ...build(rp, _('Rule Provider:'), nikki.ruleProvidersDir),
+                ...build(pp, _('Proxy Provider:'), nikki.proxyProvidersDir),
+                { path: mp.path, mtime: mp.mtime, size: mp.size, name: _('File for Mixin') },
+                { path: yp.path, mtime: yp.mtime, size: yp.size, name: _('Profile for Startup') },
             ];
 
-            return Promise.all(allFiles.map(item =>
-                fs.stat(item.path).then(stat => {
-                    const mtime = new Date(stat.mtime * 1000).toLocaleString();
-                    return { ...item, stat: _('Last modified: %s, Size: %s bytes').format(mtime, stat.size) };
-                }).catch(() => {})
-            )).then(r => r.filter(Boolean));
+            return allFiles.filter(item => item.path).map(item => {
+                const mtimeStr = item.mtime ? new Date(item.mtime * 1000).toLocaleString() : _('Unknown');
+                item.stat = _('Last modified: %s, Size: %s bytes').format(mtimeStr, item.size || 0);
+                return item;
+            });
         });
     },
 
     render: function (data) {
-        let m, s, o, aceEditor = null;
+        const statEl = E('span', {
+            style: 'margin-left:10px;font-size:12px;color:#888;vertical-align:middle;'
+        });
 
-        m = new form.Map('nikki');
-        s = m.section(form.NamedSection, 'editor', 'editor', _('Editor'));
+        this.textarea = E('textarea', {
+            style: 'width:100%;height:380px;box-sizing:border-box;', wrap: 'off'
+        });
 
-        o = s.option(form.ListValue, '_file', _('Choose File'));
-        o.optional = true;
-        for (const item of data) {
-            o.value(item.path, item.name);
-        }
-        o.load = () => null;
-        o.write = () => true;
-        o.renderWidget = function (section_id, option_index, cfgvalue) {
-            const frameEl = form.ListValue.prototype.renderWidget.apply(this, arguments);
-            const statEl = E('span', {
-                id: `${this.cbid(section_id)}_stat`,
-                style: 'margin-left:10px;font-size:12px;color:#888;vertical-align:middle;'
-            });
-            frameEl.appendChild(statEl);
-            return frameEl;
-        };
-        o.onchange = function (ev, section_id, value) {
-            if (!value) return;
+        const aceDiv = E('div', { style: 'width:auto;height:100%;display:none;' });
+
+        const container = E('div', { style: 'position:relative;width:auto;height:380px;margin-top:10px;' }, [
+            aceDiv,
+            this.textarea,
+            E('button', {
+                type: 'button', title: _('Fullscreen'),
+                style: 'position:absolute;top:3px;right:15px;padding:3px 8px;font-size:18px;z-index:1000;background:#557ef1;color:#fff;border:none;cursor:pointer;border-radius:3px;line-height:1;',
+                click: ui.createHandlerFn(this, () =>
+                    (aceDiv.requestFullscreen || aceDiv.webkitRequestFullscreen).call(aceDiv))
+            }, '⛶')
+        ]);
+
+        const select = E('select', { class: 'cbi-input-select' }, [
+            E('option', { value: '' }, _('-- Please choose --')),
+            ...data.map(item => E('option', { value: item.path }, item.name))
+        ]);
+
+        select.addEventListener('change', () => {
+            const value = select.value;
+            this.currentPath = value || null;
             const item = data.find(i => i.path === value);
-            const statEl = document.getElementById(`${this.cbid(section_id)}_stat`);
-            if (statEl) statEl.textContent = item?.stat ?? '';
+            statEl.textContent = item?.stat ?? '';
+
+            if (!value) {
+                this.textarea.value = '';
+                this.aceEditor?.setValue('', -1);
+                return;
+            }
 
             return L.resolveDefault(fs.read_direct(value), '').then((c) => {
-                if (aceEditor) {
-                    aceEditor.setValue(c, -1);
-                    requestAnimationFrame(() => aceEditor.renderer.onResize(true));
-                    return;
+                if (this.aceEditor) {
+                    this.aceEditor.setValue(c, -1);
+                    // requestAnimationFrame(() => this.aceEditor.renderer.onResize(true));
+                } else {
+                    this.textarea.value = c;
                 }
-                s.getUIElement(section_id, '_file_content').setValue(c);
             });
-        };
+        });
 
-        o = s.option(form.TextValue, '_file_content');
-        o.rows = 25;
-        o.wrap = false;
-        o.renderWidget = function (section_id, option_index, cfgvalue) {
-            let frameEl = form.TextValue.prototype.renderWidget.apply(this, arguments);
-            const ta = frameEl.firstElementChild;
-            const aceDiv = E('div', { style: 'width:auto;height:100%;' });
-            const container = E('div', { style: 'position:relative;width:auto;height:380px;' }, [
-                aceDiv,
-                E('button', {
-                    title: _('Fullscreen'),
-                    style: 'position:absolute;top:3px;right:15px;padding:3px 8px;font-size:18px;z-index:1000;background:#557ef1;color:#fff;border:none;cursor:pointer;border-radius:3px;line-height:1;',
-                    click: ui.createHandlerFn(this, () =>
-                        (aceDiv.requestFullscreen || aceDiv.webkitRequestFullscreen).call(aceDiv))
-                }, '⛶')
-            ]);
+        preloadAce().then(() => {
+            this.textarea.style.display = 'none';
+            aceDiv.style.display = '';
+            this.aceEditor = ace.edit(aceDiv);
+            this.aceEditor.setOptions({
+                wrap: true,
+                fontSize: '14px',
+                printMarginColumn: -1,
+                showPrintMargin: true,
+                mode: 'ace/mode/yaml',
+                fontFamily: 'Consolas',
+                theme: 'ace/theme/monokai'
+            });
+        }).catch(() => Object.assign(this.textarea.style, {
+            fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4'
+        }));
 
-            preloadAce().then(() => {
-                ta.style.display = 'none';
-                ta.parentNode.insertBefore(container, ta);
-                aceEditor = ace.edit(aceDiv);
-                aceEditor.setOptions({
-                    wrap: true,
-                    fontSize: '14px',
-                    printMarginColumn: -1,
-                    showPrintMargin: true,
-                    mode: 'ace/mode/yaml',
-                    fontFamily: 'Consolas',
-                    theme: 'ace/theme/monokai'
-                });
-            }).catch(() => Object.assign(ta.style, { fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4' }));
+        return E('div', { class: 'cbi-map' }, [
+            E('h3', {}, _('Editor')),
+            E('div', { class: 'cbi-section' }, [
+                E('div', { class: 'cbi-value' }, [
+                    E('label', { class: 'cbi-value-title' }, _('Choose File')),
+                    E('div', { class: 'cbi-value-field' }, [select, statEl])
+                ]),
+                E('div', { class: 'cbi-value' }, [
+                    // E('label', { class: 'cbi-value-title' }, _('File Content')),
+                    E('div', { class: 'cbi-value-field' }, [container])
+                ])
+            ])
+        ]);
+    },
 
-            return frameEl;
-        };
-        o.formvalue = function (section_id) {
-            return aceEditor?.getValue() ?? form.TextValue.prototype.formvalue.call(this, section_id);
-        };
-        o.write = function (section_id, value) {
-            const path = s.getUIElement(section_id, '_file')?.getValue();
-            if (!path) return;
-            return nikki.writefile(path, value.replace(/^\s+$/gm, '').trim()).then(() =>
-                ui.addTimeLimitedNotification(null, E('p', _('Config saved, files updated')), 5000, 'info')
-            );
-        };
-
-        return m.render();
+    handleSave: function (ev) {
+        if (!this.currentPath) {
+            ui.addTimeLimitedNotification(null, E('p', _('No file selected')), 5000, 'warning');
+            return Promise.resolve();
+        }
+        const value = this.aceEditor ? this.aceEditor.getValue() : this.textarea.value;
+        return nikki.writefile(this.currentPath, value.replace(/^\s+$/gm, '').trim()).then(() =>
+            ui.addTimeLimitedNotification(null, E('p', _('Config saved, files updated')), 5000, 'info')
+        );
     },
 
     handleSaveApply: function (ev, mode) {
-        return this.handleSave()
+        return this.handleSave(ev)
             .then(() => {
                 ui.addTimeLimitedNotification(null, E('p', mode === '0' ? _('Saved, reloading...') : _('Saved, restarting...')), 5000, 'info');
                 return mode === '0' ? nikki.reload() : nikki.restart();

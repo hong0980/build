@@ -207,16 +207,8 @@ return baseclass.extend({
         return callNikkiGetIdentifiers();
     },
 
-    listProfiles: function () {
-        return L.resolveDefault(fs.list(this.profilesDir), []);
-    },
-
-    listRuleProviders: function () {
-        return L.resolveDefault(fs.list(this.ruleProvidersDir), []);
-    },
-
-    listProxyProviders: function () {
-        return L.resolveDefault(fs.list(this.proxyProvidersDir), []);
+    listfiles: function (dir) {
+        return L.resolveDefault(fs.list(dir), []);
     },
 
     getAppLog: function () {

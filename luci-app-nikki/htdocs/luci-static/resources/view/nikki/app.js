@@ -38,14 +38,11 @@ return view.extend({
         return Promise.all([
             nikki.version(),
             nikki.status(),
-            nikki.listProfiles(),
+            nikki.listfiles(nikki.profilesDir),
             uci.load('nikki')
         ]);
     },
-    render: function ([version, running, profiles]) {
-        const appVersion = version.app ?? '';
-        const coreVersion = version.core ?? '';
-
+    render: function ([v, running, profiles]) {
         let m, s, o;
 
         m = new form.Map('nikki', _('Nikki'), `${_('Transparent Proxy with Mihomo on OpenWrt.')} <a href="https://github.com/nikkinikki-org/OpenWrt-nikki/wiki" target="_blank">${_('How To Use')}</a>`);
@@ -54,18 +51,10 @@ return view.extend({
         s.anonymous = true;
 
         o = s.option(form.DummyValue, '_app_version', _('App Version'));
-        o.readonly = true;
-        o.load = function () {
-            return appVersion;
-        };
-        o.write = function () {};
+        o.load = function () { return v.app ?? ''; };
 
         o = s.option(form.DummyValue, '_core_version', _('Core Version'));
-        o.readonly = true;
-        o.load = function () {
-            return coreVersion;
-        };
-        o.write = function () {};
+        o.load = function () { return v.core ?? ''; };
 
         o = s.option(form.DummyValue, '_core_status', _('Core Status'));
         o.cfgvalue = function () {
@@ -80,16 +69,12 @@ return view.extend({
         o = s.option(form.Button, 'reload');
         o.inputstyle = 'action';
         o.inputtitle = _('Reload Service');
-        o.onclick = function () {
-            return nikki.reload();
-        };
+        o.onclick = function () { return nikki.reload(); };
 
         o = s.option(form.Button, 'restart');
         o.inputstyle = 'negative';
         o.inputtitle = _('Restart Service');
-        o.onclick = function () {
-            return nikki.restart();
-        };
+        o.onclick = function () { return nikki.restart(); };
 
         o = s.option(form.ListValue, 'ui_url');
         o.ucisection = 'mixin';

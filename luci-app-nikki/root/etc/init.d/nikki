@@ -117,7 +117,7 @@ start_service() {
 		config_get subscription_name "$subscription_section" "name"
 		config_get subscription_prefer "$subscription_section" "prefer" "remote"
 		log "Profile" "Use subscription: $subscription_name."
-		local subscription_file; subscription_file="$SUBSCRIPTIONS_DIR/$subscription_section.yaml"
+		local subscription_file; subscription_file="$SUBSCRIPTIONS_DIR/$subscription_name.yaml"
 		if [ "$subscription_prefer" = "remote" ] || [ ! -f "$subscription_file" ]; then
 			update_subscription "$subscription_section"
 		fi
@@ -563,7 +563,7 @@ update_subscription() {
 	local subscription_header_tmpfile; subscription_header_tmpfile="$TEMP_DIR/$subscription_section.header"
 	local subscription_tmpfile; subscription_tmpfile="$TEMP_DIR/$subscription_section.yaml"
 	local subscription_info_file
-	local subscription_file; subscription_file="$SUBSCRIPTIONS_DIR/$subscription_section.yaml"
+	local subscription_file; subscription_file="$SUBSCRIPTIONS_DIR/$subscription_name.yaml"
 	# fetch subscription info
 	if [ -n "$subscription_info_url" ]; then
 		log "Profile" "Fetch subscription info."
