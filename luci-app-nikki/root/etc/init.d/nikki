@@ -539,6 +539,7 @@ update_subscription() {
 	if [ -z "$subscription_section" ]; then
 		return
 	fi
+	config_load nikki
 	# load config
 	config_load nikki
 	# get subscription config
@@ -548,21 +549,16 @@ update_subscription() {
 	config_get subscription_url "$subscription_section" "url"
 	config_get subscription_user_agent "$subscription_section" "user_agent"
 	# reset subscription info
-	uci_remove "nikki" "$subscription_section" "expire" > /dev/null 2>&1
-	uci_remove "nikki" "$subscription_section" "upload" > /dev/null 2>&1
-	uci_remove "nikki" "$subscription_section" "download" > /dev/null 2>&1
-	uci_remove "nikki" "$subscription_section" "total" > /dev/null 2>&1
-	uci_remove "nikki" "$subscription_section" "used" > /dev/null 2>&1
-	uci_remove "nikki" "$subscription_section" "avaliable" > /dev/null 2>&1
-	uci_remove "nikki" "$subscription_section" "update" > /dev/null 2>&1
-	uci_remove "nikki" "$subscription_section" "success" > /dev/null 2>&1
-	# update subscription
+	local opt
+	for opt in expire upload download total used avaliable update success; do
+		uci_remove "nikki" "$subscription_section" "$opt" > /dev/null 2>&1
+	done
+
 	log "Profile" "Update subscription: $subscription_name."
-	local success
+	local success=0 subscription_info_file
 	local subscription_info_header_tmpfile; subscription_info_header_tmpfile="$TEMP_DIR/$subscription_section.info.header"
 	local subscription_header_tmpfile; subscription_header_tmpfile="$TEMP_DIR/$subscription_section.header"
 	local subscription_tmpfile; subscription_tmpfile="$TEMP_DIR/$subscription_section.yaml"
-	local subscription_info_file
 	local subscription_file; subscription_file="$SUBSCRIPTIONS_DIR/$subscription_name.yaml"
 	# fetch subscription info
 	if [ -n "$subscription_info_url" ]; then
@@ -585,61 +581,49 @@ update_subscription() {
 			success=1
 		else
 			log "Profile" "Subscription is not valid."
-			success=0
 		fi
 	else
 		log "Profile" "Subscription download failed."
-		success=0
 	fi
+
 	# check if success
 	if [ "$success" = 1 ]; then
 		log "Profile" "Subscription update successful."
 		if [ -f "$subscription_info_file" ]; then
+			local subscription_userinfo
+			subscription_userinfo=$(grep -i "subscription-userinfo: " "$subscription_info_file")
+
 			local subscription_expire subscription_upload subscription_download subscription_total subscription_used subscription_avaliable
-			subscription_expire=$(grep -i "subscription-userinfo: " "$subscription_info_file" | grep -i -o -E "expire=[[:digit:]]+" | cut -d '=' -f 2)
-			subscription_upload=$(grep -i "subscription-userinfo: " "$subscription_info_file" | grep -i -o -E "upload=[[:digit:]]+" | cut -d '=' -f 2)
-			subscription_download=$(grep -i "subscription-userinfo: " "$subscription_info_file" | grep -i -o -E "download=[[:digit:]]+" | cut -d '=' -f 2)
-			subscription_total=$(grep -i "subscription-userinfo: " "$subscription_info_file" | grep -i -o -E "total=[[:digit:]]+" | cut -d '=' -f 2)
+			subscription_expire=$(printf '%s\n' "$subscription_userinfo" | grep -i -o -E "expire=[[:digit:]]+" | cut -d '=' -f 2)
+			subscription_upload=$(printf '%s\n' "$subscription_userinfo" | grep -i -o -E "upload=[[:digit:]]+" | cut -d '=' -f 2)
+			subscription_download=$(printf '%s\n' "$subscription_userinfo" | grep -i -o -E "download=[[:digit:]]+" | cut -d '=' -f 2)
+			subscription_total=$(printf '%s\n' "$subscription_userinfo" | grep -i -o -E "total=[[:digit:]]+" | cut -d '=' -f 2)
+
 			if [ -n "$subscription_upload" ] && [ -n "$subscription_download" ]; then
 				subscription_used=$((subscription_upload + subscription_download))
 				if [ -n "$subscription_total" ]; then
 					subscription_avaliable=$((subscription_total - subscription_used))
 				fi
 			fi
-			# update subscription info
-			if [ -n "$subscription_expire" ]; then
-				uci_set "nikki" "$subscription_section" "expire" "$(date "+%Y-%m-%d %H:%M:%S" -d "@$subscription_expire")"
-			fi
-			if [ -n "$subscription_upload" ]; then
-				uci_set "nikki" "$subscription_section" "upload" "$(format_filesize "$subscription_upload")"
-			fi
-			if [ -n "$subscription_download" ]; then
-				uci_set "nikki" "$subscription_section" "download" "$(format_filesize "$subscription_download")"
-			fi
-			if [ -n "$subscription_total" ]; then
-				uci_set "nikki" "$subscription_section" "total" "$(format_filesize "$subscription_total")"
-			fi
-			if [ -n "$subscription_used" ]; then
-				uci_set "nikki" "$subscription_section" "used" "$(format_filesize "$subscription_used")"
-			fi
-			if [ -n "$subscription_avaliable" ]; then
-				uci_set "nikki" "$subscription_section" "avaliable" "$(format_filesize "$subscription_avaliable")"
-			fi
+
+			[ -n "$subscription_expire" ] && uci_set "nikki" "$subscription_section" "expire" "$(date "+%Y-%m-%d %H:%M:%S" -d "@$subscription_expire")"
+			[ -n "$subscription_upload" ] && uci_set "nikki" "$subscription_section" "upload" "$(format_filesize "$subscription_upload")"
+			[ -n "$subscription_download" ] && uci_set "nikki" "$subscription_section" "download" "$(format_filesize "$subscription_download")"
+			[ -n "$subscription_total" ] && uci_set "nikki" "$subscription_section" "total" "$(format_filesize "$subscription_total")"
+			[ -n "$subscription_used" ] && uci_set "nikki" "$subscription_section" "used" "$(format_filesize "$subscription_used")"
+			[ -n "$subscription_avaliable" ] && uci_set "nikki" "$subscription_section" "avaliable" "$(format_filesize "$subscription_avaliable")"
 		fi
 		uci_set "nikki" "$subscription_section" "update" "$(date "+%Y-%m-%d %H:%M:%S")"
 		uci_set "nikki" "$subscription_section" "success" "1"
-		# update subscription file
-		rm -f "$subscription_info_header_tmpfile"
-		rm -f "$subscription_header_tmpfile"
 		mv -f "$subscription_tmpfile" "$subscription_file"
-	elif [ "$success" = 0 ]; then
+	else
 		log "Profile" "Subscription update failed."
-		# update subscription info
 		uci_set "nikki" "$subscription_section" "success" "0"
-		# remove tmpfile
-		rm -f "$subscription_info_header_tmpfile"
-		rm -f "$subscription_header_tmpfile"
 		rm -f "$subscription_tmpfile"
 	fi
+
+	rm -f "$subscription_info_header_tmpfile"
+	rm -f "$subscription_header_tmpfile"
+
 	uci_commit "nikki"
 }

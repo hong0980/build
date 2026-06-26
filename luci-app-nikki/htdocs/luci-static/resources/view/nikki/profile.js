@@ -3,6 +3,7 @@
 'require view';
 'require uci';
 'require ui';
+'require fs';
 'require tools.nikki as nikki';
 
 const shadowsocks_encrypt_methods = [
@@ -1194,12 +1195,15 @@ function parseShareLink(uri) {
 }
 
 return view.extend({
+    pendingDeletes: [],
+    pendingRenames: [],
     load: function () {
         return uci.load('nikki');
     },
 
     render: function () {
         let m, s, o, so;
+        const self = this;
 
         m = new form.Map('nikki');
 
@@ -1263,9 +1267,21 @@ return view.extend({
         s.anonymous = true;
         s.sortable = true;
         s.modaltitle = _('Edit Subscription');
+        s.handleRemove = function (section_id, ev) {
+            const name = uci.get('nikki', section_id, 'name');
+            if (name) self.pendingDeletes.push(name);
+            return this.super('handleRemove', [section_id, ev]);
+        };
 
         o = s.option(form.Value, 'name', _('Subscription Name'));
         o.rmempty = false;
+        o.datatype = 'uciname';
+        o.write = function (section_id, value) {
+            var oldName = this.cfgvalue(section_id);
+            if (oldName && oldName !== value)
+                self.pendingRenames.push({ from: oldName, to: value });
+            return this.super('write', [section_id, value]);
+        };
 
         o = s.option(form.Value, 'used', _('Used'));
         o.modalonly = false;
@@ -1292,7 +1308,7 @@ return view.extend({
         o.inputstyle = 'positive';
         o.inputtitle = _('Update');
         o.modalonly = false;
-        o.onclick = function (_, section_id) {
+        o.onclick = function (ev, section_id) {
             return nikki.updateSubscription(section_id);
         };
 
@@ -1401,5 +1417,21 @@ return view.extend({
         };
 
         return m.render();
+    },
+
+    handleSaveApply: function (ev, mode) {
+        var self = this;
+        var tasks = self.pendingRenames.map(function (r) {
+            return nikki.renameSubscription(r.from, r.to);
+        }).concat(self.pendingDeletes.map(function (name) {
+            return fs.remove(nikki.subscriptionsDir + '/' + name + '.yaml');
+        }));
+
+        return Promise.all(tasks).then(function () {
+            self.pendingRenames = [];
+            self.pendingDeletes = [];
+            return self.super('handleSaveApply', [ev, mode]);
+        });
     }
+
 });

@@ -230,4 +230,12 @@ return baseclass.extend({
     debug: function () {
         return callNikkiDebug();
     },
+
+    renameSubscription: function (from, to) {
+        return fs.exec('/bin/mv', [
+            '-f',
+            this.subscriptionsDir + '/' + from + '.yaml',
+            this.subscriptionsDir + '/' + to + '.yaml'
+        ]);
+    },
 })

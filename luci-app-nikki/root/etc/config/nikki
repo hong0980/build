@@ -24,7 +24,7 @@ config core 'core'
 	option tproxy_listener_name 'tproxy-in'
 	option tun_listener_name 'tun-in'
 
-config subscription 'subscription'
+config subscription
 	option name 'default'
 	option url 'http://example.com/default.yaml'
 	option user_agent 'clash'
