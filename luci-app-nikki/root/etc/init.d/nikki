@@ -539,7 +539,6 @@ update_subscription() {
 	if [ -z "$subscription_section" ]; then
 		return
 	fi
-	config_load nikki
 	# load config
 	config_load nikki
 	# get subscription config
