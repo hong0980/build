@@ -64,17 +64,25 @@ return view.extend({
 
         s = m.section(form.TypedSection);
         s.render = function () {
-            return E('div', {}, [
+            return E('p', {}, [
                 E('button', {
                     'class': 'cbi-button cbi-button-apply',
                     'click': ui.createHandlerFn(this, () => {
                         let weight = document.getElementById('_connection_check_results');
                         weight.innerHTML = '';
-                        return checkurls.forEach((site) => {
-                            L.resolveDefault(callConnStat(site[0]), {}).then((res) => {
-                                weight.innerHTML += '<span style="color:%s">&ensp;%s</span>'.format((res.httpcode && res.httpcode.match(/^20\d$/)) ? 'green' : 'red', site[1]);
+                        return Promise.all(checkurls.map((site) => {
+                            return L.resolveDefault(callConnStat(site[0]), {}).then((res) => {
+                                let label, color;
+                                if (res.httpcode && res.httpcode.match(/^20\d$/)) {
+                                    color = (res.elapsed_ms < 300) ? 'green' : (res.elapsed_ms < 800) ? 'orange' : 'red';
+                                    label = '%s (%dms)'.format(site[1], res.elapsed_ms);
+                                } else {
+                                    color = 'red';
+                                    label = '%s (超时)'.format(site[1]);
+                                }
+                                weight.innerHTML += '<span style="color:%s">&ensp;%s</span>'.format(color, label);
                             });
-                        });
+                        }));
                     })
                 }, _('Connection check')),
                 E('strong', { id: '_connection_check_results' }, [

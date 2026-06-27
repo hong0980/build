@@ -16,9 +16,13 @@ const methods = {
 			if (!req.args?.url)
 				return { httpcode: null, error: 'illegal url' };
 
+			const start = clock(true);
 			const httpcode = trim(popen(`wget --spider -t1 -ST3 ${shellQuote(req.args?.url)} 2>&1 | awk '/^\\s*HTTP\\//{print $2}'`).read('all')) || '-1';
+			const end = clock(true);
 
-			return { httpcode: httpcode };
+			const elapsed_ms = int((end[0] - start[0]) * 1000 + (end[1] - start[1]) / 1000000);
+
+			return { httpcode: httpcode, elapsed_ms: elapsed_ms };
 		}
 	},
 	update_ui: {
