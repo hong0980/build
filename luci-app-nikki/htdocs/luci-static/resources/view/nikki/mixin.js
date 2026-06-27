@@ -11,7 +11,7 @@
 const RULE_PROVIDER_TYPE = /^(http|file)$/;
 const RULE_PROVIDER_FORMAT = /^(text|yaml|mrs)$/;
 const RULE_PROVIDER_BEHAVIOR = /^(classical|domain|ipcidr)$/;
-const RULE_TYPES = /^(RULE-SET|DOMAIN|DOMAIN-SUFFIX|DOMAIN-WILDCARD|DOMAIN-KEYWORD|DOMAIN-REGEX|IP-CIDR|DST-PORT|PROCESS-NAME|GEOSITE|GEOIP)$/i;
+const RULE_TYPES = /^(RULE-SET|DOMAIN|DOMAIN-SUFFIX|DOMAIN-WILDCARD|DOMAIN-KEYWORD|DOMAIN-REGEX|IP-CIDR|DST-PORT|PROCESS-NAME|GEOSITE|GEOIP|MATCH)$/i;
 
 function normalizePath(path) {
     if (!path)
@@ -109,6 +109,22 @@ function toRuleProviderConfig(cfg) {
         file_size_limit: cfg['size-limit'] || '0',
         update_interval: cfg.interval || '86400'
     };
+}
+
+function freeformRichListRenderWidget(section_id, option_index, cfgvalue) {
+    const choices = this.transformChoices();
+    const widget = new ui.Dropdown((cfgvalue != null) ? cfgvalue : this.default, choices, {
+        id: this.cbid(section_id),
+        sort: this.keylist,
+        multiple: false,
+        optional: (this.rmempty != null) ? this.rmempty : true,
+        create: true,
+        select_placeholder: this.placeholder,
+        custom_placeholder: this.placeholder,
+        validate: L.bind(this.validate, this, section_id),
+        disabled: (this.readonly != null) ? this.readonly : this.map.readonly
+    });
+    return widget.render();
 }
 
 return view.extend({
@@ -754,6 +770,7 @@ return view.extend({
         so.depends({ 'type': /MATCH/i, '!reverse': true });
 
         so = o.subsection.option(form.RichListValue, 'node', _('Node'));
+        so.renderWidget = freeformRichListRenderWidget;
         so.default = 'GLOBAL';
         so.rmempty = false;
         so.value('GLOBAL', _('GLOBAL'), _('Route traffic to the Mihomo GLOBAL policy group.'));
@@ -761,21 +778,6 @@ return view.extend({
         so.value('REJECT', _('REJECT'), _('Block the request immediately and return an error to the client (commonly used for ad blocking).'));
         so.value('REJECT-DROP', _('REJECT-DROP'), _('Silently drop the request packets, causing the client to wait until it times out.'));
         so.value('NCloud', _('NCloud'), _('Default auto-select node. <font color="red">Required: "NCloud" must exist in proxy-groups.</font>'));
-        so.renderWidget = function (section_id, option_index, cfgvalue) {
-            const choices = this.transformChoices();
-            const widget = new ui.Dropdown((cfgvalue != null) ? cfgvalue : this.default, choices, {
-                id: this.cbid(section_id),
-                sort: this.keylist,
-                multiple: false,
-                optional: false,           // rmempty=false,不允许清空选择
-                create: true,              // 允许用户输入预设之外的自定义值
-                select_placeholder: this.placeholder,
-                custom_placeholder: this.placeholder,
-                validate: L.bind(this.validate, this, section_id),
-                disabled: (this.readonly != null) ? this.readonly : this.map.readonly
-            });
-            return widget.render();
-        };
 
         so = o.subsection.option(form.Flag, 'no_resolve', _('No Resolve'));
         so.rmempty = false;
@@ -869,21 +871,38 @@ return view.extend({
         o.value('standard', _('Standard Loader'));
         o.value('memconservative', _('Memory Conservative Loader'));
 
-        o = s.taboption('geox', form.Value, 'geosite_url', _('GeoSite Url'));
+        o = s.taboption('geox', form.RichListValue, 'geosite_url', _('GeoSite Url'));
         o.placeholder = _('Unmodified');
-        o.default = 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat';
+        o.renderWidget = freeformRichListRenderWidget;
+        o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat', _('MetaCubeX-Version'), _('(mihomo official, custom CN source + extra categories)'));
+        o.value("https://testingcf.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat", _("Loyalsoldier-Version"), _("(classic v2ray/clash geosite)"))
+        o.value("https://fastly.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat", _("Loyalsoldier-Version"), _("(Same data, Fastly mirror)"))
+        o.value("https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat", _("Loyalsoldier-github-Version"), _("(Same data, GitHub direct)"))
 
-        o = s.taboption('geox', form.Value, 'geoip_mmdb_url', _('GeoIP(MMDB) Url'));
+        o = s.taboption('geox', form.RichListValue, 'geoip_mmdb_url', _('GeoIP(MMDB) Url'));
         o.placeholder = _('Unmodified');
-        o.default = 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb';
+        o.renderWidget = freeformRichListRenderWidget;
+        o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb', _('MetaCubeX-Version'), _('(mihomo-only format, global + service categories)'));
+        o.value("https://testingcf.jsdelivr.net/gh/alecthw/mmdb_china_ip_list@release/lite/Country.mmdb", _("Alecthw-Version"), _("(Default mmdb · China IPs only, compact)"))
+        o.value("https://testingcf.jsdelivr.net/gh/alecthw/mmdb_china_ip_list@release/Country.mmdb", _("Alecthw-Version"), _("(All Info mmdb · global + refined China accuracy)"))
+        o.value("https://testingcf.jsdelivr.net/gh/Hackl0us/GeoIP2-CN@release/Country.mmdb", _("Hackl0us-Version"), _("(Only CN · China IPs only, unusable for other countries)"))
+        o.value("https://github.com/alecthw/mmdb_china_ip_list/releases/latest/download/Country-lite.mmdb", _("Alecthw-lite-github-Version"), _("(Same as lite, GitHub direct)"))
 
-        o = s.taboption('geox', form.Value, 'geoip_dat_url', _('GeoIP(DAT) Url'));
+        o = s.taboption('geox', form.RichListValue, 'geoip_dat_url', _('GeoIP(DAT) Url'));
         o.placeholder = _('Unmodified');
-        o.default = 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat';
+        o.renderWidget = freeformRichListRenderWidget;
+        o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat', _('MetaCubeX-Version'), _('(mihomo official, adds cloud-provider categories)'));
+        o.value("https://testingcf.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geoip.dat", _("Loyalsoldier-Version"), _("(classic v2ray/clash geoip)"))
+        o.value("https://fastly.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geoip.dat", _("Loyalsoldier-Version"), _("(Same data, Fastly mirror)"))
+        o.value("https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat", _("Loyalsoldier-github-Version"), _("(Same data, GitHub direct)"))
 
-        o = s.taboption('geox', form.Value, 'geoip_asn_url', _('GeoIP(ASN) Url'));
+        o = s.taboption('geox', form.RichListValue, 'geoip_asn_url', _('GeoIP(ASN) Url'));
         o.placeholder = _('Unmodified');
-        o.default = 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb';
+        o.renderWidget = freeformRichListRenderWidget;
+        o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb', _('MetaCubeX-Version'), _('(MaxMind GeoLite2-ASN mirror)'));
+        o.value("https://testingcf.jsdelivr.net/gh/xishang0128/geoip@release/GeoLite2-ASN.mmdb", _("xishang0128-Version"), _("(MaxMind GeoLite2-ASN mirror)"))
+        o.value("https://fastly.jsdelivr.net/gh/xishang0128/geoip@release/GeoLite2-ASN.mmdb", _("xishang0128-Version"), _("(Same data, Fastly mirror)"))
+        o.value("https://github.com/xishang0128/geoip/releases/latest/download/GeoLite2-ASN.mmdb", _("xishang0128-github-Version"), _("(Same data, GitHub direct)"))
 
         o = s.taboption('geox', form.ListValue, 'geox_auto_update', _('GeoX Auto Update'));
         o.optional = true;

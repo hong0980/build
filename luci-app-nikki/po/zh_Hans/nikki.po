@@ -1687,5 +1687,50 @@ msgstr "全匹配"
 msgid "Catch-all rule that matches any remaining traffic not handled by previous rules."
 msgstr "全匹配：无条件匹配所有剩余流量（通常用作最后一条兜底规则）。"
 
-msgid "Default auto-select node. <font color="red">Required: \"NCloud\" must exist in proxy-groups.</font>"
-msgstr "默认自动选择最优节点。<font color="red">必须：订阅中必须包含 “NCloud” 策略组。</font>"
+msgid "Default auto-select node. <font color=\"red\">Required: \"NCloud\" must exist in proxy-groups.</font>"
+msgstr "默认自动选择最优节点。<font color=\"red\">必须：订阅中必须包含 \"NCloud\" 策略组。</font>"
+
+msgid "Please paste the %s field of a mihomo config, one rule per line."
+msgstr "请粘贴 mihomo 配置的 %s 字段，每行一条规则。"
+
+msgid "MetaCubeX-Version"
+msgstr "MetaCubeX-版本"
+
+msgid "(mihomo official, custom CN source + extra categories)"
+msgstr "（mihomo 官方维护，CN 分类换用自定义源，新增扩展分类）"
+
+msgid "(classic v2ray/clash geosite)"
+msgstr "（经典 v2ray/clash 域名分类库）"
+
+msgid "(Same data, Fastly mirror)"
+msgstr "（数据相同，Fastly 镜像）"
+
+msgid "(Same data, GitHub direct)"
+msgstr "（数据相同，GitHub 直连）"
+
+msgid "(mihomo-only format, global + service categories)"
+msgstr "（mihomo 专用格式，全球库 + 服务级分类）"
+
+msgid "(Default mmdb · China IPs only, compact)"
+msgstr "（默认 mmdb · 仅含中国大陆 IP，体积小）"
+
+msgid "(All Info mmdb · global + refined China accuracy)"
+msgstr "（全量 mmdb · 全球库 + 中国大陆精度增强）"
+
+msgid "(Only CN · China IPs only, unusable for other countries)"
+msgstr "（仅 CN · 仅含中国大陆 IP，不可用于其他国家）"
+
+msgid "(Same as lite, GitHub direct)"
+msgstr "（与精简版相同，GitHub 直连）"
+
+msgid "(mihomo official, adds cloud-provider categories)"
+msgstr "（mihomo 官方维护，新增云厂商分类）"
+
+msgid "(classic v2ray/clash geoip)"
+msgstr "（经典 v2ray/clash IP 分类库）"
+
+msgid "(MaxMind GeoLite2-ASN mirror)"
+msgstr "（MaxMind GeoLite2-ASN 镜像）"
+
+msgid "(MaxMind GeoLite2-ASN mirror)"
+msgstr "（MaxMind GeoLite2-ASN 镜像）"

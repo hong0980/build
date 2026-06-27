@@ -5,7 +5,22 @@
 import { access, popen, writefile } from 'fs';
 import { get_users, get_groups, get_cgroups, load_profile } from '/etc/nikki/ucode/include.uc';
 
+function shellQuote(s) {
+	return `'${replace(s, "'", "'\\''")}'`;
+};
+
 const methods = {
+	connection_check: {
+		args: { url: 'url' },
+		call: function (req) {
+			if (!req.args?.url)
+				return { httpcode: null, error: 'illegal url' };
+
+			const httpcode = trim(popen(`wget --spider -t1 -ST3 ${shellQuote(req.args?.url)} 2>&1 | awk '/^\\s*HTTP\\//{print $2}'`).read('all')) || '-1';
+
+			return { httpcode: httpcode };
+		}
+	},
 	update_ui: {
 		args: { url: 'url', name: 'name' },
 		call: function(req) {

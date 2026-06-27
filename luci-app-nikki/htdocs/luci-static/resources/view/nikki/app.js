@@ -14,6 +14,21 @@ const update_ui = rpc.declare({
     expect: { '': {} }
 });
 
+const callConnStat = rpc.declare({
+    object: 'luci.nikki',
+    method: 'connection_check',
+    params: ['url'],
+    expect: { '': {} }
+});
+
+const checkurls = [
+    ['https://www.baidu.com', _('Baidu')],
+    ['https://s1.music.126.net/style/favicon.ico', _('163Music')],
+    ['https://github.com', _('GitHub')],
+    ['https://www.google.com/generate_204', _('Google')],
+    ['https://www.youtube.com', _('YouTube')]
+];
+
 function renderStatus(running) {
     return updateStatus(E('span', { id: 'core_status', style: 'font-style: italic; font-weight: bold;' }), running);
 }
@@ -46,6 +61,27 @@ return view.extend({
         let m, s, o;
 
         m = new form.Map('nikki', _('Nikki'), `${_('Transparent Proxy with Mihomo on OpenWrt.')} <a href="https://github.com/nikkinikki-org/OpenWrt-nikki/wiki" target="_blank">${_('How To Use')}</a>`);
+
+        s = m.section(form.TypedSection);
+        s.render = function () {
+            return E('div', {}, [
+                E('button', {
+                    'class': 'cbi-button cbi-button-apply',
+                    'click': ui.createHandlerFn(this, () => {
+                        let weight = document.getElementById('_connection_check_results');
+                        weight.innerHTML = '';
+                        return checkurls.forEach((site) => {
+                            L.resolveDefault(callConnStat(site[0]), {}).then((res) => {
+                                weight.innerHTML += '<span style="color:%s">&ensp;%s</span>'.format((res.httpcode && res.httpcode.match(/^20\d$/)) ? 'green' : 'red', site[1]);
+                            });
+                        });
+                    })
+                }, _('Connection check')),
+                E('strong', { id: '_connection_check_results' }, [
+                    E('span', { style: 'color:gray' }, ' ' + _('unchecked'))
+                ])
+            ])
+        };
 
         s = m.section(form.TableSection, 'status', _('Status'));
         s.anonymous = true;
