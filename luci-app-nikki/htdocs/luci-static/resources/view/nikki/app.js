@@ -1,0 +1,267 @@
+'use strict';
+'require form';
+'require view';
+'require ui';
+'require fs';
+'require rpc';
+'require uci';
+'require tools.nikki as nikki';
+
+const update_ui = rpc.declare({
+    object: 'luci.nikki',
+    method: 'update_ui',
+    params: ['url', 'name'],
+    expect: { '': {} }
+});
+
+const callConnStat = rpc.declare({
+    object: 'luci.nikki',
+    method: 'connection_check',
+    params: ['url'],
+    expect: { '': {} }
+});
+
+const checkurls = [
+    ['https://www.baidu.com', _('Baidu')],
+    ['https://s1.music.126.net/style/favicon.ico', _('163Music')],
+    ['https://github.com', _('GitHub')],
+    ['https://www.google.com/generate_204', _('Google')],
+    ['https://www.youtube.com', _('YouTube')]
+];
+
+function setStatus(element, running) {
+    if (element) {
+        element.style.color = running ? 'green' : 'red';
+        element.textContent = running ? _('Running') : _('Not Running');
+    }
+    return element;
+}
+
+const ui_array = [
+    ["https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip", "Zashboard"],
+    ["https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip", "MetaCubeXD"],
+    ["https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip", "YACD"],
+    ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]
+];
+
+return view.extend({
+    load: function () {
+        return Promise.all([
+            nikki.version(),
+            nikki.status(),
+            nikki.listfiles(nikki.profilesDir),
+            nikki.listfiles(nikki.subscriptionsDir),
+            uci.load('nikki')
+        ]);
+    },
+    render: function ([v, running, profiles, subfiles]) {
+        let m, s, o;
+
+        m = new form.Map('nikki', _('Nikki'), `${_('Transparent Proxy with Mihomo on OpenWrt.')} <a href="https://github.com/nikkinikki-org/OpenWrt-nikki/wiki" target="_blank">${_('How To Use')}</a>`);
+
+        s = m.section(form.TypedSection);
+        s.render = function () {
+            return E('p', [
+                E('button', {
+                    'class': 'cbi-button cbi-button-apply',
+                    'click': ui.createHandlerFn(this, () => {
+                        let weight = document.getElementById('_connection_check_results');
+                        weight.innerHTML = '';
+                        return Promise.all(checkurls.map((site) => {
+                            return L.resolveDefault(callConnStat(site[0]), {}).then((res) => {
+                                let label = '%s (%dms)'.format(site[1], res.elapsed_ms), color = 'red';
+                                if (res.httpcode && res.httpcode.match(/^20\d$/)) {
+                                    color = (res.elapsed_ms < 300) ? 'green' : (res.elapsed_ms < 800) ? 'orange' : 'red';
+                                } else {
+                                    label = '%s (超时)'.format(site[1]);
+                                }
+                                weight.innerHTML += '<span style="color:%s">&ensp;%s</span>'.format(color, label);
+                            });
+                        }));
+                    })
+                }, _('Connection check')),
+                E('strong', { id: '_connection_check_results' }, [
+                    E('span', { style: 'color:gray' }, ' ' + _('unchecked'))
+                ])
+            ])
+        };
+
+        s = m.section(form.TableSection, 'status', _('Status'));
+        s.anonymous = true;
+
+        o = s.option(form.DummyValue, '_app_version', _('App Version'));
+        o.load = function () { return v.app ?? ''; };
+
+        o = s.option(form.DummyValue, '_core_version', _('Core Version'));
+        o.load = function () { return v.core ?? ''; };
+
+        o = s.option(form.DummyValue, '_core_status', _('Core Status'));
+        o.cfgvalue = function () {
+            return setStatus(E('span', { id: 'core_status', style: 'font-style: italic; font-weight: bold;' }), running);
+        };
+
+        L.Poll.add(function () {
+            return L.resolveDefault(nikki.status(), false).then(function (r) {
+                setStatus(document.getElementById('core_status'), r);
+            });
+        });
+
+        o = s.option(form.Button, 'reload');
+        o.inputstyle = 'action';
+        o.inputtitle = _('Reload Service');
+        o.onclick = function () { return nikki.reload(); };
+
+        o = s.option(form.Button, 'restart');
+        o.inputstyle = 'negative';
+        o.inputtitle = _('Restart Service');
+        o.onclick = function () { return nikki.restart(); };
+
+        o = s.option(form.ListValue, 'ui_url');
+        o.ucisection = 'mixin';
+        o.ucioption = 'ui_url';
+        ui_array.forEach(([url, name]) => {
+            o.value(url, name);
+        });
+        o.renderWidget = function (section_id) {
+            let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            el.classList.add('control-group');
+            const default_label = _('Open Dashboard');
+            const btn = E('button', {
+                'class': 'btn cbi-button-positive',
+                'click': ui.createHandlerFn(this, function () {
+                    const current_url = el.firstChild.value;
+                    const ui_entry = ui_array.find(x => x[0] === current_url);
+                    const ui_path = uci.get('nikki', 'mixin', 'ui_path');
+
+                    return fs.stat(`${nikki.runDir}/${ui_path}/${ui_entry[1]}/index.html`)
+                        .then(() => nikki.openDashboard(ui_entry[1]))
+                        .catch(() => {
+                            btn.textContent = _('Please wait, downloading %s...').format(ui_entry[1]);
+                            return update_ui(current_url, ui_entry[1])
+                                .then(result => {
+                                    if (result.status === 'ok')
+                                        return nikki.openDashboard(ui_entry[1]);
+                                    throw new Error(result?.message);
+                                })
+                                .finally(() => btn.textContent = default_label);
+                        })
+                        .catch(e => ui.addNotification(null, E('p', _('Update failed: ') + e), 'error'));
+                })
+            }, default_label);
+
+            el.appendChild(btn);
+            return el;
+        };
+
+        s = m.section(form.NamedSection, 'config', 'config', _('App Config'));
+
+        o = s.option(form.Flag, 'enabled', _('Enable'));
+        o.rmempty = false;
+
+        o = s.option(form.ListValue, 'profile', _('Choose Profile'));
+        o.optional = true;
+
+        for (const profile of profiles) {
+            o.value('file:' + profile.name, _('File:') + profile.name);
+        };
+
+        uci.sections('nikki', 'subscription', function (s, sid) {
+            if (subfiles.length > 0) o.value('subscription:' + s['.name'], _('Subscription:') + s.name);
+        });
+
+        o = s.option(form.Value, 'start_delay', _('Start Delay'));
+        o.datatype = 'uinteger';
+        o.placeholder = _('Start Immidiately');
+
+        o = s.option(form.Flag, 'scheduled_restart', _('Scheduled Restart'));
+        o.rmempty = false;
+
+        o = s.option(form.Value, 'scheduled_restart_cron', _('Scheduled Restart Cron'));
+        o.retain = true;
+        o.rmempty = false;
+        o.depends('scheduled_restart', '1');
+
+        o = s.option(form.Flag, 'test_profile', _('Test Profile'));
+        o.rmempty = false;
+
+        o = s.option(form.Flag, 'core_only', _('Core Only'));
+        o.rmempty = false;
+
+        s = m.section(form.NamedSection, 'procd', 'procd', _('procd Config'));
+
+        s.tab('general', _('General Config'));
+
+        o = s.taboption('general', form.Flag, 'fast_reload', _('Fast Reload'));
+        o.rmempty = false;
+
+        s.tab('rlimit', _('RLIMIT Config'));
+
+        o = s.taboption('rlimit', form.Value, 'rlimit_nproc_soft', _('Number of Processes Soft Limit'));
+        o.datatype = 'uinteger';
+
+        o = s.taboption('rlimit', form.Value, 'rlimit_nproc_hard', _('Number of Processes Hard Limit'));
+        o.datatype = 'uinteger';
+
+        o = s.taboption('rlimit', form.Value, 'rlimit_address_space_soft', _('Address Space Size Soft Limit'));
+        o.datatype = 'uinteger';
+        o.placeholder = _('Unlimited');
+
+        o = s.taboption('rlimit', form.Value, 'rlimit_address_space_hard', _('Address Space Size Hard Limit'));
+        o.datatype = 'uinteger';
+        o.placeholder = _('Unlimited');
+
+        o = s.taboption('rlimit', form.Value, 'rlimit_data_soft', _('Heap Size Soft Limit'));
+        o.datatype = 'uinteger';
+        o.placeholder = _('Unlimited');
+
+        o = s.taboption('rlimit', form.Value, 'rlimit_data_hard', _('Heap Size Hard Limit'));
+        o.datatype = 'uinteger';
+        o.placeholder = _('Unlimited');
+
+        o = s.taboption('rlimit', form.Value, 'rlimit_stack_soft', _('Stack Size Soft Limit'));
+        o.datatype = 'uinteger';
+        o.placeholder = _('Unlimited');
+
+        o = s.taboption('rlimit', form.Value, 'rlimit_stack_hard', _('Stack Size Hard Limit'));
+        o.datatype = 'uinteger';
+        o.placeholder = _('Unlimited');
+
+        o = s.taboption('rlimit', form.Value, 'rlimit_nofile_soft', _('Number of Open Files Soft Limit'));
+        o.datatype = 'uinteger';
+
+        o = s.taboption('rlimit', form.Value, 'rlimit_nofile_hard', _('Number of Open Files Hard Limit'));
+        o.datatype = 'uinteger';
+
+        s.tab('environment_variable', _('Environment Variable Config'));
+
+        o = s.taboption('environment_variable', form.Value, 'env_go_max_procs', 'GOMAXPROCS');
+        o.datatype = 'uinteger';
+        o.placeholder = _('Unlimited');
+
+        o = s.taboption('environment_variable', form.Value, 'env_go_mem_limit', 'GOMEMLIMIT');
+        o.datatype = 'uinteger';
+        o.placeholder = _('Unlimited');
+
+        o = s.taboption('environment_variable', form.DynamicList, 'env_safe_paths', _('Safe Paths'));
+        o.load = function (section_id) {
+            return this.super('load', section_id)?.split(':');
+        };
+        o.write = function (section_id, formvalue) {
+            this.super('write', section_id, formvalue?.join(':'));
+        };
+
+        o = s.taboption('environment_variable', form.Flag, 'env_disable_loopback_detector', _('Disable Loopback Detector'));
+        o.rmempty = false;
+
+        o = s.taboption('environment_variable', form.Flag, 'env_disable_quic_go_gso', _('Disable GSO of quic-go'));
+        o.rmempty = false;
+
+        o = s.taboption('environment_variable', form.Flag, 'env_disable_quic_go_ecn', _('Disable ECN of quic-go'));
+        o.rmempty = false;
+
+        o = s.taboption('environment_variable', form.Flag, 'env_skip_system_ipv6_check', _('Skip System IPv6 Check'));
+        o.rmempty = false;
+
+        return m.render();
+    }
+});

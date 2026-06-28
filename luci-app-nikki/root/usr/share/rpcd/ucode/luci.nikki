@@ -1,0 +1,174 @@
+#!/usr/bin/ucode
+
+'use strict';
+
+import { cursor } from 'uci';
+import { access, popen, writefile } from 'fs';
+import { get_users, get_groups, get_cgroups, load_profile } from '/etc/nikki/ucode/include.uc';
+const uci = cursor();
+
+function shellQuote(s) {
+	return `'${replace(s, "'", "'\\''")}'`;
+};
+
+const methods = {
+	connection_check: {
+		args: { url: 'url' },
+		call: function (req) {
+			if (!req.args?.url)
+				return { httpcode: null, error: 'illegal url' };
+
+			const start = clock(true);
+			const httpcode = trim(popen(`wget --spider -t1 -ST3 ${shellQuote(req.args?.url)} 2>&1 | awk '/^\\s*HTTP\\//{print $2}'`).read('all')) || '-1';
+			const end = clock(true);
+
+			const elapsed_ms = int((end[0] - start[0]) * 1000 + (end[1] - start[1]) / 1000000);
+
+			return { httpcode: httpcode, elapsed_ms: elapsed_ms };
+		}
+	},
+	update_ui: {
+		args: { url: 'url', name: 'name' },
+		call: function (req) {
+			const url = req.args?.url;
+			const name = req.args?.name;
+			const listen = uci.get('nikki', 'mixin', 'api_listen');
+			const secret = uci.get('nikki', 'mixin', 'api_secret');
+			const filepath = '/etc/nikki/run/config.yaml';
+			if (!url || !name
+				|| !match(name, /^[A-Za-z0-9_-]+$/)
+				|| match(url, /['"`$\\;&|<>(){}\n]/)) {
+				return { status: 'error', message: 'invalid url/name' };
+			};
+			function run(cmd) {
+				const p = popen(cmd);
+				if (!p) return null;
+				const out = trim(p.read('all'));
+				p.close();
+				return out;
+			};
+			const yq_out = run(`yq -Mi '.["external-ui-url"]="${url}" | .["external-ui-name"]="${name}"' ${filepath} 2>&1`);
+			if (yq_out) return { status: 'error', message: `yq: ${yq_out}` };
+
+			const reload_out = run(`curl -s -S -X PUT -H 'Authorization: Bearer ${secret}' http://${listen}/configs?force=true -d '{"path": "${filepath}", "payload": ""}' 2>&1`);
+			if (reload_out) return { status: 'error', message: `reload: ${reload_out}` };
+
+			function do_upgrade() {
+				const out = run(`curl -s -S -X POST -H 'Authorization: Bearer ${secret}' http://${listen}/upgrade/ui 2>&1`);
+				try { return json(out); } catch (e) { return null; }
+			};
+
+			let result = do_upgrade();
+			if (result?.status !== 'ok') {
+				result = do_upgrade();
+			};
+
+			return result?.status === 'ok'
+				? { status: 'ok' }
+				: { status: 'error', message: result?.message || 'upgrade failed, please retry' };
+		}
+	},
+	version: {
+		call: function () {
+			let process;
+			let app = '';
+			if (system('command -v apk') == 0) {
+				process = popen('apk list -I luci-app-nikki | cut -d " " -f 1 | cut -d "-" -f 4');
+				if (process) {
+					app = trim(process.read('all'));
+					process.close();
+				}
+			} else if (system('command -v opkg') == 0) {
+				process = popen('opkg list-installed luci-app-nikki | cut -d " " -f 3');
+				if (process) {
+					app = trim(process.read('all'));
+					process.close();
+				}
+			}
+			let core = '';
+			process = popen('mihomo -v | grep Mihomo | cut -d " " -f 3');
+			if (process) {
+				core = trim(process.read('all'));
+				process.close();
+			}
+			return { app: app, core: core };
+		}
+	},
+	profile: {
+		args: { defaults: {} },
+		call: function (req) {
+			let profile = {};
+			const defaults = req.args?.defaults ?? {};
+			const filepath = '/etc/nikki/run/config.yaml';
+			const tmpFilepath = '/var/run/nikki/profile.json';
+			if (access(filepath, 'r')) {
+				writefile(tmpFilepath, defaults);
+				const command = `yq -M -p yaml -o json eval-all 'select(fi == 0) *? select(fi == 1)' ${tmpFilepath} ${filepath}`;
+				const process = popen(command);
+				if (process) {
+					profile = json(process);
+					process.close();
+				}
+			}
+			return profile;
+		}
+	},
+	update_subscription: {
+		args: { section_id: 'section_id' },
+		call: function (req) {
+			let success = false;
+			const section_id = req.args?.section_id;
+			if (section_id) {
+				success = system(['service', 'nikki', 'update_subscription', section_id]) == 0;
+			}
+			return { success: success };
+		}
+	},
+	api: {
+		args: { method: 'method', path: 'path', query: 'query', body: 'body' },
+		call: function (req) {
+			let result = {};
+
+			const method = req.args?.method;
+			const path = req.args?.path;
+			const query = req.args?.query;
+			const body = req.args?.body;
+
+			const profile = load_profile();
+			const api_listen = profile['external-controller'];
+			const api_tls_listen = profile['external-controller-tls'];
+			const api_secret = profile['secret'];
+			if (!api_listen && !api_tls_listen) {
+				return result;
+			}
+
+			const protocol = api_tls_listen ? 'https' : 'http';
+
+			const url = api_listen + path;
+
+			const process = popen(`curl --proto-default '${protocol}' --insecure --request '${method}' --oauth2-bearer '${api_secret}' --url-query '${query}' --data '${body}' '${url}'`);
+			if (process) {
+				result = json(process);
+				process.close();
+			}
+
+			return result;
+		}
+	},
+	get_identifiers: {
+		call: function () {
+			const users = filter(get_users(), (x) => x != '');
+			const groups = filter(get_groups(), (x) => x != '');
+			const cgroups = filter(get_cgroups(), (x) => x != '' && index(x, 'services/nikki') < 0);
+			return { users: users, groups: groups, cgroups: cgroups };
+		}
+	},
+	debug: {
+		call: function () {
+			const success = system('/etc/nikki/scripts/debug.sh > /var/log/nikki/debug.log') == 0;
+			return { success: success };
+		}
+	}
+};
+
+return { 'luci.nikki': methods };

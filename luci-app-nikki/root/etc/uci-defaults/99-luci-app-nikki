@@ -1,0 +1,61 @@
+#!/bin/sh
+
+chmod +x /etc/init.d/nikki \
+         /etc/nikki/scripts/debug.sh \
+         /etc/nikki/scripts/include.sh \
+         /etc/nikki/scripts/firewall_include.sh
+
+. /lib/functions.sh
+. /etc/nikki/scripts/include.sh
+mkdir -p "$PROFILES_DIR" "$SUBSCRIPTIONS_DIR" "$RULE_PROVIDERS_DIR" "$PROXY_PROVIDERS_DIR" /etc/nikki/certs
+
+config_load nikki
+
+migrate_rac_cgroup_item() {
+	local cgroup="$1" cfg="$2"
+	[ -d "/sys/fs/cgroup/$cgroup" ] && return
+	[ -d "/sys/fs/cgroup/services/$cgroup" ] && {
+		uci -q del_list "nikki.$cfg.cgroup=$cgroup"
+		uci -q add_list "nikki.$cfg.cgroup=services/$cgroup"
+	}
+}
+
+migrate_router_access_control_cgroup() {
+	local cfg="$1"
+	config_list_foreach "$cfg" cgroup migrate_rac_cgroup_item "$cfg"
+}
+
+config_foreach migrate_router_access_control_cgroup router_access_control
+
+sync_dns_from_proxy() {
+	local cfg="$1"
+	local proxy dns
+	config_get proxy "$cfg" proxy
+	config_get dns   "$cfg" dns
+	[ -z "$dns" ] && uci -q set "nikki.$cfg.dns=$proxy"
+}
+
+config_foreach sync_dns_from_proxy router_access_control
+
+config_get init config init
+[ -n "$init" ] && {
+	random=$(awk 'BEGIN{srand(); printf "%06d", int(rand() * 1000000)}')
+	uci -q set nikki.mixin.api_secret="$random"
+	uci -q set nikki.@authentication[0].password="$random"
+	uci -q del nikki.config.init
+}
+
+uci -q commit nikki
+
+uci -q batch <<-EOF > /dev/null
+	del firewall.nikki
+	set firewall.nikki=include
+	set firewall.nikki.type=script
+	set firewall.nikki.path=$FIREWALL_INCLUDE_SH
+	set firewall.nikki.fw4_compatible=1
+	commit firewall
+EOF
+
+rm -f /tmp/luci-*
+
+exit 0
