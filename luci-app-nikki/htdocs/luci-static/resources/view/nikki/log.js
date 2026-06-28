@@ -19,8 +19,8 @@ const parseCoreLogLine = (line, dateObj) => {
 return view.extend({
     load: function () {
         return Promise.all([
-            L.resolveDefault(nikki.getAppLog(), ''),
-            L.resolveDefault(nikki.getCoreLog(), ''),
+            L.resolveDefault(fs.read_direct(nikki.appLogPath), ''),
+            L.resolveDefault(fs.read_direct(nikki.coreLogPath), ''),
             uci.load('system')
         ]);
     },
@@ -90,9 +90,7 @@ return view.extend({
                         'click': ui.createHandlerFn(this, function () {
                             state.raw = '';
                             renderText();
-                            return tab === 'core_log'
-                                ? nikki.clearCoreLog()
-                                : nikki.clearAppLog();
+                            return nikki.clearLog(tab === 'core_log' ? nikki.coreLogPath : nikki.appLogPath)
                         })
                     }, _('Clear Log')),
                     E('button', {
@@ -186,8 +184,8 @@ return view.extend({
 
         L.Poll.add(L.bind(function () {
             return Promise.all([
-                L.resolveDefault(nikki.getAppLog(), ''),
-                L.resolveDefault(nikki.getCoreLog(), '')
+                L.resolveDefault(fs.read_direct(nikki.appLogPath), ''),
+                L.resolveDefault(fs.read_direct(nikki.coreLogPath), ''),
             ]).then(function ([app_log, core_log]) {
                 const appEl = document.getElementById(`widget.cbid.nikki.log._app_log`);
                 if (appEl && appEl._logState) {

@@ -10,7 +10,7 @@
             "uci": { "nikki": true }
         }
     },
-    "admin/services/nikki/config": {
+    "admin/services/nikki/app": {
         "title": "App Config",
         "order": 10,
         "action": {

@@ -3,23 +3,8 @@
 'require view';
 'require ui';
 'require fs';
-'require rpc';
 'require uci';
 'require tools.nikki as nikki';
-
-const update_ui = rpc.declare({
-    object: 'luci.nikki',
-    method: 'update_ui',
-    params: ['url', 'name'],
-    expect: { '': {} }
-});
-
-const callConnStat = rpc.declare({
-    object: 'luci.nikki',
-    method: 'connection_check',
-    params: ['url'],
-    expect: { '': {} }
-});
 
 const checkurls = [
     ['https://www.baidu.com', _('Baidu')],
@@ -68,7 +53,7 @@ return view.extend({
                         let weight = document.getElementById('_connection_check_results');
                         weight.innerHTML = '';
                         return Promise.all(checkurls.map((site) => {
-                            return L.resolveDefault(callConnStat(site[0]), {}).then((res) => {
+                            return L.resolveDefault(nikki.callConnStat(site[0]), {}).then((res) => {
                                 let label = '%s (%dms)'.format(site[1], res.elapsed_ms), color = 'red';
                                 if (res.httpcode && res.httpcode.match(/^20\d$/)) {
                                     color = (res.elapsed_ms < 300) ? 'green' : (res.elapsed_ms < 800) ? 'orange' : 'red';
@@ -109,12 +94,12 @@ return view.extend({
         o = s.option(form.Button, 'reload');
         o.inputstyle = 'action';
         o.inputtitle = _('Reload Service');
-        o.onclick = function () { return nikki.reload(); };
+        o.onclick = function () { return nikki.service('reload'); };
 
         o = s.option(form.Button, 'restart');
         o.inputstyle = 'negative';
         o.inputtitle = _('Restart Service');
-        o.onclick = function () { return nikki.restart(); };
+        o.onclick = function () { return nikki.service('restart'); };
 
         o = s.option(form.ListValue, 'ui_url');
         o.ucisection = 'mixin';
@@ -137,7 +122,7 @@ return view.extend({
                         .then(() => nikki.openDashboard(ui_entry[1]))
                         .catch(() => {
                             btn.textContent = _('Please wait, downloading %s...').format(ui_entry[1]);
-                            return update_ui(current_url, ui_entry[1])
+                            return nikki.update_ui(current_url, ui_entry[1])
                                 .then(result => {
                                     if (result.status === 'ok')
                                         return nikki.openDashboard(ui_entry[1]);

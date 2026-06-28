@@ -2,10 +2,8 @@
 
 'use strict';
 
-import { cursor } from 'uci';
 import { access, popen, writefile } from 'fs';
 import { get_users, get_groups, get_cgroups, load_profile } from '/etc/nikki/ucode/include.uc';
-const uci = cursor();
 
 function shellQuote(s) {
 	return `'${replace(s, "'", "'\\''")}'`;
@@ -32,8 +30,13 @@ const methods = {
 		call: function (req) {
 			const url = req.args?.url;
 			const name = req.args?.name;
-			const listen = uci.get('nikki', 'mixin', 'api_listen');
-			const secret = uci.get('nikki', 'mixin', 'api_secret');
+			const profile = load_profile();
+			const secret = profile['secret'];
+			const listen = profile['external-controller'];
+			const tls_listen = profile['external-controller-tls'];
+			if (!listen && !tls_listen) {
+				return { status: 'error', message: 'invalid listen' };
+			}
 			const filepath = '/etc/nikki/run/config.yaml';
 			if (!url || !name
 				|| !match(name, /^[A-Za-z0-9_-]+$/)

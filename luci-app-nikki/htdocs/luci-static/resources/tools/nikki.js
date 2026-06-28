@@ -69,6 +69,20 @@ const callNikkiDebug = rpc.declare({
     expect: { '': {} }
 });
 
+const update_ui = rpc.declare({
+    object: 'luci.nikki',
+    method: 'update_ui',
+    params: ['url', 'name'],
+    expect: { '': {} }
+});
+
+const callConnStat = rpc.declare({
+    object: 'luci.nikki',
+    method: 'connection_check',
+    params: ['url'],
+    expect: { '': {} }
+});
+
 const homeDir = '/etc/nikki';
 const profilesDir = `${homeDir}/profiles`;
 const subscriptionsDir = `${homeDir}/subscriptions`;
@@ -101,12 +115,8 @@ return baseclass.extend({
         return callServiceList('nikki', ['instances', 'nikki', 'running']).then(Boolean);
     },
 
-    reload: function () {
-        return callRCInit('nikki', 'reload');
-    },
-
-    restart: function () {
-        return callRCInit('nikki', 'restart');
+    service: function (command) {
+        return callRCInit('nikki', command);
     },
 
     writefile: function (path, data, mode) {
@@ -211,20 +221,8 @@ return baseclass.extend({
         return L.resolveDefault(fs.list(dir), []);
     },
 
-    getAppLog: function () {
-        return L.resolveDefault(fs.read_direct(this.appLogPath), '');
-    },
-
-    getCoreLog: function () {
-        return L.resolveDefault(fs.read_direct(this.coreLogPath), '');
-    },
-
-    clearAppLog: function () {
-        return this.writefile(this.appLogPath, '');
-    },
-
-    clearCoreLog: function () {
-        return this.writefile(this.coreLogPath, '');
+    clearLog: function (path) {
+        return this.writefile(path, '');
     },
 
     debug: function () {
@@ -237,5 +235,13 @@ return baseclass.extend({
             this.subscriptionsDir + '/' + from + '.yaml',
             this.subscriptionsDir + '/' + to + '.yaml'
         ]);
+    },
+
+    callConnStat: function (url) {
+        return callConnStat(url);
+    },
+
+    update_ui: function (url, name) {
+        return update_ui(url, name);
     },
 })
