@@ -1,5 +1,5 @@
 #!/usr/bin/ucode
-
+// https://ucode.mein.io/module-fs.html
 'use strict';
 
 import { access, popen, writefile } from 'fs';
@@ -7,6 +7,14 @@ import { get_users, get_groups, get_cgroups, load_profile } from '/etc/nikki/uco
 
 function shellQuote(s) {
 	return `'${replace(s, "'", "'\\''")}'`;
+};
+
+function run(cmd) {
+	const p = popen(cmd);
+	if (!p) return null;
+	const out = trim(p.read('all'));
+	p.close();
+	return out;
 };
 
 const methods = {
@@ -19,7 +27,6 @@ const methods = {
 			const start = clock(true);
 			const httpcode = trim(popen(`wget --spider -t1 -ST3 ${shellQuote(req.args?.url)} 2>&1 | awk '/^\\s*HTTP\\//{print $2}'`).read('all')) || '-1';
 			const end = clock(true);
-
 			const elapsed_ms = int((end[0] - start[0]) * 1000 + (end[1] - start[1]) / 1000000);
 
 			return { httpcode: httpcode, elapsed_ms: elapsed_ms };
@@ -43,13 +50,6 @@ const methods = {
 				|| match(url, /['"`$\\;&|<>(){}\n]/)) {
 				return { status: 'error', message: 'invalid url/name' };
 			};
-			function run(cmd) {
-				const p = popen(cmd);
-				if (!p) return null;
-				const out = trim(p.read('all'));
-				p.close();
-				return out;
-			};
 			const yq_out = run(`yq -Mi '.["external-ui-url"]="${url}" | .["external-ui-name"]="${name}"' ${filepath} 2>&1`);
 			if (yq_out) return { status: 'error', message: `yq: ${yq_out}` };
 
@@ -62,39 +62,23 @@ const methods = {
 			};
 
 			let result = do_upgrade();
-			if (result?.status !== 'ok') {
-				result = do_upgrade();
-			};
+			if (result?.status !== 'ok') result = do_upgrade();
 
 			return result?.status === 'ok'
 				? { status: 'ok' }
-				: { status: 'error', message: result?.message || 'upgrade failed, please retry' };
+				: { status: 'error', message: result?.message || 'please retry' };
 		}
 	},
 	version: {
 		call: function () {
-			let process;
-			let app = '';
-			if (system('command -v apk') == 0) {
-				process = popen('apk list -I luci-app-nikki | cut -d " " -f 1 | cut -d "-" -f 4');
-				if (process) {
-					app = trim(process.read('all'));
-					process.close();
-				}
+			let app = null, core = null;
+			if (access('/usr/bin/apk', 'x')) {
+				app = run('apk list -I luci-app-nikki | cut -d " " -f 1 | cut -d "-" -f 4');
 			} else if (system('command -v opkg') == 0) {
-				process = popen('opkg list-installed luci-app-nikki | cut -d " " -f 3');
-				if (process) {
-					app = trim(process.read('all'));
-					process.close();
-				}
+				app = run('opkg list-installed luci-app-nikki | cut -d " " -f 3');
 			}
-			let core = '';
-			process = popen('mihomo -v | grep Mihomo | cut -d " " -f 3');
-			if (process) {
-				core = trim(process.read('all'));
-				process.close();
-			}
-			return { app: app, core: core };
+			core = run('mihomo -v | grep Mihomo | cut -d " " -f 3');
+			return { app, core };
 		}
 	},
 	profile: {
@@ -106,12 +90,8 @@ const methods = {
 			const tmpFilepath = '/var/run/nikki/profile.json';
 			if (access(filepath, 'r')) {
 				writefile(tmpFilepath, defaults);
-				const command = `yq -M -p yaml -o json eval-all 'select(fi == 0) *? select(fi == 1)' ${tmpFilepath} ${filepath}`;
-				const process = popen(command);
-				if (process) {
-					profile = json(process);
-					process.close();
-				}
+				const process = run(`yq -M -p yaml -o json eval-all 'select(fi == 0) *? select(fi == 1)' ${tmpFilepath} ${filepath}`);
+				if (process) profile = json(process);
 			}
 			return profile;
 		}
@@ -141,19 +121,12 @@ const methods = {
 			const api_listen = profile['external-controller'];
 			const api_tls_listen = profile['external-controller-tls'];
 			const api_secret = profile['secret'];
-			if (!api_listen && !api_tls_listen) {
-				return result;
-			}
+			if (!api_listen && !api_tls_listen) return result;
 
 			const protocol = api_tls_listen ? 'https' : 'http';
-
 			const url = api_listen + path;
-
-			const process = popen(`curl --proto-default '${protocol}' --insecure --request '${method}' --oauth2-bearer '${api_secret}' --url-query '${query}' --data '${body}' '${url}'`);
-			if (process) {
-				result = json(process);
-				process.close();
-			}
+			const process = run(`curl --proto-default '${protocol}' --insecure --request '${method}' --oauth2-bearer '${api_secret}' --url-query '${query}' --data '${body}' '${url}'`);
+			if (process) result = json(process);
 
 			return result;
 		}

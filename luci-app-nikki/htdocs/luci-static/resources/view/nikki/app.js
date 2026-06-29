@@ -75,10 +75,10 @@ return view.extend({
         s.anonymous = true;
 
         o = s.option(form.DummyValue, '_app_version', _('App Version'));
-        o.load = function () { return v.app ?? ''; };
+        o.load = () => v.app;
 
         o = s.option(form.DummyValue, '_core_version', _('Core Version'));
-        o.load = function () { return v.core ?? ''; };
+        o.load = () => v.core ?? '';
 
         o = s.option(form.DummyValue, '_core_status', _('Core Status'));
         o.cfgvalue = function () {
@@ -104,9 +104,19 @@ return view.extend({
         o = s.option(form.ListValue, 'ui_url');
         o.ucisection = 'mixin';
         o.ucioption = 'ui_url';
-        ui_array.forEach(([url, name]) => {
-            o.value(url, name);
-        });
+
+        o.load = function (section_id) {
+            const ui_path = uci.get('nikki', 'mixin', 'ui_path');
+            return Promise.all(ui_array.map(([url, name]) =>
+                fs.stat(`${nikki.runDir}/${ui_path}/${name}/index.html`)
+                    .then(() => [url, name])
+                    .catch(() => [url, `${name} (${_('未安装')})`])
+            )).then(entries => {
+                entries.forEach(([url, label]) => this.value(url, label));
+                return form.ListValue.prototype.load.apply(this, arguments);
+            });
+        };
+
         o.renderWidget = function (section_id) {
             let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
             el.classList.add('control-group');
@@ -117,7 +127,6 @@ return view.extend({
                     const current_url = el.firstChild.value;
                     const ui_entry = ui_array.find(x => x[0] === current_url);
                     const ui_path = uci.get('nikki', 'mixin', 'ui_path');
-
                     return fs.stat(`${nikki.runDir}/${ui_path}/${ui_entry[1]}/index.html`)
                         .then(() => nikki.openDashboard(ui_entry[1]))
                         .catch(() => {
@@ -133,7 +142,6 @@ return view.extend({
                         .catch(e => ui.addNotification(null, E('p', _('Update failed: ') + e), 'error'));
                 })
             }, default_label);
-
             el.appendChild(btn);
             return el;
         };

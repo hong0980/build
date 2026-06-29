@@ -140,17 +140,24 @@ return view.extend({
         m = new form.Map('nikki');
 
         s = m.section(form.NamedSection, 'mixin', 'mixin', _('Mixin Option'));
-
         s.tab('general', _('General Config'));
+        s.tab('external_control', _('External Control Config'));
+        s.tab('dns', _('DNS Config'));
+        s.tab('inbound', _('Inbound Config'));
+        s.tab('tun', _('TUN Config'));
+        s.tab('sniffer', _('Sniffer Config'));
+        s.tab('rule', _('Rule Config'));
+        s.tab('geox', _('GeoX Config'));
+        s.tab('mixin_file_content', _('Mixin File Content'));
 
         o = s.taboption('general', form.ListValue, 'log_level', _('Log Level'));
         o.optional = true;
         o.placeholder = _('Unmodified');
-        o.value('silent');
-        o.value('error');
-        o.value('warning');
-        o.value('info');
-        o.value('debug');
+        o.value('silent', _('Silent'));
+        o.value('error', _('Error'));
+        o.value('warning', _('Warning'));
+        o.value('info', _('Info'));
+        o.value('debug', _('Debug'));
 
         o = s.taboption('general', form.ListValue, 'mode', _('Mode'));
         o.optional = true;
@@ -162,9 +169,9 @@ return view.extend({
         o = s.taboption('general', form.ListValue, 'match_process', _('Match Process'));
         o.optional = true;
         o.placeholder = _('Unmodified');
-        o.value('off');
-        o.value('strict');
-        o.value('always');
+        o.value('off', _('Off'));
+        o.value('strict', _('Strict'));
+        o.value('always', _('Always'));
 
         o = s.taboption('general', form.ListValue, 'outbound_interface', _('Outbound Interface'));
         o.optional = true;
@@ -209,8 +216,6 @@ return view.extend({
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
 
-        s.tab('external_control', _('External Control Config'));
-
         o = s.taboption('external_control', form.Value, 'ui_path', _('UI Path'));
         o.placeholder = _('Unmodified');
 
@@ -251,8 +256,6 @@ return view.extend({
         o.placeholder = _('Unmodified');
         o.value('0', _('Disable'));
         o.value('1', _('Enable'));
-
-        s.tab('inbound', _('Inbound Config'));
 
         o = s.taboption('inbound', form.ListValue, 'allow_lan', _('Allow Lan'));
         o.optional = true;
@@ -301,8 +304,6 @@ return view.extend({
         so.password = true;
         so.rmempty = false;
 
-        s.tab('tun', _('TUN Config'));
-
         o = s.taboption('tun', form.ListValue, 'tun_enabled', _('Enable'));
         o.optional = true;
         o.placeholder = _('Unmodified');
@@ -342,7 +343,6 @@ return view.extend({
         o.value('tcp://any:53');
         o.value('any:53');
 
-        s.tab('dns', _('DNS Config'));
 
         o = s.taboption('dns', form.ListValue, 'dns_enabled', _('Enable'));
         o.optional = true;
@@ -514,8 +514,6 @@ return view.extend({
 
         so = o.subsection.option(form.DynamicList, 'nameserver', _('Nameserver'));
 
-        s.tab('sniffer', _('Sniffer Config'));
-
         o = s.taboption('sniffer', form.ListValue, 'sniffer', _('Enable'));
         o.optional = true;
         o.placeholder = _('Unmodified');
@@ -572,8 +570,6 @@ return view.extend({
 
         so = o.subsection.option(form.Flag, 'overwrite_destination', _('Overwrite Destination'));
         so.rmempty = false;
-
-        s.tab('rule', _('Rule Config'));
 
         o = s.taboption('rule', form.Flag, 'rule_provider', _('Append Rule Provider'));
         o.rmempty = false;
@@ -857,8 +853,6 @@ return view.extend({
         };
         /* Import mihomo config END */
 
-        s.tab('geox', _('GeoX Config'));
-
         o = s.taboption('geox', form.ListValue, 'geoip_format', _('GeoIP Format'));
         o.optional = true;
         o.placeholder = _('Unmodified');
@@ -913,8 +907,6 @@ return view.extend({
         o = s.taboption('geox', form.Value, 'geox_update_interval', _('GeoX Update Interval'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
-
-        s.tab('mixin_file_content', _('Mixin File Content'));
 
         o = s.taboption('mixin_file_content', form.Flag, 'mixin_file_content', _('Enable'), _('Please go to the editor tab to edit the file for mixin'));
         o.rmempty = false;
