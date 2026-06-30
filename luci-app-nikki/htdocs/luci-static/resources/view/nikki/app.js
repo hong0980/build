@@ -116,7 +116,6 @@ return view.extend({
                 return form.ListValue.prototype.load.apply(this, arguments);
             });
         };
-
         o.renderWidget = function (section_id) {
             let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
             el.classList.add('control-group');
@@ -124,7 +123,8 @@ return view.extend({
             const btn = E('button', {
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function () {
-                    const current_url = el.firstChild.value;
+                    const select = el.firstChild;
+                    const current_url = select.value;
                     const ui_entry = ui_array.find(x => x[0] === current_url);
                     const ui_path = uci.get('nikki', 'mixin', 'ui_path');
                     return fs.stat(`${nikki.runDir}/${ui_path}/${ui_entry[1]}/index.html`)
@@ -133,8 +133,11 @@ return view.extend({
                             btn.textContent = _('Please wait, downloading %s...').format(ui_entry[1]);
                             return nikki.update_ui(current_url, ui_entry[1])
                                 .then(result => {
-                                    if (result.status === 'ok')
+                                    if (result?.status === 'ok') {
+                                        const opt = Array.from(select.options).find(o => o.value === current_url);
+                                        if (opt) opt.textContent = ui_entry[1];
                                         return nikki.openDashboard(ui_entry[1]);
+                                    }
                                     throw new Error(result?.message);
                                 })
                                 .finally(() => btn.textContent = default_label);
