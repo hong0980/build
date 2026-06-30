@@ -1,62 +1,70 @@
+# ============================================================================
+# 官方完整配置示例: https://github.com/MetaCubeX/mihomo/blob/Meta/docs/config.yaml
+# ============================================================================
+
 # ================= 机场订阅 =================
 proxy-providers:
   cloud:
-    url: ""
+    url: ""                           # ⚠️ 风险提示：订阅地址为空字符串，mihomo 会因无法拉取节点而启动失败或代理组为空。
+                                      # 部署前必须填入真实订阅链接，否则所有依赖 use:[cloud] 的策略组都没有节点可用。
     type: http
-    interval: 86400
-    path: "./proxy_provider/airport.yaml"
-    filter: "(?i)^(?!.*(到期|域名|剩余)).*$"
-    proxy: 直连
+    interval: 86400                  # 订阅自动更新间隔，单位秒（此处 24 小时）
+    path: "./proxy_provider/airport.yaml"   # 订阅缓存落盘路径，默认只允许存储在 mihomo Home Dir 下
+    filter: "(?i)^(?!.*(到期|域名|剩余)).*$" # 过滤节点名，排除机场塞进订阅里的“到期时间/官网域名”等提示性虚假节点
+    proxy: 🎯 直连                    # 拉取订阅本身走的出口，必须用直连节点的“名称”而非策略组名，
+                                      # 否则订阅更新会失败（你的配置已正确定义了 🎯 直连，注意名字要完全一致，emoji 也算在内）
     health-check:
       enable: true
-      url: http://cp.cloudflare.com/generate_204
-      interval: 300
-    override:
-      # 强制将所有下载的节点 packet-encoding 设为空，解决 xudp 导致的无延迟问题
-      packet-encoding: ""
-      client-fingerprint: "chrome"
+      url: http://cp.cloudflare.com/generate_204   # 健康检测探测地址，返回 204 视为节点存活
+      interval: 300                  # 探测间隔（秒）
+    override:                        # 覆写订阅节点加载时的部分字段
+      packet-encoding: ""            # 强制清空 packet-encoding，规避部分机场把 xudp 写死导致 UDP 转发异常/无延迟数据的问题
+      client-fingerprint: "chrome"   # 强制覆盖所有订阅节点的 TLS ClientHello 指纹为 chrome，统一抗封锁特征
+
 # ================= 全局设置 =================
-port: 7890
-socks-port: 7891
-redir-port: 7892
-mixed-port: 7893
-tproxy-port: 7894
-allow-lan: true
-bind-address: "*"
-mode: rule
-ipv6: false
-unified-delay: true
-tcp-concurrent: true
-log-level: warning
-find-process-mode: 'off'
-# interface-name: veth-mihomo
-client-fingerprint: chrome
-keep-alive-idle: 600
-keep-alive-interval: 15
-disable-keep-alive: false
+allow-lan: true                      # 允许局域网设备接入代理端口/Tun（路由器场景必须开启）
+bind-address: "*"                    # 配合 allow-lan 使用，"*" 表示所有网卡都监听
+mode: rule                           # 规则模式（rule / global / direct）
+ipv6: false                          # 全局 IPv6 总开关；关闭后会屏蔽 AAAA 查询、阻断所有 IPv6 连接
+                                      # 此全局开关同时控制 DNS 是否解析 AAAA，如果你的下游设备/应用依赖 IPv6（如某些直播/游戏），
+                                      # 关闭后会导致这些应用直接连接失败而不是回退到 IPv4，需结合自身网络环境判断是否需要打开。
+unified-delay: true                  # 统一延迟计算方式，去除握手带来的延迟偏差，使测速更准确
+tcp-concurrent: true                 # 对解析出的多个 IP 并发握手，使用最快握手成功的 IP（依赖 DNS 解析出多条 A/AAAA 记录才有意义）
+log-level: warning                   # 日志等级：silent/error/warning/info/debug
+                                      # ⚠️ 风险提示：排查 DNS 策略、嗅探、代理选择问题时 warning 级别往往看不到关键信息，
+                                      # 建议临时改成 info 甚至 debug 来定位问题，确认无误后再改回 warning 减少日志量。
+find-process-mode: 'off'             # off 不匹配进程，推荐路由器场景使用（避免因获取不到进程信息而拖慢/出错）
+client-fingerprint: chrome           # 全局默认 TLS 指纹（节点未单独指定 client-fingerprint 时生效）
+keep-alive-idle: 600                 # TCP keepalive 空闲探测时间（秒）
+keep-alive-interval: 15              # TCP keepalive 探测间隔（秒）
+disable-keep-alive: false            # 是否禁用 keepalive
 
 # 配置文件持久化设置
 profile:
-  store-selected: true
-  store-fake-ip: true
+  store-selected: true                # 记住手动在策略组中选择的节点，重启/reload 后保留
+  store-fake-ip: true                 # 持久化 fake-ip 映射表，重启后同一域名尽量复用同一个 fake-ip，减少缓存失效带来的偶发性问题
 
 # ================= 嗅探 =================
 sniffer:
-  enable: true
+  enable: true                        # 启用流量嗅探，从 TLS SNI / HTTP Host / QUIC 中提取真实域名，弥补 fake-ip/redir 模式下规则匹配只能用 IP 的缺陷
   sniff:
     HTTP:
-      ports: [80, 8080-8880]
-      override-destination: true
+      ports: [80, 8080-8880]          # 仅在这些端口上嗅探 HTTP Host
+      override-destination: true      # 用嗅探结果覆盖实际连接目标（局部覆盖全局 sniffer.override-destination 默认值 true，这里写了一样的值，等效）
     TLS:
-      ports: [443, 8443]
+      ports: [443, 8443]              # 嗅探 TLS ClientHello 中的 SNI
+                                       # ⚠️ 注意：此处未单独写 override-destination，会继承全局默认值 true（即与 HTTP 一致，用嗅探域名覆盖目标）
     QUIC:
-      ports: [443, 8443]
-  # skip-dst-address:
+      ports: [443, 8443]              # 嗅探 QUIC（HTTP/3）的 SNI
+                                       # 同样继承全局默认 override-destination: true
+  # skip-dst-address:                 # 按目标 IP 跳过嗅探（已注释关闭）
   #   - 111.1.171.0/24
   #   - 39.174.182.0/23
   force-domain:
-    - "+.v2ex.com"
-  skip-domain:
+    - "+.v2ex.com"                    # 强制对该域名嗅探（即使不在 ports 白名单范围逻辑里也强制处理，常用于解决误判问题）
+  skip-domain:                        # 对这些域名跳过嗅探，使用连接本身的真实 IP/端口判断规则，而不是嗅探到的域名
+                                       # ⚠️ 常见用途：很多 UDP/QUIC 长连接（微信、游戏、企业 VPN 等）嗅探后会因为域名规则误判走代理导致连接异常，
+                                       # 故意跳过嗅探让它们保持走 IP 段规则（通常是直连），这是非常容易被忽略但又直接影响"是否能连上"的配置点。
     - "rule-set:private_domain,cn_domain"
     - "+.goofish.com"
     - "dlg.io.mi.com"
@@ -76,75 +84,89 @@ sniffer:
 
 # ================= DNS模块 =================
 dns:
-  enable: true
-  listen: 0.0.0.0:1053
-  ipv6: false
-  respect-rules: true
-  enhanced-mode: fake-ip
-  fake-ip-range: 198.18.0.1/16
-  fake-ip-filter-mode: blacklist
+  enable: true                                # 开启 mihomo 内置 DNS 服务器；关闭则直接用系统 DNS，所有分流/拦截策略均会失效
+  cache-algorithm: arc                         # DNS 缓存淘汰算法，ARC 比默认 LRU 命中率更优，能降低重复解析延迟
+  listen: '[::]:1053'                          # 内置 DNS 监听地址（同时覆盖 IPv4/IPv6），端口 1053；真实的 53 端口由下方 tun.dns-hijack 劫持转发到这里
+  ipv6: false                                  # 关闭后 AAAA 查询直接返回空结果，不解析 IPv6 地址，需与全局 ipv6 开关保持一致
+  respect-rules: true                          # 让 nameserver/fallback/nameserver-policy 这些 DNS 服务器自身的连接方式也按 rules 规则走代理或直连，而非一律直连
+  enhanced-mode: fake-ip                       # 使用 fake-ip 模式，比 redir-host 少一次往返，需配合 Tun 使用
+  fake-ip-range: 198.18.0.1/16                 # fake-ip 地址池，使用 IANA 为网络测试保留、不可在公网路由的网段，避免地址冲突或流量泄露
+  fake-ip-filter-mode: blacklist               # blacklist：默认所有域名都分配 fake-ip，命中下方 fake-ip-filter 列表的除外，返回真实 IP
 
-  # 【优化】让国内域名不过 Fake-IP，直接返回真实 IP，配合直连规则
-  fake-ip-filter:
-    - "rule-set:private_domain,cn_domain"
-    - "*.lan"
-    - "*.local"
-    - "+.services.googleapis.cn"
-    - "+.xn--ngstr-lra8j.com"
-    - "time.*.com"
-    - "+.pool.ntp.org"
-    - "+.ntp.tencent.com"
-    - "+.ntp1.aliyun.com"
-    - "+.ntp.ntsc.ac.cn"
-    - "+.cn.ntp.org.cn"
-    - "*.microsoftonline.com"
-    - "*.wql.us"
-    - "*.microsoft.com"
-    - "*.keywordsstudios.cn"
-    - "geosite:cn"
+  fake-ip-filter:                              # 命中以下条目的域名不走 fake-ip，直接返回真实解析结果（是否走代理仍由 rules 决定，这里只管"给不给假IP"）
+    - "rule-set:private_domain,cn_domain"      # 复用已定义的私有/国内域名规则集
+    - "*.lan"                                  # 局域网域名
+    - "*.local"                                # mDNS 本地域名
+    - "+.services.googleapis.cn"               # 国内可直连的 Google 服务镜像域名
+    - "+.xn--ngstr-lra8j.com"                  # Google 域名的 Punycode 编码形式（同上类服务）
+    - "time.*.com"                             # 各类时间同步服务域名
+    - "+.pool.ntp.org"                         # NTP 时间同步池
+    - "+.ntp.tencent.com"                      # 腾讯 NTP 服务器
+    - "+.ntp1.aliyun.com"                      # 阿里 NTP 服务器
+    - "+.ntp.ntsc.ac.cn"                       # 国家授时中心 NTP 服务器
+    - "+.cn.ntp.org.cn"                        # NTP 时间同步服务
+    - "*.microsoftonline.com"                  # 微软账号登录相关域名，需返回真实 IP 避免登录异常
+    - "*.wql.us"                               # 自定义保留域名
+    - "*.microsoft.com"                        # 微软主域名
+    - "*.keywordsstudios.cn"                   # 自定义保留域名
+    - "geosite:cn"                             # 国内域名分类（geosite 数据库）
 
-  #DNS 分流策略：国内域名强制用国内 DNS 解析
-  nameserver-policy:
-    "geosite:cn,private":
-    - https://223.5.5.5/dns-query
-    - https://1.12.12.12/dns-query
-    "rule-set:cn_domain":
-    - https://223.5.5.5/dns-query
-    - https://1.12.12.12/dns-query
-  default-nameserver:
+  default-nameserver:                          # 仅用于解析下面各 DoH/DoT 服务器自身的域名（如果它们写成域名形式），必须是纯 IP，不能再用域名
     - 223.5.5.5
-    - 1.12.12.12
-  proxy-server-nameserver:
+    - 119.29.29.29
+
+  proxy-server-nameserver:                     # 专用于解析机场节点 server 字段（如果是域名形式），不影响普通上网流量解析
     - https://223.5.5.5/dns-query
     - https://1.12.12.12/dns-query
-  nameserver:
+
+  nameserver:                                  # 主 DNS 服务器，未命中 nameserver-policy 的域名（主要是境外域名）走这里解析
     - https://8.8.8.8/dns-query
     - https://1.1.1.1/dns-query
-  fallback:
+
+  fallback:                                    # 当 nameserver 解析结果被 fallback-filter 判定为可疑（疑似污染）时，改用这里重新查询
     - https://8.8.8.8/dns-query
     - https://1.1.1.1/dns-query
+
   fallback-filter:
-    geoip: true
-    geoip-code: CN
+    geoip: true                                # 启用基于 geoip 的污染判断
+    geoip-code: CN                              # nameserver 解析出的 IP 属于 CN 则视为可信，不触发 fallback
     ipcidr:
-        - 240.0.0.0/4
+      - 240.0.0.0/4                             # 命中该保留网段（典型污染/劫持特征）则强制触发 fallback 重新查询
+
+  nameserver-policy:                           # 按域名/规则集指定专用 DNS，优先级高于上面的 nameserver，是实现"国内国外分流解析"的核心
+    "geosite:cn,private":                      # 国内域名 + 私有域名
+      - https://223.5.5.5/dns-query
+      - https://1.12.12.12/dns-query
+    "rule-set:cn_domain":                      # 国内域名规则集（与上面 geosite:cn 互为补充，覆盖面更细）
+      - https://223.5.5.5/dns-query
+      - https://1.12.12.12/dns-query
+    "rule-set:apple_domain":                   # 苹果服务域名单独走阿里 DoH，避免与其他境外 DNS 混用导致登录/推送异常
+      - https://223.5.5.5/dns-query
 
 # ================= 入站 Tun =================
 tun:
   enable: true
-  stack: mixed
-  device: tun0
-  dns-hijack: ["any:53", "tcp://any:53"]
-  mtu: 1380
-  auto-route: true
-  auto-redirect: false
-  auto-detect-interface: true
+  stack: mixed                        # Tun 协议栈实现，mixed 兼顾兼容性与性能
+  dns-hijack: ["any:53", "tcp://any:53"]   # 把所有目的端口为 53 的 UDP/TCP DNS 请求强制劫持到 mihomo 内置 DNS（即上面 dns.listen 的 1053 端口），
+                                       # 这样即使设备/App 写死了 8.8.8.8:53 之类的 DNS 也能被接管，是 fake-ip 模式生效的前提之一
+  mtu: 1380                           # Tun 网卡 MTU，部分上游链路（PPPoE/隧道套隧道）MTU 偏小时需要调低，避免分片导致连接卡顿甚至失败
+  auto-route: true                    # 自动配置路由表，把流量导入 Tun 网卡
+  auto-redirect: false                # 是否自动配置 iptables 重定向 TCP 连接（仅 Linux），路由器场景如果想做透明网关代理其他设备，
+                                       # 通常需要开启；当前为 false，说明该 Tun 主要服务于本机/已显式路由到该网卡的流量
+  auto-detect-interface: true         # 自动识别出口物理网卡，避免 Tun 网卡把自己发出的代理流量又递归劫持进 Tun（典型的"无限套娃"问题）
 
 # ================= 出站策略 =================
-groups: &groups {type: url-test, use: [cloud], include-all: true, tolerance: 50, interval: 300, url: http://www.gstatic.com/generate_204}
+groups: &groups {type: url-test, use: [cloud], include-all: true, tolerance: 50, interval: 300, url: http://cp.cloudflare.com/generate_204}
+# 以上为策略组公共锚点：url-test 自动选延迟最低节点；use: [cloud] 引用 proxy-providers 里的订阅名（必须与上面 proxy-providers.cloud 的 key 完全一致）；
+# include-all: true 表示把全局已知的所有节点（含 proxies 列表里手写的、其他订阅的）都纳入候选池，再用 filter 正则筛选子集；
+# tolerance: 50 表示延迟差在 50ms 以内的节点视为同一档，避免来回抖动切换；
+# url 为该策略组用来测速/健康检查的探测地址
+# ⚠️ 如果发现策略组里所有节点长期显示超时/无法测速，
+# 可以换成 http://www.google.com/generate_204 或机场自己提供的测速地址做交叉验证，排除"测速地址本身不通"导致误判节点全部失效的情况。
 
 proxies:
   - {name: 🎯 直连, type: direct, udp: true}
+    # 手写的本地直连"节点"，主要供 proxy-providers.cloud.proxy 引用，以及规则里 DIRECT 含义的具名出口
 
 proxy-groups:
   - {name: ♻️ 自动选择, <<: *groups, filter: "(?i)^(?!.*(直连)).*$"}
@@ -155,23 +177,19 @@ proxy-groups:
   - {name: ♻️ 新加坡自动, <<: *groups, filter: "(?i)(新加坡|sg)"}
   - {name: ♻️ AI, <<: *groups, filter: "(?i)^(?!.*(俄罗斯|土耳其|印度|港|HK|直连)).*$"}
   - {name: ♻️ 其他, <<: *groups, filter: "(?i)^(?!.*(港|HK|台|日|美|新|直连)).*$"}
+  # ⚠️ 风险提示：以上每个分区策略组的 filter 都是基于"机场节点命名是否包含对应关键字"做正则匹配，
+  # 强依赖你订阅商的节点命名规范。如果机场改了命名格式（比如把"香港"改成"HKG"或纯 emoji 旗帜），
+  # 对应分组会突然变成空节点列表，代理请求会因为该分组无可用节点而失败或被自动降级，
+  # 建议订阅更新后定期检查各分组节点数量是否为 0。
 
 rules:
-  #- AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,goofish.com)),DIRECT
-  #- AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,taobao.com)),DIRECT
-  #- AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,alicdn.com)),DIRECT
-  #- AND,((NETWORK,UDP),(DST-PORT,443),(GEOSITE,cn)),DIRECT
-  #- AND,((NETWORK,UDP),(DST-PORT,443)),REJECT # 拦截 QUIC，强制回退 TCP
-  #- IP-CIDR,10.0.0.0/24,DIRECT
-  #- IP-CIDR,192.168.6.0/24,DIRECT
-  #- AND,((DOMAIN-SUFFIX,netflix.com),(NETWORK,UDP)),REJECT
-  - RULE-SET,private_domain,🎯 直连
-  - RULE-SET,cn_domain,🎯 直连
   - RULE-SET,ww_reject,REJECT
-  - RULE-SET,cn_ip,🎯 直连,no-resolve
-  - GEOIP,CN,🎯 直连
-  - GEOIP,PRIVATE,🎯 直连
-  - RULE-SET,apple_domain,🎯 直连
+  - RULE-SET,private_domain,🎯 直连     # 局域网/内网保留域名直连
+  - RULE-SET,cn_domain,🎯 直连          # 国内域名直连
+  - RULE-SET,cn_ip,🎯 直连,no-resolve   # 国内 IP 段直连；no-resolve 表示不为此规则触发额外 DNS 解析，仅用于已知 IP 的连接（如直接填 IP 访问、或被前面规则解析过的）
+  - GEOIP,CN,🎯 直连                    # 兜底：按连接目标 IP 的地理位置判断为中国大陆则直连
+  - GEOIP,PRIVATE,🎯 直连               # 私有/内网 IP 段直连
+  - RULE-SET,apple_domain,🎯 直连       # 苹果服务直连（避免代理导致登录/推送异常，这也是上面 sniffer.skip-domain 里大量出现 apple 相关域名的原因——双重保险）
   - RULE-SET,ai_domain,♻️ AI
   - RULE-SET,bybit_domain,♻️ 日本自动
   - RULE-SET,github_domain,♻️ 自动选择
@@ -185,15 +203,23 @@ rules:
   - RULE-SET,gfw_domain,♻️ 自动选择
   - RULE-SET,geolocation-!cn,♻️ 自动选择
   - RULE-SET,ww_proxy,♻️ 自动选择
-  - MATCH,♻️ 自动选择
+  - MATCH,♻️ 自动选择                   # 兜底规则，必须放在最后一条；前面没命中的流量全部走这里
+  # ⚠️ 规则顺序敏感：mihomo 按从上到下顺序匹配，命中即停止。当前 RULE-SET,cn_ip 用了 no-resolve，
+  # 必须确保它出现在依赖"已解析出真实 IP"的规则之后或域名规则之前都没关系，因为 no-resolve 只是说"不为它本身触发解析"，
+  # 但它仍依赖连接此时是否已经有可用的目标 IP（fake-ip 模式下，由于 DNS 在连接发起前已完成解析/或走嗅探拿到域名），
+  # 一般场景下没有问题，但如果未来调整为 redir-host 模式或关闭 sniffer，要重新评估这条规则是否还能命中。
 
-geodata-mode: false
+geodata-mode: false                  # false 使用 geosite.dat/geoip.dat（社区 dat 格式），与下面 geox-url 的 .dat 后缀对应；
+                                      # 如果改成 true 则应改用 .metadb（mmdb 格式），两者必须匹配，否则规则集加载会失败
 geodata-loader: standard
 geox-url:
   mmdb: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb
   geosite: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat
   geoip: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat
   asn: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb
+  # ⚠️ jsdelivr 的 testingcf 镜像在国内有时会被墙或限速，首次启动/更新这些 geo 文件如果一直失败，
+  # 会导致依赖 geosite:cn / GEOIP,CN 等的规则全部失效（退化为"无法匹配"，最终落到 MATCH 兜底规则，
+  # 也就是所有流量包括本该直连的国内网站全部走代理），可以考虑替换成 raw.githubusercontent.com 镜像或自建 CDN 加速。
 
 rule-anchor:
   ip:          &ip          {type: http, interval: 86400, behavior: ipcidr,    format: mrs}
@@ -202,12 +228,13 @@ rule-anchor:
   domain_text: &domain_text {type: http, interval: 86400, behavior: domain,    format: yaml}
 
 rule-providers:
+  # 以下均为远程规则集，url 指向 MetaCubeX/meta-rules-dat 仓库的预编译规则文件（.mrs 二进制格式，体积小、加载快）
   ai_domain: {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs"}
+  ww_reject: {<<: *domain, url: "https://raw.githubusercontent.com/wwqgtxx/clash-rules/release/reject.mrs"}
   private_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
   bybit_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geosite/bybit.mrs"}
   youtube_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs"}
   github_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/github.mrs"}
-  ww_reject: {<<: *domain, url: "https://raw.githubusercontent.com/wwqgtxx/clash-rules/release/reject.mrs"}
   telegram_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"}
   netflix_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.mrs"}
   disney_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/disney.mrs"}
@@ -220,3 +247,6 @@ rule-providers:
   cn_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"}
   cn_ip: { <<: *ip, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"}
   ww_proxy: {<<: *domain, url: "https://raw.githubusercontent.com/wwqgtxx/clash-rules/release/proxy.mrs"}
+  # ⚠️ 风险提示：上面所有 rule-providers 默认 interval: 86400（24 小时自动更新一次），
+  # 第三方维护的 ww_proxy 规则集更新频率/可用性不受你控制，如果该仓库地址失效（404/仓库迁移），
+  # 对应规则集会加载失败，受其影响的规则行为同上方 geox-url 失效时类似——该走代理的域名可能掉回兜底 MATCH 规则。

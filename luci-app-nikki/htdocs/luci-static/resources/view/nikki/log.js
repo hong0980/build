@@ -67,7 +67,7 @@ return view.extend({
                 const textareaEl = el.firstElementChild;
                 textareaEl.style.cssText = 'width: 100%; font-family: Consolas;';
                 textareaEl.wrap = 'off';
-                const state = { raw: cfgvalue || '', reversed: false, level: 'all' };
+                const state = { raw: cfgvalue || '', reversed: true, level: 'all' };
                 const renderText = () => {
                     let items = parseFn
                         ? state.raw.split('\n').map(parseFn).filter(Boolean)
