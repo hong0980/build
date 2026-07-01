@@ -100,41 +100,55 @@ return view.extend({
 
         o.load = function (section_id) {
             const ui_path = uci.get('nikki', 'mixin', 'ui_path');
+            this.install_status = {};
             return Promise.all(nikki.ui_array.map(([url, name]) =>
                 fs.stat(`${nikki.runDir}/${ui_path}/${name}/index.html`)
-                    .then(() => [url, name])
-                    .catch(() => [url, `${name} (${_('未安装')})`])
+                    .then(() => {
+                        this.install_status[url] = true;
+                        return [url, name];
+                    })
+                    .catch(() => {
+                        this.install_status[url] = false;
+                        return [url, `${name} (${_('未安装')})`];
+                    })
             )).then(entries => {
                 entries.forEach(([url, label]) => this.value(url, label));
                 return form.ListValue.prototype.load.apply(this, arguments);
             });
         };
+
         o.renderWidget = function (section_id) {
             let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
             el.classList.add('control-group');
             const default_label = _('Open Dashboard');
+            const self = this;
+
             const btn = E('button', {
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function () {
                     const select = el.firstChild;
                     const current_url = select.value;
                     const ui_entry = nikki.ui_array.find(x => x[0] === current_url);
-                    const ui_path = uci.get('nikki', 'mixin', 'ui_path');
-                    return fs.stat(`${nikki.runDir}/${ui_path}/${ui_entry[1]}/index.html`)
-                        .then(() => nikki.openDashboard(ui_entry[1]))
-                        .catch(() => {
+
+                    const openOrDownload = self.install_status[current_url]
+                        ? Promise.resolve()
+                        : (() => {
                             btn.textContent = _('Please wait, downloading %s...').format(ui_entry[1]);
                             return nikki.update_ui(current_url, ui_entry[1])
                                 .then(result => {
                                     if (result?.status === 'ok') {
+                                        self.install_status[current_url] = true;
                                         const opt = Array.from(select.options).find(o => o.value === current_url);
                                         if (opt) opt.textContent = ui_entry[1];
-                                        return nikki.openDashboard(ui_entry[1]);
+                                        return;
                                     }
                                     throw new Error(result?.message);
                                 })
                                 .finally(() => btn.textContent = default_label);
-                        })
+                        })();
+
+                    return openOrDownload
+                        .then(() => nikki.openDashboard(ui_entry[1]))
                         .catch(e => ui.addNotification(null, E('p', _('Update failed: ') + e), 'error'));
                 })
             }, default_label);

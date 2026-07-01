@@ -1195,8 +1195,8 @@ function parseShareLink(uri) {
 }
 
 return view.extend({
-    pendingDeletes: [],
     pendingRenames: [],
+    pendingDeletes: [],
     load: function () {
         return uci.load('nikki');
     },
@@ -1277,7 +1277,7 @@ return view.extend({
         o.rmempty = false;
         o.datatype = 'uciname';
         o.write = function (section_id, value) {
-            var oldName = this.cfgvalue(section_id);
+            const oldName = this.cfgvalue(section_id);
             if (oldName && oldName !== value)
                 self.pendingRenames.push({ from: oldName, to: value });
             return this.super('write', [section_id, value]);
@@ -1420,18 +1420,23 @@ return view.extend({
     },
 
     handleSaveApply: function (ev, mode) {
-        var self = this;
-        var tasks = self.pendingRenames.map(function (r) {
-            return nikki.renameSubscription(r.from, r.to);
-        }).concat(self.pendingDeletes.map(function (name) {
-            return fs.remove(nikki.subscriptionsDir + '/' + name + '.yaml');
-        }));
+        const self = this;
+        return this.handleSave(ev).then(function () {
+            const tasks = self.pendingRenames.map(function (r) {
+                return fs.exec('/bin/mv', [
+                    '-f',
+                    `/etc/nikki/subscriptions/${r.from}.yaml`,
+                    `/etc/nikki/subscriptions/${r.to}.yaml`
+                ]);
+            }).concat(self.pendingDeletes.map(function (name) {
+                return fs.remove(`/etc/nikki/subscriptions/${name}.yaml`);
+            }));
 
-        return Promise.all(tasks).then(function () {
             self.pendingRenames = [];
             self.pendingDeletes = [];
-            return self.super('handleSaveApply', [ev, mode]);
+            return Promise.all(tasks);
+        }).then(function () {
+            return classes.ui.changes.apply(mode == '0');
         });
     }
-
 });

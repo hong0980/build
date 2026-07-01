@@ -165,12 +165,12 @@ proxies:
 
 proxy-groups:
   - {name: ♻️ 自动选择, <<: *groups, filter: "(?i)^(?!.*(直连)).*$"}
+  - {name: ♻️ AI, <<: *groups, filter: "(?i)^(?!.*(俄罗斯|土耳其|印度|港|HK|直连)).*$"}
   - {name: ♻️ 香港自动, <<: *groups, filter: "(?i)(香港|HK)"}
   - {name: ♻️ 日本自动, <<: *groups, filter: "(?i)(日本|jp)"}
   - {name: ♻️ 台湾自动, <<: *groups, filter: "(?i)(台湾|tw)"}
   - {name: ♻️ 美国自动, <<: *groups, filter: "(?i)(美国|us)"}
   - {name: ♻️ 新加坡自动, <<: *groups, filter: "(?i)(新加坡|sg)"}
-  - {name: ♻️ AI, <<: *groups, filter: "(?i)^(?!.*(俄罗斯|土耳其|印度|港|HK|直连)).*$"}
   - {name: ♻️ 其他, <<: *groups, filter: "(?i)^(?!.*(港|HK|台|日|美|新|直连)).*$"}
   # 各分组按节点命名关键字筛选，依赖机场命名规范一致
 
@@ -194,9 +194,9 @@ rules:
   - RULE-SET,pt_classical,🎯 直连
   - RULE-SET,ai_domain,♻️ AI
   - RULE-SET,bybit_domain,♻️ 日本自动
+  - RULE-SET,tiktok_domain,♻️ 美国自动
   - RULE-SET,github_domain,♻️ 自动选择
   - RULE-SET,youtube_domain,♻️ 自动选择
-  - RULE-SET,tiktok_domain,♻️ 美国自动
   - RULE-SET,netflix_domain,♻️ 新加坡自动
   - RULE-SET,disney_domain,♻️ 新加坡自动
   - RULE-SET,speedtest_domain,♻️ 自动选择
@@ -220,11 +220,12 @@ rule-anchor:
   domain:      &domain      {type: http, interval: 86400, behavior: domain,    format: mrs}
   class:       &class       {type: http, interval: 86400, behavior: classical, format: text}
   domain_text: &domain_text {type: http, interval: 86400, behavior: domain,    format: yaml}
+  class_yaml:  &class_yaml  {type: http, interval: 86400, behavior: classical, format: yaml}
 
 rule-providers:
   # 远程规则集，指向 meta-rules-dat 仓库的预编译 .mrs 文件
   ai_domain: {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs"}
-  pt_classical: {<<: *domain_text, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/classical/category-pt.yaml"}
+  pt_classical: {<<: *class_yaml, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/classical/category-pt.yaml"}
   ww_reject: {<<: *domain, url: "https://raw.githubusercontent.com/wwqgtxx/clash-rules/release/reject.mrs"}
   private_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
   bybit_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geosite/bybit.mrs"}
