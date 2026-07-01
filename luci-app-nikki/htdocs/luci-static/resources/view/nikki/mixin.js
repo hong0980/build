@@ -14,8 +14,7 @@ const RULE_PROVIDER_BEHAVIOR = /^(classical|domain|ipcidr)$/;
 const RULE_TYPES = /^(RULE-SET|DOMAIN|DOMAIN-SUFFIX|DOMAIN-WILDCARD|DOMAIN-KEYWORD|DOMAIN-REGEX|IP-CIDR|DST-PORT|PROCESS-NAME|GEOSITE|GEOIP|MATCH)$/i;
 
 function normalizePath(path) {
-    if (!path)
-        return path;
+    if (!path) return path;
 
     path = path.trim();
     const isDir = /\/$/.test(path) || !path.includes('/');
@@ -60,13 +59,11 @@ function parseRuleProviderYaml(text) {
     const lines = raw_lines.slice(start).filter(l => l.trim() && !/^\s*#/.test(l));
     if (!lines.length) return [];
 
-    const nameRe = /^(\s*)([^\s:#][^:]*):\s*$/;
-    const kvRe = /^(\s*)([\w-]+):\s*(.+?)\s*$/;
-
-    const baseIndent = (lines[0].match(/^(\s*)/) || ['', ''])[1].length;
-
     const providers = [];
     let current = null;
+    const nameRe = /^(\s*)([^\s:#][^:]*):\s*$/;
+    const kvRe = /^(\s*)([\w-]+):\s*(.+?)\s*$/;
+    const baseIndent = (lines[0].match(/^(\s*)/) || ['', ''])[1].length;
 
     for (const line of lines) {
         const indent = (line.match(/^(\s*)/) || ['', ''])[1].length;
@@ -150,15 +147,6 @@ return view.extend({
         s.tab('geox', _('GeoX Config'));
         s.tab('mixin_file_content', _('Mixin File Content'));
 
-        o = s.taboption('general', form.ListValue, 'log_level', _('Log Level'));
-        o.optional = true;
-        o.placeholder = _('Unmodified');
-        o.value('silent', _('Silent'));
-        o.value('error', _('Error'));
-        o.value('warning', _('Warning'));
-        o.value('info', _('Info'));
-        o.value('debug', _('Debug'));
-
         o = s.taboption('general', form.ListValue, 'mode', _('Mode'));
         o.optional = true;
         o.placeholder = _('Unmodified');
@@ -169,9 +157,18 @@ return view.extend({
         o = s.taboption('general', form.ListValue, 'match_process', _('Match Process'));
         o.optional = true;
         o.placeholder = _('Unmodified');
-        o.value('off', _('Off'));
-        o.value('strict', _('Strict'));
-        o.value('always', _('Always'));
+        o.value('always', _('Enable'));
+        o.value('strict', _('Auto'));
+        o.value('off', _('Disable'));
+
+        o = s.taboption('general', form.ListValue, 'log_level', _('Log Level'));
+        o.optional = true;
+        o.placeholder = _('Unmodified');
+        o.value('silent', _('Silent'));
+        o.value('error', _('Error'));
+        o.value('warning', _('Warning'));
+        o.value('info', _('Info'));
+        o.value('debug', _('Debug'));
 
         o = s.taboption('general', form.ListValue, 'outbound_interface', _('Outbound Interface'));
         o.optional = true;
@@ -208,11 +205,11 @@ return view.extend({
         o.value('0', _('Disable'));
         o.value('1', _('Enable'));
 
-        o = s.taboption('general', form.Value, 'tcp_keep_alive_idle', _('TCP Keep Alive Idle'));
+        o = s.taboption('general', form.Value, 'tcp_keep_alive_idle', _('TCP Keep Alive Idle'), _('In seconds.'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
 
-        o = s.taboption('general', form.Value, 'tcp_keep_alive_interval', _('TCP Keep Alive Interval'));
+        o = s.taboption('general', form.Value, 'tcp_keep_alive_interval', _('TCP Keep Alive Interval'), _('In seconds.'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
 
@@ -224,11 +221,14 @@ return view.extend({
 
         o = s.taboption('external_control', form.Value, 'ui_url', _('UI Url'));
         o.placeholder = _('Unmodified');
-        o.value('https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip', 'Zashboard (CDN Fonts)');
-        o.value('https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip', 'Zashboard');
-        o.value('https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip', 'MetaCubeXD');
-        o.value('https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip', 'YACD');
-        o.value('https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip', 'Razord');
+        nikki.ui_array.forEach(([url, name]) => o.value(url, name));
+        o.onchange = function (ev, section_id, value) {
+            var lEl = s.getUIElement(section_id, 'ui_name');
+            if (!lEl) return;
+
+            var matched = nikki.ui_array.find(([url]) => url === value);
+            lEl.setValue(matched ? matched[1] : '');
+        };
 
         o = s.taboption('external_control', form.Value, 'api_listen', _('API Listen'));
         o.datatype = 'ipaddrport(1)';

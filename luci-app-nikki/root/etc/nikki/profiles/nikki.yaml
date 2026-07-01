@@ -1,0 +1,245 @@
+# ============================================================================
+# 官方完整配置示例: https://github.com/MetaCubeX/mihomo/blob/Meta/docs/config.yaml
+# ============================================================================
+
+# ================= 机场订阅 =================
+proxy-providers:
+  cloud:
+    url: ""                           # 订阅链接
+    type: http
+    interval: 86400                  # 自动更新间隔（秒）
+    path: "./proxy_provider/airport.yaml"   # 订阅缓存落盘路径
+    filter: "(?i)^(?!.*(到期|域名|剩余)).*$" # 过滤掉机场塞入的提示性虚假节点
+    # proxy: 🎯 直连                    # 拉取订阅用的出口，须为节点名而非策略组名
+    health-check:
+      enable: true
+      url: http://cp.cloudflare.com/generate_204   # 健康检测地址，204 视为存活
+      interval: 300                  # 探测间隔（秒）
+    override:                        # 覆写订阅节点的部分字段
+      packet-encoding: ""            # 清空 packet-encoding，避免部分机场写死 xudp 导致 UDP 异常
+      client-fingerprint: "chrome"   # 统一覆盖节点 TLS 指纹为 chrome
+
+# ================= 全局设置 =================
+
+port: 8080
+socks-port: 1080
+mixed-port: 7890
+redir-port: 7891
+tproxy-port: 7892
+allow-lan: true                      # 允许局域网设备接入代理端口/Tun
+bind-address: "*"                    # 配合 allow-lan，监听所有网卡
+mode: rule                           # 代理模式：rule / global / direct
+ipv6: false                          # 全局 IPv6 开关，同时控制 DNS 是否解析 AAAA
+unified-delay: true                  # 统一延迟计算方式，测速更准确
+tcp-concurrent: true                 # 多个解析 IP 并发握手，取最快
+log-level: warning                   # 日志等级：silent/error/warning/info/debug
+find-process-mode: 'off'             # 不匹配进程，路由器场景推荐
+client-fingerprint: chrome           # 全局默认 TLS 指纹
+keep-alive-idle: 600                 # TCP keepalive 空闲探测时间（秒）
+keep-alive-interval: 15              # TCP keepalive 探测间隔（秒）
+disable-keep-alive: false            # 是否禁用 keepalive
+
+# 配置文件持久化设置
+profile:
+  store-selected: true                # 记住策略组手动选择的节点
+  store-fake-ip: true                 # 持久化 fake-ip 映射表
+
+external-ui: ui                       # WebUI 目录
+external-ui-name: Zashboard           # WebUI 名称
+external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip  # WebUI 下载地址
+external-controller: '[::]:9090'      # RESTful API 监听地址
+secret: "709777"                      # RESTful API 鉴权密钥
+
+# ================= 嗅探 =================
+sniffer:
+  enable: true                        # 启用流量嗅探（从 SNI/Host/QUIC 提取真实域名）
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]          # 嗅探 HTTP Host 的端口范围
+      override-destination: true      # 用嗅探结果覆盖实际连接目标
+    TLS:
+      ports: [443, 8443]              # 嗅探 TLS SNI 的端口范围
+    QUIC:
+      ports: [443, 8443]              # 嗅探 QUIC（HTTP/3）SNI 的端口范围
+  # skip-dst-address:                 # 按目标 IP 跳过嗅探
+  #   - 111.1.171.0/24
+  #   - 39.174.182.0/23
+  force-domain:
+    - "+.v2ex.com"                    # 强制嗅探该域名
+  skip-domain:                        # 跳过嗅探，改用连接真实 IP/端口判断规则
+    - "rule-set:private_domain,cn_domain"
+    - "+.goofish.com"
+    - "dlg.io.mi.com"
+    - "+.push.apple.com"
+    - "+.apple.com"
+    - "+.wechat.com"
+    - "+.qpic.cn"
+    - "+.qq.com"
+    - "+.wechatapp.com"
+    - "+.vivox.com"
+    - "+.oray.com"
+    - "+.sunlogin.net"
+    - "+.msftconnecttest.com"
+    - "+.msftncsi.com"
+    - "+.wql.us"
+    - "+.keywordsstudios.cn"
+
+# ================= DNS模块 =================
+dns:
+  enable: true                                 # 启用内置 DNS 服务器
+  cache-algorithm: arc                         # DNS 缓存淘汰算法
+  listen: '[::]:1053'                          # 内置 DNS 监听地址（IPv4/IPv6），配合 tun.dns-hijack 使用
+  ipv6: false                                  # 关闭后不解析 AAAA 记录
+  respect-rules: true                          # DNS 服务器自身连接也遵循 rules 分流
+  enhanced-mode: fake-ip                       # 使用 fake-ip 模式，需配合 Tun
+  fake-ip-range: 198.18.0.1/16                 # fake-ip 地址池（保留网段，避免冲突）
+  fake-ip-filter-mode: blacklist               # 默认全部分配 fake-ip，命中 filter 的例外
+
+  fake-ip-filter:                              # 命中以下域名不走 fake-ip，直接返回真实 IP
+    - "rule-set:private_domain,cn_domain"      # 私有/国内域名
+    - "*.lan"                                  # 局域网域名
+    - "*.local"                                # mDNS 本地域名
+    - "+.services.googleapis.cn"               # 国内 Google 服务镜像
+    - "+.xn--ngstr-lra8j.com"                  # Google 域名 Punycode 形式
+    - "time.*.com"                             # 时间同步服务
+    - "+.pool.ntp.org"                         # NTP 时间同步池
+    - "+.ntp.tencent.com"                      # 腾讯 NTP 服务器
+    - "+.ntp1.aliyun.com"                      # 阿里 NTP 服务器
+    - "+.ntp.ntsc.ac.cn"                       # 国家授时中心 NTP 服务器
+    - "+.cn.ntp.org.cn"                        # NTP 时间同步服务
+    - "*.microsoftonline.com"                  # 微软账号登录域名
+    - "*.wql.us"                               # 自定义保留域名
+    - "*.microsoft.com"                        # 微软主域名
+    - "*.keywordsstudios.cn"                   # 自定义保留域名
+    - "geosite:cn"                             # 国内域名分类
+
+  default-nameserver:                          # 解析下方 DoH/DoT 服务器自身域名，须为纯 IP
+    - 223.5.5.5
+    - 119.29.29.29
+
+  proxy-server-nameserver:                     # 解析机场节点 server 字段（若为域名）
+    - https://223.5.5.5/dns-query
+    - https://1.12.12.12/dns-query
+
+  nameserver:                                  # 主 DNS，未命中 nameserver-policy 走这里
+    - https://8.8.8.8/dns-query
+    - https://1.1.1.1/dns-query
+
+  fallback:                                    # nameserver 解析结果可疑时改用此处重新查询
+    - https://8.8.8.8/dns-query
+    - https://1.1.1.1/dns-query
+
+  fallback-filter:
+    geoip: true                                # 启用基于 geoip 的污染判断
+    geoip-code: CN                              # 解析结果属于 CN 则视为可信
+    ipcidr:
+      - 240.0.0.0/4                             # 命中该网段强制触发 fallback
+
+  nameserver-policy:                           # 按域名/规则集指定专用 DNS，优先级高于 nameserver
+    "geosite:cn,private":                      # 国内 + 私有域名
+      - https://223.5.5.5/dns-query
+      - https://1.12.12.12/dns-query
+    "rule-set:cn_domain":                      # 国内域名规则集
+      - https://223.5.5.5/dns-query
+      - https://1.12.12.12/dns-query
+    "rule-set:apple_domain":                   # 苹果服务域名单独走阿里 DoH
+      - https://223.5.5.5/dns-query
+
+# ================= 入站 Tun =================
+tun:
+  enable: true                        # 启用 Tun 虚拟网卡
+  stack: mixed                        # Tun 协议栈实现
+  dns-hijack: ["any:53", "tcp://any:53"]   # 劫持所有 53 端口 DNS 请求到内置 DNS
+  mtu: 1380                           # Tun 网卡 MTU
+  auto-route: true                    # 自动配置路由表，将流量导入 Tun
+  auto-redirect: true                 # 自动配置 iptables/nftables 重定向 TCP（仅 Linux，依赖 auto-route）
+  auto-detect-interface: true         # 自动识别出口物理网卡，避免流量递归进 Tun
+
+# ================= 出站策略 =================
+groups: &groups {type: url-test, use: [cloud], include-all: true, tolerance: 50, interval: 300, url: http://cp.cloudflare.com/generate_204}
+# 策略组公共锚点：url-test 自动选延迟最低节点；use 引用订阅；include-all 纳入全部已知节点；
+# tolerance 为同档延迟容差（ms）；url 为测速探测地址
+
+proxies:
+  - {name: 🎯 直连, type: direct, udp: true} # 手写直连节点，供订阅拉取出口及规则引用
+
+proxy-groups:
+  - {name: ♻️ 自动选择, <<: *groups, filter: "(?i)^(?!.*(直连)).*$"}
+  - {name: ♻️ 香港自动, <<: *groups, filter: "(?i)(香港|HK)"}
+  - {name: ♻️ 日本自动, <<: *groups, filter: "(?i)(日本|jp)"}
+  - {name: ♻️ 台湾自动, <<: *groups, filter: "(?i)(台湾|tw)"}
+  - {name: ♻️ 美国自动, <<: *groups, filter: "(?i)(美国|us)"}
+  - {name: ♻️ 新加坡自动, <<: *groups, filter: "(?i)(新加坡|sg)"}
+  - {name: ♻️ AI, <<: *groups, filter: "(?i)^(?!.*(俄罗斯|土耳其|印度|港|HK|直连)).*$"}
+  - {name: ♻️ 其他, <<: *groups, filter: "(?i)^(?!.*(港|HK|台|日|美|新|直连)).*$"}
+  # 各分组按节点命名关键字筛选，依赖机场命名规范一致
+
+rules:
+  #- AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,goofish.com)),DIRECT
+  #- AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,taobao.com)),DIRECT
+  #- AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,alicdn.com)),DIRECT
+  #- AND,((NETWORK,UDP),(DST-PORT,443),(GEOSITE,cn)),DIRECT
+  #- AND,((NETWORK,UDP),(DST-PORT,443)),REJECT # 拦截 QUIC，强制回退 TCP
+  #- IP-CIDR,10.0.0.0/24,DIRECT
+  #- IP-CIDR,192.168.6.0/24,DIRECT
+  #- AND,((DOMAIN-SUFFIX,netflix.com),(NETWORK,UDP)),REJECT
+  - RULE-SET,ww_reject,REJECT
+  - RULE-SET,private_domain,🎯 直连     # 局域网/内网保留域名直连
+  - RULE-SET,cn_domain,🎯 直连          # 国内域名直连
+  - RULE-SET,cn_ip,🎯 直连,no-resolve   # 国内 IP 段直连，不为此规则单独触发解析
+  - GEOIP,CN,🎯 直连                    # 兜底：目标 IP 属地中国大陆直连
+  - GEOIP,PRIVATE,🎯 直连               # 私有/内网 IP 段直连
+  - RULE-SET,apple_domain,🎯 直连       # 苹果服务直连
+  - RULE-SET,cdn_cn,🎯 直连
+  - RULE-SET,pt_classical,🎯 直连
+  - RULE-SET,ai_domain,♻️ AI
+  - RULE-SET,bybit_domain,♻️ 日本自动
+  - RULE-SET,github_domain,♻️ 自动选择
+  - RULE-SET,youtube_domain,♻️ 自动选择
+  - RULE-SET,tiktok_domain,♻️ 美国自动
+  - RULE-SET,netflix_domain,♻️ 新加坡自动
+  - RULE-SET,disney_domain,♻️ 新加坡自动
+  - RULE-SET,speedtest_domain,♻️ 自动选择
+  - RULE-SET,telegram_domain,♻️ 自动选择
+  - RULE-SET,paypal_domain,♻️ 自动选择
+  - RULE-SET,gfw_domain,♻️ 自动选择
+  - RULE-SET,geolocation-!cn,♻️ 自动选择
+  - MATCH,♻️ 自动选择                   # 兜底规则，需放最后
+
+geodata-mode: false                  # false 使用 .dat 格式；true 需改用 .metadb（与 geox-url 对应）
+geodata-loader: standard
+geox-url:
+  mmdb: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb
+  geosite: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat
+  geoip: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat
+  asn: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb
+  # geo 数据文件下载地址，如访问不畅可换 raw.githubusercontent.com 等镜像
+
+rule-anchor:
+  ip:          &ip          {type: http, interval: 86400, behavior: ipcidr,    format: mrs}
+  domain:      &domain      {type: http, interval: 86400, behavior: domain,    format: mrs}
+  class:       &class       {type: http, interval: 86400, behavior: classical, format: text}
+  domain_text: &domain_text {type: http, interval: 86400, behavior: domain,    format: yaml}
+
+rule-providers:
+  # 远程规则集，指向 meta-rules-dat 仓库的预编译 .mrs 文件
+  ai_domain: {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs"}
+  pt_classical: {<<: *domain_text, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/classical/category-pt.yaml"}
+  ww_reject: {<<: *domain, url: "https://raw.githubusercontent.com/wwqgtxx/clash-rules/release/reject.mrs"}
+  private_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
+  bybit_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geosite/bybit.mrs"}
+  youtube_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs"}
+  github_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/github.mrs"}
+  telegram_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"}
+  netflix_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.mrs"}
+  disney_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/disney.mrs"}
+  paypal_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/paypal.mrs"}
+  apple_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geosite/apple.mrs"}
+  speedtest_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/ookla-speedtest.mrs"}
+  tiktok_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tiktok.mrs"}
+  gfw_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/gfw.mrs"}
+  geolocation-!cn: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"}
+  cn_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"}
+  cn_ip: { <<: *ip, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"}
+  cdn_cn: {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-cdn-cn.mrs"}
+  # 均为 24 小时自动更新一次，第三方仓库（ww_proxy/ww_reject）失效会导致对应规则失效

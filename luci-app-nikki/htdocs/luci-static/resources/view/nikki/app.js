@@ -22,13 +22,6 @@ function setStatus(element, running) {
     return element;
 }
 
-const ui_array = [
-    ["https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip", "Zashboard"],
-    ["https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip", "MetaCubeXD"],
-    ["https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip", "YACD"],
-    ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]
-];
-
 return view.extend({
     load: function () {
         return Promise.all([
@@ -107,7 +100,7 @@ return view.extend({
 
         o.load = function (section_id) {
             const ui_path = uci.get('nikki', 'mixin', 'ui_path');
-            return Promise.all(ui_array.map(([url, name]) =>
+            return Promise.all(nikki.ui_array.map(([url, name]) =>
                 fs.stat(`${nikki.runDir}/${ui_path}/${name}/index.html`)
                     .then(() => [url, name])
                     .catch(() => [url, `${name} (${_('未安装')})`])
@@ -125,7 +118,7 @@ return view.extend({
                 'click': ui.createHandlerFn(this, function () {
                     const select = el.firstChild;
                     const current_url = select.value;
-                    const ui_entry = ui_array.find(x => x[0] === current_url);
+                    const ui_entry = nikki.ui_array.find(x => x[0] === current_url);
                     const ui_path = uci.get('nikki', 'mixin', 'ui_path');
                     return fs.stat(`${nikki.runDir}/${ui_path}/${ui_entry[1]}/index.html`)
                         .then(() => nikki.openDashboard(ui_entry[1]))

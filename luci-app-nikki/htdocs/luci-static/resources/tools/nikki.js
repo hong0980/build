@@ -97,6 +97,12 @@ const appLogPath = `${logDir}/app.log`;
 const coreLogPath = `${logDir}/core.log`;
 const debugLogPath = `${logDir}/debug.log`;
 const nftDir = `${homeDir}/nftables`;
+const ui_array = [
+    ["https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip", "Zashboard"],
+    ["https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip", "MetaCubeXD"],
+    ["https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip", "YACD"],
+    ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]
+];
 
 return baseclass.extend({
     homeDir: homeDir,
@@ -110,6 +116,7 @@ return baseclass.extend({
     appLogPath: appLogPath,
     coreLogPath: coreLogPath,
     debugLogPath: debugLogPath,
+    ui_array: ui_array,
 
     status: function () {
         return callServiceList('nikki', ['instances', 'nikki', 'running']).then(Boolean);
