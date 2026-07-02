@@ -1737,3 +1737,144 @@ msgstr "（MaxMind GeoLite2-ASN 镜像）"
 
 msgid "Please wait, downloading %s..."
 msgstr "请稍等，%s 下载中..."
+
+#
+# App
+#
+msgid "Start after %s seconds."
+msgstr "%s 秒后启动。"
+
+msgid "Disabled."
+msgstr "已禁用。"
+
+msgid "Exit."
+msgstr "已退出。"
+
+msgid "Enabled."
+msgstr "已启用。"
+
+msgid "Start."
+msgstr "启动中。"
+
+msgid "Core is not executable."
+msgstr "核心程序不可执行。"
+
+msgid "Set scheduled restart."
+msgstr "已设置定时重启。"
+
+msgid "Set log scheduled clear."
+msgstr "已设置日志定时清理。"
+
+#
+# Profile
+#
+msgid "Use file: %s."
+msgstr "使用文件：%s。"
+
+msgid "File not found."
+msgstr "文件不存在。"
+
+msgid "Use subscription: %s."
+msgstr "使用订阅：%s。"
+
+msgid "Subscription file not found."
+msgstr "订阅文件不存在。"
+
+msgid "No profile/subscription selected."
+msgstr "未选择配置文件/订阅。"
+
+msgid "Checking..."
+msgstr "检查中..."
+
+msgid "Check failed."
+msgstr "检查失败。"
+
+msgid "DNS should be enabled and listen should be defined."
+msgstr "DNS 应启用，且需要定义监听地址。"
+
+msgid "Redirect Port/Listener should be defined."
+msgstr "需要定义 Redirect 端口/监听器。"
+
+msgid "TPROXY Port/Listener should be defined."
+msgstr "需要定义 TPROXY 端口/监听器。"
+
+msgid "TUN should be defined."
+msgstr "需要定义 TUN。"
+
+msgid "Check passed."
+msgstr "检查通过。"
+
+msgid "Testing..."
+msgstr "检测中..."
+
+msgid "Test passed."
+msgstr "检测通过。"
+
+msgid "Test failed."
+msgstr "检测失败。"
+
+msgid "Please check the core log to find out the problem."
+msgstr "请检查核心日志以排查问题。"
+
+msgid "Update subscription: %s."
+msgstr "更新订阅：%s。"
+
+msgid "Fetch subscription info."
+msgstr "获取订阅信息。"
+
+msgid "Download subscription."
+msgstr "下载订阅。"
+
+msgid "Subscription download successful."
+msgstr "订阅下载成功。"
+
+msgid "Subscription is valid."
+msgstr "订阅有效。"
+
+msgid "Subscription is not valid."
+msgstr "订阅无效。"
+
+msgid "Subscription download failed."
+msgstr "订阅下载失败。"
+
+msgid "Subscription update successful."
+msgstr "订阅更新成功。"
+
+msgid "Subscription update failed."
+msgstr "订阅更新失败。"
+
+#
+# Mixin
+#
+msgid "Mixin config."
+msgstr "混入配置。"
+
+#
+# Proxy
+#
+msgid "Waiting for tun device online within %s seconds..."
+msgstr "等待 TUN 设备上线，超时时间 %s 秒..."
+
+msgid "TUN device is online."
+msgstr "TUN 设备已上线。"
+
+msgid "Timeout, TUN device is not online."
+msgstr "超时，TUN 设备未上线。"
+
+msgid "Hijack successful."
+msgstr "劫持成功。"
+
+msgid "Hijack failed."
+msgstr "劫持失败。"
+
+#
+# Log
+#
+msgid "Logs are cleared due to clear at stop is enabled."
+msgstr "由于已启用停止时清理，日志已清空。"
+
+msgid "App log is cleared due to scheduled clear and exceeding size limits."
+msgstr "由于已启用定时清理且超出大小限制，应用日志已清空。"
+
+msgid "Core log is cleared due to scheduled clear and exceeding size limits."
+msgstr "由于已启用定时清理且超出大小限制，核心日志已清空。"

@@ -69,6 +69,26 @@ format_filesize() {
 	fi
 }
 
+[ -z "$lang" ] && lang=$(uci get luci.main.lang 2>/dev/null)
+[ -z "$lang" ] && lang="en"
+
+translate() {
+	local tpl="$1"; shift
+	local translated
+	translated=$(TR_LANG="$lang" TR_TPL="$tpl" lua -e '
+		local lang = os.getenv("TR_LANG")
+		local tpl  = os.getenv("TR_TPL")
+		require "luci.i18n".setlanguage(lang)
+		print(require "luci.i18n".translate(tpl))
+	' 2>/dev/null)
+	[ -z "$translated" ] && translated="$tpl"
+	[ $# -gt 0 ] && printf "$translated" "$@" || printf '%s' "$translated"
+}
+
 log() {
-	echo "[$(date "+%Y-%m-%d %H:%M:%S")] [$1] $2" >> "$APP_LOG_PATH"
+	local level="$1"; shift
+	local tpl="$1"; shift
+	local msg
+	msg="$(translate "$tpl" "$@")"
+	echo "[$(date "+%Y-%m-%d %H:%M:%S")] [$level] $msg" >> "$APP_LOG_PATH"
 }

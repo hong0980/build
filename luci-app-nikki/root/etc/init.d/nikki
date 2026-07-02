@@ -34,11 +34,22 @@ start_service() {
 	# check if enabled
 	local enabled
 	config_get_bool enabled "config" "enabled" 0
-	[ "$enabled" = 0 -o ! -x $PROG ] && return
+	if [ "$enabled" = 0 ]; then
+		log "App" "Disabled."
+		log "App" "Exit."
+		return
+	fi
 	# start
 	log "App" "Enabled."
 	log "App" "Start."
-
+	# check if executable
+	if [ ! -x $PROG ]; then
+		log "App" "Core is not executable."
+		log "App" "Exit."
+		return
+	fi
+	# get config
+	## app config
 	local scheduled_restart scheduled_restart_cron profile test_profile core_only
 	config_get_bool scheduled_restart "config" "scheduled_restart" 0
 	config_get scheduled_restart_cron "config" "scheduled_restart_cron"
@@ -242,7 +253,6 @@ start_service() {
 			return
 		fi
 	fi
-
 	# start core
 	log "Core" "Start."
 	procd_open_instance nikki
