@@ -18,7 +18,7 @@ boot_func() {
 	config_get_bool enabled "config" "enabled" 0
 	config_get start_delay "config" "start_delay" 0
 	if [ "$enabled" = 1 ] && [ "$start_delay" -gt 0 ]; then
-		log "App" "Start after $start_delay seconds."
+		log "App" "Start after %s seconds." "$start_delay"
 		sleep "$start_delay"
 	fi
 	# start
@@ -115,7 +115,7 @@ start_service() {
 	if [ "${profile%%:*}" = "file" ]; then
 		local profile_name; profile_name="${profile#*:}"
 		local profile_file; profile_file="$PROFILES_DIR/$profile_name"
-		log "Profile" "Use file: $profile_name."
+		log "Profile" "Use file: %s." "$profile_name"
 		if [ ! -f "$profile_file" ]; then
 			log "Profile" "File not found."
 			log "App" "Exit."
@@ -127,7 +127,7 @@ start_service() {
 		local subscription_name subscription_prefer
 		config_get subscription_name "$subscription_section" "name"
 		config_get subscription_prefer "$subscription_section" "prefer" "remote"
-		log "Profile" "Use subscription: $subscription_name."
+		log "Profile" "Use subscription: %s." "$subscription_name"
 		local subscription_file; subscription_file="$SUBSCRIPTIONS_DIR/$subscription_name.yaml"
 		if [ "$subscription_prefer" = "remote" ] || [ ! -f "$subscription_file" ]; then
 			update_subscription "$subscription_section"
@@ -360,7 +360,7 @@ service_started() {
 		log "Proxy" "Enabled."
 		# wait for tun device online
 		if [ "$tun_enable" = 1 ]; then
-			log "Proxy" "Waiting for tun device online within $tun_timeout seconds..."
+			log "Proxy" "Waiting for tun device online within %s seconds..." "$tun_timeout"
 			while [ "$tun_timeout" -gt 0 ]; do
 				if ip -j link show dev "$tun_device" 2>/dev/null | jsonfilter -q -e "@[@['flags'][@='UP']]" > /dev/null 2>&1; then
 					log "Proxy" "TUN device is online."
@@ -563,7 +563,7 @@ update_subscription() {
 		uci_remove "nikki" "$subscription_section" "$opt" > /dev/null 2>&1
 	done
 
-	log "Profile" "Update subscription: $subscription_name."
+	log "Profile" "Update subscription: %s." "$subscription_name"
 	local success=0 subscription_info_file
 	local subscription_info_header_tmpfile; subscription_info_header_tmpfile="$TEMP_DIR/$subscription_section.info.header"
 	local subscription_header_tmpfile; subscription_header_tmpfile="$TEMP_DIR/$subscription_section.header"
