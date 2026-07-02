@@ -13,7 +13,7 @@ proxy-providers:
     # proxy: 🎯 直连                    # 拉取订阅用的出口，须为节点名而非策略组名
     health-check:
       enable: true
-      url: http://cp.cloudflare.com/generate_204   # 健康检测地址，204 视为存活
+      url: https://cp.cloudflare.com/generate_204   # 健康检测地址，204 视为存活
       interval: 300                  # 探测间隔（秒）
     override:                        # 覆写订阅节点的部分字段
       packet-encoding: ""            # 清空 packet-encoding，避免部分机场写死 xudp 导致 UDP 异常
@@ -156,7 +156,7 @@ tun:
   auto-detect-interface: true         # 自动识别出口物理网卡，避免流量递归进 Tun
 
 # ================= 出站策略 =================
-groups: &groups {type: url-test, use: [cloud], include-all: true, tolerance: 50, interval: 300, url: http://cp.cloudflare.com/generate_204}
+groups: &groups {type: url-test, use: [cloud], include-all: true, tolerance: 50, interval: 300, url: https://cp.cloudflare.com/generate_204}
 # 策略组公共锚点：url-test 自动选延迟最低节点；use 引用订阅；include-all 纳入全部已知节点；
 # tolerance 为同档延迟容差（ms）；url 为测速探测地址
 
