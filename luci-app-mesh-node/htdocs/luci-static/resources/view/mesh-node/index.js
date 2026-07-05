@@ -62,7 +62,7 @@ function showMeshModal(title, text) {
 
 	dlg.style.minWidth = getComputedStyle(dlg).width;
 	dlg.style.maxWidth = '90vw';
-	dlg.style.width    = 'max-content';
+	dlg.style.width = 'max-content';
 
 	return dlg;
 }
@@ -73,7 +73,7 @@ function m11opt(s, widget, name, section, conditions = '', title, desc) {
 	o.ucioption = name;
 
 	var base = { 'mesh_node.main.band_mode': '2' };
-	(Array.isArray(conditions) ? conditions : [conditions]).forEach(function(cond) {
+	(Array.isArray(conditions) ? conditions : [conditions]).forEach(function (cond) {
 		o.depends(Object.assign({}, base, cond || {}));
 	});
 
@@ -84,7 +84,7 @@ function batadvopt(s, widget, name, conditions = '', title, desc) {
 	var o = s.taboption('batadv', widget, name, title, desc);
 	var uciKey = name === 'batadv_log_level' ? 'log_level' : name;
 	o.load = function (section_id) {
-		var proto = uci.get(o.config, section_id, 'batadv_proto');
+		var proto = uci.get('mesh_node', section_id, 'batadv_proto');
 		return uci.get('network', proto, uciKey);
 	};
 	o.write = function (section_id, value) {
@@ -128,8 +128,8 @@ return view.extend({
 
 						Object.keys(interfaces).forEach(function (ifname) {
 							var net = interfaces[ifname] || {}, cfg = net.config || {};
-							var mode = cfg.mode || '', ssid = cfg.ssid  || '';
-							var key  = cfg.key  || '', meshId = cfg.mesh_id || '';
+							var mode = cfg.mode || '', ssid = cfg.ssid || '';
+							var key = cfg.key || '', meshId = cfg.mesh_id || '';
 
 							if (mode === 'Master' || mode === 'ap') {
 								if (band === '2g') {
@@ -177,19 +177,19 @@ return view.extend({
 		s.addremove = false;
 		s.anonymous = true;
 
-		s.tab('network',  _('Network'));
+		s.tab('network', _('Network'));
 		s.tab('wireless', _('Wireless'));
-		s.tab('mesh',     _('Mesh Backhaul'));
+		s.tab('mesh', _('Mesh Backhaul'));
 		s.tab('mesh11sd', _('mesh11sd Settings'));
-		s.tab('batadv',   _('batadv Settings'));
-		s.tab('usteer',   _('Usteer Settings'));
-		s.tab('other',    _('Other'));
+		s.tab('batadv', _('batadv Settings'));
+		s.tab('usteer', _('Usteer Settings'));
+		s.tab('other', _('Other'));
 
 		o = s.taboption('network', form.RichListValue, 'combo_mode', _('Network Mode'));
 		Object.keys(COMBO_MODES).forEach(function (k) {
 			o.value(k, _(COMBO_MODES[k].label), _(COMBO_MODES[k].desc));
 		});
-		o.default  = 'bridge_static';
+		o.default = 'bridge_static';
 		o.onchange = function (ev, section_id, value) {
 			var combo = COMBO_MODES[value];
 			var lEl = s.getUIElement(section_id, 'lan_proto');
@@ -200,11 +200,11 @@ return view.extend({
 
 		o = s.taboption('network', form.ListValue, 'wan_proto', _('WAN Protocol'));
 		o.value('bridge', _('Bridge to LAN'));
-		o.value('pppoe',  _('PPPoE'));
-		o.value('dhcp',   _('Default'));
+		o.value('pppoe', _('PPPoE'));
+		o.value('dhcp', _('Default'));
 		o.defaults = {
-			'pppoe':  [{ combo_mode: 'pppoe_none' }],
-			'dhcp':   [{ combo_mode: /(custom|dhcp_none)/ }],
+			'pppoe': [{ combo_mode: 'pppoe_none' }],
+			'dhcp': [{ combo_mode: /(custom|dhcp_none)/ }],
 			'bridge': [{ combo_mode: /(bridge_dhcp|bridge_static)/ }]
 		};
 		o.rmempty = false;
@@ -218,13 +218,13 @@ return view.extend({
 		o.depends('wan_proto', 'pppoe');
 
 		o = s.taboption('network', form.ListValue, 'lan_proto', _('LAN Mode'));
-		o.value('dhcp',   _('DHCP client'));
+		o.value('dhcp', _('DHCP client'));
 		o.value('static', _('Static address'));
-		o.value('none',   _('Default'));
+		o.value('none', _('Default'));
 		o.defaults = {
-			'dhcp':   [{ combo_mode: 'bridge_dhcp' }],
+			'dhcp': [{ combo_mode: 'bridge_dhcp' }],
 			'static': [{ combo_mode: 'bridge_static' }],
-			'none':   [{ combo_mode: /(custom|dhcp_none|pppoe_none)/ }],
+			'none': [{ combo_mode: /(custom|dhcp_none|pppoe_none)/ }],
 		};
 
 		o = s.taboption('network', form.Value, 'lan_ip', _('Node Static IP'),
@@ -262,24 +262,24 @@ return view.extend({
 
 		var BAND_DEFS = [
 			{ key: '2g', label: '2.4 GHz', ssid: info.ssid_2g, pass: info.key_2g },
-			{ key: '5g', label: '5 GHz',   ssid: info.ssid_5g, pass: info.key_5g },
+			{ key: '5g', label: '5 GHz', ssid: info.ssid_5g, pass: info.key_5g },
 		];
 		if (info.ssid_6g || info.key_6g)
 			BAND_DEFS.push({ key: '6g', label: '6 GHz', ssid: info.ssid_6g, pass: info.key_6g });
 
-		BAND_DEFS.forEach(function(band) {
+		BAND_DEFS.forEach(function (band) {
 			o = s.taboption('wireless', form.Value, 'ssid_' + band.key, _('%s SSID').format(band.label),
 				_('Must exactly match the main router SSID to enable seamless roaming'));
-			o.default  = band.ssid || 'HomeWiFi';
-			o.rmempty  = false;
+			o.default = band.ssid || 'HomeWiFi';
+			o.rmempty = false;
 			o.depends('band_merge', '0');
 
 			o = s.taboption('wireless', form.Value, 'key_' + band.key, _('%s WiFi Password').format(band.label),
 				_('Encryption: psk2+ccmp (WPA2). Minimum 8 characters.'));
 			o.datatype = 'wpakey';
 			o.password = true;
-			o.rmempty  = false;
-			o.default  = band.pass || '';
+			o.rmempty = false;
+			o.default = band.pass || '';
 			o.depends('band_merge', '0');
 		});
 
@@ -333,7 +333,7 @@ return view.extend({
 		o.depends('band_mode', '0'); o.inputstyle = 'positive';
 		o.onclick = function (ev, section_id) {
 			var sep = '='.repeat(72), text = '';
-			var proto  = s.formvalue(section_id, 'batadv_proto') || 'bat0';
+			var proto = s.formvalue(section_id, 'batadv_proto') || 'bat0';
 			if (MeshStatus) {
 				var run = function (args) {
 					return fs.exec_direct('/usr/sbin/batctl', args)
@@ -349,7 +349,7 @@ return view.extend({
 					run(['meshif', proto, 'statistics'])
 				]).then(function (r) {
 					var titles = [_('MESH INFO'), _('INTERFACES'), _('NEIGHBORS'), _('ORIGINATORS'), _('STATISTICS')];
-					r.forEach(function(out, i) {
+					r.forEach(function (out, i) {
 						var content = (out || '').trim() || _('No output. please retry in a moment.');
 						if (content && i === 4) {
 							content = content.split('\n').map(function (l) {
@@ -380,7 +380,7 @@ return view.extend({
 				return Promise.all(cmds).then(function (r) {
 					ifaces.forEach(function (iface, i) {
 						var sta = (r[i * 2] || '').trim() || _('(No neighbor nodes connected)');
-						var mp  = (r[i * 2 + 1] || '').trim();
+						var mp = (r[i * 2 + 1] || '').trim();
 						if (!mp || mp.split('\n').length <= 1) mp = _('(No mesh paths established)');
 
 						text += `[ ${_('Mesh Interface')}: ${iface} ]\n${sep}\n`;
@@ -403,49 +403,31 @@ return view.extend({
 		o.default = 'batmesh'; o.rmempty = false;
 		o.depends('use_batadv', '1');
 
-		o = s.taboption('batadv', form.RichListValue, 'routing_algo', _('Routing Algorithm'),
+		o = batadvopt(s, form.RichListValue, 'routing_algo', '', _('Routing Algorithm'),
 			_('All nodes in the same mesh must use the same algorithm.'));
 		o.value('BATMAN_IV', _('BATMAN_IV'), _('link quality (recommended)'));
-		o.value('BATMAN_V',  _('BATMAN_V'), _('throughput based'));
+		o.value('BATMAN_V', _('BATMAN_V'), _('throughput based'));
 		o.default = 'BATMAN_IV';
-		o.depends('use_batadv', '1');
-		o.write = function (section_id, value) {
-			var proto  = s.formvalue(section_id, 'batadv_proto');
-			var hardif = s.formvalue(section_id, 'batadv_hardif');
-			if (!uci.get('network', proto)) {
-				uci.add('network', 'interface', proto);
-				uci.set('network', proto, 'proto', 'batadv');
-				uci.set('network', proto, 'multipath', 'off');
-			}
-			if (!uci.get('network', hardif)) {
-				uci.add('network', 'interface', hardif);
-				uci.set('network', hardif, 'proto', 'batadv_hardif');
-				uci.set('network', hardif, 'mtu', '2304');
-				uci.set('network', hardif, 'multipath', 'off');
-			}
-			uci.set('network', hardif, 'master', proto);
-			uci.set('network', proto, 'routing_algo', value);
-		};
 
-		o = batadvopt(s, form.ListValue, 'gw_mode', '',  _('Gateway Mode'),
-				_('A batman-adv node can either run in server mode (sharing its internet connection with the mesh) or in client mode (searching for the most suitable internet connection in the mesh) or having the gateway support turned off entirely (which is the default setting).'));
+		o = batadvopt(s, form.ListValue, 'gw_mode', '', _('Gateway Mode'),
+			_('A batman-adv node can either run in server mode (sharing its internet connection with the mesh) or in client mode (searching for the most suitable internet connection in the mesh) or having the gateway support turned off entirely (which is the default setting).'));
 		o.value('off', _('Off'));
 		o.value('client', _('Client'));
 		o.value('server', _('Server'));
 		o.default = 'off';
 
-		o = batadvopt(s, form.RichListValue, 'gw_sel_class', {'gw_mode': 'client'}, _('Gateway Selection Class'));
-		o.value('1',  _('Fast'),
+		o = batadvopt(s, form.RichListValue, 'gw_sel_class', { 'gw_mode': 'client' }, _('Gateway Selection Class'));
+		o.value('1', _('Fast'),
 			_('Prioritize by advertised throughput and link quality. Sticks with the gateway until it disappears.'));
-		o.value('2',  _('Stable'),
+		o.value('2', _('Stable'),
 			_('Prioritize by link quality only. Sticks with the gateway until it disappears.'));
-		o.value('3',  _('Fast Switch'),
+		o.value('3', _('Fast Switch'),
 			_('Prioritize by link quality only. Switches immediately if a better gateway is found.'));
 		o.value('20', _('Late Switch'),
 			_('Prioritize by link quality only. Switches only if a better gateway is at least 20 TQ points better.'));
 		o.datatype = 'min(1)'; o.default = '20';
 
-		o = batadvopt(s, form.Value, 'gw_bandwidth', {'gw_mode': 'server'}, _('Gateway Bandwidth'),
+		o = batadvopt(s, form.Value, 'gw_bandwidth', { 'gw_mode': 'server' }, _('Gateway Bandwidth'),
 			_('Advertised bandwidth for gateway server mode (e.g. 100mbit/20mbit). Download/upload, defaults upload to download/5 if omitted.'));
 		o.placeholder = '100mbit/20mbit';
 
@@ -464,14 +446,14 @@ return view.extend({
 
 		o = batadvopt(s, form.RichListValue, 'batadv_log_level', '', _('Log Level'),
 			_('Standard warning/error messages are sent to the kernel log. Additional debug output can be enabled here.'));
-		o.value('0',   _('Off (none)'));
-		o.value('1',   _('batman (routing/flooding)'));
-		o.value('2',   _('routes'));
-		o.value('4',   _('tt (translation table)'));
-		o.value('8',   _('bla (bridge loop avoidance)'));
-		o.value('16',  _('dat (ARP/DAT)'));
-		o.value('32',  _('mcast (multicast)'));
-		o.value('64',  _('tp (throughput meter)'));
+		o.value('0', _('Off (none)'));
+		o.value('1', _('batman (routing/flooding)'));
+		o.value('2', _('routes'));
+		o.value('4', _('tt (translation table)'));
+		o.value('8', _('bla (bridge loop avoidance)'));
+		o.value('16', _('dat (ARP/DAT)'));
+		o.value('32', _('mcast (multicast)'));
+		o.value('64', _('tp (throughput meter)'));
 		o.value('128', _('nc (network coding)'));
 		o.value('255', _('all'));
 		o.default = '0';
@@ -480,8 +462,8 @@ return view.extend({
 			_('When running the mesh over multiple WiFi interfaces per node batman-adv is capable of optimizing the traffic flow to gain maximum performance.'));
 		o.default = o.disabled;
 
-		o = batadvopt(s, form.Value, 'elp_interval', {'routing_algo': 'BATMAN_V'}, _('ELP Interval'),
-			_('Interval in ms for neighbor probing (BATMAN V only).'));
+		o = batadvopt(s, form.Value, 'elp_interval', { 'routing_algo': 'BATMAN_V' }, _('ELP Interval'),
+			_('Interval in ms for neighbor probing'));
 		o.datatype = 'min(1)';
 		o.default = '500';
 
@@ -506,13 +488,13 @@ return view.extend({
 			_('Enables more efficient, group aware multicast forwarding infrastructure in batman-adv.'));
 		o.default = o.enabled;
 
-		o = batadvopt(s, form.Value, 'multicast_fanout', {'multicast_mode': '1'}, _('Multicast Fanout'),
+		o = batadvopt(s, form.Value, 'multicast_fanout', { 'multicast_mode': '1' }, _('Multicast Fanout'),
 			_('Max number of multicast listeners before switching to classic flooding.'));
 		o.datatype = 'min(1)';
 		o.default = '16';
 
 		o = batadvopt(s, form.Flag, 'network_coding', '', _('Network Coding'),
-				_('When enabled network coding increases the WiFi throughput by combining multiple frames into a single frame, thus reducing the needed air time.'));
+			_('When enabled network coding increases the WiFi throughput by combining multiple frames into a single frame, thus reducing the needed air time.'));
 		o.default = o.enabled;
 
 		o = m11opt(s, form.DummyValue, '_m11_badge', '', '', _('mesh11sd Status'));
@@ -524,7 +506,7 @@ return view.extend({
 				]),
 				E('div', {
 					class: 'btn cbi-button-apply', style: m_running ? '' : 'display:none',
-					click: ui.createHandlerFn(this, function() {
+					click: ui.createHandlerFn(this, function () {
 						return fs.exec_direct('/usr/sbin/mesh11sd', ['status']).then(function (out) {
 							var text = (out || '').trim() || _('No output. please retry in a moment.');
 							try { text = JSON.stringify(JSON.parse(out), null, 2) } catch {}
@@ -538,8 +520,8 @@ return view.extend({
 		};
 
 		o = m11opt(s, form.Flag, 'enabled', '', '', _('Enable Daemon'));
-		o.default  = '0';
-		o.rmempty  = false;
+		o.default = '0';
+		o.rmempty = false;
 		o.write = function (section_id, value) {
 			uci.set('mesh_node', 'main', 'm11_enable', value);
 			return this.super('write', [section_id, value]);
@@ -555,39 +537,39 @@ return view.extend({
 		o = m11opt(s, form.Value, 'checkinterval', '', '', _('Check Interval (s)'),
 			_('How often the daemon dynamically checks and updates the mesh configuration.'));
 		o.datatype = 'uinteger';
-		o.default  = '15';
+		o.default = '15';
 
 		o = m11opt(s, form.Value, 'interface_timeout', '', '', _('Interface Timeout (s)'),
 			_('Seconds to wait for a wireless interface to become ready.'));
 		o.datatype = 'uinteger';
-		o.default  = '10';
+		o.default = '10';
 
 		o = m11opt(s, form.Flag, 'auto_config', '', '', _('Auto Config'),
 			_('When enabled, the daemon automatically configures wireless interfaces for the mesh — no manual wireless config needed. '
-			+ 'When disabled, the daemon only monitors an existing mesh configuration.<br>'
-			+ '<b>Warning:</b> Incorrect manual mesh configuration can soft-brick the router.'));
-		o.default  = '0';
-		o.rmempty  = false;
+				+ 'When disabled, the daemon only monitors an existing mesh configuration.<br>'
+				+ '<b>Warning:</b> Incorrect manual mesh configuration can soft-brick the router.'));
+		o.default = '0';
+		o.rmempty = false;
 
-		o = m11opt(s, form.ListValue, 'auto_mesh_band', '', {'auto_config': '1'}, _('Mesh Backhaul Band'),
+		o = m11opt(s, form.ListValue, 'auto_mesh_band', '', { 'auto_config': '1' }, _('Mesh Backhaul Band'),
 			_('Select the radio band used for the 802.11s mesh backhaul link. <b>Must match on all nodes.</b>'));
 		var bands = [];
 		if (info.ssid_2g) bands.push(['2g', '2.4 GHz']);
 		if (info.ssid_5g) bands.push(['5g', '5 GHz']);
 		if (info.ssid_6g) bands.push(['6g', '6 GHz']);
-		bands.forEach(function(b) { o.value(b[0], _(b[1])); });
+		bands.forEach(function (b) { o.value(b[0], _(b[1])); });
 		o.rmempty = false;
 
-		o = m11opt(s, form.Value, 'auto_mesh_id', '', {'auto_config': '1'}, _('Mesh ID'),
+		o = m11opt(s, form.Value, 'auto_mesh_id', '', { 'auto_config': '1' }, _('Mesh ID'),
 			_('Hashed to generate the actual mesh network ID. <b>Must match on all nodes.</b>'));
-		o.default  = '--__';
+		o.default = '--__';
 
-		o = m11opt(s, form.Value, 'auto_mesh_key', '', {'auto_config': '1'}, _('Mesh Password'),
+		o = m11opt(s, form.Value, 'auto_mesh_key', '', { 'auto_config': '1' }, _('Mesh Password'),
 			_('SHA256-hashed to produce the mesh encryption key. <b>Must match on all nodes.</b>'));
 		o.password = true;
 		o.optional = true;
 
-		o = m11opt(s, widgets.NetworkSelect, 'auto_mesh_network', '', {'auto_config': '1'}, _('Network'),
+		o = m11opt(s, widgets.NetworkSelect, 'auto_mesh_network', '', { 'auto_config': '1' }, _('Network'),
 			_('This can be set differently on each meshnode as required.'));
 		o.default = 'lan';
 
@@ -595,17 +577,17 @@ return view.extend({
 			_('Overrides the country code in the wireless config (e.g. CN, US, DE). Defaults to DFS-ETSI if not set.'));
 		o.placeholder = 'CN';
 
-		o = m11opt(s, form.Value, 'mesh_phy_index', '',  {'auto_config': '1'}, _('Force Radio Index'),
+		o = m11opt(s, form.Value, 'mesh_phy_index', '', { 'auto_config': '1' }, _('Force Radio Index'),
 			_('Leave empty for auto-selection. Only needed on devices with multiple radios on the same band (e.g. enter 2 to force phy2).'));
 		o.datatype = 'uinteger';
 		o.optional = true;
 
 		o = m11opt(s, form.Value, 'mesh_basename', '', '', _('Mesh Interface Base Name'),
 			_('Used to build the interface name m-<name>-0. Max 8 characters. Default: 11s → interface m-11s-0.'));
-		o.default  = '11s';
+		o.default = '11s';
 		o.datatype = 'maxlength(8)';
 
-		o = m11opt(s, form.RichListValue, 'portal_detect', '',  {'auto_config': '1'}, _('Node Mode'),
+		o = m11opt(s, form.RichListValue, 'portal_detect', '', { 'auto_config': '1' }, _('Node Mode'),
 			_('Select the operating mode for this node in the mesh network'));
 		o.value('0', _('Forced Routed Portal (MRP)'),
 			_('Forces routed portal mode:<br/>• Always provides DHCP/NAT<br/>• Must have WAN connection'));
@@ -617,17 +599,17 @@ return view.extend({
 			_('Bridge mode, WAN joins VXLAN:<br/>• No NAT translation<br/>• WAN port added to br-tun69'));
 		o.value('5', _('Trunk Peer Node (TPN)'),
 			_('Special peer node:<br/>• WAN port is VXLAN endpoint<br/>• Compatible with mode 0/1/4 portals'));
-		o.default  = '1';
+		o.default = '1';
 
-		o = m11opt(s, form.Value, 'portal_detect_threshold', '',  {'auto_config': '1'}, _('Portal Detect Watchdog'),
+		o = m11opt(s, form.Value, 'portal_detect_threshold', '', { 'auto_config': '1' }, _('Portal Detect Watchdog'),
 			_('Number of check intervals a peer node can fail to detect the portal before the watchdog triggers a reboot. 0 = disabled.'));
 		o.datatype = 'uinteger';
-		o.default  = '10';
+		o.default = '10';
 
-		o = m11opt(s, form.ListValue, 'portal_channel', '', {'portal_detect': '0'}, _('Portal Channel (2.4 GHz only)'),
+		o = m11opt(s, form.ListValue, 'portal_channel', '', { 'portal_detect': '0' }, _('Portal Channel (2.4 GHz only)'),
 			_('Peer nodes automatically track the portal channel regardless of auto_mesh_band.'));
 		o.value('default', _('Use channel from wireless config'));
-		o.value('auto',    _('Auto select'));
+		o.value('auto', _('Auto select'));
 		for (var ch = 1; ch <= 13; ch++) {
 			o.value(String(ch), _('Channel ') + ch);
 		}
@@ -636,19 +618,19 @@ return view.extend({
 		o = m11opt(s, form.Value, 'channel_tracking_checkinterval', '', '', _('Channel Tracking Start Interval (s)'),
 			_('Minimum interval after which channel tracking begins on peer nodes. Values less than checkinterval are ignored.'));
 		o.datatype = 'uinteger';
-		o.default  = '30';
+		o.default = '30';
 		o.optional = true;
 
-		o = m11opt(s, form.Flag, 'portal_use_default_ipv4', '', {'portal_detect': /(0|1|4)/}, _('Use Default IPv4 Address'),
+		o = m11opt(s, form.Flag, 'portal_use_default_ipv4', '', { 'portal_detect': /(0|1|4)/ }, _('Use Default IPv4 Address'),
 			_('When enabled, the portal node uses the IPv4 address from /etc/config/network. '
-			+ 'When disabled, the subnet is auto-calculated from the label MAC address.'));
+				+ 'When disabled, the subnet is auto-calculated from the label MAC address.'));
 		o.default = '0';
 
-		o = m11opt(s, form.ListValue, 'cpe_mode', '', {'portal_detect': '3'}, _('CPE IPv6 Mode'),
+		o = m11opt(s, form.ListValue, 'cpe_mode', '', { 'portal_detect': '3' }, _('CPE IPv6 Mode'),
 			_('Applies only when Node Role is CPE (3).'));
-		o.value('nat66',             _('NAT66 (default, compatible with Android)'));
+		o.value('nat66', _('NAT66 (default, compatible with Android)'));
 		o.value('prefix_delegation', _('Prefix Delegation'));
-		o.value('relay',             _('Relay'));
+		o.value('relay', _('Relay'));
 		o.default = 'nat66';
 
 		o = m11opt(s, form.ListValue, 'mesh_gate_enable', '', '', _('AP Gate'),
@@ -658,16 +640,16 @@ return view.extend({
 		o.value('2', _('Enabled only on radios not shared with mesh'));
 		o.default = '1';
 
-		o = m11opt(s, form.Value, 'mesh_gate_base_ssid', '', {'mesh_gate_enable': /(1|2)/}, _('AP SSID'),
+		o = m11opt(s, form.Value, 'mesh_gate_base_ssid', '', { 'mesh_gate_enable': /(1|2)/ }, _('AP SSID'),
 			_('Base SSID for the access point. Max 22 chars with suffix enabled, 30 without. '
-			+ 'Leave empty to use the SSID from wireless config.'));
+				+ 'Leave empty to use the SSID from wireless config.'));
 		o.rmempty = false; o.default = 'HomeWiFi';
 
-		o = m11opt(s, form.Flag, 'ssid_suffix_enable', '', {'mesh_gate_enable': /(1|2)/}, _('SSID Suffix'),
+		o = m11opt(s, form.Flag, 'ssid_suffix_enable', '', { 'mesh_gate_enable': /(1|2)/ }, _('SSID Suffix'),
 			_('Append the last 4 digits of the mesh interface MAC to the SSID to distinguish nodes.'));
 		o.default = '1';
 
-		o = m11opt(s, form.RichListValue, 'mesh_gate_encryption', '', {'mesh_gate_enable': /(1|2)/}, _('AP Encryption'));
+		o = m11opt(s, form.RichListValue, 'mesh_gate_encryption', '', { 'mesh_gate_enable': /(1|2)/ }, _('AP Encryption'));
 		o.value('0', _('None / OWE transition'));
 		o.value('1', _('SAE (WPA3)'));
 		o.value('2', _('SAE-Mixed (WPA2+WPA3)'));
@@ -675,14 +657,14 @@ return view.extend({
 		o.value('4', _('OWE — Opportunistic Wireless Encryption'));
 		o.default = '4';
 
-		o = m11opt(s, form.Value, 'mesh_gate_key', '', {'mesh_gate_encryption': /(1|2|3)/}, _('AP Password'));
+		o = m11opt(s, form.Value, 'mesh_gate_key', '', { 'mesh_gate_encryption': /(1|2|3)/ }, _('AP Password'));
 		o.password = true;
 		o.optional = true;
 
 		o = m11opt(s, form.Value, 'mesh_path_cost', '', '', _('Mesh Path Cost (STP)'),
 			_('STP link cost for the mesh network. Range 0–65534. 0 disables STP.'));
 		o.datatype = 'range(0,65534)';
-		o.default  = '65525';
+		o.default = '65525';
 
 		o = m11opt(s, form.ListValue, 'mesh_node_mobility_level', '', '', _('Node Mobility Level'),
 			_('Tunes path-selection aggressiveness. Use 1 for fixed deployments; increase for mobile nodes.'));
@@ -700,7 +682,7 @@ return view.extend({
 		o = m11opt(s, form.Value, 'reactive_path_stabilisation_threshold', '', '', _('Reactive Path Stabilisation Threshold'),
 			_('Number of check intervals an unstable neighbour path must persist before path stabilisation activates.'));
 		o.datatype = 'uinteger';
-		o.default  = '10';
+		o.default = '10';
 		o.optional = true;
 
 		o = m11opt(s, form.Flag, 'mesh_mac_forced_forwarding', '', '', _('MAC Forced Forwarding'),
@@ -711,10 +693,10 @@ return view.extend({
 			_('Enable proxy ARP on the gateway bridge interface to improve ARP resolution.'));
 		o.default = '1';
 
-		o = m11opt(s, form.Flag, 'mesh_leechmode_enable', '', [{'mesh_node_mobility_level': '0', 'auto_config': '0'}, {'mesh_node_mobility_level': '0', 'portal_detect': /(1|3|5)/}], _('Leech Mode'),
+		o = m11opt(s, form.Flag, 'mesh_leechmode_enable', '', [{ 'mesh_node_mobility_level': '0', 'auto_config': '0' }, { 'mesh_node_mobility_level': '0', 'portal_detect': /(1|3|5)/ }], _('Leech Mode'),
 			_('Node acts as AP only: uses mesh backhaul but does not contribute to routing or forwarding. '
-			+ 'Useful when the node is within range of 2+ peer nodes to avoid unstable multi-hop paths. '
-			+ 'Requires mobility level 0 and non-portal role.'));
+				+ 'Useful when the node is within range of 2+ peer nodes to avoid unstable multi-hop paths. '
+				+ 'Requires mobility level 0 and non-portal role.'));
 		o.default = '0';
 
 		o = m11opt(s, form.Value, 'txpower', '', '', _('TX Power (dBm)'),
@@ -722,39 +704,39 @@ return view.extend({
 		o.datatype = 'uinteger';
 		o.optional = true;
 
-		o = m11opt(s, form.Flag, 'vtun_enable', '', [{'auto_config': '0'}, {'portal_detect': /(0|1|4|5)/}], _('Enable VXLAN Tunnel'),
+		o = m11opt(s, form.Flag, 'vtun_enable', '', [{ 'auto_config': '0' }, { 'portal_detect': /(0|1|4|5)/ }], _('Enable VXLAN Tunnel'),
 			_('Point-to-multipoint VXLAN tunnel between the portal and all compatible peers. '
-			+ 'Requires <b>ip-full</b> and <b>vxlan</b> packages; ignored otherwise. '
-			+ 'Disabled by default when Node Role is CPE (3).'));
+				+ 'Requires <b>ip-full</b> and <b>vxlan</b> packages; ignored otherwise. '
+				+ 'Disabled by default when Node Role is CPE (3).'));
 		o.default = '0';
 
-		o = m11opt(s, form.Value, 'tun_id', '', {'vtun_enable': '1'}, _('Tunnel ID'),
+		o = m11opt(s, form.Value, 'tun_id', '', { 'vtun_enable': '1' }, _('Tunnel ID'),
 			_('VXLAN tunnel identifier. Decimal, range 1–16777216 (24-bit).'));
 		o.datatype = 'range(1,16777216)';
-		o.default  = '69';
+		o.default = '69';
 
-		o = m11opt(s, form.Value, 'vtun_ip', '', {'vtun_enable': '1'}, _('VXLAN Tunnel IPv4 Gateway'),
+		o = m11opt(s, form.Value, 'vtun_ip', '', { 'vtun_enable': '1' }, _('VXLAN Tunnel IPv4 Gateway'),
 			_('IPv4 gateway address for the vxlan tunnel bridge. Active only when this node becomes a portal.'));
 		o.datatype = 'ip4addr';
 		o.optional = true;
 
-		o = m11opt(s, form.Value, 'vtun_mask', '', {'vtun_enable': '1'}, _('VXLAN Tunnel Subnet Mask'),
+		o = m11opt(s, form.Value, 'vtun_mask', '', { 'vtun_enable': '1' }, _('VXLAN Tunnel Subnet Mask'),
 			_('IPv4 subnet mask for the vxlan tunnel bridge. Active only when this node becomes a portal. Default: 255.255.255.0.'));
 		o.datatype = 'ip4addr';
-		o.default  = '255.255.255.0';
+		o.default = '255.255.255.0';
 		o.optional = true;
 
-		o = m11opt(s, form.Value, 'vtun_path_cost', '', {'vtun_enable': '1'}, _('VXLAN Path Cost (STP)'),
+		o = m11opt(s, form.Value, 'vtun_path_cost', '', { 'vtun_enable': '1' }, _('VXLAN Path Cost (STP)'),
 			_('STP link cost for the vxlan tunnel network. Range 0–65534. 0 disables STP.'));
 		o.datatype = 'range(0,65534)';
-		o.default  = '10';
+		o.default = '10';
 		o.optional = true;
 
-		o = m11opt(s, form.Value, 'vtun_base_ssid', '', {'vtun_enable': '1'}, _('VXLAN AP SSID'),
+		o = m11opt(s, form.Value, 'vtun_base_ssid', '', { 'vtun_enable': '1' }, _('VXLAN AP SSID'),
 			_('Base SSID for the AP attached to the vxlan tunnel. Max 22 chars with suffix, 30 without.'));
 		o.optional = true;
 
-		o = m11opt(s, form.RichListValue, 'vtun_gate_encryption', '', {'vtun_enable': '1'}, _('VXLAN AP Encryption'),
+		o = m11opt(s, form.RichListValue, 'vtun_gate_encryption', '', { 'vtun_enable': '1' }, _('VXLAN AP Encryption'),
 			_('Encryption for the AP attached to the vxlan tunnel.'));
 		o.value('0', _('None / OWE transition'));
 		o.value('1', _('SAE (WPA3)'));
@@ -763,7 +745,7 @@ return view.extend({
 		o.value('4', _('OWE — Opportunistic Wireless Encryption'));
 		o.default = '4';
 
-		o = m11opt(s, form.Value, 'vtun_gate_key', '', {'vtun_gate_encryption': /(1|2|3)/}, _('VXLAN AP Password'),
+		o = m11opt(s, form.Value, 'vtun_gate_key', '', { 'vtun_gate_encryption': /(1|2|3)/ }, _('VXLAN AP Password'),
 			_('Encryption key for the vxlan-attached AP. Minimum 8 characters.'));
 		o.password = true;
 		o.optional = true;
@@ -774,46 +756,46 @@ return view.extend({
 
 		o = m11opt(s, form.Flag, 'stop_on_error', '', '', _('Stop on Error (overrides Reboot on Error)'),
 			_('When the watchdog detects a portal communication failure, the daemon goes idle instead of rebooting. '
-			+ 'Useful for nodes without a reset button. Takes priority over Reboot on Error.'));
+				+ 'Useful for nodes without a reset button. Takes priority over Reboot on Error.'));
 		o.default = '0';
 
 		o = m11opt(s, form.Flag, 'apmond_enable', '', '', _('Enable AP Monitor (apmond)'),
 			_('Collects AP interface data from this node and sends it to the portal. Requires uhttpd and px5g-mbedtls packages.'));
 		o.default = '1';
 
-		o = m11opt(s, form.Value, 'apmond_cgi_dir', '', {'apmond_enable': '1'}, _('apmond CGI Directory'),
+		o = m11opt(s, form.Value, 'apmond_cgi_dir', '', { 'apmond_enable': '1' }, _('apmond CGI Directory'),
 			_('Path for apmond CGI scripts when this node becomes a portal. Default: /www/cgi-bin.'));
-		o.default  = '/www/cgi-bin';
+		o.default = '/www/cgi-bin';
 		o.optional = true;
 
 		o = m11opt(s, form.Value, 'mesh_backhaul_led', '', '', _('Mesh Backhaul LED'),
 			_('LED is solid when the mesh interface is up; switches to Linux heartbeat when peers are connected. '
-			+ 'Set to <b>none</b> to disable, or enter an LED name from /sys/class/leds/ (e.g. blue:run). '
-			+ 'Default: auto (uses power/system LED).'));
-		o.default  = 'auto';
+				+ 'Set to <b>none</b> to disable, or enter an LED name from /sys/class/leds/ (e.g. blue:run). '
+				+ 'Default: auto (uses power/system LED).'));
+		o.default = 'auto';
 		o.optional = true;
 
 		o = m11opt(s, form.Flag, 'manage_opennds_startup', '', '', _('Manage openNDS Startup'),
 			_('If openNDS is installed, mesh11sd manages its startup and synchronises nft rulesets. '
-			+ 'Disabling may cause crash loops because the openNDS gateway interface may not be ready in time.'));
+				+ 'Disabling may cause crash loops because the openNDS gateway interface may not be ready in time.'));
 		o.default = '0';
 
 		o = m11opt(s, form.Flag, 'watchdog_nonvolatile_log', '', '', _('Watchdog Non-volatile Log (debug only)'),
 			_('<b>Warning:</b> Writes watchdog actions to non-volatile storage (/mesh11sd_log/mesh11sd.log). '
-			+ 'Leaving this enabled long-term may cause irreparable flash wear and consume storage. '
-			+ '<b>Disable immediately after debugging.</b>'));
+				+ 'Leaving this enabled long-term may cause irreparable flash wear and consume storage. '
+				+ '<b>Disable immediately after debugging.</b>'));
 		o.default = '0';
 
 		o = m11opt(s, form.Value, 'mesh_rssi_threshold', 'mesh_params', '', _('RSSI Threshold (dBm)'),
 			_('Minimum signal strength required to establish a peer link (e.g. -70). Range: -100 to 0.'));
-		o.datatype   = 'range(-100,0)';
-		o.optional   = true;
+		o.datatype = 'range(-100,0)';
+		o.optional = true;
 		o.placeholder = '-70';
 
 		o = m11opt(s, form.Value, 'mesh_max_peer_links', 'mesh_params', '', _('Max Peer Links'),
 			_('Maximum number of peer links allowed per node.'));
-		o.datatype   = 'uinteger';
-		o.optional   = true;
+		o.datatype = 'uinteger';
+		o.optional = true;
 		o.placeholder = '20';
 
 		o = s.taboption('usteer', form.Flag, 'enable_usteer', _('Enable usteer Smart Steering'),
@@ -1034,6 +1016,41 @@ return view.extend({
 		});
 		o.default = 'arpbind dnsmasq firewall miniupnpd odhcpd';
 
+		var origParse = m.parse.bind(m);
+		m.parse = function () {
+			var proto = s.formvalue('main', 'batadv_proto');
+			var hardif = s.formvalue('main', 'batadv_hardif');
+			var use_batadv = s.formvalue('main', 'use_batadv');
+
+			function migrate(oldName, newName, defaults) {
+				if (!newName) return;
+				var renamed = oldName && oldName !== newName;
+				var oldSection = oldName ? uci.get('network', oldName) : null;
+
+				if (!uci.get('network', newName)) {
+					uci.add('network', 'interface', newName);
+					if (renamed && oldSection) {
+						for (var key in oldSection) {
+							if (key.charAt(0) === '.') continue;
+							uci.set('network', newName, key, oldSection[key]);
+						}
+					} else {
+						for (var k in defaults) uci.set('network', newName, k, defaults[k]);
+					}
+				}
+				if (renamed && oldSection) uci.remove('network', oldName);
+			}
+
+			var oldProto = uci.get('mesh_node', 'main', 'batadv_proto');
+			var oldHardif = uci.get('mesh_node', 'main', 'batadv_hardif');
+			if (use_batadv === '1') {
+				migrate(oldProto, proto, { proto: 'batadv', multipath: 'off' });
+				migrate(oldHardif, hardif, { proto: 'batadv_hardif', mtu: '2304', multipath: 'off' });
+				if (proto && hardif) uci.set('network', hardif, 'master', proto);
+			}
+
+			return origParse();
+		};
 		return m.render();
 	}
 });

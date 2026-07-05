@@ -1076,3 +1076,9 @@ msgstr "组播扇出"
 
 msgid "Max number of multicast listeners before switching to classic flooding."
 msgstr "超过该数量后将切换为广播模式。"
+
+msgid "ELP Interval"
+msgstr "ELP 间隔"
+
+msgid "Interval in ms for neighbor probing"
+msgstr "邻居探测的时间间隔（以毫秒为单位）"
