@@ -2,7 +2,7 @@
 
 START=99
 STOP=10
-
+USE_PROCD=1
 hash_value() { echo "$1" | md5sum | awk '{print $1}'; }
 
 do_network() {
@@ -289,7 +289,7 @@ do_usteer() {
 	return 0
 }
 
-start() {
+start_service() {
 	local band_mode batadv_proto batadv_hardif use_batadv \
 		  hostname old_hostname m11_enable enable_usteer \
 		  network_changed=0 mesh11sd_changed=0 usteer_changed=0 wireless_changed=0
@@ -317,10 +317,13 @@ start() {
 	do_network  && network_changed=1
 	do_mesh11sd && mesh11sd_changed=1
 	do_usteer   && usteer_changed=1
-	uci -q commit
+	uci -q commit mesh_node
+	uci -q commit network
+	uci -q commit wireless
+	uci -q commit usteer
 
-	[ "$network_changed"  = 1 ] && { /etc/init.d/network restart; sleep 3; }
 	[ "$wireless_changed" = 1 ] && { wifi reload; sleep 3; }
+	[ "$network_changed"  = 1 ] && { /etc/init.d/network restart; sleep 3; }
 	[ "$mesh11sd_changed" = 1 ] && [ "$band_mode" = "2" ] && {
 		if [ "$m11_enable" = "1" ]; then
 			/etc/init.d/mesh11sd enable  2>/dev/null || true
@@ -343,5 +346,10 @@ start() {
 	}
 }
 
-stop() { :; }
-boot() { :; }
+reload_service() {
+	start_service
+}
+
+service_triggers() {
+	procd_add_reload_trigger "mesh_node"
+}
