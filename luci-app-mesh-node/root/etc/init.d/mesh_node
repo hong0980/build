@@ -3,6 +3,7 @@
 START=99
 STOP=10
 USE_PROCD=1
+
 hash_value() { echo "$1" | md5sum | awk '{print $1}'; }
 
 do_network() {
@@ -321,6 +322,7 @@ start_service() {
 	uci -q commit network
 	uci -q commit wireless
 	uci -q commit usteer
+	uci -q commit mesh11sd
 
 	[ "$wireless_changed" = 1 ] && { wifi reload; sleep 3; }
 	[ "$network_changed"  = 1 ] && { /etc/init.d/network restart; sleep 3; }
@@ -353,3 +355,5 @@ reload_service() {
 service_triggers() {
 	procd_add_reload_trigger "mesh_node"
 }
+
+boot() { :; }
