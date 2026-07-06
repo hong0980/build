@@ -185,6 +185,10 @@ return view.extend({
 		s.tab('usteer', _('Usteer Settings'));
 		s.tab('other', _('Other'));
 
+		o = s.taboption('network', form.Flag, 'enabled', _('Enable'));
+		o.default = '0';
+		o.rmempty = false;
+
 		o = s.taboption('network', form.RichListValue, 'combo_mode', _('Network Mode'));
 		Object.keys(COMBO_MODES).forEach(function (k) {
 			o.value(k, _(COMBO_MODES[k].label), _(COMBO_MODES[k].desc));

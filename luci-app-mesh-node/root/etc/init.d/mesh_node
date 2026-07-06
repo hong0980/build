@@ -291,11 +291,13 @@ do_usteer() {
 }
 
 start_service() {
-	local band_mode batadv_proto batadv_hardif use_batadv \
+	local band_mode batadv_proto batadv_hardif use_batadv enabled \
 		  hostname old_hostname m11_enable enable_usteer \
 		  network_changed=0 mesh11sd_changed=0 usteer_changed=0 wireless_changed=0
 
 	config_load mesh_node
+	config_get_bool enabled main enabled 0
+	[ "enabled" != "1" ] && return 0
 	config_get band_mode     main band_mode         '0'
 	config_get batadv_proto  main batadv_proto      ''
 	config_get batadv_hardif main batadv_hardif     ''
@@ -355,5 +357,3 @@ reload_service() {
 service_triggers() {
 	procd_add_reload_trigger "mesh_node"
 }
-
-boot() { :; }
