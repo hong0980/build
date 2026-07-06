@@ -1022,6 +1022,7 @@ return view.extend({
 
 		var origParse = m.parse.bind(m);
 		m.parse = function () {
+			var enabled = s.formvalue('main', 'enabled');
 			var proto = s.formvalue('main', 'batadv_proto');
 			var hardif = s.formvalue('main', 'batadv_hardif');
 			var use_batadv = s.formvalue('main', 'use_batadv');
@@ -1030,7 +1031,6 @@ return view.extend({
 				if (!newName) return;
 				var renamed = oldName && oldName !== newName;
 				var oldSection = oldName ? uci.get('network', oldName) : null;
-
 				if (!uci.get('network', newName)) {
 					uci.add('network', 'interface', newName);
 					if (renamed && oldSection) {
@@ -1047,7 +1047,8 @@ return view.extend({
 
 			var oldProto = uci.get('mesh_node', 'main', 'batadv_proto');
 			var oldHardif = uci.get('mesh_node', 'main', 'batadv_hardif');
-			if (use_batadv === '1') {
+
+			if (enabled === '1' && use_batadv === '1') {
 				migrate(oldProto, proto, { proto: 'batadv', multipath: 'off' });
 				migrate(oldHardif, hardif, { proto: 'batadv_hardif', mtu: '2304', multipath: 'off' });
 				if (proto && hardif) uci.set('network', hardif, 'master', proto);
