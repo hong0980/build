@@ -297,7 +297,7 @@ start_service() {
 
 	config_load mesh_node
 	config_get_bool enabled main enabled 0
-	[ "enabled" != "1" ] && return 0
+	[ "$enabled" -eq 0 ] && return 0
 	config_get band_mode     main band_mode         '0'
 	config_get batadv_proto  main batadv_proto      ''
 	config_get batadv_hardif main batadv_hardif     ''

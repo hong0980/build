@@ -1,8 +1,15 @@
 #!/bin/sh
+touch /etc/config/mesh_node
 
-echo "config mesh_node 'main'" > /etc/config/mesh_node
+uci -q batch <<-EOF
+	set mesh_node.main=mesh_node
+	set mesh_node.main.enabled='0'
+	commit mesh_node
+EOF
+
 chmod +x /etc/init.d/mesh_node
-/etc/init.d/mesh_node enable
+/etc/init.d/mesh_node enable   2>/dev/null || true
+/etc/init.d/mesh_node restart  2>/dev/null || true
 
 /etc/init.d/usteer stop      2>/dev/null || true
 /etc/init.d/usteer disable   2>/dev/null || true
