@@ -2,6 +2,7 @@
 
 START=99
 STOP=10
+USE_PROCD=1
 
 hash_value() { echo "$1" | md5sum | awk '{print $1}'; }
 
@@ -289,7 +290,7 @@ do_usteer() {
 	return 0
 }
 
-start() {
+start_service() {
 	local band_mode batadv_proto batadv_hardif use_batadv enabled \
 		  hostname old_hostname m11_enable enable_usteer \
 		  network_changed=0 mesh11sd_changed=0 usteer_changed=0 wireless_changed=0
@@ -356,5 +357,12 @@ start() {
 	}
 }
 
-stop() { :; }
 boot() { :; }
+
+reload_service() {
+	start_service
+}
+
+service_triggers() {
+	procd_add_reload_trigger "mesh_node"
+}

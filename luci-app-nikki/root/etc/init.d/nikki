@@ -11,26 +11,22 @@ PROG="/usr/bin/mihomo"
 extra_command 'update_subscription' 'Update subscription by section id'
 extra_command 'clear_logs' 'Clear logs if size exceeds the limit'
 
-boot_func() {
-	config_load nikki
-	# start delay
+config_load nikki
+
+boot() {
 	local enabled start_delay
-	config_get_bool enabled "config" "enabled" 0
-	config_get start_delay "config" "start_delay" 0
-	if [ "$enabled" = 1 ] && [ "$start_delay" -gt 0 ]; then
+	config_get_bool enabled config enabled 0
+	[ "$enabled" = 1 ] || return
+
+	config_get start_delay config start_delay 0
+	if [ "$start_delay" -gt 0 ]; then
 		log "App" "Start after %s seconds." "$start_delay"
 		sleep "$start_delay"
 	fi
-	# start
 	start
 }
 
-boot() {
-	boot_func < /dev/null > /dev/null 2>&1 &
-}
-
 start_service() {
-	config_load nikki
 	# check if enabled
 	local enabled
 	config_get_bool enabled "config" "enabled" 0
@@ -306,7 +302,7 @@ service_started() {
 		return
 	fi
 	# load config
-	config_load nikki
+
 	# check if proxy enabled
 	local proxy_enabled
 	config_get_bool proxy_enabled "proxy" "enabled" 0
@@ -454,10 +450,6 @@ service_triggers() {
 }
 
 cleanup() {
-	# load config
-	config_load nikki
-	# get config
-	## log config
 	local log_clear_at_stop
 	config_get_bool log_clear_at_stop "log" "clear_at_stop" 0
 	## routing config
@@ -510,10 +502,6 @@ cleanup() {
 }
 
 clear_logs() {
-	# load config
-	config_load nikki
-	# get config
-	## log config
 	local log_scheduled_clear_size_limit log_scheduled_clear_size_limit_unit
 	config_get log_scheduled_clear_size_limit "log" "scheduled_clear_size_limit" 1
 	config_get log_scheduled_clear_size_limit_unit "log" "scheduled_clear_size_limit_unit" "MB"
@@ -549,8 +537,6 @@ update_subscription() {
 	if [ -z "$subscription_section" ]; then
 		return
 	fi
-	# load config
-	config_load nikki
 	# get subscription config
 	local subscription_name subscription_info_url subscription_url subscription_user_agent
 	config_get subscription_name "$subscription_section" "name"
