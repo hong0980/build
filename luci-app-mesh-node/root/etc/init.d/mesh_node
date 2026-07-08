@@ -325,16 +325,6 @@ start_service() {
 	[ "$wireless_changed" = 1 ] && { wifi reload; sleep 3; }
 	[ "$network_changed"  = 1 ] && { /etc/init.d/network restart; sleep 3; }
 
-	# if [ "$network_changed" = 1 ] && [ "$use_batadv" = "1" ]; then
-	# 	[ -n "$batadv_hardif" ] && ifdown "$batadv_hardif" 2>/dev/null
-	# 	[ -n "$batadv_proto" ]  && ifdown "$batadv_proto"  2>/dev/null
-	# 	sleep 1
-	# 	[ -n "$batadv_proto" ]  && ifup "$batadv_proto"
-	# 	sleep 1
-	# 	[ -n "$batadv_hardif" ] && ifup "$batadv_hardif"
-	# 	sleep 2
-	# fi
-
 	[ "$mesh11sd_changed" = 1 ] && [ "$band_mode" = "2" ] && {
 		if [ "$m11_enable" = "1" ]; then
 			/etc/init.d/mesh11sd enable  2>/dev/null || true
@@ -357,10 +347,9 @@ start_service() {
 	}
 }
 
-boot() { :; }
-
 reload_service() {
-	start_service
+	stop
+	start
 }
 
 service_triggers() {
