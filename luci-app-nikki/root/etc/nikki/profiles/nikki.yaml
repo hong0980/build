@@ -161,7 +161,7 @@ groups: &groups {type: url-test, use: [cloud], include-all: true, tolerance: 50,
 # tolerance 为同档延迟容差（ms）；url 为测速探测地址
 
 proxies:
-  - {name: 🎯 国内, type: direct, udp: true} # 手写国内节点，供订阅拉取出口及规则引用
+  - {name: 🎯 国内, type: direct, udp: true, proxies: [DIRECT]} # 手写国内节点，供订阅拉取出口及规则引用
 
 proxy-groups:
   - {name: 自动选择, <<: *groups, filter: "(?i)^(?!.*(国内)).*$", icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/mini/Global.png}
@@ -196,7 +196,7 @@ rules:
   - RULE-SET,bybit_domain,日本自动
   - RULE-SET,github_domain,自动选择
   - RULE-SET,youtube_domain,自动选择
-  - RULE-SET,tiktok_domain,美国自动
+  - RULE-SET,tiktok_domain,自动选择
   - RULE-SET,netflix_domain,新加坡自动
   - RULE-SET,disney_domain,新加坡自动
   - RULE-SET,speedtest_domain,自动选择

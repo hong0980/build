@@ -4,19 +4,13 @@ import { uci_bool, uci_int, uci_array, trim_all } from '/etc/nikki/ucode/include
 const uci = cursor();
 
 function map_utls(fp) {
-	if (fp == null || fp == '') {
-		return null;
-	}
-	if (fp == 'randomized') {
-		return 'random';
-	}
+	if (fp == null || fp == '') return null;
+	if (fp == 'randomized') return 'random';
 	return fp;
 };
 
 function build_reality_opts(section) {
-	if (!uci_bool(section.tls_reality)) {
-		return null;
-	}
+	if (!uci_bool(section.tls_reality)) return null;
 	const opts = {
 		'public-key': section.tls_reality_public_key,
 		'short-id': section.tls_reality_short_id,
@@ -66,12 +60,8 @@ function build_httpupgrade_opts(section) {
 
 function apply_transport(target, section, allowed) {
 	const transport = section.transport;
-	if (transport == null || transport == '') {
-		return;
-	}
-	if (index(allowed, transport) == -1) {
-		return;
-	}
+	if (transport == null || transport == '') return;
+	if (index(allowed, transport) == -1) return;
 
 	switch (transport) {
 		case 'ws':
@@ -94,28 +84,20 @@ function apply_transport(target, section, allowed) {
 };
 
 function apply_tls_common(target, section, sni_field) {
-	if (!uci_bool(section.tls)) {
-		return;
-	}
+	if (!uci_bool(section.tls)) return;
 	target['tls'] = true;
 	target[sni_field ?? 'servername'] = section.tls_sni;
 
 	const alpn = uci_array(section.tls_alpn);
-	if (length(alpn) > 0) {
-		target['alpn'] = alpn;
-	}
+	if (length(alpn) > 0) target['alpn'] = alpn;
 
 	target['skip-cert-verify'] = uci_bool(section.tls_insecure);
 
 	const fp = map_utls(section.tls_utls);
-	if (fp != null) {
-		target['client-fingerprint'] = fp;
-	}
+	if (fp != null) target['client-fingerprint'] = fp;
 
 	const reality = build_reality_opts(section);
-	if (reality != null) {
-		target['reality-opts'] = reality;
-	}
+	if (reality != null) target['reality-opts'] = reality;
 
 	if (uci_bool(section.tls_ech)) {
 		target['ech-opts'] = trim_all({
@@ -126,9 +108,7 @@ function apply_tls_common(target, section, sni_field) {
 };
 
 function apply_multiplex(target, section) {
-	if (!uci_bool(section.multiplex)) {
-		return;
-	}
+	if (!uci_bool(section.multiplex)) return;
 	target['smux'] = trim_all({
 		enabled: true,
 		protocol: section.multiplex_protocol,
@@ -226,10 +206,6 @@ function build_shadowsocks(section, base) {
 };
 
 function build_shadowtls(section, base) {
-	/* 官方示例 ss4-shadow-tls 显示：
-	 *   - proxy.password       底层 Shadowsocks 自身密码
-	 *   - plugin-opts.password shadow-tls 隧道认证密码（独立字段，跟 SS 密码不同）
-	 * client-fingerprint 是外层字段（跟 type 同级），不是 plugin-opts 里面。 */
 	const proxy = base;
 	proxy['type'] = 'ss';
 	proxy['cipher'] = section.shadowsocks_encrypt_method ?? 'none';
@@ -366,9 +342,7 @@ function build_tuic(section, base) {
 
 	proxy['sni'] = section.tls_sni;
 	const alpn = uci_array(section.tls_alpn);
-	if (length(alpn) > 0) {
-		proxy['alpn'] = alpn;
-	}
+	if (length(alpn) > 0) proxy['alpn'] = alpn;
 
 	return proxy;
 };
@@ -435,14 +409,10 @@ export function build_proxies() {
 	const proxies = [];
 
 	uci.foreach('nikki', 'node', (section) => {
-		if (uci_bool(section.enabled) === false) {
-			return;
-		}
+		if (uci_bool(section.enabled) === false) return;
 
 		const builder = builders[section.type];
-		if (!builder) {
-			return;
-		}
+		if (!builder) return;
 
 		const base = {
 			name: section.label ?? `${section.address}:${section.port}`,
@@ -450,17 +420,11 @@ export function build_proxies() {
 			port: uci_int(section.port),
 		};
 
-		if (uci_bool(section.tcp_fast_open)) {
-			base['tfo'] = true;
-		}
-		if (uci_bool(section.tcp_multi_path)) {
-			base['mptcp'] = true;
-		}
+		if (uci_bool(section.tcp_fast_open)) base['tfo'] = true;
+		if (uci_bool(section.tcp_multi_path)) base['mptcp'] = true;
 
 		const proxy = builder(section, base);
-		if (proxy != null) {
-			push(proxies, trim_all(proxy));
-		}
+		if (proxy != null) push(proxies, trim_all(proxy));
 	});
 
 	return proxies;

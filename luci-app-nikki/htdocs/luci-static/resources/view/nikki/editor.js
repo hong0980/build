@@ -31,7 +31,7 @@ return view.extend({
             nikki.listfiles(nikki.ruleProvidersDir),
             nikki.listfiles(nikki.proxyProvidersDir),
             nikki.listfiles(nikki.subscriptionsDir),
-            L.resolveDefault(fs.stat(nikki.mixinFilePath), { path: null }),
+            nikki.listfiles('/etc/nikki/mixin'),
             L.resolveDefault(fs.stat(nikki.runProfilePath), { path: null }),
         ]).then(([pf, rp, pp, sp, mp, yp]) => {
             const build = (files, prefix, dir) => files.map(f => ({
@@ -43,7 +43,7 @@ return view.extend({
                 ...build(sp, _('Subscription:'), nikki.subscriptionsDir),
                 ...build(rp, _('Rule Provider:'), nikki.ruleProvidersDir),
                 ...build(pp, _('Proxy Provider:'), nikki.proxyProvidersDir),
-                { path: mp.path, mtime: mp.mtime, size: mp.size, name: _('File for Mixin') },
+                ...build(mp, _('混入：'), '/etc/nikki/mixin'),
                 { path: yp.path, mtime: yp.mtime, size: yp.size, name: _('Profile for Startup') },
             ];
 

@@ -7,7 +7,7 @@ chmod +x /etc/init.d/nikki \
 
 . /lib/functions.sh
 . /etc/nikki/scripts/include.sh
-mkdir -p "$PROFILES_DIR" "$SUBSCRIPTIONS_DIR" "$RULE_PROVIDERS_DIR" "$PROXY_PROVIDERS_DIR" /etc/nikki/certs
+mkdir -p "$SUBSCRIPTIONS_DIR" "$RULE_PROVIDERS_DIR" "$PROXY_PROVIDERS_DIR" /etc/nikki/certs
 
 config_load nikki
 
@@ -28,10 +28,9 @@ migrate_router_access_control_cgroup() {
 config_foreach migrate_router_access_control_cgroup router_access_control
 
 sync_dns_from_proxy() {
-	local cfg="$1"
-	local proxy dns
-	config_get proxy "$cfg" proxy
+	local cfg="$1" proxy dns
 	config_get dns   "$cfg" dns
+	config_get proxy "$cfg" proxy
 	[ -z "$dns" ] && uci -q set "nikki.$cfg.dns=$proxy"
 }
 
@@ -40,19 +39,18 @@ config_foreach sync_dns_from_proxy router_access_control
 config_get init config init
 [ -n "$init" ] && {
 	random=$(awk 'BEGIN{srand(); printf "%06d", int(rand() * 1000000)}')
+	uci -q del nikki.config.init
 	uci -q set nikki.mixin.api_secret="$random"
 	uci -q set nikki.@authentication[0].password="$random"
-	uci -q del nikki.config.init
 }
-
-uci -q commit nikki
 
 uci -q batch <<-EOF > /dev/null
 	del firewall.nikki
 	set firewall.nikki=include
 	set firewall.nikki.type=script
-	set firewall.nikki.path=$FIREWALL_INCLUDE_SH
 	set firewall.nikki.fw4_compatible=1
+	set firewall.nikki.path=$FIREWALL_INCLUDE_SH
+	commit nikki
 	commit firewall
 EOF
 

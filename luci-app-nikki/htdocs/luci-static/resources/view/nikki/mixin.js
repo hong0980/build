@@ -128,10 +128,12 @@ return view.extend({
     load: function () {
         return Promise.all([
             network.getNetworks(),
+            nikki.listfiles(nikki.profilesDir),
+            nikki.listfiles(nikki.subscriptionsDir),
             uci.load('nikki')
         ]);
     },
-    render: function ([networks]) {
+    render: function ([networks, profiles, subfiles]) {
         let m, s, o, so;
 
         m = new form.Map('nikki');
@@ -145,7 +147,6 @@ return view.extend({
         s.tab('sniffer', _('Sniffer Config'));
         s.tab('rule', _('Rule Config'));
         s.tab('geox', _('GeoX Config'));
-        s.tab('mixin_file_content', _('Mixin File Content'));
 
         o = s.taboption('general', form.ListValue, 'mode', _('Mode'));
         o.optional = true;
@@ -175,9 +176,7 @@ return view.extend({
         o.placeholder = _('Unmodified');
 
         for (const network of networks) {
-            if (network.getName() === 'loopback') {
-                continue;
-            }
+            if (network.getName() === 'loopback') continue;
             o.value(network.getName());
         }
 
@@ -773,7 +772,7 @@ return view.extend({
         so.value('DIRECT', _('DIRECT'), _('Traffic bypasses the proxy and is sent directly via the local network.'));
         so.value('REJECT', _('REJECT'), _('Block the request immediately and return an error to the client (commonly used for ad blocking).'));
         so.value('REJECT-DROP', _('REJECT-DROP'), _('Silently drop the request packets, causing the client to wait until it times out.'));
-        so.value('NCloud', _('NCloud'), _('Default auto-select node. <font color="red">Required: "NCloud" must exist in proxy-groups.</font>'));
+        // so.value('NCloud', _('NCloud'), _('Default auto-select node. <font color="red">Required: "NCloud" must exist in proxy-groups.</font>'));
 
         so = o.subsection.option(form.Flag, 'no_resolve', _('No Resolve'));
         so.rmempty = false;
@@ -907,9 +906,6 @@ return view.extend({
         o = s.taboption('geox', form.Value, 'geox_update_interval', _('GeoX Update Interval'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
-
-        o = s.taboption('mixin_file_content', form.Flag, 'mixin_file_content', _('Enable'), _('Please go to the editor tab to edit the file for mixin'));
-        o.rmempty = false;
 
         return m.render();
     }

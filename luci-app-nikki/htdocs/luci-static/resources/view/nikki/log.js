@@ -139,24 +139,31 @@ return view.extend({
 
         o = s.taboption('log_config', form.Flag, 'clear_at_stop', _('Clear At Stop'));
         o.rmempty = false;
+
         o = s.taboption('log_config', form.Flag, 'scheduled_clear', _('Scheduled Clear'));
         o.rmempty = false;
+
         o = s.taboption('log_config', form.Value, 'scheduled_clear_cron', _('Scheduled Clear Cron'));
         o.retain = true;
         o.rmempty = false;
         o.depends('scheduled_clear', '1');
-        o = s.taboption('log_config', form.Value, 'scheduled_clear_size_limit', _('Scheduled Clear Size Limit'));
+
+        o = s.taboption('log_config', form.Value, 'limit', _('Scheduled Clear Size Limit'));
         o.retain = true;
         o.rmempty = false;
+        o.default = '1';
         o.datatype = 'uinteger';
         o.depends('scheduled_clear', '1');
-        o = s.taboption('log_config', form.ListValue, 'scheduled_clear_size_limit_unit', _('Scheduled Clear Size Limit Unit'));
+
+        o = s.taboption('log_config', form.ListValue, 'limit_unit', _('Scheduled Clear Size Limit Unit'));
         o.retain = true;
         o.rmempty = false;
+        o.default = 'MB';
         o.depends('scheduled_clear', '1');
         o.value('KB', 'KB');
         o.value('MB', 'MB');
         o.value('GB', 'GB');
+
         o = s.taboption('log_config', form.Button, '_generate_download_debug_log', _('Debug Log'));
         o.inputstyle = 'action';
         o.inputtitle = _('Generate & Download');

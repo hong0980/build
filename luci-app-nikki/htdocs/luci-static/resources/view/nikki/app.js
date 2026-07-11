@@ -27,12 +27,13 @@ return view.extend({
         return Promise.all([
             nikki.version(),
             nikki.status(),
-            nikki.listfiles(nikki.profilesDir),
-            nikki.listfiles(nikki.subscriptionsDir),
+            nikki.listfiles('/etc/nikki/profiles/'),
+            nikki.listfiles('/etc/nikki/subscriptions/'),
+            nikki.listfiles('/etc/nikki/mixin'),
             uci.load('nikki')
         ]);
     },
-    render: function ([v, running, profiles, subfiles]) {
+    render: function ([v, running, profiles, subfiles, mixinfiles]) {
         let m, s, o;
 
         m = new form.Map('nikki', _('Nikki'), `${_('Transparent Proxy with Mihomo on OpenWrt.')} <a href="https://github.com/nikkinikki-org/OpenWrt-nikki/wiki" target="_blank">${_('How To Use')}</a>`);
@@ -97,7 +98,6 @@ return view.extend({
         o = s.option(form.ListValue, 'ui_url');
         o.ucisection = 'mixin';
         o.ucioption = 'ui_url';
-
         o.load = function (section_id) {
             const ui_path = uci.get('nikki', 'mixin', 'ui_path');
             this.install_status = {};
@@ -122,14 +122,12 @@ return view.extend({
             el.classList.add('control-group');
             const default_label = _('Open Dashboard');
             const self = this;
-
             const btn = E('button', {
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function () {
                     const select = el.firstChild;
                     const current_url = select.value;
                     const ui_entry = nikki.ui_array.find(x => x[0] === current_url);
-
                     const openOrDownload = self.install_status[current_url]
                         ? Promise.resolve()
                         : (() => {
@@ -172,6 +170,21 @@ return view.extend({
             if (subfiles.length > 0) o.value('subscription:' + s['.name'], _('Subscription:') + s.name);
         });
 
+        o = s.option(form.ListValue, 'mixin_file', _('选择混入文件'), _('Select the file to add to mixin'));
+        o.optional = true;
+        o.depends({ profile: 'subscription', '!contains': true });
+
+        for (const profile of mixinfiles) {
+            o.value(profile.name);
+        };
+
+        o = s.option(form.Flag, 'core_only', _('Core Only'), _('启用后不使用所有混入配置，有 Mihomo 自动配置'));
+        // o.depends({ profile: 'file', '!contains': true });
+        o.rmempty = false;
+
+        o = s.option(form.Flag, 'test_profile', _('Test Profile'));
+        o.rmempty = false;
+
         o = s.option(form.Value, 'start_delay', _('Start Delay'));
         o.datatype = 'uinteger';
         o.placeholder = _('Start Immidiately');
@@ -183,21 +196,34 @@ return view.extend({
         o.retain = true;
         o.rmempty = false;
         o.depends('scheduled_restart', '1');
-
-        o = s.option(form.Flag, 'test_profile', _('Test Profile'));
-        o.rmempty = false;
-
-        o = s.option(form.Flag, 'core_only', _('Core Only'));
-        o.rmempty = false;
+        o.renderWidget = function (section_id, option_index, cfgvalue) {
+            const node = form.Value.prototype.renderWidget.apply(this, arguments);
+            const input = node.querySelector('input');
+            const btn = E('button', {
+                'class': 'btn cbi-button-positive',
+                'click': ui.createHandlerFn(this, function (ev) {
+                    ev.preventDefault();
+                    const val = input.value.trim();
+                    if (!val) {
+                        ui.addNotification(null, E('p', _('Please enter a cron expression first.')));
+                        return;
+                    }
+                    const encoded = val.split(/\s+/).join('_');
+                    window.open('https://crontab.guru/#' + encoded, '_blank');
+                })
+            }, _('verify'));
+            node.classList.add('control-group');
+            node.appendChild(btn);
+            return node;
+        };
 
         s = m.section(form.NamedSection, 'procd', 'procd', _('procd Config'));
-
         s.tab('general', _('General Config'));
+        s.tab('rlimit', _('RLIMIT Config'));
+        s.tab('environment_variable', _('Environment Variable Config'));
 
         o = s.taboption('general', form.Flag, 'fast_reload', _('Fast Reload'));
         o.rmempty = false;
-
-        s.tab('rlimit', _('RLIMIT Config'));
 
         o = s.taboption('rlimit', form.Value, 'rlimit_nproc_soft', _('Number of Processes Soft Limit'));
         o.datatype = 'uinteger';
@@ -234,8 +260,6 @@ return view.extend({
 
         o = s.taboption('rlimit', form.Value, 'rlimit_nofile_hard', _('Number of Open Files Hard Limit'));
         o.datatype = 'uinteger';
-
-        s.tab('environment_variable', _('Environment Variable Config'));
 
         o = s.taboption('environment_variable', form.Value, 'env_go_max_procs', 'GOMAXPROCS');
         o.datatype = 'uinteger';

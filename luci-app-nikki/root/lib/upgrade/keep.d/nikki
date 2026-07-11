@@ -1,5 +1,5 @@
 /etc/nikki/profiles/
-/etc/nikki/subscriptions/
 /etc/nikki/mixin.yaml
+/etc/nikki/subscriptions/
 /etc/nikki/run/providers/rule/
 /etc/nikki/run/providers/proxy/

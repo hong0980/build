@@ -1846,8 +1846,8 @@ msgstr "订阅更新失败。"
 #
 # Mixin
 #
-msgid "Mixin config."
-msgstr "混入配置。"
+msgid "%s Mixin config."
+msgstr "%s 混入配置。"
 
 #
 # Proxy
@@ -1878,3 +1878,18 @@ msgstr "由于已启用定时清理且超出大小限制，应用日志已清空
 
 msgid "Core log is cleared due to scheduled clear and exceeding size limits."
 msgstr "由于已启用定时清理且超出大小限制，核心日志已清空。"
+
+msgid ""
+msgstr ""
+
+msgid "Override Settings"
+msgstr "覆写设置"
+
+msgid "Add all files to mixin"
+msgstr "所有文件加入混入"
+
+msgid "Select files to add to mixin"
+msgstr "选择文件加入混入"
+
+msgid "Select the file to add to mixin"
+msgstr "选择需要加入混入的文件"
