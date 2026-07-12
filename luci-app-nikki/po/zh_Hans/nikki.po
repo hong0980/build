@@ -1882,14 +1882,26 @@ msgstr "由于已启用定时清理且超出大小限制，核心日志已清空
 msgid ""
 msgstr ""
 
-msgid "Override Settings"
-msgstr "覆写设置"
-
-msgid "Add all files to mixin"
-msgstr "所有文件加入混入"
-
 msgid "Select files to add to mixin"
 msgstr "选择文件加入混入"
 
-msgid "Select the file to add to mixin"
-msgstr "选择需要加入混入的文件"
+msgid "Select mixin file"
+msgstr "选择混入文件"
+
+msgid "%s (Timeout)"
+msgstr "%s (超时)"
+
+msgid "Not Installed"
+msgstr "未安装"
+
+msgid "Mixin: "
+msgstr "混入："
+
+msgid "When enabled, mixin configs will not be used; Mihomo will auto-configure instead"
+msgstr "启用后不使用所有混入配置，有 Mihomo 自动配置"
+
+msgid ""
+msgstr ""
+
+msgid ""
+msgstr ""

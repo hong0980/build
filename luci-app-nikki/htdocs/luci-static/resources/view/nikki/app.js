@@ -27,8 +27,8 @@ return view.extend({
         return Promise.all([
             nikki.version(),
             nikki.status(),
-            nikki.listfiles('/etc/nikki/profiles/'),
-            nikki.listfiles('/etc/nikki/subscriptions/'),
+            nikki.listfiles('/etc/nikki/profiles'),
+            nikki.listfiles('/etc/nikki/subscriptions'),
             nikki.listfiles('/etc/nikki/mixin'),
             uci.load('nikki')
         ]);
@@ -52,7 +52,7 @@ return view.extend({
                                 if (res.httpcode && res.httpcode.match(/^20\d$/)) {
                                     color = (res.elapsed_ms < 300) ? 'green' : (res.elapsed_ms < 800) ? 'orange' : 'red';
                                 } else {
-                                    label = '%s (超时)'.format(site[1]);
+                                    label = _('%s (Timeout)').format(site[1]);
                                 }
                                 weight.innerHTML += '<span style="color:%s">&ensp;%s</span>'.format(color, label);
                             });
@@ -109,7 +109,7 @@ return view.extend({
                     })
                     .catch(() => {
                         this.install_status[url] = false;
-                        return [url, `${name} (${_('未安装')})`];
+                        return [url, `${name} (${_('Not Installed')})`];
                     })
             )).then(entries => {
                 entries.forEach(([url, label]) => this.value(url, label));
@@ -170,16 +170,16 @@ return view.extend({
             if (subfiles.length > 0) o.value('subscription:' + s['.name'], _('Subscription:') + s.name);
         });
 
-        o = s.option(form.ListValue, 'mixin_file', _('选择混入文件'), _('Select the file to add to mixin'));
+        o = s.option(form.ListValue, 'mixin_file', _('Select mixin file'), _('Select files to add to mixin'));
         o.optional = true;
         o.depends({ profile: 'subscription', '!contains': true });
 
         for (const profile of mixinfiles) {
-            o.value(profile.name);
+            o.value(profile.name, _('Mixin: ') + profile.name);
         };
 
-        o = s.option(form.Flag, 'core_only', _('Core Only'), _('启用后不使用所有混入配置，有 Mihomo 自动配置'));
-        // o.depends({ profile: 'file', '!contains': true });
+        o = s.option(form.Flag, 'core_only', _('Core Only'), _('When enabled, mixin configs will not be used; Mihomo will auto-configure instead'));
+        o.depends({ profile: 'file', '!contains': true });
         o.rmempty = false;
 
         o = s.option(form.Flag, 'test_profile', _('Test Profile'));
