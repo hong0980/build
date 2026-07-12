@@ -78,10 +78,22 @@ export function get_cgroups() {
 
 export function load_profile() {
 	let result = {};
-	const process = popen('yq -M -p yaml -o json /etc/nikki/run/config.yaml');
+	const process = popen('yq -Mpy -o json /etc/nikki/run/config.yaml');
 	if (process) {
 		result = json(process);
 		process.close();
 	}
 	return result;
+};
+
+export function run(cmd) {
+	const p = popen(cmd);
+	if (!p) return null;
+	const out = trim(p.read('all'));
+	p.close();
+	return out;
+};
+
+export function shellQuote(s) {
+	return `'${replace(s, "'", "'\\''")}'`;
 };

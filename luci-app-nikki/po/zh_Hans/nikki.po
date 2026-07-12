@@ -1894,7 +1894,7 @@ msgstr "%s (超时)"
 msgid "Not Installed"
 msgstr "未安装"
 
-msgid "Mixin: "
+msgid "Mixin:"
 msgstr "混入："
 
 msgid "When enabled, mixin configs will not be used; Mihomo will auto-configure instead"

@@ -43,7 +43,7 @@ return view.extend({
                 ...build(sp, _('Subscription:'), '/etc/nikki/subscriptions'),
                 ...build(rp, _('Rule Provider:'), '/etc/nikki/run/providers/rule'),
                 ...build(pp, _('Proxy Provider:'), '/etc/nikki/run/providers/proxy'),
-                ...build(mp, _('Mixin: '), '/etc/nikki/mixin'),
+                ...build(mp, _('Mixin:'), '/etc/nikki/mixin'),
                 { path: yp.path, mtime: yp.mtime, size: yp.size, name: _('Profile for Startup') },
             ];
 

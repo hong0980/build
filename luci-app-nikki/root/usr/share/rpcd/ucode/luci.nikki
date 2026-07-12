@@ -3,19 +3,8 @@
 'use strict';
 
 import { access, popen, writefile } from 'fs';
-import { get_users, get_groups, get_cgroups, load_profile } from '/etc/nikki/ucode/include.uc';
-
-function shellQuote(s) {
-	return `'${replace(s, "'", "'\\''")}'`;
-};
-
-function run(cmd) {
-	const p = popen(cmd);
-	if (!p) return null;
-	const out = trim(p.read('all'));
-	p.close();
-	return out;
-};
+import { get_users, get_groups, get_cgroups, load_profile, shellQuote, run }
+	from '/etc/nikki/ucode/include.uc';
 
 const methods = {
 	connection_check: {
@@ -77,8 +66,8 @@ const methods = {
 			let app = null, core = null;
 			if (access('/usr/bin/apk', 'x')) {
 				app = run('apk list -I luci-app-nikki | cut -d " " -f 1 | cut -d "-" -f 4');
-			} else if (system('command -v opkg') == 0) {
-				app = run('opkg list-installed luci-app-nikki | cut -d " " -f 3');
+			} else if (access('/bin/opkg', 'x')) {
+				app = run("opkg list-installed luci-app-nikki | sed -nr 's/.*nikki - (.*)-.*/\\1/p'");
 			}
 			core = run('mihomo -v | grep Mihomo | cut -d " " -f 3');
 			return { app, core };

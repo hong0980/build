@@ -175,7 +175,7 @@ return view.extend({
         o.depends({ profile: 'subscription', '!contains': true });
 
         for (const profile of mixinfiles) {
-            o.value(profile.name, _('Mixin: ') + profile.name);
+            o.value(profile.name, _('Mixin:') + profile.name);
         };
 
         o = s.option(form.Flag, 'core_only', _('Core Only'), _('When enabled, mixin configs will not be used; Mihomo will auto-configure instead'));
