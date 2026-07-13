@@ -1900,8 +1900,17 @@ msgstr "混入："
 msgid "When enabled, mixin configs will not be used; Mihomo will auto-configure instead"
 msgstr "启用后不使用所有混入配置，有 Mihomo 自动配置"
 
-msgid ""
-msgstr ""
+msgid "Config saved, files updated"
+msgstr "配置已保存，文件已更新"
+
+msgid "No file selected"
+msgstr "未选择文件"
+
+msgid "Saved, reloading..."
+msgstr "已保存，正在重新加载..."
+
+msgid "Saved, restarting..."
+msgstr "已保存，正在重新启动..."
 
 msgid ""
 msgstr ""

@@ -129,25 +129,22 @@ return baseclass.extend({
     writefile: function (path, data, mode) {
         data = (data != null) ? String(data) : '';
         mode = (mode != null) ? mode : 0o644;
-
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
         const chunkSize = 8 * 1024;
-
         const bytes = encoder.encode(data);
-
         if (bytes.length <= chunkSize) {
             return callFileWrite(path, data, false, mode);
         }
-
         let promise = Promise.resolve();
         for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-            const chunkBytes = bytes.slice(offset, Math.min(offset + chunkSize, bytes.length));
-            const chunk = decoder.decode(chunkBytes);
+            const end = Math.min(offset + chunkSize, bytes.length);
+            const chunkBytes = bytes.slice(offset, end);
+            const isLast = end >= bytes.length;
+            const chunk = decoder.decode(chunkBytes, { stream: !isLast });
             const append = offset > 0;
             promise = promise.then(() => callFileWrite(path, chunk, append, mode));
         }
-
         return promise;
     },
 

@@ -186,7 +186,7 @@ rules:
   - "GEOSITE,github,GitHub"                            # GitHub
   - "GEOSITE,onedrive,OneDrive"                        # OneDrive
   - "GEOSITE,microsoft,Microsoft"                      # 微软服务
-  - "GEOSITE,apple-tvplus,AppleTV"                     # Apple TV+
+  # - "GEOSITE,apple-tvplus,AppleTV"                     # Apple TV+
   - "GEOSITE,apple,Apple"                              # 苹果服务
   - "GEOSITE,tiktok,TikTok"                            # TikTok
   # - "GEOSITE,twitter,Twitter(X)"                       # Twitter(X)

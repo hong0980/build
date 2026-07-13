@@ -27,24 +27,24 @@ return view.extend({
 
     load: function () {
         return Promise.all([
+            L.resolveDefault(fs.stat(nikki.runProfilePath), { path: null }),
+            nikki.listfiles('/etc/nikki/subscriptions'),
             nikki.listfiles('/etc/nikki/profiles'),
+            nikki.listfiles('/etc/nikki/mixin'),
             nikki.listfiles('/etc/nikki/run/providers/rule'),
             nikki.listfiles('/etc/nikki/run/providers/proxy'),
-            nikki.listfiles('/etc/nikki/subscriptions'),
-            nikki.listfiles('/etc/nikki/mixin'),
-            L.resolveDefault(fs.stat(nikki.runProfilePath), { path: null }),
-        ]).then(([pf, rp, pp, sp, mp, yp]) => {
+        ]).then(([yp, sp, pf, mp, rp, pp]) => {
             const build = (files, prefix, dir) => files.map(f => ({
                 path: `${dir}/${f.name}`, mtime: f.mtime, size: f.size, name: prefix + f.name
             }));
 
             const allFiles = [
-                ...build(pf, _('File:'), '/etc/nikki/profiles'),
+                { path: yp.path, mtime: yp.mtime, size: yp.size, name: _('Profile for Startup') },
                 ...build(sp, _('Subscription:'), '/etc/nikki/subscriptions'),
+                ...build(pf, _('File:'), '/etc/nikki/profiles'),
+                ...build(mp, _('Mixin:'), '/etc/nikki/mixin'),
                 ...build(rp, _('Rule Provider:'), '/etc/nikki/run/providers/rule'),
                 ...build(pp, _('Proxy Provider:'), '/etc/nikki/run/providers/proxy'),
-                ...build(mp, _('Mixin:'), '/etc/nikki/mixin'),
-                { path: yp.path, mtime: yp.mtime, size: yp.size, name: _('Profile for Startup') },
             ];
 
             return allFiles.filter(item => item.path).map(item => {
