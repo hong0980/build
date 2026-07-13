@@ -65,7 +65,7 @@ const methods = {
 		call: function () {
 			let app = null, core = null;
 			if (access('/usr/bin/apk', 'x')) {
-				app = run('apk list -I luci-app-nikki | cut -d " " -f 1 | cut -d "-" -f 4');
+				app = run("apk list -I luci-app-nikki | sed -nr 's/.*nikki-(.*)-.*noarch.*/\\1/p'");
 			} else if (access('/bin/opkg', 'x')) {
 				app = run("opkg list-installed luci-app-nikki | sed -nr 's/.*nikki - (.*)-.*/\\1/p'");
 			}

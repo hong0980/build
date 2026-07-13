@@ -7,14 +7,11 @@
 
 
 # ███████████████████████████ 锚点区域 ███████████████████████████
-# ══ 订阅锚点 ══
-Anchor_PR: &Anchor_PR {type: http, interval: 86400, proxy: DIRECT, health-check: {enable: true, url: 'https://www.g.cn/generate_204', interval: 300}, filter: "^(?!.*(到期|过期|剩余|网址|官网|邮箱|订阅|套餐|流量|说明|重置|域名)).*$"}
 # ══ 出站锚点 ══
-Anchor_PG: &Anchor_PG {type: select, proxies: [香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 美国-故转, 韩国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 美国-自动, 韩国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动, 🎯 国内]}
+Anchor_PG: &Anchor_PG {type: select, proxies: [香港-故转, 日本-故转, 新加坡-故转, 台湾-故转, 美国-故转, 韩国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 美国-自动, 韩国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动, 🎯 国内]}
 Anchor_OP: &Anchor_OP {type: select, proxies: [一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 美国-故转, 韩国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 美国-自动, 韩国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动, 🎯 国内]}
-Anchor_LD: &Anchor_LD {type: select, proxies: [🎯 国内, 一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 美国-故转, 韩国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 美国-自动, 韩国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动]}
-Anchor_UP: &Anchor_UP {type: select, proxies: [台湾-故转, 日本-故转, 新加坡-故转, 美国-故转, 韩国-故转, 欧洲-故转, 台湾-自动, 日本-自动, 新加坡-自动, 美国-自动, 韩国-自动, 欧洲-自动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动, 🎯 国内]}
-Anchor_DR: &Anchor_DR {name: 🎯 国内,type: select, proxies: [DIRECT], hidden: true}
+Anchor_LD: &Anchor_LD {type: select, hidden: true, proxies: [🎯 国内, 一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 美国-故转, 韩国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 美国-自动, 韩国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动]}
+Anchor_DR: &Anchor_DR {type: select, proxies: [DIRECT], hidden: true}
 # ══ 策略锚点 ══
 Anchor_HS: &Anchor_HS {type: select, include-all: true}
 Anchor_FB: &Anchor_FB {type: fallback, url: 'https://www.g.cn/generate_204', interval: 300, lazy: false, timeout: 2000, max-failed-times: 3, hidden: true}
@@ -67,7 +64,7 @@ secret: ""                                             # 面板密码
 tun:
   enable: true                                         # 网卡模式  是否启用 TUN 虚拟网卡模式
   stack: mixed                                         # 协议类型  网络栈：system（系统栈）/ gvisor（内置用户态栈）/ mixed（混合）
-  dns-hijack: [udp://any:53, tcp://any:53]             # 劫持请求  劫持所有 UDP/TCP 53 端口的 DNS 请求
+  dns-hijack: ["any:53", "tcp://any:53"]               # 劫持请求  劫持所有 UDP/TCP 53 端口的 DNS 请求
   auto-detect-interface: true                          # 自动出口  自动识别默认出口网络接口 （仅内核模式有效）
   auto-route: true                                     # 自动路由  自动添加系统路由表      （仅内核模式有效）
   auto-redirect: true                                  # 自动定向  自动将流量重定向至 TUN  （仅内核模式有效）
@@ -82,7 +79,7 @@ sniffer:
   sniff:
     QUIC: { ports: [443] }                             # 嗅探参数  QUIC 协议流量（HTTP/3 常用端口）
     TLS:  { ports: [443, 8443] }                       # 嗅探参数  HTTPS（TLS）常用及备用端口
-    HTTP: { ports: [80, 8080-8880] }                   # 嗅探参数  HTTP 及常见 Web / 代理端口段
+    HTTP: { ports: [80, 8080-8880], override-destination: true } # 嗅探参数  HTTP 及常见 Web / 代理端口段
   force-domain:
     - "+.netflix.com"                                  # 强制嗅探  Netflix 主域名
     - "+.nflxvideo.net"                                # 强制嗅探  Netflix CDN
@@ -117,34 +114,32 @@ dns:
 # ███████████████████████████ 策略分组 ███████████████████████████
 # ══ 服务组 ══
 proxy-groups:
+  - {name: AI,         <<: *Anchor_UT, hidden: false, filter: "(?i)^(?!.*(俄罗斯|土耳其|印度|港|HK|国内)).*$", icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Claude.png}
 # ══ 手动组 ══
   - {name: 香港-手动,   <<: *Anchor_HS, filter: *Anchor_HK, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/HK.png}
+  - {name: 新加坡-手动, <<: *Anchor_HS, filter: *Anchor_SG, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/SG.png}
   - {name: 台湾-手动,   <<: *Anchor_HS, filter: *Anchor_TW, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/TW.png}
   - {name: 日本-手动,   <<: *Anchor_HS, filter: *Anchor_JP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/JP.png}
-  - {name: 新加坡-手动, <<: *Anchor_HS, filter: *Anchor_SG, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/SG.png}
   - {name: 韩国-手动,   <<: *Anchor_HS, filter: *Anchor_KR, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/KR.png}
   - {name: 美国-手动,   <<: *Anchor_HS, filter: *Anchor_US, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/US.png}
   - {name: 欧洲-手动,   <<: *Anchor_HS, filter: *Anchor_EU, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/EU.png}
   - {name: 其他-手动,   <<: *Anchor_HS, filter: *Anchor_OT, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/OT.png}
 
   - {name: 一键代理,    <<: *Anchor_PG, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Rocket.png}
-  - {name: ChatGPT,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/ChatGPT.png}
-  - {name: Claude,     <<: *Anchor_UP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Claude.png}
-  - {name: Gemini,     <<: *Anchor_UP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Gemini.png}
   - {name: YouTube,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/YouTube.png}
   - {name: Google,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Google.png}
   - {name: GitHub,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/GitHub.png}
   - {name: OneDrive,   <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/OneDrive.png}
   - {name: Microsoft,  <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Microsoft.png}
-  - {name: AppleTV,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/AppleTV.png}
+  # - {name: AppleTV,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/AppleTV.png}
   - {name: Apple,      <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Apple.png}
   - {name: TikTok,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/TikTok.png}
-  - {name: Twitter(X), <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Twitter.png}
+  # - {name: Twitter(X), <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Twitter.png}
   - {name: Telegram,   <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Telegram.png}
   - {name: Netflix,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Netflix.png}
-  - {name: Disney,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Disney.png}
-  - {name: Spotify,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Spotify.png}
-  - {name: PayPal,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/PayPal.png}
+  # - {name: Disney,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Disney.png}
+  # - {name: Spotify,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Spotify.png}
+  # - {name: PayPal,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/PayPal.png}
   - {name: Speedtest,  <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Speedtest.png}
   - {name: 漏网之鱼,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/MATCH.png}
   - {name: 🎯 国内,    <<: *Anchor_DR, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/China.png}
@@ -172,11 +167,12 @@ rules:
   - "RULE-SET,ww_reject,REJECT"
   - "GEOSITE,private,🎯 国内"                          # Private
   - "GEOIP,private,🎯 国内,no-resolve"                 # Private
-  - "RULE-SET,cdn_cn,🎯 国内"
-  - "RULE-SET,pt_classical,🎯 国内"
-  - "GEOSITE,openai,ChatGPT"                           # ChatGPT
-  - "GEOSITE,anthropic,Claude"                         # Claude
-  - "GEOSITE,google-gemini,Gemini"                     # Gemini
+  - "GEOSITE,category-cdn-cn,🎯 国内"
+  - "GEOSITE,category-pt,🎯 国内"
+  - "GEOSITE,category-ai-!cn,AI"
+  # - "GEOSITE,openai,ChatGPT"                           # ChatGPT
+  # - "GEOSITE,anthropic,Claude"                         # Claude
+  # - "GEOSITE,google-gemini,Gemini"                     # Gemini
   - "GEOSITE,youtube,YouTube"                          # YouTube
   - "GEOSITE,google,Google"                            # Google
   - "GEOSITE,github,GitHub"                            # GitHub
@@ -185,27 +181,27 @@ rules:
   - "GEOSITE,apple-tvplus,AppleTV"                     # Apple TV+
   - "GEOSITE,apple,Apple"                              # 苹果服务
   - "GEOSITE,tiktok,TikTok"                            # TikTok
-  - "GEOSITE,twitter,Twitter(X)"                       # Twitter(X)
+  # - "GEOSITE,twitter,Twitter(X)"                       # Twitter(X)
   - "GEOSITE,telegram,Telegram"                        # Telegram
   - "GEOSITE,netflix,Netflix"                          # Netflix
-  - "GEOSITE,disney,Disney"                            # Disney+
-  - "GEOSITE,spotify,Spotify"                          # Spotify
-  - "GEOSITE,paypal,PayPal"                            # PayPal
+  # - "GEOSITE,disney,Disney"                            # Disney+
+  # - "GEOSITE,spotify,Spotify"                          # Spotify
+  # - "GEOSITE,paypal,PayPal"                            # PayPal
   - "GEOSITE,category-speedtest,Speedtest"             # Speedtest
-  - "GEOIP,google,Google,no-resolve"                   # Google
-  - "GEOIP,telegram,Telegram,no-resolve"               # Telegram
-  - "GEOIP,twitter,Twitter(X),no-resolve"              # Twitter
-  - "GEOIP,netflix,Netflix,no-resolve"                 # Netflix
+  # - "GEOIP,google,Google,no-resolve"                   # Google
+  # - "GEOIP,telegram,Telegram,no-resolve"               # Telegram
+  # - "GEOIP,twitter,Twitter(X),no-resolve"              # Twitter
+  # - "GEOIP,netflix,Netflix,no-resolve"                 # Netflix
   - "GEOSITE,geolocation-!cn,一键代理"                  # 排除国内
   - "RULE-SET,add_direct_domain,🎯 国内"               # 直连域名
   - "GEOSITE,cn,🎯 国内"                               # 中国域名
   - "GEOIP,cn,🎯 国内,no-resolve"                      # 中国IP
   - "MATCH,漏网之鱼"                                    # 兜底规则
+
+
 # ══ 规则补充 ══
 rule-providers:
-  cdn_cn: {<<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-cdn-cn.mrs"}
   add_direct_domain:    { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/Seven1echo/Yaml/refs/heads/main/rules/Seven1_Direct_Domain.mrs"}
-  pt_classical: {<<: *class_yaml, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/classical/category-pt.yaml"}
   ww_reject: {<<: *Anchor_DN, url: "https://raw.githubusercontent.com/wwqgtxx/clash-rules/release/reject.mrs"}
 
 
