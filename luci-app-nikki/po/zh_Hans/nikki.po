@@ -1912,5 +1912,8 @@ msgstr "已保存，正在重新加载..."
 msgid "Saved, restarting..."
 msgstr "已保存，正在重新启动..."
 
+msgid "Last modified: %s, Size: %s"
+msgstr "最后修改: %s, 大小: %s"
+
 msgid ""
 msgstr ""

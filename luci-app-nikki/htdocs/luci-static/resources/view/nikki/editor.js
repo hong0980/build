@@ -4,6 +4,17 @@
 'require view';
 'require tools.nikki as nikki';
 
+function formatSize(bytes) {
+    if (bytes == null || isNaN(bytes)) return _('Unknown');
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const idx = Math.min(i, units.length - 1);
+    const value = bytes / Math.pow(1024, idx);
+    const formatted = Number.isInteger(value) ? value : value.toFixed(2);
+    return `${formatted} ${units[idx]}`;
+}
+
 function preloadAce() {
     if (window.ace?.edit) return Promise.resolve(true);
     if (window._acePromise) return window._acePromise;
@@ -49,26 +60,18 @@ return view.extend({
 
             return allFiles.filter(item => item.path).map(item => {
                 const mtimeStr = item.mtime ? new Date(item.mtime * 1000).toLocaleString() : _('Unknown');
-                item.stat = _('Last modified: %s, Size: %s bytes').format(mtimeStr, item.size || 0);
+                item.stat = _('Last modified: %s, Size: %s').format(mtimeStr, formatSize(item.size));
                 return item;
             });
         });
     },
 
     render: function (data) {
-        const statEl = E('span', {
-            style: 'margin-left:10px;font-size:12px;color:#888;vertical-align:middle;'
-        });
-
-        this.textarea = E('textarea', {
-            style: 'width:100%;height:380px;box-sizing:border-box;', wrap: 'off'
-        });
-
+        this.textarea = E('textarea', { style: 'width:100%;height:380px;box-sizing:border-box;', wrap: 'off' });
+        const statEl = E('span', { style: 'margin-left:10px;font-size:12px;color:#888;vertical-align:middle;' });
         const aceDiv = E('div', { style: 'width:auto;height:100%;display:none;' });
-
         const container = E('div', { style: 'position:relative;width:auto;height:380px;margin-top:10px;' }, [
-            aceDiv,
-            this.textarea,
+            aceDiv, this.textarea,
             E('button', {
                 type: 'button', title: _('Fullscreen'),
                 style: 'position:absolute;top:3px;right:15px;padding:3px 8px;font-size:18px;z-index:1000;background:#557ef1;color:#fff;border:none;cursor:pointer;border-radius:3px;line-height:1;',
@@ -77,32 +80,27 @@ return view.extend({
             }, '⛶')
         ]);
 
-        const select = E('select', { class: 'cbi-input-select' }, [
+        const select = E('select', {
+            class: 'cbi-input-select',
+            change: L.bind(function (ev) {
+                const value = ev.target.value;
+                this.currentPath = value || null;
+                const item = data.find(i => i.path === value);
+                statEl.textContent = item?.stat ?? '';
+                if (!value) {
+                    this.textarea.value = '';
+                    this.aceEditor?.setValue('', -1);
+                    return;
+                }
+                return L.resolveDefault(fs.read_direct(value), '').then((c) => {
+                    if (this.aceEditor) this.aceEditor.setValue(c, -1);
+                    else this.textarea.value = c;
+                });
+            }, this)
+        }, [
             E('option', { value: '' }, _('-- Please choose --')),
             ...data.map(item => E('option', { value: item.path }, item.name))
         ]);
-
-        select.addEventListener('change', () => {
-            const value = select.value;
-            this.currentPath = value || null;
-            const item = data.find(i => i.path === value);
-            statEl.textContent = item?.stat ?? '';
-
-            if (!value) {
-                this.textarea.value = '';
-                this.aceEditor?.setValue('', -1);
-                return;
-            }
-
-            return L.resolveDefault(fs.read_direct(value), '').then((c) => {
-                if (this.aceEditor) {
-                    this.aceEditor.setValue(c, -1);
-                    // requestAnimationFrame(() => this.aceEditor.renderer.onResize(true));
-                } else {
-                    this.textarea.value = c;
-                }
-            });
-        });
 
         preloadAce().then(() => {
             this.textarea.style.display = 'none';
@@ -117,6 +115,7 @@ return view.extend({
                 fontFamily: 'Consolas',
                 theme: 'ace/theme/monokai'
             });
+            this.aceEditor.setValue(this.textarea.value || '', -1);
         }).catch(() => Object.assign(this.textarea.style, {
             fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4'
         }));
@@ -129,7 +128,6 @@ return view.extend({
                     E('div', { class: 'cbi-value-field' }, [select, statEl])
                 ]),
                 E('div', { class: 'cbi-value' }, [
-                    // E('label', { class: 'cbi-value-title' }, _('File Content')),
                     E('div', { class: 'cbi-value-field' }, [container])
                 ])
             ])
@@ -153,7 +151,7 @@ return view.extend({
                 ui.addTimeLimitedNotification(null, E('p', mode === '0' ? _('Saved, reloading...') : _('Saved, restarting...')), 5000, 'info');
                 return nikki.service(mode === '0' ? 'reload' : 'restart');
             })
-            .catch((e) => ui.addTimeLimitedNotification(null, E('p', _(e.message)), 8000, 'error'));
+            .catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 8000, 'error'));
     },
 
     handleReset: null

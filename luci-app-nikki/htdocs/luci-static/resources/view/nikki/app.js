@@ -22,19 +22,112 @@ function setStatus(element, running) {
     return element;
 }
 
+function preloadAce() {
+    if (window.ace?.edit) return Promise.resolve(true);
+    if (window._acePromise) return window._acePromise;
+    return window._acePromise = new Promise((resolve, reject) => {
+        const script = E('script', { src: '/luci-static/resources/view/nikki/ace/ace.js' });
+        script.onload = () => {
+            ace.config.set('basePath', '/luci-static/resources/view/nikki/ace');
+            resolve(true);
+        };
+        script.onerror = () => {
+            window._acePromise = null;
+            reject(new Error('Failed to load ace'));
+        };
+        document.head.appendChild(script);
+    });
+}
+
+function attachFileEditorButton(o, resolveTarget) {
+    if (!o.vallist || o.vallist.length === 0) return;
+    o.renderWidget = function (section_id, option_index, cfgvalue) {
+        const self = this;
+        const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
+        const btn = E('button', {
+            'class': 'btn cbi-button-positive',
+            'click': ui.createHandlerFn(this, function (ev) {
+                ev.stopPropagation();
+                ev.preventDefault();
+
+                const value = self.formvalue(section_id) || cfgvalue;
+                const target = resolveTarget(value);
+                if (!target) return;
+                const { title, path } = target;
+                const textarea = E('textarea', {
+                    style: 'width:100%;height:400px;box-sizing:border-box;font-family:Consolas,monospace;white-space:pre-wrap;word-break:break-all;'
+                });
+                const aceDiv = E('div', { style: 'width:100%;height:400px;display:none;' });
+
+                return L.resolveDefault(fs.read_direct(path), '').then((content) => {
+                    textarea.value = content;
+
+                    ui.showModal(_('Edit: %s').format(title), [
+                        aceDiv, textarea,
+                        E('div', { 'class': 'right', style: 'margin-top:10px;' }, [
+                            E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel')),
+                            ' ',
+                            E('button', {
+                                'class': 'btn cbi-button-positive',
+                                'click': ui.createHandlerFn(self, function () {
+                                    const finalValue = window.ace?.edit ? aceDiv.env?.editor?.getValue() ?? textarea.value : textarea.value;
+                                    return nikki.writefile(path, finalValue)
+                                        .then(() => {
+                                            ui.addTimeLimitedNotification(null, E('p', _('Saved, reloading...')), 5000, 'info');
+                                            ui.hideModal();
+                                        })
+                                        .catch((e) => {
+                                            ui.addTimeLimitedNotification(null, E('p', e.message), 8000, 'error');
+                                        });
+                                })
+                            }, _('Save'))
+                        ])
+                    ], 'cbi-modal');
+
+                    return preloadAce().then(() => {
+                        textarea.style.display = 'none';
+                        aceDiv.style.display = '';
+                        const editor = ace.edit(aceDiv);
+                        editor.setOptions({
+                            fontSize: '14px',
+                            printMarginColumn: -1,
+                            showPrintMargin: true,
+                            mode: 'ace/mode/yaml',
+                            fontFamily: 'Consolas',
+                            theme: 'ace/theme/monokai'
+                        });
+                        editor.session.setUseWrapMode(true);
+                        editor.session.setWrapLimitRange(null, null);
+                        editor.setValue(content || '', -1);
+                        aceDiv.env = { editor };
+                    }).catch(() => Object.assign(textarea.style, {
+                        fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4'
+                    }));
+                });
+            })
+        }, _('Edit'));
+
+        node.classList.add('control-group');
+        node.appendChild(btn);
+        return node;
+    };
+}
+
 return view.extend({
+    aceEditor: null,
     load: function () {
         return Promise.all([
             nikki.version(),
             nikki.status(),
+            nikki.listfiles('/etc/nikki/mixin'),
             nikki.listfiles('/etc/nikki/profiles'),
             nikki.listfiles('/etc/nikki/subscriptions'),
-            nikki.listfiles('/etc/nikki/mixin'),
             uci.load('nikki')
         ]);
     },
-    render: function ([v, running, profiles, subfiles, mixinfiles]) {
+    render: function ([v, running, mixinfiles, profiles, subfiles]) {
         let m, s, o;
+        preloadAce().catch(() => {});
 
         m = new form.Map('nikki', _('Nikki'), `${_('Transparent Proxy with Mihomo on OpenWrt.')} <a href="https://github.com/nikkinikki-org/OpenWrt-nikki/wiki" target="_blank">${_('How To Use')}</a>`);
 
@@ -162,21 +255,36 @@ return view.extend({
         o = s.option(form.ListValue, 'profile', _('Choose Profile'));
         o.optional = true;
 
-        for (const profile of profiles) {
-            o.value('file:' + profile.name, _('File:') + profile.name);
-        };
-
+        for (const p of profiles) o.value('file:' + p.name, _('File:') + p.name);
         uci.sections('nikki', 'subscription', function (s, sid) {
             if (subfiles.length > 0) o.value('subscription:' + s['.name'], _('Subscription:') + s.name);
         });
+
+        attachFileEditorButton(o, (value) => {
+            const [type, id] = value.split(/:(.+)/);
+            if (type === 'file') return { title: id, path: `/etc/nikki/profiles/${id}` };
+
+            const subName = uci.get('nikki', id, 'name');
+            if (!subName) return null;
+
+            const fileName = subName + '.yaml';
+            return { title: fileName, path: `/etc/nikki/subscriptions/${fileName}` };
+        });
+
+        o.onchange = function (ev, section_id, value) {
+            const lEl = this.map.lookupOption('core_only', section_id)[0];
+            lEl?.getUIElement(section_id).setValue('0');
+        };
 
         o = s.option(form.ListValue, 'mixin_file', _('Select mixin file'), _('Select files to add to mixin'));
         o.optional = true;
         o.depends({ profile: 'subscription', '!contains': true });
 
-        for (const profile of mixinfiles) {
-            o.value(profile.name, _('Mixin:') + profile.name);
-        };
+        for (const p of mixinfiles) o.value(p.name, _('Mixin:') + p.name);
+
+        attachFileEditorButton(o, (value) => ({
+            title: value, path: `/etc/nikki/mixin/${value}`
+        }));
 
         o = s.option(form.Flag, 'core_only', _('Core Only'), _('When enabled, mixin configs will not be used; Mihomo will auto-configure instead'));
         o.depends({ profile: 'file', '!contains': true });
