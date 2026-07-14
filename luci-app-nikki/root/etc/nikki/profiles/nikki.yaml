@@ -111,7 +111,6 @@ dns:
     - "*.wql.us"                               # 自定义保留域名
     - "*.microsoft.com"                        # 微软主域名
     - "*.keywordsstudios.cn"                   # 自定义保留域名
-    - "geosite:cn"                             # 国内域名分类
 
   default-nameserver:                          # 解析下方 DoH/DoT 服务器自身域名，须为纯 IP
     - 223.5.5.5
@@ -131,32 +130,31 @@ dns:
 
   fallback-filter:
     geoip: true                                # 启用基于 geoip 的污染判断
-    geoip-code: CN                              # 解析结果属于 CN 则视为可信
+    geoip-code: CN                             # 解析结果属于 CN 则视为可信
     ipcidr:
-      - 240.0.0.0/4                             # 命中该网段强制触发 fallback
+      - 240.0.0.0/4                            # 命中该网段强制触发 fallback
 
   nameserver-policy:                           # 按域名/规则集指定专用 DNS，优先级高于 nameserver
-    "geosite:cn,private":                      # 国内 + 私有域名
+    "rule-set:private_domain,cn_domain,apple_domain": # 国内域名规则集
       - https://223.5.5.5/dns-query
       - https://1.12.12.12/dns-query
-    "rule-set:cn_domain":                      # 国内域名规则集
-      - https://223.5.5.5/dns-query
-      - https://1.12.12.12/dns-query
-    "rule-set:apple_domain":                   # 苹果服务域名单独走阿里 DoH
-      - https://223.5.5.5/dns-query
 
 # ================= 入站 Tun =================
 tun:
   enable: true                        # 启用 Tun 虚拟网卡
   stack: mixed                        # Tun 协议栈实现
-  dns-hijack: ["any:53", "tcp://any:53"]   # 劫持所有 53 端口 DNS 请求到内置 DNS
+  dns-hijack: ["any:53", "tcp://any:53"] # 劫持所有 53 端口 DNS 请求到内置 DNS
   mtu: 1380                           # Tun 网卡 MTU
   auto-route: true                    # 自动配置路由表，将流量导入 Tun
   auto-redirect: true                 # 自动配置 iptables/nftables 重定向 TCP（仅 Linux，依赖 auto-route）
   auto-detect-interface: true         # 自动识别出口物理网卡，避免流量递归进 Tun
 
-# ================= 出站策略 =================
-groups: &groups {type: url-test, use: [cloud], include-all: true, tolerance: 50, interval: 300, url: https://cp.cloudflare.com/generate_204}
+ip:          &ip          {type: http, interval: 86400, behavior: ipcidr,    format: mrs}
+domain:      &domain      {type: http, interval: 86400, behavior: domain,    format: mrs}
+class:       &class       {type: http, interval: 86400, behavior: classical, format: text}
+domain_text: &domain_text {type: http, interval: 86400, behavior: domain,    format: yaml}
+class_yaml:  &class_yaml  {type: http, interval: 86400, behavior: classical, format: yaml}
+groups:      &groups      {type: url-test, use: [cloud], include-all: true, tolerance: 50, interval: 300, url: https://cp.cloudflare.com/generate_204}
 # 策略组公共锚点：url-test 自动选延迟最低节点；use 引用订阅；include-all 纳入全部已知节点；
 # tolerance 为同档延迟容差（ms）；url 为测速探测地址
 
@@ -187,8 +185,6 @@ rules:
   - RULE-SET,private_domain,🎯 国内     # 局域网/内网保留域名国内
   - RULE-SET,cn_domain,🎯 国内          # 国内域名国内
   - RULE-SET,cn_ip,🎯 国内,no-resolve   # 国内 IP 段国内，不为此规则单独触发解析
-  - GEOIP,CN,🎯 国内                    # 兜底：目标 IP 属地中国大陆国内
-  - GEOIP,PRIVATE,🎯 国内               # 私有/内网 IP 段国内
   - RULE-SET,apple_domain,🎯 国内       # 苹果服务国内
   - RULE-SET,cdn_cn,🎯 国内
   - RULE-SET,pt_classical,🎯 国内
@@ -204,9 +200,11 @@ rules:
   - RULE-SET,paypal_domain,自动选择
   - RULE-SET,gfw_domain,自动选择
   - RULE-SET,geolocation-!cn,自动选择
-  - MATCH,自动选择                   # 兜底规则，需放最后
+  - GEOIP,CN,🎯 国内                    # 兜底：目标 IP 属地中国大陆国内
+  - GEOIP,PRIVATE,🎯 国内               # 私有/内网 IP 段国内
+  - MATCH,自动选择                       # 兜底规则，需放最后
 
-geodata-mode: false                  # false 使用 .dat 格式；true 需改用 .metadb（与 geox-url 对应）
+geodata-mode: false                     # false 使用 .dat 格式；true 需改用 .metadb（与 geox-url 对应）
 geodata-loader: standard
 geox-url:
   mmdb: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb
@@ -214,13 +212,6 @@ geox-url:
   geoip: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat
   asn: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb
   # geo 数据文件下载地址，如访问不畅可换 raw.githubusercontent.com 等镜像
-
-rule-anchor:
-  ip:          &ip          {type: http, interval: 86400, behavior: ipcidr,    format: mrs}
-  domain:      &domain      {type: http, interval: 86400, behavior: domain,    format: mrs}
-  class:       &class       {type: http, interval: 86400, behavior: classical, format: text}
-  domain_text: &domain_text {type: http, interval: 86400, behavior: domain,    format: yaml}
-  class_yaml:  &class_yaml  {type: http, interval: 86400, behavior: classical, format: yaml}
 
 rule-providers:
   # 远程规则集，指向 meta-rules-dat 仓库的预编译 .mrs 文件

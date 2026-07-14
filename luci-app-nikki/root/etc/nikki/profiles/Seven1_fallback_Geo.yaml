@@ -19,10 +19,10 @@ Anchor_HS: &Anchor_HS {type: select, include-all: true}
 Anchor_FB: &Anchor_FB {type: fallback, url: 'https://www.g.cn/generate_204', interval: 300, lazy: false, timeout: 2000, max-failed-times: 3, hidden: true}
 Anchor_UT: &Anchor_UT {type: url-test, url: 'https://www.g.cn/generate_204', interval: 300, lazy: false, tolerance: 50, timeout: 2000, max-failed-times: 3, hidden: true, include-all: true}
 # ══ 规则锚点 ══
-Anchor_DN:  &Anchor_DN  {type: http, interval: 86400, behavior: domain,    format: mrs}
-Anchor_IP:  &Anchor_IP  {type: http, interval: 86400, behavior: ipcidr,    format: mrs}
-Anchor_CL:  &Anchor_CL  {type: http, interval: 86400, behavior: classical, format: text}
-class_yaml: &class_yaml {type: http, interval: 86400, behavior: classical, format: yaml}
+Anchor_DN: &Anchor_DN  {type: http, interval: 86400, behavior: domain,    format: mrs}
+Anchor_IP: &Anchor_IP  {type: http, interval: 86400, behavior: ipcidr,    format: mrs}
+Anchor_TX: &Anchor_TX  {type: http, interval: 86400, behavior: classical, format: text}
+Anchor_YM: &Anchor_YM  {type: http, interval: 86400, behavior: classical, format: yaml}
 # ══ 区域锚点 ══
 Anchor_HK: &Anchor_HK '^(?i)(?=.*(香港|🇭🇰|\bHK\b|Hong(?:\s?Kong)?|HKG)).*$'
 Anchor_TW: &Anchor_TW '^(?i)(?=.*(台湾|台灣|🇹🇼|\bTW\b|\bTPE\b|\bTSA\b|\bKHH\b|taiwan|TPE|TSA|KHH)).*$'
@@ -111,7 +111,7 @@ dns:
   respect-rules: false                                 # 遵循规则  不强制遵循规则顺序
   fake-ip-filter:
     - "+.lan"                                          # 真实解析  常见局域网域名后缀
-    - "rule-set:add_direct_domain"                     # 真实解析  大陆冷门域名
+    - "rule-set:direct_domain"                         # 真实解析  大陆冷门域名
     - "geosite:cn"                                     # 真实解析  大陆域 GeoSite 数据
   nameserver:                                          # 解析服务  请使用运营商提供的 DNS
     - 114.114.114.114
@@ -201,7 +201,7 @@ rules:
   # - "GEOIP,twitter,Twitter(X),no-resolve"              # Twitter
   # - "GEOIP,netflix,Netflix,no-resolve"                 # Netflix
   - "GEOSITE,geolocation-!cn,一键代理"                  # 排除国内
-  - "RULE-SET,add_direct_domain,🎯 国内"               # 直连域名
+  - "RULE-SET,direct_domain,🎯 国内"                   # 直连域名
   - "GEOSITE,cn,🎯 国内"                               # 中国域名
   - "GEOIP,cn,🎯 国内,no-resolve"                      # 中国IP
   - "MATCH,漏网之鱼"                                    # 兜底规则
@@ -209,8 +209,8 @@ rules:
 
 # ══ 规则补充 ══
 rule-providers:
-  add_direct_domain:    { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/Seven1echo/Yaml/refs/heads/main/rules/Seven1_Direct_Domain.mrs"}
-  ww_reject: {<<: *Anchor_DN, url: "https://raw.githubusercontent.com/wwqgtxx/clash-rules/release/reject.mrs"}
+  ww_reject:     {<<: *Anchor_DN, url: "https://raw.githubusercontent.com/wwqgtxx/clash-rules/release/reject.mrs"}
+  direct_domain: {<<: *Anchor_DN, url: "https://raw.githubusercontent.com/Seven1echo/Yaml/refs/heads/main/rules/Seven1_Direct_Domain.mrs"}
 
 
 
