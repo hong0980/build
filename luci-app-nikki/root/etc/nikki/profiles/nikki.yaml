@@ -8,7 +8,7 @@ proxy-providers:
     url: ""                           # 订阅链接
     type: http
     interval: 86400                  # 自动更新间隔（秒）
-    path: "./proxy_provider/airport.yaml"   # 订阅缓存落盘路径
+    # path: "./proxy_provider/airport.yaml"   # 订阅缓存落盘路径
     filter: "(?i)^(?!.*(到期|域名|剩余|去除)).*$" # 过滤掉机场塞入的提示性虚假节点
     # proxy: 🎯 国内                    # 拉取订阅用的出口，须为节点名而非策略组名
     health-check:

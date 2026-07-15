@@ -50,8 +50,7 @@ function attachFileEditorButton(o, resolveTarget) {
                 ev.stopPropagation();
                 ev.preventDefault();
 
-                const value = self.formvalue(section_id) || cfgvalue;
-                const target = resolveTarget(value);
+                const target = resolveTarget(self.formvalue(section_id));
                 if (!target) return;
                 const { title, path } = target;
                 const textarea = E('textarea', {
@@ -64,23 +63,22 @@ function attachFileEditorButton(o, resolveTarget) {
 
                     ui.showModal(_('Edit: %s').format(title), [
                         aceDiv, textarea,
-                        E('div', { 'class': 'right', style: 'margin-top:10px;' }, [
-                            E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel')),
-                            ' ',
+                        E('div', { 'class': 'button-row' }, [
                             E('button', {
                                 'class': 'btn cbi-button-positive',
                                 'click': ui.createHandlerFn(self, function () {
                                     const finalValue = window.ace?.edit ? aceDiv.env?.editor?.getValue() ?? textarea.value : textarea.value;
                                     return nikki.writefile(path, finalValue)
                                         .then(() => {
-                                            ui.addTimeLimitedNotification(null, E('p', _('Saved, reloading...')), 5000, 'info');
+                                            ui.addTimeLimitedNotification(null, E('p', _('Config saved, files updated')), 5000, 'info');
                                             ui.hideModal();
                                         })
                                         .catch((e) => {
                                             ui.addTimeLimitedNotification(null, E('p', e.message), 8000, 'error');
                                         });
                                 })
-                            }, _('Save'))
+                            }, _('Save')),
+                            E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel'))
                         ])
                     ], 'cbi-modal');
 
@@ -100,6 +98,7 @@ function attachFileEditorButton(o, resolveTarget) {
                         editor.session.setWrapLimitRange(null, null);
                         editor.setValue(content || '', -1);
                         aceDiv.env = { editor };
+                        setTimeout(() => editor.resize(true), 0);
                     }).catch(() => Object.assign(textarea.style, {
                         fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4'
                     }));
@@ -282,9 +281,10 @@ return view.extend({
 
         for (const p of mixinfiles) o.value(p.name, _('Mixin:') + p.name);
 
-        attachFileEditorButton(o, (value) => ({
-            title: value, path: `/etc/nikki/mixin/${value}`
-        }));
+        attachFileEditorButton(o, (value) => {
+            if (!value) return null;
+            return { title: value, path: `/etc/nikki/mixin/${value}` }
+        });
 
         o = s.option(form.Flag, 'core_only', _('Core Only'), _('When enabled, mixin configs will not be used; Mihomo will auto-configure instead'));
         o.depends({ profile: 'file', '!contains': true });
