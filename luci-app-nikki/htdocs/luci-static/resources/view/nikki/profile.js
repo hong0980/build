@@ -1242,12 +1242,12 @@ return view.extend({
             return this.super('write', [section_id, value]);
         };
 
-        o = s.option(form.Value, 'used', _('Used'));
+        o = s.option(form.Value, 'total', _('Total'));
         o.modalonly = false;
         o.optional = true;
         o.readonly = true;
 
-        o = s.option(form.Value, 'total', _('Total'));
+        o = s.option(form.Value, 'used', _('Used'));
         o.modalonly = false;
         o.optional = true;
         o.readonly = true;
@@ -1269,19 +1269,26 @@ return view.extend({
         o.modalonly = false;
         o.onclick = function (ev, section_id) {
             return nikki.updateSubscription(section_id)
-                .then(function () {
+                .then(function (r) {
+                    if (!r.success) {
+                        ui.addTimeLimitedNotification(null, E('p', _('订阅更新失败')), 8000, 'error');
+                        return Promise.reject();
+                    }
+                    const name = uci.get('nikki', section_id, 'name') || '';
+                    ui.addTimeLimitedNotification(null, E('p', _('%s 订阅更新成功').format(name)), 5000, 'info')
                     uci.unload('nikki');
                     return uci.load('nikki');
                 })
                 .then(function () {
                     const row = document.getElementById('cbi-nikki-' + section_id);
                     if (!row) return;
-                    ['used', 'total', 'expire', 'update'].forEach(function (optName) {
-                        const cell = row.querySelector('[data-name="' + optName + '"]');
-                        const newVal = uci.get('nikki', section_id, optName) || '';
-                        if (cell) cell.textContent = newVal;
+
+                    row.querySelectorAll('[data-name]').forEach(function (cell) {
+                        const optName = cell.getAttribute('data-name');
+                        cell.textContent = uci.get('nikki', section_id, optName) || '';
                     });
-                });
+                })
+                .catch(function (err) { if (err) console.error(err); });
         };
 
         o = s.option(form.Value, 'info_url', _('Subscription Info Url'));

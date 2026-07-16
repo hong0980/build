@@ -78,7 +78,7 @@ start_service() {
 			log "App" "Exit."
 			return
 		fi
-		cp -f "$profile_file" "$TEMP_RUN_PATH"
+		cp -f "$profile_file" "$TEMP_CONFIG"
 	elif [ "${profile%%:*}" = "subscription" ]; then
 		local name prefer section="${profile#*:}"
 		config_get name   "$section" "name"
@@ -93,7 +93,7 @@ start_service() {
 			log "App" "Exit."
 			return
 		fi
-		cp -f "$subscription_file" "$TEMP_RUN_PATH"
+		cp -f "$subscription_file" "$TEMP_CONFIG"
 	else
 		log "Profile" "No profile/subscription selected."
 		log "App" "Exit."
@@ -101,15 +101,15 @@ start_service() {
 	fi
 
 	if [ "$core_only" = 0 ]; then
-		[ "$hosts"                 = 1 ] && yq -Mi 'del(.hosts)'                 "$TEMP_RUN_PATH"
-		[ "$sniffer_sniff"         = 1 ] && yq -Mi 'del(.sniffer.sniff)'         "$TEMP_RUN_PATH"
-		[ "$authentication"        = 1 ] && yq -Mi 'del(.authentication)'        "$TEMP_RUN_PATH"
-		[ "$tun_dns_hijack"        = 1 ] && yq -Mi 'del(.tun.dns-hijack)'        "$TEMP_RUN_PATH"
-		[ "$fake_ip_filter"        = 1 ] && yq -Mi 'del(.dns.fake-ip-filter)'    "$TEMP_RUN_PATH"
-		[ "$force_domain_name"     = 1 ] && yq -Mi 'del(.sniffer.force-domain)'  "$TEMP_RUN_PATH"
-		[ "$ignore_domain_name"    = 1 ] && yq -Mi 'del(.sniffer.skip-domain)'   "$TEMP_RUN_PATH"
-		[ "$dns_nameserver_policy" = 1 ] && yq -Mi 'del(.dns.nameserver-policy)' "$TEMP_RUN_PATH"
-		[ "$dns_nameserver"        = 1 ] && yq -Mi 'del(.dns.default-nameserver) | del(.dns.fallback) | del(.dns.proxy-server-nameserver) | del(.dns.direct-nameserver) | del(.dns.nameserver)' "$TEMP_RUN_PATH"
+		[ "$hosts"                 = 1 ] && yq -Mi 'del(.hosts)'                 "$TEMP_CONFIG"
+		[ "$sniffer_sniff"         = 1 ] && yq -Mi 'del(.sniffer.sniff)'         "$TEMP_CONFIG"
+		[ "$authentication"        = 1 ] && yq -Mi 'del(.authentication)'        "$TEMP_CONFIG"
+		[ "$tun_dns_hijack"        = 1 ] && yq -Mi 'del(.tun.dns-hijack)'        "$TEMP_CONFIG"
+		[ "$fake_ip_filter"        = 1 ] && yq -Mi 'del(.dns.fake-ip-filter)'    "$TEMP_CONFIG"
+		[ "$force_domain_name"     = 1 ] && yq -Mi 'del(.sniffer.force-domain)'  "$TEMP_CONFIG"
+		[ "$ignore_domain_name"    = 1 ] && yq -Mi 'del(.sniffer.skip-domain)'   "$TEMP_CONFIG"
+		[ "$dns_nameserver_policy" = 1 ] && yq -Mi 'del(.dns.nameserver-policy)' "$TEMP_CONFIG"
+		[ "$dns_nameserver"        = 1 ] && yq -Mi 'del(.dns.default-nameserver) | del(.dns.fallback) | del(.dns.proxy-server-nameserver) | del(.dns.direct-nameserver) | del(.dns.nameserver)' "$TEMP_CONFIG"
 
 		local mixin_file mixin_extra_file=""
 		config_get mixin_file "config" "mixin_file" ''
@@ -126,14 +126,14 @@ start_service() {
 			.proxy-groups = .nikki-proxy-groups + .proxy-groups | del(.nikki-proxy-groups) |
 			.rules        = .nikki-rules        + .rules        | del(.nikki-rules)        |
 			.rule-providers? |= with_entries(.key as $k | ((.value.path | select(. != "")) // ("./rule_provider/" + $k)) as $base | .value.path = (($base | select(test("/$")) | . + $k) // $base))
-			' "$TEMP_RUN_PATH" $mixin_extra_file -
+			' "$TEMP_CONFIG" $mixin_extra_file -
 
 		if [ "$proxy_enabled" = 1 ]; then
-			if yq 'has("tun")' "$TEMP_RUN_PATH" >/dev/null 2>&1; then
-				yq -Mi '(.tun) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$TEMP_RUN_PATH"
+			if yq 'has("tun")' "$TEMP_CONFIG" >/dev/null 2>&1; then
+				yq -Mi '(.tun) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$TEMP_CONFIG"
 			fi
-			if yq 'has("listeners")' "$TEMP_RUN_PATH" >/dev/null 2>&1; then
-				yq -Mi '(.listeners[] | select(.type == "tun")) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$TEMP_RUN_PATH"
+			if yq 'has("listeners")' "$TEMP_CONFIG" >/dev/null 2>&1; then
+				yq -Mi '(.listeners[] | select(.type == "tun")) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$TEMP_CONFIG"
 			fi
 		fi
 	else
@@ -144,13 +144,13 @@ start_service() {
 				.tun["auto-route"] = true    |
 				.tun["auto-redirect"] = true |
 				.tun["auto-detect-interface"] = true
-				' "$TEMP_RUN_PATH"
+				' "$TEMP_CONFIG"
 	fi
 
 	if [ "$core_only" = 0 -a "$proxy_enabled" = 1 ]; then
-		log "Profile" "Checking..."
+		# log "Profile" "Checking..."
 		if [ "$ipv4_dns_hijack" = 1 -o "$ipv6_dns_hijack" = 1 ]; then
-			if ! yq '(has("dns") and (.dns | .enable) and (.dns | has("listen")))' "$TEMP_RUN_PATH" >/dev/null 2>&1; then
+			if ! yq '(has("dns") and (.dns | .enable) and (.dns | has("listen")))' "$TEMP_CONFIG" >/dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "DNS should be enabled and listen should be defined."
 				log "App" "Exit."
@@ -158,7 +158,7 @@ start_service() {
 			fi
 		fi
 		if [ "$tcp_mode" = "redirect" ]; then
-			if yq -Me "(has(\"redir-port\") or (has(\"listeners\") and .listeners | any_c(.name == \"$redirect_listener_name\" and .type == \"redir\"))) | not" "$TEMP_RUN_PATH" > /dev/null 2>&1; then
+			if yq -Me "(has(\"redir-port\") or (has(\"listeners\") and .listeners | any_c(.name == \"$redirect_listener_name\" and .type == \"redir\"))) | not" "$TEMP_CONFIG" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "Redirect Port/Listener should be defined."
 				log "App" "Exit."
@@ -166,7 +166,7 @@ start_service() {
 			fi
 		fi
 		if [ "$tcp_mode" = "tproxy" -o "$udp_mode" = "tproxy" ]; then
-			if yq -Me "(has(\"tproxy-port\") or (has(\"listeners\") and .listeners | any_c(.name == \"$tproxy_listener_name\" and .type == \"tproxy\"))) | not" "$TEMP_RUN_PATH" > /dev/null 2>&1; then
+			if yq -Me "(has(\"tproxy-port\") or (has(\"listeners\") and .listeners | any_c(.name == \"$tproxy_listener_name\" and .type == \"tproxy\"))) | not" "$TEMP_CONFIG" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "TPROXY Port/Listener should be defined."
 				log "App" "Exit."
@@ -174,16 +174,16 @@ start_service() {
 			fi
 		fi
 		if [ "$tcp_mode" = "tun" -o "$udp_mode" = "tun" ]; then
-			if yq -Me "(has(\"tun\") and (.tun | .enable) and (.tun | has(\"device\"))) or (has(\"listeners\") and .listeners | any_c(.name == \"$tun_listener_name\" and .type == \"tun\" and has(\"device\")))) | not" "$TEMP_RUN_PATH" > /dev/null 2>&1; then
+			if yq -Me "(has(\"tun\") and (.tun | .enable) and (.tun | has(\"device\"))) or (has(\"listeners\") and .listeners | any_c(.name == \"$tun_listener_name\" and .type == \"tun\" and has(\"device\")))) | not" "$TEMP_CONFIG" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "TUN should be defined."
 				log "App" "Exit."
 				return
 			fi
 		fi
-		log "Profile" "Check passed."
+		# log "Profile" "Check passed."
 	fi
-	mv -f "$TEMP_RUN_PATH" "$RUN_PROFILE_PATH"
+	mv -f "$TEMP_CONFIG" "$RUN_PROFILE_PATH"
 
 	if [ "$test_profile" = 1 ]; then
 		log "Profile" "Testing..."
@@ -478,21 +478,16 @@ update_subscription() {
 	[ x"$section" = 'x' ] && return
 
 	config_load nikki
-	local success=0 url name opt info_url user_agent file tmpfile header_tmpfile info_header_tmpfile info_file
-	config_get url        "$section" "url"
-	config_get name       "$section" "name"
-	config_get info_url   "$section" "info_url"
-	config_get user_agent "$section" "user_agent"
+	local success=0 url name opt info_url user_agent file header_tmpfile info_header_tmpfile info_file
+	config_get url        "$section" url
+	config_get name       "$section" name
+	config_get info_url   "$section" info_url
+	config_get user_agent "$section" user_agent
 	log "Profile" "Update subscription: %s." "$name"
 
-	tmpfile="$TEMP_DIR/$section.yaml"
 	file="$SUBSCRIPTIONS_DIR/$name.yaml"
 	header_tmpfile="$TEMP_DIR/$section.header"
 	info_header_tmpfile="$TEMP_DIR/$section.info.header"
-
-	for opt in expire upload download total used avaliable update success; do
-		uci_remove "nikki" "$section" "$opt" > /dev/null 2>&1
-	done
 
 	if [ -n "$info_url" ]; then
 		log "Profile" "Fetch subscription info."
@@ -504,12 +499,12 @@ update_subscription() {
 	fi
 
 	log "Profile" "Download subscription."
-	if curl -sfL --max-time 120 --connect-timeout 15 --retry 3 -A "$user_agent" -D "$header_tmpfile" -o "$tmpfile" "$url" > /dev/null 2>&1; then
+	if curl -sfL --max-time 120 --connect-timeout 15 --retry 3 -A "$user_agent" -D "$header_tmpfile" -o "$TEMP_CONFIG" "$url" > /dev/null 2>&1; then
 		log "Profile" "Subscription download successful."
 		if [ ! -f "$info_file" ] && grep -q -i "subscription-userinfo:" "$header_tmpfile"; then
 			info_file="$header_tmpfile"
 		fi
-		if yq -r 'has("proxies") or has("proxy-providers")' "$tmpfile" > /dev/null 2>&1; then
+		if yq -r 'has("proxies") or has("proxy-providers")' "$TEMP_CONFIG" > /dev/null 2>&1; then
 			success=1
 			log "Profile" "Subscription is valid."
 		else
@@ -518,8 +513,10 @@ update_subscription() {
 	else
 		log "Profile" "Subscription download failed."
 	fi
-
 	if [ "$success" = 1 ]; then
+		# for opt in expire upload download total used avaliable update success; do
+		# 	uci_remove nikki "$section" "$opt" > /dev/null 2>&1
+		# done
 		log "Profile" "Subscription update successful."
 		if [ -f "$info_file" ]; then
 			local userinfo expire upload download total used avaliable
@@ -531,25 +528,24 @@ update_subscription() {
 
 			if [ -n "$upload" -a -n "$download" ]; then
 				used=$((upload + download))
-				[ -n "$total" ] && avaliable=$((total - used))
+				# [ -n "$total" ] && avaliable=$((total - used))
 			fi
 
-			[ -n "$used" ]      && uci_set "nikki" "$section" "used"      "$(format_filesize "$used")"
-			[ -n "$total" ]     && uci_set "nikki" "$section" "total"     "$(format_filesize "$total")"
-			[ -n "$upload" ]    && uci_set "nikki" "$section" "upload"    "$(format_filesize "$upload")"
-			[ -n "$download" ]  && uci_set "nikki" "$section" "download"  "$(format_filesize "$download")"
-			[ -n "$avaliable" ] && uci_set "nikki" "$section" "avaliable" "$(format_filesize "$avaliable")"
-			[ -n "$expire" ]    && uci_set "nikki" "$section" "expire"    "$(date "+%Y-%m-%d %H:%M:%S" -d "@$expire")"
+			[ -n "$used" ]      && uci_set nikki "$section" used      "$(format_filesize "$used")"
+			[ -n "$total" ]     && uci_set nikki "$section" total     "$(format_filesize "$total")"
+			# [ -n "$upload" ]    && uci_set nikki "$section" upload    "$(format_filesize "$upload")"
+			# [ -n "$download" ]  && uci_set nikki "$section" download  "$(format_filesize "$download")"
+			# [ -n "$avaliable" ] && uci_set nikki "$section" avaliable "$(format_filesize "$avaliable")"
+			[ -n "$expire" ]    && uci_set nikki "$section" expire    "$(date "+%Y-%m-%d %H:%M:%S" -d "@$expire")"
 		fi
-		uci_set "nikki" "$section" "success" "1"
-		uci_set "nikki" "$section" "update" "$(date "+%Y-%m-%d %H:%M:%S")"
-		mv -f "$tmpfile" "$file"
+		uci_set nikki "$section" update "$(date "+%Y-%m-%d %H:%M:%S")"
+		mv -f "$TEMP_CONFIG" "$file"
 	else
 		log "Profile" "Subscription update failed."
-		uci_set "nikki" "$section" "success" "0"
-		rm -f "$tmpfile"
+		rm -f "$TEMP_CONFIG"
 	fi
 
 	rm -f "$header_tmpfile" "$info_header_tmpfile"
-	uci_commit "nikki"
+	uci_commit nikki
+	[ "$success" = 1 ] && return 0 || return 1
 }

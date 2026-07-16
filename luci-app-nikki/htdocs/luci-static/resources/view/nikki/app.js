@@ -78,7 +78,7 @@ function attachFileEditorButton(o, resolveTarget) {
                                         });
                                 })
                             }, _('Save')),
-                            E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel'))
+                            E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Dismiss'))
                         ])
                     ], 'cbi-modal');
 
