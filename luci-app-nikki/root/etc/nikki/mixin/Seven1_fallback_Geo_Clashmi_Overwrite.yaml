@@ -96,6 +96,7 @@ sniffer:
 # ══ DNS配置 ══
 dns:
   enable: true                                         # 解析服务  启用 Clash 内置 DNS 服务
+  cache-algorithm: arc                                 # DNS 缓存淘汰算法
   ipv6: false                                          # 网络协议  启用 IPv6 DNS 解析支持
   listen: 0.0.0.0:7874                                 # 监听服务  DNS 服务监听地址与端口
   enhanced-mode: fake-ip                               # 增强模式  FDNS 增强模式（Fake-IP，用于防止 DNS 泄露）
@@ -115,51 +116,51 @@ dns:
 # ███████████████████████████ 策略分组 ███████████████████████████
 # ══ 服务组 ══
 proxy-groups:
-  - {name: AI,         <<: *Anchor_UT, hidden: false, filter: "(?i)^(?!.*(俄罗斯|土耳其|印度|港|HK|国内)).*$", icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Claude.png}
+  - {name: 🚀 AI,         <<: *Anchor_UT, hidden: false, filter: "(?i)^(?!.*(俄罗斯|土耳其|印度|港|HK|国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Claude.png}
 # ══ 手动组 ══
-  - {name: 香港-手动,   <<: *Anchor_HS, filter: *Anchor_HK, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/HK.png}
-  - {name: 新加坡-手动, <<: *Anchor_HS, filter: *Anchor_SG, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/SG.png}
-  - {name: 台湾-手动,   <<: *Anchor_HS, filter: *Anchor_TW, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/TW.png}
-  - {name: 日本-手动,   <<: *Anchor_HS, filter: *Anchor_JP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/JP.png}
-  - {name: 韩国-手动,   <<: *Anchor_HS, filter: *Anchor_KR, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/KR.png}
-  - {name: 美国-手动,   <<: *Anchor_HS, filter: *Anchor_US, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/US.png}
-  - {name: 欧洲-手动,   <<: *Anchor_HS, filter: *Anchor_EU, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/EU.png}
-  - {name: 其他-手动,   <<: *Anchor_HS, filter: *Anchor_OT, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/OT.png}
+  - {name: 香港-手动,   <<: *Anchor_HS, filter: *Anchor_HK, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
+  - {name: 新加坡-手动, <<: *Anchor_HS, filter: *Anchor_SG, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/SG.png}
+  - {name: 台湾-手动,   <<: *Anchor_HS, filter: *Anchor_TW, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
+  - {name: 日本-手动,   <<: *Anchor_HS, filter: *Anchor_JP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
+  - {name: 韩国-手动,   <<: *Anchor_HS, filter: *Anchor_KR, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
+  - {name: 美国-手动,   <<: *Anchor_HS, filter: *Anchor_US, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
+  - {name: 欧洲-手动,   <<: *Anchor_HS, filter: *Anchor_EU, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/EU.png}
+  - {name: 其他-手动,   <<: *Anchor_HS, filter: *Anchor_OT, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OT.png}
 
-  - {name: 一键代理,    <<: *Anchor_PG, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Rocket.png}
-  - {name: YouTube,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/YouTube.png}
-  - {name: Google,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Google.png}
-  - {name: GitHub,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/GitHub.png}
-  - {name: OneDrive,   <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/OneDrive.png}
-  - {name: Microsoft,  <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Microsoft.png}
-  # - {name: AppleTV,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/AppleTV.png}
-  - {name: Apple,      <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Apple.png}
-  - {name: TikTok,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/TikTok.png}
-  # - {name: Twitter(X), <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Twitter.png}
-  - {name: Telegram,   <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Telegram.png}
-  - {name: Netflix,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Netflix.png}
-  # - {name: Disney,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Disney.png}
-  # - {name: Spotify,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Spotify.png}
-  # - {name: PayPal,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/PayPal.png}
-  - {name: Speedtest,  <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Speedtest.png}
-  - {name: 漏网之鱼,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/MATCH.png}
-  - {name: 🎯 国内,    <<: *Anchor_DR, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/China.png}
+  - {name: 一键代理,    <<: *Anchor_PG, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
+  - {name: YouTube,    <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/YouTube.png}
+  - {name: Google,     <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Google.png}
+  - {name: 👨🏿‍💻 GitHub,     <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/GitHub.png}
+  - {name: OneDrive,   <<: *Anchor_LD, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OneDrive.png}
+  - {name: Microsoft,  <<: *Anchor_LD, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Microsoft.png}
+  # - {name: AppleTV,    <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/AppleTV.png}
+  - {name: Apple,      <<: *Anchor_LD, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Apple.png}
+  - {name: 🎵 TikTok,     <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TikTok.png}
+  # - {name: Twitter(X), <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Twitter.png}
+  - {name: Telegram,   <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Telegram.png}
+  - {name: Netflix,    <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Netflix.png}
+  # - {name: Disney,     <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Disney.png}
+  # - {name: Spotify,    <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Spotify.png}
+  # - {name: PayPal,     <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/PayPal.png}
+  - {name: Speedtest,  <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Speedtest.png}
+  - {name: 🐟 漏网之鱼,    <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/MATCH.png}
+  - {name: 🎯 国内,    <<: *Anchor_DR, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/China.png}
 # ══ 故转组 ══
-  - {name: 香港-故转,   <<: *Anchor_FB, proxies: [香港-手动, 香港-自动], icon: https://github.com/Seven1echo/Yaml/raw/main/icons/HK.png}
-  - {name: 台湾-故转,   <<: *Anchor_FB, proxies: [台湾-手动, 台湾-自动], icon: https://github.com/Seven1echo/Yaml/raw/main/icons/TW.png}
-  - {name: 日本-故转,   <<: *Anchor_FB, proxies: [日本-手动, 日本-自动], icon: https://github.com/Seven1echo/Yaml/raw/main/icons/JP.png}
-  - {name: 新加坡-故转, <<: *Anchor_FB, proxies: [新加坡-手动, 新加坡-自动], icon: https://github.com/Seven1echo/Yaml/raw/main/icons/SG.png}
-  - {name: 韩国-故转,   <<: *Anchor_FB, proxies: [韩国-手动, 韩国-自动], icon: https://github.com/Seven1echo/Yaml/raw/main/icons/KR.png}
-  - {name: 美国-故转,   <<: *Anchor_FB, proxies: [美国-手动, 美国-自动], icon: https://github.com/Seven1echo/Yaml/raw/main/icons/US.png}
-  - {name: 欧洲-故转,   <<: *Anchor_FB, proxies: [欧洲-手动, 欧洲-自动], icon: https://github.com/Seven1echo/Yaml/raw/main/icons/EU.png}
+  - {name: 香港-故转,   <<: *Anchor_FB, proxies: [香港-手动, 香港-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
+  - {name: 台湾-故转,   <<: *Anchor_FB, proxies: [台湾-手动, 台湾-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
+  - {name: 日本-故转,   <<: *Anchor_FB, proxies: [日本-手动, 日本-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
+  - {name: 新加坡-故转, <<: *Anchor_FB, proxies: [新加坡-手动, 新加坡-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/SG.png}
+  - {name: 韩国-故转,   <<: *Anchor_FB, proxies: [韩国-手动, 韩国-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
+  - {name: 美国-故转,   <<: *Anchor_FB, proxies: [美国-手动, 美国-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
+  - {name: 欧洲-故转,   <<: *Anchor_FB, proxies: [欧洲-手动, 欧洲-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/EU.png}
 # ══ 自动组 ══
-  - {name: 香港-自动,   <<: *Anchor_UT, filter: *Anchor_HK, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/HK.png}
-  - {name: 台湾-自动,   <<: *Anchor_UT, filter: *Anchor_TW, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/TW.png}
-  - {name: 日本-自动,   <<: *Anchor_UT, filter: *Anchor_JP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/JP.png}
-  - {name: 新加坡-自动, <<: *Anchor_UT, filter: *Anchor_SG, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/SG.png}
-  - {name: 韩国-自动,   <<: *Anchor_UT, filter: *Anchor_KR, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/KR.png}
-  - {name: 美国-自动,   <<: *Anchor_UT, filter: *Anchor_US, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/US.png}
-  - {name: 欧洲-自动,   <<: *Anchor_UT, filter: *Anchor_EU, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/EU.png}
+  - {name: 香港-自动,   <<: *Anchor_UT, filter: *Anchor_HK, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
+  - {name: 台湾-自动,   <<: *Anchor_UT, filter: *Anchor_TW, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
+  - {name: 日本-自动,   <<: *Anchor_UT, filter: *Anchor_JP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
+  - {name: 新加坡-自动, <<: *Anchor_UT, filter: *Anchor_SG, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/SG.png}
+  - {name: 韩国-自动,   <<: *Anchor_UT, filter: *Anchor_KR, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
+  - {name: 美国-自动,   <<: *Anchor_UT, filter: *Anchor_US, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
+  - {name: 欧洲-自动,   <<: *Anchor_UT, filter: *Anchor_EU, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/EU.png}
 
 
 
@@ -170,18 +171,18 @@ rules:
   - "GEOIP,private,🎯 国内,no-resolve"                 # Private
   - "GEOSITE,category-cdn-cn,🎯 国内"
   - "GEOSITE,category-pt,🎯 国内"
-  - "GEOSITE,category-ai-!cn,AI"
+  - "GEOSITE,category-ai-!cn,🚀 AI"
   # - "GEOSITE,openai,ChatGPT"                           # ChatGPT
   # - "GEOSITE,anthropic,Claude"                         # Claude
   # - "GEOSITE,google-gemini,Gemini"                     # Gemini
   - "GEOSITE,youtube,YouTube"                          # YouTube
   - "GEOSITE,google,Google"                            # Google
-  - "GEOSITE,github,GitHub"                            # GitHub
+  - "GEOSITE,github,👨🏿‍💻 GitHub"                            # GitHub
   - "GEOSITE,onedrive,OneDrive"                        # OneDrive
   - "GEOSITE,microsoft,Microsoft"                      # 微软服务
   # - "GEOSITE,apple-tvplus,AppleTV"                     # Apple TV+
   - "GEOSITE,apple,Apple"                              # 苹果服务
-  - "GEOSITE,tiktok,TikTok"                            # TikTok
+  - "GEOSITE,tiktok,🎵 TikTok"                            # TikTok
   # - "GEOSITE,twitter,Twitter(X)"                       # Twitter(X)
   - "GEOSITE,telegram,Telegram"                        # Telegram
   - "GEOSITE,netflix,Netflix"                          # Netflix
@@ -197,13 +198,14 @@ rules:
   - "RULE-SET,direct_domain,🎯 国内"                   # 直连域名
   - "GEOSITE,cn,🎯 国内"                               # 中国域名
   - "GEOIP,cn,🎯 国内,no-resolve"                      # 中国IP
-  - "MATCH,漏网之鱼"                                    # 兜底规则
+  - "MATCH,🐟 漏网之鱼"                                    # 兜底规则
 
 
 # ══ 规则补充 ══
 rule-providers:
-  ww_reject:     {<<: *Anchor_DN, url: "https://raw.githubusercontent.com/wwqgtxx/clash-rules/release/reject.mrs"}
-  direct_domain: {<<: *Anchor_DN, url: "https://raw.githubusercontent.com/Seven1echo/Yaml/refs/heads/main/rules/Seven1_Direct_Domain.mrs"}
+  ww_reject:     {<<: *Anchor_DN, url: "https://testingcf.jsdelivr.net/gh/wwqgtxx/clash-rules@release/reject.mrs"}
+  direct_domain: {<<: *Anchor_DN, url: "https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/rules/Seven1_Direct_Domain.mrs"}
+
 
 
 # ███████████████████████████ 配置结束 ███████████████████████████

@@ -1270,12 +1270,12 @@ return view.extend({
         o.onclick = function (ev, section_id) {
             return nikki.updateSubscription(section_id)
                 .then(function (r) {
+                    const name = uci.get('nikki', section_id, 'name') || '';
                     if (!r.success) {
-                        ui.addTimeLimitedNotification(null, E('p', _('订阅更新失败')), 8000, 'error');
+                        ui.addTimeLimitedNotification(null, E('p', _('%s Subscription update failed.').format(name)), 8000, 'error');
                         return Promise.reject();
                     }
-                    const name = uci.get('nikki', section_id, 'name') || '';
-                    ui.addTimeLimitedNotification(null, E('p', _('%s 订阅更新成功').format(name)), 5000, 'info')
+                    ui.addTimeLimitedNotification(null, E('p', _('%s Subscription update successful.').format(name)), 5000, 'info')
                     uci.unload('nikki');
                     return uci.load('nikki');
                 })
@@ -1283,10 +1283,11 @@ return view.extend({
                     const row = document.getElementById('cbi-nikki-' + section_id);
                     if (!row) return;
 
-                    row.querySelectorAll('[data-name]').forEach(function (cell) {
-                        const optName = cell.getAttribute('data-name');
-                        cell.textContent = uci.get('nikki', section_id, optName) || '';
-                    });
+                    ['total', 'used', 'expire', 'update'].forEach(function (optName) {
+                        const cell = row.querySelector('[data-name="' + optName + '"]');
+                        const newVal = uci.get('nikki', section_id, optName) || '';
+                        if (cell) cell.textContent = newVal;
+                    })
                 })
                 .catch(function (err) { if (err) console.error(err); });
         };

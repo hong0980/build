@@ -26,17 +26,19 @@ function normalizePath(path) {
 
 function parseRuleLine(line) {
     let l = line.trim();
-    if (!l || /^#/.test(l)) return null;
+    if (!l || /^#/.test(l)) return { skip: true };
 
     l = l.replace(/^-\s*/, '');
     l = l.replace(/\s*#.*$/, '');
     l = l.replace(/^["']|["']$/g, '');
 
     const parts = l.split(',').map(s => s.trim());
-    if (parts.length < 2) return null;
+    if (parts.length < 2)
+        return { error: _('At least 2 fields separated by commas are required (type,matcher[,node]).') };
 
     const type = parts[0].toUpperCase();
-    if (!RULE_TYPES.test(type)) return null;
+    if (!RULE_TYPES.test(type))
+        return { error: _('Unknown rule type: %s').format(parts[0]) };
 
     let no_resolve = false;
     if (/^no-resolve$/i.test(parts[parts.length - 1])) {
@@ -44,9 +46,34 @@ function parseRuleLine(line) {
         parts.pop();
     }
 
-    if (parts.length < 3) return null;
+    if (parts.length < 3)
+        return { error: _('Missing node/policy field (type,matcher,node).') };
 
-    return { type, matcher: parts[1], node: parts[2], no_resolve };
+    return { config: { type, matcher: parts[1], node: parts[2], no_resolve } };
+}
+
+function toRuleProviderConfig(cfg) {
+    if (!cfg.name) return { error: _('Missing provider name.') };
+    if (cfg.type !== 'http')
+        return { error: _('Only "%s" type is supported here; "%s" will be skipped.').format('http', cfg.type || '(none)') };
+    if (!cfg.url) return { error: _('Missing "url" field.') };
+
+    const format = RULE_PROVIDER_FORMAT.test(cfg.format) ? cfg.format : 'yaml';
+    const behavior = RULE_PROVIDER_BEHAVIOR.test(cfg.behavior) ? cfg.behavior : 'classical';
+
+    return {
+        config: {
+            name: cfg.name,
+            type: 'http',
+            url: cfg.url,
+            path: cfg.path,
+            node: cfg.proxy || 'DIRECT',
+            file_format: format,
+            behavior: behavior,
+            file_size_limit: cfg['size-limit'] || '0',
+            update_interval: cfg.interval || '86400'
+        }
+    };
 }
 
 function parseRuleProviderYaml(text) {
@@ -87,43 +114,6 @@ function parseRuleProviderYaml(text) {
     return providers;
 }
 
-function toRuleProviderConfig(cfg) {
-    if (!cfg.name) return null;
-    if (cfg.type !== 'http' || !RULE_PROVIDER_TYPE.test(cfg.type)) return null;
-    if (!cfg.url) return null;
-
-    const format = RULE_PROVIDER_FORMAT.test(cfg.format) ? cfg.format : 'yaml';
-    const behavior = RULE_PROVIDER_BEHAVIOR.test(cfg.behavior) ? cfg.behavior : 'classical';
-
-    return {
-        name: cfg.name,
-        type: 'http',
-        url: cfg.url,
-        path: cfg.path,
-        node: cfg.proxy || 'DIRECT',
-        file_format: format,
-        behavior: behavior,
-        file_size_limit: cfg['size-limit'] || '0',
-        update_interval: cfg.interval || '86400'
-    };
-}
-
-function freeformRichListRenderWidget(section_id, option_index, cfgvalue) {
-    const choices = this.transformChoices();
-    const widget = new ui.Dropdown((cfgvalue != null) ? cfgvalue : this.default, choices, {
-        id: this.cbid(section_id),
-        sort: this.keylist,
-        multiple: false,
-        optional: (this.rmempty != null) ? this.rmempty : true,
-        create: true,
-        select_placeholder: this.placeholder,
-        custom_placeholder: this.placeholder,
-        validate: L.bind(this.validate, this, section_id),
-        disabled: (this.readonly != null) ? this.readonly : this.map.readonly
-    });
-    return widget.render();
-}
-
 return view.extend({
     load: function () {
         return Promise.all([
@@ -145,8 +135,8 @@ return view.extend({
         s.tab('inbound', _('Inbound Config'));
         s.tab('tun', _('TUN Config'));
         s.tab('sniffer', _('Sniffer Config'));
-        s.tab('rule', _('Rule Config'));
         s.tab('geox', _('GeoX Config'));
+        s.tab('rule', _('Rule Config'));
 
         o = s.taboption('general', form.ListValue, 'mode', _('Mode'));
         o.optional = true;
@@ -581,6 +571,107 @@ return view.extend({
         o.subsection.addremove = true;
         o.subsection.sortable = true;
 
+        /* Import mihomo config START */
+        o.subsection.handleRuleImport = function () {
+            const section = this;
+            const textarea = E('textarea', {
+                'style': 'width:100%; height:260px; font-family: Consolas;',
+                'placeholder':
+                    'rule-providers:\n' +
+                    '  cn_domain:\n' +
+                    '    type: http\n' +
+                    '    behavior: domain\n' +
+                    '    format: mrs\n' +
+                    '    interval: 86400\n' +
+                    '    size-limit: 0\n' +
+                    '    proxy: DIRECT\n' +
+                    '    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"\n' +
+                    '  ban_ad:\n' +
+                    '    type: http\n' +
+                    '    behavior: classical\n' +
+                    '    format: yaml\n' +
+                    '    interval: 600\n' +
+                    '    proxy: GLOBAL\n' +
+                    '    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/BanAD.yaml"\n'
+            });
+
+            ui.showModal(_('Import mihomo config'), [
+                E('p', {}, _('Please paste the %s field of a mihomo config.').format('<code>rule-providers</code>')),
+                E('p', { 'class': 'alert-message warning' },
+                    _('Only %s type entries can be imported this way; %s entries will be skipped (please add them manually).').format('http', 'file')),
+                textarea,
+                E('div', { 'class': 'button-row' }, [
+                    E('button', {
+                        'class': 'btn cbi-button-action important',
+                        'click': ui.createHandlerFn(this, function () {
+                            const parsed = parseRuleProviderYaml(textarea.value);
+                            let count = 0;
+                            const errors = [];
+
+                            parsed.forEach(cfg => {
+                                const result = toRuleProviderConfig(cfg);
+                                if (result.error) {
+                                    errors.push({ name: cfg.name || '(unnamed)', reason: result.error });
+                                    return;
+                                }
+
+                                const config = result.config;
+                                const sid = uci.add('nikki', 'rule_provider');
+                                uci.set('nikki', 'mixin', 'rule_provider', '1');
+                                uci.set('nikki', sid, 'enabled', '1');
+                                for (const k in config) {
+                                    if (config[k] == null) continue;
+                                    if (k === 'path') config[k] = normalizePath(config[k]);
+                                    uci.set('nikki', sid, k, config[k]);
+                                }
+
+                                count++;
+                            });
+
+                            if (count === 0 && errors.length === 0) {
+                                ui.hideModal();
+                                return ui.addNotification(null, E('p', _('No valid rule-provider entry found.')));
+                            }
+
+                            if (count > 0) {
+                                ui.addTimeLimitedNotification(null, E('p',
+                                    _('Successfully imported %s of %s entries.').format(count, parsed.length)), 4000, 'info');
+                            }
+
+                            if (errors.length > 0) {
+                                ui.addNotification(null, E('div', {}, [
+                                    E('p', {}, _('%s entry(ies) failed:').format(errors.length)),
+                                    E('ul', {}, errors.map(e => E('li', {}, _('%s: %s').format(e.name, e.reason))))
+                                ]), 'warning');
+                            }
+
+                            if (count === 0) return ui.hideModal();
+
+                            return uci.save()
+                                .then(L.bind(this.map.load, this.map))
+                                .then(L.bind(this.map.reset, this.map))
+                                .then(L.ui.hideModal)
+                                .catch(() => {});
+                        })
+                    }, _('Import')),
+                    E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Dismiss')),
+                ])
+            ], 'cbi-modal');
+        };
+
+        o.subsection.renderSectionAdd = function (/* ... */) {
+            let el = form.GridSection.prototype.renderSectionAdd.apply(this, arguments);
+
+            el.appendChild(E('button', {
+                'class': 'btn cbi-button-add',
+                'title': _('Import mihomo config'),
+                'click': ui.createHandlerFn(this, 'handleRuleImport')
+            }, _('Import mihomo config')));
+
+            return el;
+        };
+        /* Import mihomo config END */
+
         so = o.subsection.option(form.Flag, 'enabled', _('Enable'));
         so.default = 1;
         so.editable = true;
@@ -640,95 +731,11 @@ return view.extend({
             );
         };
 
-        so = o.subsection.option(form.Value, 'update_interval', _('Update Interval'));
+        so = o.subsection.option(form.Value, 'update_interval', _('Update Interval'), _('In seconds.'));
         so.datatype = 'uinteger';
         so.default = 86400;
         so.modalonly = true;
         so.depends('type', 'http');
-
-        /* Import mihomo config START */
-        o.subsection.handleYamlImport = function () {
-            const section = this;
-            const textarea = E('textarea', {
-                'style': 'width:100%; height:260px; font-family: Consolas;',
-                'placeholder':
-                    'rule-providers:\n' +
-                    '  cn_domain:\n' +
-                    '    type: http\n' +
-                    '    behavior: domain\n' +
-                    '    format: mrs\n' +
-                    '    interval: 86400\n' +
-                    '    size-limit: 0\n' +
-                    '    proxy: DIRECT\n' +
-                    '    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"\n' +
-                    '  ban_ad:\n' +
-                    '    type: http\n' +
-                    '    behavior: classical\n' +
-                    '    format: yaml\n' +
-                    '    interval: 600\n' +
-                    '    proxy: GLOBAL\n' +
-                    '    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/BanAD.yaml"\n'
-            });
-
-            ui.showModal(_('Import mihomo config'), [
-                E('p', {}, _('Please paste the %s field of a mihomo config.').format('<code>rule-providers</code>')),
-                E('p', { 'class': 'alert-message warning' },
-                    _('Only %s type entries can be imported this way; %s entries will be skipped (please add them manually).')
-                        .format('http', 'file')),
-                textarea,
-                E('div', { 'class': 'right' }, [
-                    E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel')),
-                    ' ',
-                    E('button', {
-                        'class': 'btn cbi-button-action important',
-                        'click': ui.createHandlerFn(section, function () {
-                            const parsed = parseRuleProviderYaml(textarea.value);
-                            let count = 0;
-
-                            parsed.forEach(cfg => {
-                                const config = toRuleProviderConfig(cfg);
-                                if (!config) return;
-
-                                const sid = uci.add('nikki', 'rule_provider');
-                                uci.set('nikki', 'mixin', 'rule_provider', '1');
-                                uci.set('nikki', sid, 'enabled', '1');
-                                for (const k in config) {
-                                    if (k === 'path') config[k] = normalizePath(config[k]);
-                                    uci.set('nikki', sid, k, config[k]);
-                                }
-
-                                count++;
-                            });
-
-                            ui.hideModal();
-
-                            if (count === 0) {
-                                ui.addNotification(null, E('p', _('No valid rule-provider entry found.')));
-                                return;
-                            }
-
-                            ui.addTimeLimitedNotification(null, E('p',
-                                _('Successfully imported %s of %s entries.').format(count, parsed.length)), 4000, 'info');
-
-                            return uci.save().then(() => location.reload());
-                        })
-                    }, _('Import'))
-                ])
-            ]);
-        };
-
-        o.subsection.renderSectionAdd = function (/* ... */) {
-            let el = form.GridSection.prototype.renderSectionAdd.apply(this, arguments);
-
-            el.appendChild(E('button', {
-                'class': 'cbi-button cbi-button-add',
-                'title': _('Import mihomo config'),
-                'click': ui.createHandlerFn(this, 'handleYamlImport')
-            }, [_('Import mihomo config')]));
-
-            return el;
-        };
-        /* Import mihomo config END */
 
         o = s.taboption('rule', form.Flag, 'rule', _('Append Rule'));
         o.rmempty = false;
@@ -740,46 +747,6 @@ return view.extend({
         o.subsection.anonymous = true;
         o.subsection.addremove = true;
         o.subsection.sortable = true;
-
-        so = o.subsection.option(form.Flag, 'enabled', _('Enable'));
-        so.default = 1;
-        so.rmempty = false;
-
-        so = o.subsection.option(form.RichListValue, 'type', _('Type'));
-        so.rmempty = false;
-        so.value('RULE-SET', _('Rule Set'), _('Import external or local rule set files for batch matching.'));
-        so.value('DOMAIN', _('Domain Name'), _('Match the exact full domain name (e.g., google.com).'));
-        so.value('DOMAIN-SUFFIX', _('Domain Name Suffix'), _('Match the domain and all its subdomains (e.g., google.com matches abc.google.com).'));
-        so.value('DOMAIN-WILDCARD', _('Domain Name Wildcard'), _('Match domains using wildcards (e.g., *.google.com).'));
-        so.value('DOMAIN-KEYWORD', _('Domain Name Keyword'), _('Match if the domain contains this keyword (e.g., containing google).'));
-        so.value('DOMAIN-REGEX', _('Domain Name Regex'), _('Match domains using regular expressions.'));
-        so.value('IP-CIDR', _('Destination IP'), _('Match specified IPv4 or IPv6 CIDR addresses (e.g., 192.168.1.0/24).'));
-        so.value('DST-PORT', _('Destination Port'), _('Match the target port number or range (e.g., 80 or 80-443).'));
-        so.value('PROCESS-NAME', _('Process Name'), _('Match the local process or application name that initiated the request.'));
-        so.value('GEOSITE', _('Domain Name Geo'), _('Match predefined GeoSite categories (e.g., geosite:cn).'));
-        so.value('GEOIP', _('Destination IP Geo'), _('Match the country/region of the destination IP (e.g., geoip:cn).'));
-        so.value('MATCH', _('Match All'), _('Match All: Catch-all rule that matches any remaining traffic not handled by previous rules.'));
-
-        so = o.subsection.option(form.Value, 'matcher', _('Matcher'));
-        so.rmempty = false;
-        so.depends({ 'type': /MATCH/i, '!reverse': true });
-
-        so = o.subsection.option(form.RichListValue, 'node', _('Node'));
-        so.renderWidget = freeformRichListRenderWidget;
-        so.default = 'GLOBAL';
-        so.rmempty = false;
-        so.value('GLOBAL', _('GLOBAL'), _('Route traffic to the Mihomo GLOBAL policy group.'));
-        so.value('DIRECT', _('DIRECT'), _('Traffic bypasses the proxy and is sent directly via the local network.'));
-        so.value('REJECT', _('REJECT'), _('Block the request immediately and return an error to the client (commonly used for ad blocking).'));
-        so.value('REJECT-DROP', _('REJECT-DROP'), _('Silently drop the request packets, causing the client to wait until it times out.'));
-        // so.value('NCloud', _('NCloud'), _('Default auto-select node. <font color="red">Required: "NCloud" must exist in proxy-groups.</font>'));
-
-        so = o.subsection.option(form.Flag, 'no_resolve', _('No Resolve'));
-        so.rmempty = false;
-        so.depends('type', /IP-CIDR6?/i);
-        so.depends('type', /IP-ASN/i);
-        so.depends('type', /RULE-SET/i);
-        so.depends('type', /GEOIP/i);
 
         /* Import mihomo config START */
         o.subsection.handleRuleImport = function () {
@@ -796,22 +763,27 @@ return view.extend({
             ui.showModal(_('Import mihomo config'), [
                 E('p', {}, _('Please paste the %s field of a mihomo config, one rule per line.').format('<code>rules</code>')),
                 textarea,
-                E('div', { 'class': 'right' }, [
-                    E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel')),
-                    ' ',
+                E('div', { 'class': 'button-row' }, [
                     E('button', {
                         'class': 'btn cbi-button-action important',
-                        'click': ui.createHandlerFn(section, function () {
+                        'click': ui.createHandlerFn(this, function () {
                             const raw_lines = textarea.value.split('\n');
                             let count = 0, total = 0;
+                            const errors = [];
 
-                            raw_lines.forEach(line => {
+                            raw_lines.forEach((line, idx) => {
                                 if (!line.trim() || /^\s*rules\s*:\s*$/i.test(line)) return;
                                 total++;
 
-                                const config = parseRuleLine(line);
-                                if (!config) return;
+                                const result = parseRuleLine(line);
+                                if (result.skip) { total--; return; }
 
+                                if (result.error) {
+                                    errors.push({ lineNo: idx + 1, text: line.trim(), reason: result.error });
+                                    return;
+                                }
+
+                                const config = result.config;
                                 const sid = uci.add('nikki', 'rule');
                                 uci.set('nikki', sid, 'enabled', '1');
                                 uci.set('nikki', 'mixin', 'rule', '1');
@@ -822,35 +794,88 @@ return view.extend({
                                 count++;
                             });
 
-                            ui.hideModal();
-
-                            if (count === 0) {
-                                ui.addNotification(null, E('p', _('No valid rule found.')));
-                                return;
+                            if (count === 0 && errors.length === 0) {
+                                ui.hideModal();
+                                return ui.addNotification(null, E('p', _('No valid rule found.')));
                             }
 
-                            ui.addNotification(null, E('p',
-                                _('Successfully imported %s of %s line(s).').format(count, total)), 'info');
+                            if (count > 0) {
+                                ui.addNotification(null, E('p',
+                                    _('Successfully imported %s of %s line(s).').format(count, total)), 'info');
+                            }
 
-                            return uci.save().then(() => location.reload());
+                            if (errors.length > 0) {
+                                ui.addNotification(null, E('div', {}, [
+                                    E('p', {}, _('%s line(s) failed:').format(errors.length)),
+                                    E('ul', {}, errors.map(e => E('li', {},
+                                        _('Line %s: %s — %s').format(e.lineNo, e.text, e.reason))))
+                                ]), 'warning');
+                            }
+
+                            if (count === 0) return ui.hideModal();
+
+                            return uci.save()
+                                .then(L.bind(this.map.load, this.map))
+                                .then(L.bind(this.map.reset, this.map))
+                                .then(L.ui.hideModal)
+                                .catch(() => {});
                         })
-                    }, _('Import'))
+                    }, _('Import')),
+                    E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Dismiss'))
                 ])
-            ]);
+            ], 'cbi-modal');
         };
 
         o.subsection.renderSectionAdd = function (/* ... */) {
             let el = form.TableSection.prototype.renderSectionAdd.apply(this, arguments);
 
             el.appendChild(E('button', {
-                'class': 'cbi-button cbi-button-add',
+                'class': 'btn cbi-button-add',
                 'title': _('Import mihomo config'),
                 'click': ui.createHandlerFn(this, 'handleRuleImport')
-            }, [_('Import mihomo config')]));
+            }, _('Import mihomo config')));
 
             return el;
         };
         /* Import mihomo config END */
+
+        so = o.subsection.option(form.Flag, 'enabled', _('Enable'));
+        so.default = 1;
+        so.rmempty = false;
+
+        so = o.subsection.option(form.RichListValue, 'type', _('Type'));
+        so.rmempty = false;
+        so.value('RULE-SET', _('RULE-SET'), _('Import external or local rule set files for batch matching.'));
+        so.value('DOMAIN', _('DOMAIN'), _('Match the exact full domain name (e.g., google.com).'));
+        so.value('DOMAIN-SUFFIX', _('DOMAIN-SUFFIX'), _('Match the domain and all its subdomains (e.g., google.com matches abc.google.com).'));
+        so.value('DOMAIN-WILDCARD', _('DOMAIN-WILDCARD'), _('Match domains using wildcards (e.g., *.google.com).'));
+        so.value('DOMAIN-KEYWORD', _('DOMAIN-KEYWORD'), _('Match if the domain contains this keyword (e.g., containing google).'));
+        so.value('DOMAIN-REGEX', _('DOMAIN-REGEX'), _('Match domains using regular expressions.'));
+        so.value('IP-CIDR', _('IP-CIDR'), _('Match specified IPv4 or IPv6 CIDR addresses (e.g., 192.168.1.0/24).'));
+        so.value('DST-PORT', _('DST-PORT'), _('Match the target port number or range (e.g., 80 or 80-443).'));
+        so.value('PROCESS-NAME', _('PROCESS-NAME'), _('Match the local process or application name that initiated the request.'));
+        so.value('GEOSITE', _('GEOSITE'), _('Match predefined GeoSite categories (e.g., geosite:cn).'));
+        so.value('GEOIP', _('GEOIP'), _('Match the country/region of the destination IP (e.g., geoip:cn).'));
+        so.value('MATCH', _('MATCH'), _('Catch-all rule that matches any remaining traffic not handled by previous rules.'));
+
+        so = o.subsection.option(form.Value, 'matcher', _('Matcher'));
+        so.rmempty = false;
+        so.depends({ 'type': /MATCH/i, '!reverse': true });
+
+        so = o.subsection.option(form.RichListValue, 'node', _('Node'));
+        so.default = 'GLOBAL';
+        so.rmempty = false;
+        so.value('GLOBAL', _('GLOBAL'), _('Route traffic to the Mihomo GLOBAL policy group.'));
+        so.value('DIRECT', _('DIRECT'), _('Traffic bypasses the proxy and is sent directly via the local network.'));
+        so.value('REJECT', _('REJECT'), _('Block the request immediately and return an error to the client (commonly used for ad blocking).'));
+        so.value('REJECT-DROP', _('REJECT-DROP'), _('Silently drop the request packets, causing the client to wait until it times out.'));
+
+        so = o.subsection.option(form.Flag, 'no_resolve', _('No Resolve'));
+        so.rmempty = false;
+        so.depends('type', /IP-CIDR6?/i);
+        so.depends('type', /IP-ASN/i);
+        so.depends('type', /RULE-SET/i);
+        so.depends('type', /GEOIP/i);
 
         o = s.taboption('geox', form.ListValue, 'geoip_format', _('GeoIP Format'));
         o.optional = true;
@@ -864,38 +889,21 @@ return view.extend({
         o.value('standard', _('Standard Loader'));
         o.value('memconservative', _('Memory Conservative Loader'));
 
-        o = s.taboption('geox', form.RichListValue, 'geosite_url', _('GeoSite Url'));
+        o = s.taboption('geox', form.Value, 'geosite_url', _('GeoSite Url'));
         o.placeholder = _('Unmodified');
-        o.renderWidget = freeformRichListRenderWidget;
-        o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat', _('MetaCubeX-Version'), _('(mihomo official, custom CN source + extra categories)'));
-        o.value("https://testingcf.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat", _("Loyalsoldier-Version"), _("(classic v2ray/clash geosite)"))
-        o.value("https://fastly.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat", _("Loyalsoldier-Version"), _("(Same data, Fastly mirror)"))
-        o.value("https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat", _("Loyalsoldier-github-Version"), _("(Same data, GitHub direct)"))
+        o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat', _('MetaCubeX-Version'));
 
-        o = s.taboption('geox', form.RichListValue, 'geoip_mmdb_url', _('GeoIP(MMDB) Url'));
+        o = s.taboption('geox', form.Value, 'geoip_mmdb_url', _('GeoIP(MMDB) Url'));
         o.placeholder = _('Unmodified');
-        o.renderWidget = freeformRichListRenderWidget;
-        o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb', _('MetaCubeX-Version'), _('(mihomo-only format, global + service categories)'));
-        o.value("https://testingcf.jsdelivr.net/gh/alecthw/mmdb_china_ip_list@release/lite/Country.mmdb", _("Alecthw-Version"), _("(Default mmdb · China IPs only, compact)"))
-        o.value("https://testingcf.jsdelivr.net/gh/alecthw/mmdb_china_ip_list@release/Country.mmdb", _("Alecthw-Version"), _("(All Info mmdb · global + refined China accuracy)"))
-        o.value("https://testingcf.jsdelivr.net/gh/Hackl0us/GeoIP2-CN@release/Country.mmdb", _("Hackl0us-Version"), _("(Only CN · China IPs only, unusable for other countries)"))
-        o.value("https://github.com/alecthw/mmdb_china_ip_list/releases/latest/download/Country-lite.mmdb", _("Alecthw-lite-github-Version"), _("(Same as lite, GitHub direct)"))
+        o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb', _('MetaCubeX-Version'));
 
-        o = s.taboption('geox', form.RichListValue, 'geoip_dat_url', _('GeoIP(DAT) Url'));
+        o = s.taboption('geox', form.Value, 'geoip_dat_url', _('GeoIP(DAT) Url'));
         o.placeholder = _('Unmodified');
-        o.renderWidget = freeformRichListRenderWidget;
-        o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat', _('MetaCubeX-Version'), _('(mihomo official, adds cloud-provider categories)'));
-        o.value("https://testingcf.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geoip.dat", _("Loyalsoldier-Version"), _("(classic v2ray/clash geoip)"))
-        o.value("https://fastly.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geoip.dat", _("Loyalsoldier-Version"), _("(Same data, Fastly mirror)"))
-        o.value("https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat", _("Loyalsoldier-github-Version"), _("(Same data, GitHub direct)"))
+        o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat', _('MetaCubeX-Version'));
 
-        o = s.taboption('geox', form.RichListValue, 'geoip_asn_url', _('GeoIP(ASN) Url'));
+        o = s.taboption('geox', form.Value, 'geoip_asn_url', _('GeoIP(ASN) Url'));
         o.placeholder = _('Unmodified');
-        o.renderWidget = freeformRichListRenderWidget;
-        o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb', _('MetaCubeX-Version'), _('(MaxMind GeoLite2-ASN mirror)'));
-        o.value("https://testingcf.jsdelivr.net/gh/xishang0128/geoip@release/GeoLite2-ASN.mmdb", _("xishang0128-Version"), _("(MaxMind GeoLite2-ASN mirror)"))
-        o.value("https://fastly.jsdelivr.net/gh/xishang0128/geoip@release/GeoLite2-ASN.mmdb", _("xishang0128-Version"), _("(Same data, Fastly mirror)"))
-        o.value("https://github.com/xishang0128/geoip/releases/latest/download/GeoLite2-ASN.mmdb", _("xishang0128-github-Version"), _("(Same data, GitHub direct)"))
+        o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb', _('MetaCubeX-Version'));
 
         o = s.taboption('geox', form.ListValue, 'geox_auto_update', _('GeoX Auto Update'));
         o.optional = true;
