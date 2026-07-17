@@ -116,7 +116,7 @@ if (uci_bool(uci.get('nikki', 'mixin', 'dns_nameserver_policy'))) {
 };
 if (uci_bool(uci.get('nikki', 'mixin', 'wanDns'))) {
     const wanDns = ubus.call('network.interface.wan', 'status')?.['dns-server'];
-    if (wanDns && length(wanDns) > 0) config['dns']['nameserver'] = wanDns;
+    if (wanDns && length(wanDns) > 0) config['dns']['nameserver'] = uci_array(wanDns);
 };
 
 config['sniffer'] = {};
