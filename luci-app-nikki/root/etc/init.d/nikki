@@ -111,15 +111,19 @@ start_service() {
 		[ "$dns_nameserver_policy" = 1 ] && yq -Mi 'del(.dns.nameserver-policy)' "$TEMP_CONFIG"
 		[ "$dns_nameserver"        = 1 ] && yq -Mi 'del(.dns.default-nameserver) | del(.dns.fallback) | del(.dns.proxy-server-nameserver) | del(.dns.direct-nameserver) | del(.dns.nameserver)' "$TEMP_CONFIG"
 
-		local mixin_file mixin_extra_file=""
-		config_get mixin_file "config" "mixin_file" ''
+		local mixin_file file_url mixin_extra_file=""
+		config_get file_url   config file_url
+		config_get mixin_file config mixin_file
+
+		[ -n "$file_url" -a x"$profile_name" != 'x' ] && \
+			yq -i --yaml-fix-merge-anchor-to-spec ".proxy-providers[].url = \"$file_url\"" "$TEMP_CONFIG"
 
 		[ -n "$mixin_file" ] && {
 			mixin_extra_file="/etc/nikki/mixin/$mixin_file"
 			log "Mixin" "%s Mixin config." "$mixin_file"
 		}
 
-		ucode -S "/etc/nikki/ucode/mixin.uc" | yq -Poy | yq -Mi eval-all '
+		ucode -S "/etc/nikki/ucode/mixin.uc" | yq -P -oy | yq -i --yaml-fix-merge-anchor-to-spec eval-all '
 			... comments="" | . as $item ireduce ({}; . * $item ) | explode(.) |
 			.proxies      = .node               + .proxies      | del(.node)               |
 			.proxies      = .nikki-proxies      + .proxies      | del(.nikki-proxies)      |

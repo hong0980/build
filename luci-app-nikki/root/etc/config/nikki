@@ -1,4 +1,3 @@
-config status 'status'
 
 config config 'config'
 	option init '1'
@@ -40,7 +39,7 @@ config mixin 'mixin'
 	option api_listen '[::]:9090'
 	option selection_cache '1'
 	option allow_lan '1'
-	option http_port '8080'
+	option http_port '7893'
 	option socks_port '1080'
 	option mixed_port '7890'
 	option redir_port '7891'
@@ -219,9 +218,9 @@ config routing 'routing'
 	option cgroup_name 'nikki'
 	option dummy_device 'nikki-dummy'
 
-config editor 'editor'
-
 config log 'log'
 	option clear_at_stop '1'
 	option scheduled_clear '1'
 	option scheduled_clear_cron '*/35 * * * *'
+
+config status 'status'

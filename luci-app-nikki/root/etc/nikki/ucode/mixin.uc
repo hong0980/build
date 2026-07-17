@@ -11,7 +11,6 @@ const uci = cursor();
 const ubus = connect();
 
 const config = {};
-
 const outbound_interface = uci.get('nikki', 'mixin', 'outbound_interface');
 const outbound_interface_status = ubus.call('network.interface', 'status', { 'interface': outbound_interface });
 const outbound_device = outbound_interface_status?.l3_device ?? outbound_interface_status?.device ?? '';
@@ -114,6 +113,10 @@ if (uci_bool(uci.get('nikki', 'mixin', 'dns_nameserver_policy'))) {
 		if (!uci_bool(section.enabled)) return;
 		config['dns']['nameserver-policy'][section.matcher] = uci_array(section.nameserver);
 	});
+};
+if (uci_bool(uci.get('nikki', 'mixin', 'wanDns'))) {
+    const wanDns = ubus.call('network.interface.wan', 'status')?.['dns-server'];
+    if (wanDns && length(wanDns) > 0) config['dns']['nameserver'] = wanDns;
 };
 
 config['sniffer'] = {};
