@@ -115,20 +115,23 @@ start_service() {
 		config_get file_url   config file_url
 		config_get mixin_file config mixin_file
 
-		[ -n "$file_url" -a x"$profile_name" != 'x' ] && \
-			yq -i --yaml-fix-merge-anchor-to-spec ".proxy-providers[].url = \"$file_url\"" "$TEMP_CONFIG"
+		[ -n "$file_url" -a x"$profile_name" != 'x' ] && {
+			export file_url
+			yq -i --yaml-fix-merge-anchor-to-spec '.proxy-providers[].url = env(file_url)' "$TEMP_CONFIG"
+		}
 
 		[ -n "$mixin_file" ] && {
 			mixin_extra_file="/etc/nikki/mixin/$mixin_file"
 			log "Mixin" "%s Mixin config." "$mixin_file"
 		}
 
-		ucode -S "/etc/nikki/ucode/mixin.uc" | yq -P -oy | yq -i --yaml-fix-merge-anchor-to-spec eval-all '
+		ucode -S "/etc/nikki/ucode/mixin.uc" | yq -Poy | yq -i --yaml-fix-merge-anchor-to-spec eval-all '
 			... comments="" | . as $item ireduce ({}; . * $item ) | explode(.) |
-			.proxies      = .node               + .proxies      | del(.node)               |
-			.proxies      = .nikki-proxies      + .proxies      | del(.nikki-proxies)      |
-			.proxy-groups = .nikki-proxy-groups + .proxy-groups | del(.nikki-proxy-groups) |
-			.rules        = .nikki-rules        + .rules        | del(.nikki-rules)        |
+			.rules =   ((.rules // []) + (.nikki-rules // [])) |
+			.proxies = ((.node  // []) + (.proxies     // []) + (.nikki-proxies // [])) |
+			.proxy-groups = ((.proxy-groups // []) + (.nikki-proxy-groups // [])) |
+			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups) |
+			.proxies |= (reverse | unique_by(.name) | reverse) |
 			.rule-providers? |= with_entries(.key as $k | ((.value.path | select(. != "")) // ("./rule_provider/" + $k)) as $base | .value.path = (($base | select(test("/$")) | . + $k) // $base))
 			' "$TEMP_CONFIG" $mixin_extra_file -
 
@@ -154,7 +157,7 @@ start_service() {
 	if [ "$core_only" = 0 -a "$proxy_enabled" = 1 ]; then
 		# log "Profile" "Checking..."
 		if [ "$ipv4_dns_hijack" = 1 -o "$ipv6_dns_hijack" = 1 ]; then
-			if ! yq '(has("dns") and (.dns | .enable) and (.dns | has("listen")))' "$TEMP_CONFIG" >/dev/null 2>&1; then
+			if ! yq '(has("dns") and (.dns | .enable) and (.dns | has("listen")))' "$TEMP_CONFIG" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "DNS should be enabled and listen should be defined."
 				log "App" "Exit."
@@ -162,7 +165,8 @@ start_service() {
 			fi
 		fi
 		if [ "$tcp_mode" = "redirect" ]; then
-			if yq -Me "(has(\"redir-port\") or (has(\"listeners\") and .listeners | any_c(.name == \"$redirect_listener_name\" and .type == \"redir\"))) | not" "$TEMP_CONFIG" > /dev/null 2>&1; then
+			export redirect_listener_name
+			if yq -Me '((has("redir-port")) or (has("listeners") and .listeners | any_c(.name == env(redirect_listener_name) and .type == "redir"))) | not' "$TEMP_CONFIG" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "Redirect Port/Listener should be defined."
 				log "App" "Exit."
@@ -170,7 +174,8 @@ start_service() {
 			fi
 		fi
 		if [ "$tcp_mode" = "tproxy" -o "$udp_mode" = "tproxy" ]; then
-			if yq -Me "(has(\"tproxy-port\") or (has(\"listeners\") and .listeners | any_c(.name == \"$tproxy_listener_name\" and .type == \"tproxy\"))) | not" "$TEMP_CONFIG" > /dev/null 2>&1; then
+			export tproxy_listener_name
+			if yq -Me '((has("tproxy-port")) or (has("listeners") and .listeners | any_c(.name == env(tproxy_listener_name) and .type == "tproxy"))) | not' "$TEMP_CONFIG" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "TPROXY Port/Listener should be defined."
 				log "App" "Exit."
@@ -178,7 +183,8 @@ start_service() {
 			fi
 		fi
 		if [ "$tcp_mode" = "tun" -o "$udp_mode" = "tun" ]; then
-			if yq -Me "(has(\"tun\") and (.tun | .enable) and (.tun | has(\"device\"))) or (has(\"listeners\") and .listeners | any_c(.name == \"$tun_listener_name\" and .type == \"tun\" and has(\"device\")))) | not" "$TEMP_CONFIG" > /dev/null 2>&1; then
+			export tun_listener_name
+			if yq -Me '((has("tun") and (.tun | .enable) and (.tun | has("device"))) or (has("listeners") and .listeners | any_c(.name == env(tun_listener_name) and .type == "tun" and has("device")))) | not' "$TEMP_CONFIG" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "TUN should be defined."
 				log "App" "Exit."
@@ -431,14 +437,14 @@ cleanup() {
 	ip -6 link del "$dummy_device" > /dev/null 2>&1
 
 	nft delete table inet nikki > /dev/null 2>&1
-	local handles handle
-	handles=$(nft --json list table inet fw4 | jsonfilter -q -e "@.nftables[@.rule.chain='input' && @.rule.comment='nikki'].rule.handle")
-	for handle in $handles; do
-		nft delete rule inet fw4 input handle "$handle"
-	done
-	handles=$(nft --json list table inet fw4 | jsonfilter -q -e "@.nftables[@.rule.chain='forward' && @.rule.comment='nikki'].rule.handle")
-	for handle in $handles; do
-		nft delete rule inet fw4 forward handle "$handle"
+
+	local chain handle
+	for chain in input forward; do
+		nft --json list table inet fw4 \
+			| jsonfilter -q -e "@.nftables[@.rule.chain='$chain' && @.rule.comment='nikki'].rule.handle" \
+			| while IFS= read -r handle; do
+				[ -n "$handle" ] && nft delete rule inet fw4 "$chain" handle "$handle"
+			done
 	done
 
 	rm "$STARTED_FLAG_PATH" > /dev/null 2>&1
