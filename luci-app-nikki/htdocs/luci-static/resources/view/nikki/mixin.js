@@ -55,8 +55,8 @@ function toRuleProviderConfig(cfg) {
         return { error: _('Only "%s" type is supported here; "%s" will be skipped.').format('http', cfg.type || '(none)') };
     if (!cfg.url) return { error: _('Missing "url" field.') };
 
-    const format = /^(text|yaml|mrs)$/.test(cfg.format);
-    const behavior = /^(classical|domain|ipcidr)$/.test(cfg.behavior);
+    const format = /^(text|yaml|mrs)$/.test(cfg.format) ? cfg.format : 'mrs';
+    const behavior = /^(classical|domain|ipcidr)$/.test(cfg.behavior) ? cfg.behavior : 'domain';
 
     return {
         config: {
@@ -65,8 +65,8 @@ function toRuleProviderConfig(cfg) {
             url: cfg.url,
             path: cfg.path,
             node: cfg.proxy || 'DIRECT',
-            file_format: format || 'mrs',
-            behavior: behavior || 'domain',
+            file_format: format,
+            behavior: behavior,
             file_size_limit: cfg['size-limit'] || '0',
             update_interval: cfg.interval || '86400'
         }

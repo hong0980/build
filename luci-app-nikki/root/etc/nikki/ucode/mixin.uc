@@ -5,7 +5,7 @@
 import { cursor } from 'uci';
 import { connect } from 'ubus';
 import { build_proxies } from '/etc/nikki/ucode/node.uc';
-import { uci_bool, uci_int, uci_array, trim_all } from '/etc/nikki/ucode/include.uc';
+import { uci_bool, uci_int, uci_array, trim_all, mirrorGithubUrl } from '/etc/nikki/ucode/include.uc';
 
 const uci = cursor();
 const ubus = connect();
@@ -121,8 +121,8 @@ if (uci_bool(uci.get('nikki', 'mixin', 'wanDns'))) {
 
 config['sniffer'] = {};
 config['sniffer']['enable'] = uci_bool(uci.get('nikki', 'mixin', 'sniffer'));
+config['sniffer']['parse-pure-ip']     = uci_bool(uci.get('nikki', 'mixin', 'sniffer_sniff_pure_ip'));
 config['sniffer']['force-dns-mapping'] = uci_bool(uci.get('nikki', 'mixin', 'sniffer_sniff_dns_mapping'));
-config['sniffer']['parse-pure-ip'] = uci_bool(uci.get('nikki', 'mixin', 'sniffer_sniff_pure_ip'));
 if (uci_bool(uci.get('nikki', 'mixin', 'sniffer_force_domain_name'))) {
 	config['sniffer']['force-domain'] = uci_array(uci.get('nikki', 'mixin', 'sniffer_force_domain_names'));
 };
@@ -142,8 +142,8 @@ if (uci_bool(uci.get('nikki', 'mixin', 'sniffer_sniff'))) {
 };
 
 config['profile'] = {};
+config['profile']['store-fake-ip']  = uci_bool(uci.get('nikki', 'mixin', 'fake_ip_cache'));
 config['profile']['store-selected'] = uci_bool(uci.get('nikki', 'mixin', 'selection_cache'));
-config['profile']['store-fake-ip'] = uci_bool(uci.get('nikki', 'mixin', 'fake_ip_cache'));
 
 if (uci_bool(uci.get('nikki', 'mixin', 'rule_provider'))) {
 	config['rule-providers'] = {};
@@ -152,20 +152,21 @@ if (uci_bool(uci.get('nikki', 'mixin', 'rule_provider'))) {
 		if (section.type == 'http') {
 			config['rule-providers'][section.name] = {
 				type: section.type,
-				path: section.path,
-				url: section.url,
-				proxy: section.node,
-				size_limit: section.file_size_limit,
-				format: section.file_format,
+				interval: uci_int(section.update_interval),
 				behavior: section.behavior,
-				interval: section.update_interval,
+				format: section.file_format,
+				proxy: section.node,
+				size_limit: uci_int(section.file_size_limit),
+				// url: mirrorGithubUrl(section.url),
+				url: section.url,
+				path: section.path,
 			};
 		} else if (section.type == 'file') {
 			config['rule-providers'][section.name] = {
 				type: section.type,
-				path: section.file_path,
 				format: section.file_format,
 				behavior: section.behavior,
+				path: section.file_path,
 			};
 		};
 	});
@@ -183,11 +184,11 @@ const geoip_format = uci.get('nikki', 'mixin', 'geoip_format');
 config['geodata-mode'] = geoip_format == null ? null : geoip_format == 'dat';
 config['geodata-loader'] = uci.get('nikki', 'mixin', 'geodata_loader');
 config['geox-url'] = {};
+config['geox-url']['asn']     = uci.get('nikki', 'mixin', 'geoip_asn_url');
+config['geox-url']['mmdb']    = uci.get('nikki', 'mixin', 'geoip_mmdb_url');
+config['geox-url']['geoip']   = uci.get('nikki', 'mixin', 'geoip_dat_url');
 config['geox-url']['geosite'] = uci.get('nikki', 'mixin', 'geosite_url');
-config['geox-url']['mmdb'] = uci.get('nikki', 'mixin', 'geoip_mmdb_url');
-config['geox-url']['geoip'] = uci.get('nikki', 'mixin', 'geoip_dat_url');
-config['geox-url']['asn'] = uci.get('nikki', 'mixin', 'geoip_asn_url');
-config['geo-auto-update'] = uci_bool(uci.get('nikki', 'mixin', 'geox_auto_update'));
+config['geo-auto-update']     = uci_bool(uci.get('nikki', 'mixin', 'geox_auto_update'));
 config['geo-update-interval'] = uci_int(uci.get('nikki', 'mixin', 'geox_update_interval'));
 config['node'] = build_proxies();
 

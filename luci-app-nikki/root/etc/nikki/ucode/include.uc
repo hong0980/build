@@ -50,6 +50,26 @@ export function trim_all(obj) {
 	return obj;
 };
 
+const GITHUB_URL_PATTERNS = [
+    /^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/refs\/heads\/([^\/]+)\/(.+)$/,
+    /^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)$/,
+    /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/refs\/heads\/([^\/]+)\/(.+)$/,
+    /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/([^\/]+)\/(.+)$/,
+];
+
+export function mirrorGithubUrl(url) {
+    if (!url) return url;
+
+    url = replace(url, /^https:\/\/gh-proxy\.com\//, '');
+
+    for (let i = 0; i < length(GITHUB_URL_PATTERNS); i++) {
+        let m = match(url, GITHUB_URL_PATTERNS[i]);
+        if (m) return `https://testingcf.jsdelivr.net/gh/${m[1]}/${m[2]}@${m[3]}/${m[4]}`;
+    }
+
+    return url;
+};
+
 export function get_cgroups_version() {
 	return system('mount | grep -q -w "^cgroup"') == 0 ? 1 : 2;
 };
