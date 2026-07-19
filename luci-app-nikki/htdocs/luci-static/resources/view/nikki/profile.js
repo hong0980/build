@@ -67,9 +67,14 @@ function getRandom() {
 }
 
 function loadDefaultLabel(uciconfig, section_id) {
-    return uci.get(uciconfig, section_id, 'label')
-        || uci.get(uciconfig, section_id, 'address') + ':' + uci.get(uciconfig, section_id, 'port')
-        || section_id;
+    let label = uci.get(uciconfig, section_id, 'label');
+    if (label) return label;
+
+    let address = uci.get(uciconfig, section_id, 'address');
+    let port = uci.get(uciconfig, section_id, 'port');
+    if (address && port) return address + ':' + port;
+
+    return section_id;
 }
 
 function loadModalTitle(defaultTitle, addTitle, uciconfig, section_id) {
@@ -832,11 +837,7 @@ function renderNodeSettings(section) {
     o.value('chrome');
     o.value('firefox');
     o.value('safari');
-    o.value('iOS');
-    o.value('android');
-    o.value('edge');
-    o.value('360');
-    o.value('qq');
+    o.value('ios');
     o.value('random');
     o.depends({ 'tls': '1', 'type': 'vmess' });
     o.depends({ 'tls': '1', 'type': 'vless' });
@@ -879,12 +880,6 @@ function renderNodeSettings(section) {
     o.modalonly = true;
 
     return s;
-}
-
-function map_utls_fp_alias(fp) {
-    if (!fp) return fp;
-    if (fp.toLowerCase() === 'ios') return 'iOS';
-    return fp;
 }
 
 function parseShareLink(uri) {
@@ -982,54 +977,64 @@ function parseShareLink(uri) {
                 break;
             }
             case 'ss': {
-                try {
+                let mainStr = uri[1], label = null, hashIdx = mainStr.indexOf('#');
+                if (hashIdx !== -1) {
+                    label = decodeURIComponent(mainStr.slice(hashIdx + 1));
+                    mainStr = mainStr.slice(0, hashIdx);
+                }
+
+                let userinfo = "", hostPortPath = "";
+                let atIdx = mainStr.lastIndexOf('@');
+                if (atIdx !== -1) {
+                    userinfo = mainStr.slice(0, atIdx);
+                    hostPortPath = mainStr.slice(atIdx + 1);
+
                     try {
-                        let suri = uri[1].split('#'), slabel = '';
-                        if (suri.length <= 2) {
-                            if (suri.length === 2) slabel = '#' + suri[1];
-                            uri[1] = decodeBase64Str(suri[0]) + slabel;
+                        let decoded = decodeBase64Str(userinfo);
+                        if (decoded && decoded.includes(':')) {
+                            userinfo = decoded;
                         }
                     } catch (e) {}
+                } else {
+                    try {
+                        let decoded = decodeBase64Str(mainStr);
+                        if (!decoded) return null;
 
-                    url = new URL('http://' + uri[1]);
-                    let userinfo;
-                    if (url.username && url.password) {
-                        userinfo = [url.username, decodeURIComponent(url.password)];
-                    } else if (url.username) {
-                        userinfo = decodeBase64Str(decodeURIComponent(url.username)).split(':');
-                        if (userinfo.length > 1)
-                            userinfo = [userinfo[0], userinfo.slice(1).join(':')];
-                    }
-                    if (!shadowsocks_encrypt_methods.includes(userinfo[0])) return null;
-
-                    let plugin, plugin_opts;
-                    if (url.search && url.searchParams.get('plugin')) {
-                        let plugin_info = url.searchParams.get('plugin').split(';');
-                        plugin = plugin_info[0];
-                        plugin_opts = plugin_info.length > 1 ? plugin_info.slice(1).join(';') : null;
-                    }
-                    config = {
-                        label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
-                        type: 'shadowsocks',
-                        address: url.hostname,
-                        port: url.port || '80',
-                        shadowsocks_encrypt_method: userinfo[0],
-                        password: userinfo[1],
-                        shadowsocks_plugin: plugin,
-                        shadowsocks_plugin_opts: plugin_opts
-                    };
-                } catch (e) {
-                    uri = uri[1].split('@');
-                    if (uri.length < 2) return null;
-                    else if (uri.length > 2) uri = [uri.slice(0, -1).join('@'), uri.slice(-1).toString()];
-                    config = {
-                        type: 'shadowsocks',
-                        address: uri[1].split(':')[0],
-                        port: uri[1].split(':')[1],
-                        shadowsocks_encrypt_method: uri[0].split(':')[0],
-                        password: uri[0].split(':').slice(1).join(':')
-                    };
+                        let decAtIdx = decoded.lastIndexOf('@');
+                        if (decAtIdx !== -1) {
+                            userinfo = decoded.slice(0, decAtIdx);
+                            hostPortPath = decoded.slice(decAtIdx + 1);
+                        } else {
+                            return null;
+                        }
+                    } catch (e) { return null; }
                 }
+
+                let colonIdx = userinfo.indexOf(':');
+                if (colonIdx === -1) return null;
+                let method = userinfo.slice(0, colonIdx);
+                let password = userinfo.slice(colonIdx + 1);
+                let urlObj;
+                try { urlObj = new URL('http://' + hostPortPath); } catch (e) { return null; }
+
+                let plugin = null, plugin_opts = null;
+                if (urlObj.searchParams && urlObj.searchParams.get('plugin')) {
+                    let plugin_info = urlObj.searchParams.get('plugin').split(';');
+                    plugin = plugin_info[0];
+                    plugin_opts = plugin_info.length > 1 ? plugin_info.slice(1).join(';') : null;
+                }
+                let decodedPassword = password;
+                try { decodedPassword = decodeURIComponent(password); } catch (e) {}
+                config = {
+                    label: label,
+                    type: 'shadowsocks',
+                    address: urlObj.hostname,
+                    port: urlObj.port || '80',
+                    shadowsocks_encrypt_method: method,
+                    password: decodedPassword,
+                    shadowsocks_plugin: plugin,
+                    shadowsocks_plugin_opts: plugin_opts
+                };
                 break;
             }
             case 'trojan': {
@@ -1100,7 +1105,7 @@ function parseShareLink(uri) {
                     tls_reality: (params.get('security') === 'reality') ? '1' : '0',
                     tls_reality_public_key: params.get('pbk') ? decodeURIComponent(params.get('pbk')) : null,
                     tls_reality_short_id: params.get('sid'),
-                    tls_utls: map_utls_fp_alias(params.get('fp')),
+                    tls_utls: params.get('fp'),
                     vless_flow: ['tls', 'reality'].includes(params.get('security')) ? params.get('flow') : null
                 };
                 switch (params.get('type')) {
@@ -1152,7 +1157,7 @@ function parseShareLink(uri) {
                     tls: vmess.tls === 'tls' ? '1' : '0',
                     tls_sni: vmess.sni || vmess.host,
                     tls_alpn: vmess.alpn ? vmess.alpn.split(',') : null,
-                    tls_utls: map_utls_fp_alias(vmess.fp)
+                    tls_utls: vmess.fp
                 };
                 switch (vmess.net) {
                     case 'grpc':
@@ -1319,18 +1324,23 @@ return view.extend({
         s.anonymous = false;
         so = renderNodeSettings(s);
         so.handleLinkImport = function () {
-            let textarea = new ui.Textarea(null, { rows: 10, wrap: true });
+            const textarea = E('textarea', {
+                'style': 'height:250px; font-family: Consolas;',
+                'placeholder':
+                    'vless://eeb6823c-b926-4ea2-866a-5542edd26e59@162.159.11.57:2083/?type=ws&encryption=none&flow=&host=t1s1.rittbo.kdns.fr&path=%2F&security=tls&sni=t1s1.rittbo.kdns.fr&fp=chrome#IP%28%E7%88%B1%E5%88%86%E4%BA%AB%E7%9A%84%E5%B0%8F%E4%BC%81%E9%B9%85%294\n' +
+                    'trojan://HW85960347@renewed-porpoise.rooster465.autos:443/?type=tcp&security=tls&sni=renewed-porpoise.rooster465.autos&allowInsecure=1#Relay_%F0%9F%87%BA%F0%9F%87%B8US-%F0%9F%87%BA%F0%9F%87%B8US\n' +
+                    'ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo5MzA2OWQyMjZmMDAzZmFi@154.205.147.166:11201#DE%28%E8%8A%82%E7%82%B9%E5%88%86%E4%BA%AB%29144%20%E2%AC%87%EF%B8%8F20.08MB%2Fs\n'
+            });
+
             ui.showModal(_('Import share links'), [
                 E('p', _('Support Hysteria, Shadowsocks, Trojan, v2rayN (VMess), and XTLS (VLESS) share link format.')),
-                textarea.render(),
+                textarea,
                 E('div', { class: 'button-row' }, [
-                    E('button', { class: 'btn', click: ui.hideModal }, _('Cancel')),
                     E('button', {
-                        class: 'btn cbi-button-action',
+                        class: 'btn cbi-button-action important',
                         click: ui.createHandlerFn(this, function () {
-                            let input_links = textarea.getValue().trim().split('\n');
-                            if (!input_links || !input_links[0])
-                                return ui.hideModal();
+                            let input_links = textarea.value.trim().split('\n');
+                            if (!input_links || !input_links[0]) return ui.hideModal();
 
                             input_links = input_links.reduce(
                                 (pre, cur) => (!pre.includes(cur) && pre.push(cur), pre), []
@@ -1352,8 +1362,7 @@ return view.extend({
                                 ui.addNotification(null, E('p', _('No valid share link found.')));
                             else
                                 ui.addNotification(null, E('p',
-                                    _('Successfully imported %s nodes of total %s.')
-                                        .format(imported_node, input_links.length)));
+                                    _('Successfully imported %s nodes of total %s.').format(imported_node, input_links.length)));
 
                             return uci.save()
                                 // .then(function () uci.apply())
@@ -1362,16 +1371,17 @@ return view.extend({
                                 .then(L.ui.hideModal)
                                 .catch(function () {});
                         })
-                    }, _('Import'))
+                    }, _('Import')),
+                    E('button', { class: 'btn', click: ui.hideModal }, _('Dismiss'))
                 ])
-            ]);
+            ], 'cbi-modal');
         };
         so.renderSectionAdd = function () {
             let el = form.GridSection.prototype.renderSectionAdd.apply(this, arguments);
             let nameEl = el.querySelector('.cbi-section-create-name');
 
             if (nameEl) {
-                ui.addValidator(nameEl, 'uciname', true, v => {
+                ui.addValidator(nameEl, 'string', true, v => {
                     let button = el.querySelector('.cbi-section-create > .cbi-button-add');
                     let uciconfig = this.uciconfig || this.map.config;
                     if (!v) {
@@ -1388,7 +1398,7 @@ return view.extend({
             }
 
             el.appendChild(E('button', {
-                class: 'cbi-button cbi-button-add',
+                class: 'btn cbi-button-add',
                 title: _('Import share links'),
                 click: ui.createHandlerFn(this, 'handleLinkImport')
             }, _('Import share links')));

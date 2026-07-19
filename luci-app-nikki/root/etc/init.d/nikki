@@ -117,7 +117,7 @@ start_service() {
 
 		[ -n "$file_url" -a x"$profile_name" != 'x' ] && {
 			export file_url
-			yq -i --yaml-fix-merge-anchor-to-spec '.proxy-providers[].url = env(file_url)' "$TEMP_CONFIG"
+			yq -Mi '.proxy-providers[].url = env(file_url)' "$TEMP_CONFIG" >/dev/null 2>&1
 		}
 
 		[ -n "$mixin_file" ] && {
@@ -125,7 +125,7 @@ start_service() {
 			log "Mixin" "%s Mixin config." "$mixin_file"
 		}
 
-		ucode -S "/etc/nikki/ucode/mixin.uc" | yq -Poy | yq -i --yaml-fix-merge-anchor-to-spec eval-all '
+		ucode -S "/etc/nikki/ucode/mixin.uc" | yq -MPoy | yq -Mi eval-all '
 			... comments="" | . as $item ireduce ({}; . * $item ) | explode(.) |
 			.rules =   ((.rules // []) + (.nikki-rules // [])) |
 			.proxies = ((.node  // []) + (.proxies     // []) + (.nikki-proxies // [])) |
@@ -133,7 +133,7 @@ start_service() {
 			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups) |
 			.proxies |= (reverse | unique_by(.name) | reverse) |
 			.rule-providers? |= with_entries(.key as $k | ((.value.path | select(. != "")) // ("./rule_provider/" + $k)) as $base | .value.path = (($base | select(test("/$")) | . + $k) // $base))
-			' "$TEMP_CONFIG" $mixin_extra_file -
+			' "$TEMP_CONFIG" $mixin_extra_file - >/dev/null 2>&1
 
 		if [ "$proxy_enabled" = 1 ]; then
 			if yq 'has("tun")' "$TEMP_CONFIG" >/dev/null 2>&1; then
