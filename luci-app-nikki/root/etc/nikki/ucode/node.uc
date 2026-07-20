@@ -411,9 +411,6 @@ export function build_proxies() {
 	uci.foreach('nikki', 'node', (section) => {
 		if (uci_bool(section.enabled) === false) return;
 
-		const builder = builders[section.type];
-		if (!builder) return;
-
 		const base = {
 			name: section.label ?? `${section.address}:${section.port}`,
 			server: section.address,
@@ -423,7 +420,20 @@ export function build_proxies() {
 		if (uci_bool(section.tcp_fast_open)) base['tfo'] = true;
 		if (uci_bool(section.tcp_multi_path)) base['mptcp'] = true;
 
-		const proxy = builder(section, base);
+		let proxy;
+		if (section.clash_raw) {
+			proxy = json(section.clash_raw);
+			proxy['name'] = base.name;
+			proxy['server'] = base.server;
+			proxy['port'] = base.port;
+			if (base.tfo) proxy['tfo'] = base.tfo;
+			if (base.mptcp) proxy['mptcp'] = base.mptcp;
+		} else {
+			const builder = builders[section.type];
+			if (!builder) return;
+			proxy = builder(section, base);
+		}
+
 		if (proxy != null) push(proxies, trim_all(proxy));
 	});
 

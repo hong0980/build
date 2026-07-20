@@ -1171,9 +1171,6 @@ msgstr "代理协议"
 msgid "Write proxy protocol in the connection header."
 msgstr "在连接头中写入代理协议。"
 
-msgid "Disable"
-msgstr "禁用"
-
 msgid "Idle session check interval"
 msgstr "空闲会话检查间隔"
 
@@ -1612,8 +1609,8 @@ msgstr "上传失败：%s"
 msgid "Select File"
 msgstr "选择文件"
 
-msgid "Support Hysteria, Shadowsocks, Trojan, v2rayN (VMess), and XTLS (VLESS) share link format."
-msgstr "支持 Hysteria、Shadowsocks、Trojan、v2rayN (VMess) 和 XTLS (VLESS) 共享链接格式。"
+msgid "Support Hysteria, Shadowsocks, Trojan, v2rayN (VMess), XTLS (VLESS) share links, and single-line Clash proxy entries."
+msgstr "支持 Hysteria、Shadowsocks、Trojan、v2rayN (VMess)、XTLS (VLESS) 共享链接和单行 Clash 代理条目。"
 
 msgid "unique UCI identifier"
 msgstr "换行"
@@ -1914,6 +1911,108 @@ msgstr "最后修改: %s, 大小: %s"
 
 msgid "Edit: %s"
 msgstr "编辑： %s"
+
+msgid "URL-Test Address Modify"
+msgstr "URL 测速地址修改"
+
+msgid "Batch override the test URL for all url-test / fallback groups. Leave empty to keep each group's original setting."
+msgstr "批量覆盖所有 url-test / fallback 分组的测速地址，留空则保留各分组原有设置"
+
+msgid "Google (CN)"
+msgstr "谷歌（国内）"
+
+msgid "Google (Gstatic)"
+msgstr "谷歌（Gstatic）"
+
+msgid "Cloudflare (HTTP)"
+msgstr "Cloudflare（HTTP）"
+
+msgid "Cloudflare (HTTPS)"
+msgstr "Cloudflare（HTTPS）"
+
+msgid "Apple"
+msgstr "苹果"
+
+msgid "URL-Test Group Tolerance"
+msgstr "URL 测速容差"
+
+msgid "Delay difference (ms) tolerated before switching to a faster node. Higher values reduce switching frequency but respond slower to real improvements."
+msgstr "切换到更快节点前允许的延迟差值（毫秒）。数值越大切换越不频繁，但对真实的延迟改善反应也越慢"
+
+msgid "In mseconds."
+msgstr "单位毫秒"
+
+msgid "In seconds."
+msgstr "单位秒"
+
+msgid "50 ms (sensitive)"
+msgstr "50 毫秒（灵敏）"
+
+msgid "100 ms (default)"
+msgstr "100 毫秒（默认）"
+
+msgid "150 ms (stable)"
+msgstr "150 毫秒（稳定）"
+
+msgid "200 ms (very stable)"
+msgstr "200 毫秒（非常稳定）"
+
+msgid "URL-Test Interval Modify"
+msgstr "URL 测速间隔修改"
+
+msgid "How often (seconds) each group re-tests node latency."
+msgstr "各分组重新测速节点延迟的间隔（秒）"
+
+msgid "180 s (3 min, frequent)"
+msgstr "180 秒（3 分钟，频繁）"
+
+msgid "300 s (5 min, default)"
+msgstr "300 秒（5 分钟，默认）"
+
+msgid "600 s (10 min, relaxed)"
+msgstr "600 秒（10 分钟，宽松）"
+
+msgid "URL-Test Timeout Modify"
+msgstr "URL 测速超时修改"
+
+msgid "Maximum time (ms) to wait for a test response before marking it a failure."
+msgstr "等待测速响应的最长时间（毫秒），超过则判定为失败"
+
+msgid "2000 ms (default)"
+msgstr "2000 毫秒（默认）"
+
+msgid "3000 ms (lenient)"
+msgstr "3000 毫秒（宽松）"
+
+msgid "5000 ms (high-latency network)"
+msgstr "5000 毫秒（高延迟网络）"
+
+msgid "URL-Test Lazy Mode"
+msgstr "URL 测速懒惰模式"
+
+msgid "When enabled, groups only test when there is active traffic instead of testing on a fixed interval, saving resources."
+msgstr "启用后，分组仅在有实际流量时才测速，而非按固定间隔测速，可节省资源"
+
+msgid "URL-Test Max Failed Times"
+msgstr "URL 测速最大失败次数"
+
+msgid "Consecutive failed tests before a node is marked unavailable."
+msgstr "连续测速失败达到该次数后，节点将被标记为不可用"
+
+msgid "3 (default)"
+msgstr "3（默认）"
+
+msgid "5 (tolerant)"
+msgstr "5（宽容）"
+
+msgid "10 (very tolerant)"
+msgstr "10（非常宽容）"
+
+msgid "Unified Delay"
+msgstr "统一延迟计算"
+
+msgid "Calculate latency using a consistent method across protocols, excluding connection setup time. Recommended together with Tolerance for more accurate comparisons."
+msgstr "使用统一方式计算不同协议的延迟，排除连接建立耗时的干扰。建议与「测速容差」搭配使用，使延迟对比更准确"
 
 msgid ""
 msgstr ""

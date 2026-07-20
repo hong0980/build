@@ -111,14 +111,18 @@ start_service() {
 		[ "$dns_nameserver_policy" = 1 ] && yq -Mi 'del(.dns.nameserver-policy)' "$TEMP_CONFIG"
 		[ "$dns_nameserver"        = 1 ] && yq -Mi 'del(.dns.default-nameserver) | del(.dns.fallback) | del(.dns.proxy-server-nameserver) | del(.dns.direct-nameserver) | del(.dns.nameserver)' "$TEMP_CONFIG"
 
-		local mixin_file file_url mixin_extra_file=""
-		config_get file_url   config file_url
-		config_get mixin_file config mixin_file
-
-		[ -n "$file_url" -a x"$profile_name" != 'x' ] && {
-			export file_url
-			yq -Mi '.proxy-providers[].url = env(file_url)' "$TEMP_CONFIG" >/dev/null 2>&1
-		}
+		local mixin_file file_url github_mod urltest_url interval tolerance \
+		      timeout lazy max_failed_times unified_delay mixin_extra_file=""
+		config_get file_url          config file_url
+		config_get mixin_file        config mixin_file
+		config_get github_mod        mixin  github_mod
+		config_get urltest_url       mixin  urltest_url
+		config_get interval          mixin  interval
+		config_get tolerance         mixin  tolerance
+		config_get timeout           mixin  timeout
+		config_get lazy              mixin  lazy
+		config_get max_failed_times  mixin  max_failed_times
+		config_get unified_delay     mixin  unified_delay
 
 		[ -n "$mixin_file" ] && {
 			mixin_extra_file="/etc/nikki/mixin/$mixin_file"
@@ -134,6 +138,30 @@ start_service() {
 			.proxies |= (reverse | unique_by(.name) | reverse) |
 			.rule-providers? |= with_entries(.key as $k | ((.value.path | select(. != "")) // ("./rule_provider/" + $k)) as $base | .value.path = (($base | select(test("/$")) | . + $k) // $base))
 			' "$TEMP_CONFIG" $mixin_extra_file - >/dev/null 2>&1
+
+		export file_url urltest_url interval tolerance timeout lazy max_failed_times unified_delay
+		yq -Mi '
+			(strenv(urltest_url)      // "") as $u |
+			(strenv(interval)         // "") as $i |
+			(strenv(tolerance)        // "") as $t |
+			(strenv(timeout)          // "") as $to |
+			(strenv(lazy)             // "") as $lz |
+			(strenv(max_failed_times) // "") as $mf |
+			(strenv(unified_delay)    // "") as $ud |
+			(.proxy-groups // []) |= map(
+				((select($u  != "") | .url = $u) // .) |
+				((select($i  != "" and (.type == "url-test" or .type == "fallback")) | .interval = ($i | tonumber)) // .) |
+				((select($t  != "" and .type == "url-test") | .tolerance = ($t | tonumber)) // .) |
+				((select($to != "" and (.type == "url-test" or .type == "fallback")) | .timeout = ($to | tonumber)) // .) |
+				((select($lz != "" and .type == "url-test") | .lazy = ($lz | (. == "true"))) // .) |
+				((select($mf != "" and (.type == "url-test" or .type == "fallback")) | .["max-failed-times"] = ($mf | tonumber)) // .)
+			) |
+			((select($ud != "") | .["unified-delay"] = ($ud | (. == "true"))) // .) |
+			(.proxy-providers // {}) |= with_entries(
+				select(.value.url) | .value.url = strenv(file_url) |
+				select(.value.health-check) | .value.health-check.url = $u
+			)
+		' "$TEMP_CONFIG" >/dev/null 2>&1
 
 		if [ "$proxy_enabled" = 1 ]; then
 			if yq 'has("tun")' "$TEMP_CONFIG" >/dev/null 2>&1; then
@@ -166,7 +194,7 @@ start_service() {
 		fi
 		if [ "$tcp_mode" = "redirect" ]; then
 			export redirect_listener_name
-			if yq -Me '((has("redir-port")) or (has("listeners") and .listeners | any_c(.name == env(redirect_listener_name) and .type == "redir"))) | not' "$TEMP_CONFIG" > /dev/null 2>&1; then
+			if yq -Me '((has("redir-port")) or (has("listeners") and .listeners | any_c(.name == strenv(redirect_listener_name) and .type == "redir"))) | not' "$TEMP_CONFIG" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "Redirect Port/Listener should be defined."
 				log "App" "Exit."
@@ -175,7 +203,7 @@ start_service() {
 		fi
 		if [ "$tcp_mode" = "tproxy" -o "$udp_mode" = "tproxy" ]; then
 			export tproxy_listener_name
-			if yq -Me '((has("tproxy-port")) or (has("listeners") and .listeners | any_c(.name == env(tproxy_listener_name) and .type == "tproxy"))) | not' "$TEMP_CONFIG" > /dev/null 2>&1; then
+			if yq -Me '((has("tproxy-port")) or (has("listeners") and .listeners | any_c(.name == strenv(tproxy_listener_name) and .type == "tproxy"))) | not' "$TEMP_CONFIG" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "TPROXY Port/Listener should be defined."
 				log "App" "Exit."
@@ -184,7 +212,7 @@ start_service() {
 		fi
 		if [ "$tcp_mode" = "tun" -o "$udp_mode" = "tun" ]; then
 			export tun_listener_name
-			if yq -Me '((has("tun") and (.tun | .enable) and (.tun | has("device"))) or (has("listeners") and .listeners | any_c(.name == env(tun_listener_name) and .type == "tun" and has("device")))) | not' "$TEMP_CONFIG" > /dev/null 2>&1; then
+			if yq -Me '((has("tun") and (.tun | .enable) and (.tun | has("device"))) or (has("listeners") and .listeners | any_c(.name == strenv(tun_listener_name) and .type == "tun" and has("device")))) | not' "$TEMP_CONFIG" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "TUN should be defined."
 				log "App" "Exit."

@@ -199,6 +199,58 @@ return view.extend({
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
 
+        o = s.taboption("general", form.Value, "urltest_url", _("URL-Test Address Modify"), _("Batch override the test URL for all url-test / fallback groups. Leave empty to keep each group's original setting."));
+        o.placeholder = _('Unmodified');
+        o.value("https://www.g.cn/generate_204", _("Google (CN)"));
+        o.value("http://www.gstatic.com/generate_204", _("Google (Gstatic)"));
+        o.value("http://cp.cloudflare.com/generate_204", _("Cloudflare (HTTP)"));
+        o.value("https://cp.cloudflare.com/generate_204", _("Cloudflare (HTTPS)"));
+        o.value("https://captive.apple.com/generate_204", _("Apple"));
+
+        o = s.taboption("general", form.Value, "tolerance", _("URL-Test Group Tolerance"), _("Delay difference (ms) tolerated before switching to a faster node. Higher values reduce switching frequency but respond slower to real improvements."));
+        o.placeholder = _('Unmodified');
+        o.datatype = 'uinteger';
+        o.value("50", _("50 ms (sensitive)"));
+        o.value("100", _("100 ms (default)"));
+        o.value("150", _("150 ms (stable)"));
+        o.value("200", _("200 ms (very stable)"));
+
+        o = s.taboption("general", form.Value, "interval", _("URL-Test Interval Modify"), _("How often (seconds) each group re-tests node latency."));
+        o.placeholder = _('Unmodified');
+        o.datatype = 'uinteger';
+        o.value("180", _("180 s (3 min, frequent)"));
+        o.value("300", _("300 s (5 min, default)"));
+        o.value("600", _("600 s (10 min, relaxed)"));
+
+        o = s.taboption("general", form.Value, "timeout", _("URL-Test Timeout Modify"), _("Maximum time (ms) to wait for a test response before marking it a failure."));
+        o.placeholder = _('Unmodified');
+        o.datatype = 'uinteger';
+        o.value("2000", _("2000 ms (default)"));
+        o.value("3000", _("3000 ms (lenient)"));
+        o.value("5000", _("5000 ms (high-latency network)"));
+
+        o = s.taboption("general", form.ListValue, "lazy", _("URL-Test Lazy Mode"), _("When enabled, groups only test when there is active traffic instead of testing on a fixed interval, saving resources."));
+        o.value("", _('Unmodified'));
+        o.value("true", _('Enable'));
+        o.value("false", _('Disable'));
+
+        o = s.taboption("general", form.Value, "max_failed_times", _("URL-Test Max Failed Times"), _("Consecutive failed tests before a node is marked unavailable."));
+        o.placeholder = _('Unmodified');
+        o.datatype = 'uinteger';
+        o.value("3", _("3 (default)"));
+        o.value("5", _("5 (tolerant)"));
+        o.value("10", _("10 (very tolerant)"));
+
+        o = s.taboption("general", form.ListValue, "unified_delay", _("Unified Delay"), _("Calculate latency using a consistent method across protocols, excluding connection setup time. Recommended together with Tolerance for more accurate comparisons."));
+        o.value("", _('Unmodified'));
+        o.value("true", _('Enable'));
+        o.value("false", _('Disable'));
+
+        // o = s.taboption("general", form.Value, "github_mod", _("Github Address Modify"));
+        // o.value("https://testingcf.jsdelivr.net/");
+        // o.value("https://cdn.jsdelivr.net/");
+        // o.value("https://fastly.jsdelivr.net/");
+
         o = s.taboption('external_control', form.Value, 'ui_path', _('UI Path'));
         o.placeholder = _('Unmodified');
 

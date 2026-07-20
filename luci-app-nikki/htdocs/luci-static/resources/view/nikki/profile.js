@@ -831,13 +831,17 @@ function renderNodeSettings(section) {
     o.onclick = function (ev) { return uploadCertificate(_('ECH config'), 'client_ech_conf', ev); };
     o.modalonly = true;
 
-    o = s.option(form.ListValue, 'tls_utls', _('uTLS fingerprint'),
+    o = s.option(form.Value, 'tls_utls', _('uTLS fingerprint'),
         _('uTLS is a fork of "crypto/tls", which provides ClientHello fingerprinting resistance.'));
     o.value('', _('Disable'));
     o.value('chrome');
     o.value('firefox');
     o.value('safari');
     o.value('ios');
+    o.value('android');
+    o.value('edge');
+    o.value('360');
+    o.value('qq');
     o.value('random');
     o.depends({ 'tls': '1', 'type': 'vmess' });
     o.depends({ 'tls': '1', 'type': 'vless' });
@@ -882,321 +886,511 @@ function renderNodeSettings(section) {
     return s;
 }
 
+function finalizeConfig(config) {
+    if (!config) return null;
+    if (!config.address || !config.port) return null;
+    if (!config.label) config.label = config.address + ':' + config.port;
+    config.address = String(config.address).replace(/\[|\]/g, '');
+    config.port = String(config.port);
+    return config;
+}
+
+function splitWsEarlyData(config, path) {
+    if (path && path.includes('?ed=')) {
+        config.websocket_early_data_header = 'Sec-WebSocket-Protocol';
+        config.websocket_early_data = path.split('?ed=')[1];
+        config.ws_path = path.split('?ed=')[0];
+    } else {
+        config.ws_path = path;
+    }
+}
+
 function parseShareLink(uri) {
     let config, url, params;
 
     uri = uri.split('://');
-    if (uri[0] && uri[1]) {
-        switch (uri[0]) {
-            case 'anytls': {
-                url = new URL('http://' + uri[1]);
-                params = url.searchParams;
-                if (!url.username) return null;
-                config = {
-                    label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
-                    type: 'anytls',
-                    address: url.hostname,
-                    port: url.port || '80',
-                    password: decodeURIComponent(url.username),
-                    tls: '1',
-                    tls_sni: params.get('sni'),
-                    tls_insecure: (params.get('insecure') === '1') ? '1' : '0'
-                };
-                break;
-            }
-            case 'http':
-            case 'https': {
-                url = new URL('http://' + uri[1]);
-                config = {
-                    label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
-                    type: 'http',
-                    address: url.hostname,
-                    port: url.port || '80',
-                    username: url.username ? decodeURIComponent(url.username) : null,
-                    password: url.password ? decodeURIComponent(url.password) : null,
-                    tls: (uri[0] === 'https') ? '1' : '0'
-                };
-                break;
-            }
-            case 'hysteria': {
-                url = new URL('http://' + uri[1]);
-                params = url.searchParams;
-                if (params.get('protocol') && params.get('protocol') !== 'udp')
-                    return null;
-                config = {
-                    label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
-                    type: 'hysteria',
-                    address: url.hostname,
-                    port: url.port || '80',
-                    hysteria_protocol: params.get('protocol') || 'udp',
-                    hysteria_auth_type: params.get('auth') ? 'string' : null,
-                    hysteria_auth_payload: params.get('auth'),
-                    hysteria_obfs_password: params.get('obfsParam'),
-                    hysteria_down_mbps: params.get('downmbps'),
-                    hysteria_up_mbps: params.get('upmbps'),
-                    tls: '1',
-                    tls_sni: params.get('peer'),
-                    tls_alpn: params.get('alpn'),
-                    tls_insecure: (params.get('insecure') === '1') ? '1' : '0'
-                };
-                break;
-            }
-            case 'hysteria2':
-            case 'hy2': {
-                url = new URL('http://' + uri[1]);
-                params = url.searchParams;
-                config = {
-                    label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
-                    type: 'hysteria2',
-                    address: url.hostname,
-                    port: url.port || '80',
-                    password: url.username ? decodeURIComponent(url.username + (url.password ? ':' + url.password : '')) : null,
-                    hysteria_obfs_type: params.get('obfs'),
-                    hysteria_obfs_password: params.get('obfs-password'),
-                    tls: '1',
-                    tls_sni: params.get('sni'),
-                    tls_insecure: params.get('insecure') ? '1' : '0'
-                };
-                break;
-            }
-            case 'socks':
-            case 'socks4':
-            case 'socks4a':
-            case 'socks5':
-            case 'socks5h': {
-                url = new URL('http://' + uri[1]);
-                config = {
-                    label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
-                    type: 'socks',
-                    address: url.hostname,
-                    port: url.port || '80',
-                    username: url.username ? decodeURIComponent(url.username) : null,
-                    password: url.password ? decodeURIComponent(url.password) : null,
-                    socks_version: uri[0].includes('4') ? '4' : '5'
-                };
-                break;
-            }
-            case 'ss': {
-                let mainStr = uri[1], label = null, hashIdx = mainStr.indexOf('#');
-                if (hashIdx !== -1) {
-                    label = decodeURIComponent(mainStr.slice(hashIdx + 1));
-                    mainStr = mainStr.slice(0, hashIdx);
-                }
+    if (!uri[0] || !uri[1]) return null;
 
-                let userinfo = "", hostPortPath = "";
-                let atIdx = mainStr.lastIndexOf('@');
-                if (atIdx !== -1) {
-                    userinfo = mainStr.slice(0, atIdx);
-                    hostPortPath = mainStr.slice(atIdx + 1);
-
-                    try {
-                        let decoded = decodeBase64Str(userinfo);
-                        if (decoded && decoded.includes(':')) {
-                            userinfo = decoded;
-                        }
-                    } catch (e) {}
-                } else {
-                    try {
-                        let decoded = decodeBase64Str(mainStr);
-                        if (!decoded) return null;
-
-                        let decAtIdx = decoded.lastIndexOf('@');
-                        if (decAtIdx !== -1) {
-                            userinfo = decoded.slice(0, decAtIdx);
-                            hostPortPath = decoded.slice(decAtIdx + 1);
-                        } else {
-                            return null;
-                        }
-                    } catch (e) { return null; }
-                }
-
-                let colonIdx = userinfo.indexOf(':');
-                if (colonIdx === -1) return null;
-                let method = userinfo.slice(0, colonIdx);
-                let password = userinfo.slice(colonIdx + 1);
-                let urlObj;
-                try { urlObj = new URL('http://' + hostPortPath); } catch (e) { return null; }
-
-                let plugin = null, plugin_opts = null;
-                if (urlObj.searchParams && urlObj.searchParams.get('plugin')) {
-                    let plugin_info = urlObj.searchParams.get('plugin').split(';');
-                    plugin = plugin_info[0];
-                    plugin_opts = plugin_info.length > 1 ? plugin_info.slice(1).join(';') : null;
-                }
-                let decodedPassword = password;
-                try { decodedPassword = decodeURIComponent(password); } catch (e) {}
-                config = {
-                    label: label,
-                    type: 'shadowsocks',
-                    address: urlObj.hostname,
-                    port: urlObj.port || '80',
-                    shadowsocks_encrypt_method: method,
-                    password: decodedPassword,
-                    shadowsocks_plugin: plugin,
-                    shadowsocks_plugin_opts: plugin_opts
-                };
-                break;
+    switch (uri[0]) {
+        case 'anytls': {
+            url = new URL('http://' + uri[1]);
+            params = url.searchParams;
+            if (!url.username) return null;
+            config = {
+                label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
+                type: 'anytls',
+                address: url.hostname,
+                port: url.port || '80',
+                password: decodeURIComponent(url.username),
+                tls: '1',
+                tls_sni: params.get('sni'),
+                tls_insecure: (params.get('insecure') === '1') ? '1' : '0'
+            };
+            break;
+        }
+        case 'http':
+        case 'https': {
+            url = new URL('http://' + uri[1]);
+            config = {
+                label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
+                type: 'http',
+                address: url.hostname,
+                port: url.port || '80',
+                username: url.username ? decodeURIComponent(url.username) : null,
+                password: url.password ? decodeURIComponent(url.password) : null,
+                tls: (uri[0] === 'https') ? '1' : '0'
+            };
+            break;
+        }
+        case 'hysteria': {
+            url = new URL('http://' + uri[1]);
+            params = url.searchParams;
+            if (params.get('protocol') && params.get('protocol') !== 'udp')
+                return null;
+            config = {
+                label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
+                type: 'hysteria',
+                address: url.hostname,
+                port: url.port || '80',
+                hysteria_protocol: params.get('protocol') || 'udp',
+                hysteria_auth_type: params.get('auth') ? 'string' : null,
+                hysteria_auth_payload: params.get('auth'),
+                hysteria_obfs_password: params.get('obfsParam'),
+                hysteria_down_mbps: params.get('downmbps'),
+                hysteria_up_mbps: params.get('upmbps'),
+                tls: '1',
+                tls_sni: params.get('peer'),
+                tls_alpn: params.get('alpn'),
+                tls_insecure: (params.get('insecure') === '1') ? '1' : '0'
+            };
+            break;
+        }
+        case 'hysteria2':
+        case 'hy2': {
+            url = new URL('http://' + uri[1]);
+            params = url.searchParams;
+            config = {
+                label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
+                type: 'hysteria2',
+                address: url.hostname,
+                port: url.port || '80',
+                password: url.username ? decodeURIComponent(url.username + (url.password ? ':' + url.password : '')) : null,
+                hysteria_obfs_type: params.get('obfs'),
+                hysteria_obfs_password: params.get('obfs-password'),
+                tls: '1',
+                tls_sni: params.get('sni'),
+                tls_insecure: params.get('insecure') ? '1' : '0'
+            };
+            break;
+        }
+        case 'socks':
+        case 'socks4':
+        case 'socks4a':
+        case 'socks5':
+        case 'socks5h': {
+            url = new URL('http://' + uri[1]);
+            config = {
+                label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
+                type: 'socks',
+                address: url.hostname,
+                port: url.port || '80',
+                username: url.username ? decodeURIComponent(url.username) : null,
+                password: url.password ? decodeURIComponent(url.password) : null,
+                socks_version: uri[0].includes('4') ? '4' : '5'
+            };
+            break;
+        }
+        case 'ss': {
+            let mainStr = uri[1], label = null, hashIdx = mainStr.indexOf('#');
+            if (hashIdx !== -1) {
+                label = decodeURIComponent(mainStr.slice(hashIdx + 1));
+                mainStr = mainStr.slice(0, hashIdx);
             }
-            case 'trojan': {
-                url = new URL('http://' + uri[1]);
-                params = url.searchParams;
-                if (!url.username) return null;
-                config = {
-                    label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
-                    type: 'trojan',
-                    address: url.hostname,
-                    port: url.port || '80',
-                    password: decodeURIComponent(url.username),
-                    transport: params.get('type') !== 'tcp' ? params.get('type') : null,
-                    tls: '1',
-                    tls_sni: params.get('sni')
-                };
-                switch (params.get('type')) {
-                    case 'grpc':
-                        config.grpc_servicename = params.get('serviceName');
-                        break;
-                    case 'ws':
-                        config.ws_host = params.get('host') ? decodeURIComponent(params.get('host')) : null;
-                        config.ws_path = params.get('path') ? decodeURIComponent(params.get('path')) : null;
-                        if (config.ws_path && config.ws_path.includes('?ed=')) {
-                            config.websocket_early_data_header = 'Sec-WebSocket-Protocol';
-                            config.websocket_early_data = config.ws_path.split('?ed=')[1];
-                            config.ws_path = config.ws_path.split('?ed=')[0];
-                        }
-                        break;
-                }
-                break;
-            }
-            case 'tuic': {
-                url = new URL('http://' + uri[1]);
-                params = url.searchParams;
-                if (!url.username) return null;
-                config = {
-                    label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
-                    type: 'tuic',
-                    address: url.hostname,
-                    port: url.port || '80',
-                    uuid: url.username,
-                    password: url.password ? decodeURIComponent(url.password) : null,
-                    tuic_congestion_control: params.get('congestion_control'),
-                    tuic_udp_relay_mode: params.get('udp_relay_mode'),
-                    tls: '1',
-                    tls_sni: params.get('sni'),
-                    tls_alpn: params.get('alpn') ? decodeURIComponent(params.get('alpn')).split(',') : null
-                };
-                break;
-            }
-            case 'vless': {
-                url = new URL('http://' + uri[1]);
-                params = url.searchParams;
-                if (['kcp', 'quic'].includes(params.get('type'))) return null;
-                if (!url.username || !params.get('type')) return null;
 
-                config = {
-                    label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
-                    type: 'vless',
-                    address: url.hostname,
-                    port: url.port || '80',
-                    uuid: url.username,
-                    transport: params.get('type') !== 'tcp' ? params.get('type') : null,
-                    tls: ['tls', 'xtls', 'reality'].includes(params.get('security')) ? '1' : '0',
-                    tls_sni: params.get('sni'),
-                    tls_alpn: params.get('alpn') ? decodeURIComponent(params.get('alpn')).split(',') : null,
-                    tls_reality: (params.get('security') === 'reality') ? '1' : '0',
-                    tls_reality_public_key: params.get('pbk') ? decodeURIComponent(params.get('pbk')) : null,
-                    tls_reality_short_id: params.get('sid'),
-                    tls_utls: params.get('fp'),
-                    vless_flow: ['tls', 'reality'].includes(params.get('security')) ? params.get('flow') : null
-                };
-                switch (params.get('type')) {
-                    case 'grpc':
-                        config.grpc_servicename = params.get('serviceName');
-                        break;
-                    case 'http':
-                    case 'tcp':
-                        if (config.transport === 'http' || params.get('headerType') === 'http') {
-                            config.http_host = params.get('host') ? decodeURIComponent(params.get('host')).split(',') : null;
-                            config.http_path = params.get('path') ? decodeURIComponent(params.get('path')) : null;
-                        }
-                        break;
-                    case 'httpupgrade':
-                        config.httpupgrade_host = params.get('host') ? decodeURIComponent(params.get('host')) : null;
-                        config.http_path = params.get('path') ? decodeURIComponent(params.get('path')) : null;
-                        break;
-                    case 'ws':
-                        config.ws_host = params.get('host') ? decodeURIComponent(params.get('host')) : null;
-                        config.ws_path = params.get('path') ? decodeURIComponent(params.get('path')) : null;
-                        if (config.ws_path && config.ws_path.includes('?ed=')) {
-                            config.websocket_early_data_header = 'Sec-WebSocket-Protocol';
-                            config.websocket_early_data = config.ws_path.split('?ed=')[1];
-                            config.ws_path = config.ws_path.split('?ed=')[0];
-                        }
-                        break;
-                }
-                break;
-            }
-            case 'vmess': {
-                if (uri[1].includes('&')) return null;
-                let vmess;
+            let userinfo = "", hostPortPath = "";
+            let atIdx = mainStr.lastIndexOf('@');
+            if (atIdx !== -1) {
+                userinfo = mainStr.slice(0, atIdx);
+                hostPortPath = mainStr.slice(atIdx + 1);
+
                 try {
-                    vmess = JSON.parse(decodeBase64Str(uri[1]));
+                    let decoded = decodeBase64Str(userinfo);
+                    if (decoded && decoded.includes(':')) {
+                        userinfo = decoded;
+                    }
+                } catch (e) {}
+            } else {
+                try {
+                    let decoded = decodeBase64Str(mainStr);
+                    if (!decoded) return null;
+
+                    let decAtIdx = decoded.lastIndexOf('@');
+                    if (decAtIdx !== -1) {
+                        userinfo = decoded.slice(0, decAtIdx);
+                        hostPortPath = decoded.slice(decAtIdx + 1);
+                    } else {
+                        return null;
+                    }
                 } catch (e) { return null; }
-
-                if (vmess.v != '2') return null;
-                if (['kcp', 'quic'].includes(vmess.net)) return null;
-
-                config = {
-                    label: vmess.ps,
-                    type: 'vmess',
-                    address: vmess.add,
-                    port: vmess.port,
-                    uuid: vmess.id,
-                    vmess_alterid: vmess.aid,
-                    vmess_encrypt: vmess.scy || 'auto',
-                    transport: vmess.net !== 'tcp' ? vmess.net : null,
-                    tls: vmess.tls === 'tls' ? '1' : '0',
-                    tls_sni: vmess.sni || vmess.host,
-                    tls_alpn: vmess.alpn ? vmess.alpn.split(',') : null,
-                    tls_utls: vmess.fp
-                };
-                switch (vmess.net) {
-                    case 'grpc':
-                        config.grpc_servicename = vmess.path;
-                        break;
-                    case 'h2':
-                    case 'tcp':
-                        if (vmess.net === 'h2' || vmess.type === 'http') {
-                            config.transport = 'http';
-                            config.http_host = vmess.host ? vmess.host.split(',') : null;
-                            config.http_path = vmess.path;
-                        }
-                        break;
-                    case 'httpupgrade':
-                        config.httpupgrade_host = vmess.host;
-                        config.http_path = vmess.path;
-                        break;
-                    case 'ws':
-                        config.ws_host = vmess.host;
-                        config.ws_path = vmess.path;
-                        if (config.ws_path && config.ws_path.includes('?ed=')) {
-                            config.websocket_early_data_header = 'Sec-WebSocket-Protocol';
-                            config.websocket_early_data = config.ws_path.split('?ed=')[1];
-                            config.ws_path = config.ws_path.split('?ed=')[0];
-                        }
-                        break;
-                }
-                break;
             }
+
+            let colonIdx = userinfo.indexOf(':');
+            if (colonIdx === -1) return null;
+            let method = userinfo.slice(0, colonIdx);
+            let password = userinfo.slice(colonIdx + 1);
+            let urlObj;
+            try { urlObj = new URL('http://' + hostPortPath); } catch (e) { return null; }
+
+            let plugin = null, plugin_opts = null;
+            if (urlObj.searchParams && urlObj.searchParams.get('plugin')) {
+                let plugin_info = urlObj.searchParams.get('plugin').split(';');
+                plugin = plugin_info[0];
+                plugin_opts = plugin_info.length > 1 ? plugin_info.slice(1).join(';') : null;
+            }
+            let decodedPassword = password;
+            try { decodedPassword = decodeURIComponent(password); } catch (e) {}
+            config = {
+                label: label,
+                type: 'shadowsocks',
+                address: urlObj.hostname,
+                port: urlObj.port || '80',
+                shadowsocks_encrypt_method: method,
+                password: decodedPassword,
+                shadowsocks_plugin: plugin,
+                shadowsocks_plugin_opts: plugin_opts
+            };
+            break;
+        }
+        case 'trojan': {
+            url = new URL('http://' + uri[1]);
+            params = url.searchParams;
+            if (!url.username) return null;
+            config = {
+                label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
+                type: 'trojan',
+                address: url.hostname,
+                port: url.port || '80',
+                password: decodeURIComponent(url.username),
+                transport: params.get('type') !== 'tcp' ? params.get('type') : null,
+                tls: '1',
+                tls_sni: params.get('sni')
+            };
+            switch (params.get('type')) {
+                case 'grpc':
+                    config.grpc_servicename = params.get('serviceName');
+                    break;
+                case 'ws':
+                    config.ws_host = params.get('host') ? decodeURIComponent(params.get('host')) : null;
+                    splitWsEarlyData(config, params.get('path') ? decodeURIComponent(params.get('path')) : null);
+                    break;
+            }
+            break;
+        }
+        case 'tuic': {
+            url = new URL('http://' + uri[1]);
+            params = url.searchParams;
+            if (!url.username) return null;
+            config = {
+                label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
+                type: 'tuic',
+                address: url.hostname,
+                port: url.port || '80',
+                uuid: url.username,
+                password: url.password ? decodeURIComponent(url.password) : null,
+                tuic_congestion_control: params.get('congestion_control'),
+                tuic_udp_relay_mode: params.get('udp_relay_mode'),
+                tls: '1',
+                tls_sni: params.get('sni'),
+                tls_alpn: params.get('alpn') ? decodeURIComponent(params.get('alpn')).split(',') : null
+            };
+            break;
+        }
+        case 'vless': {
+            url = new URL('http://' + uri[1]);
+            params = url.searchParams;
+            if (['kcp', 'quic'].includes(params.get('type'))) return null;
+            if (!url.username || !params.get('type')) return null;
+
+            config = {
+                label: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
+                type: 'vless',
+                address: url.hostname,
+                port: url.port || '80',
+                uuid: url.username,
+                transport: params.get('type') !== 'tcp' ? params.get('type') : null,
+                tls: ['tls', 'xtls', 'reality'].includes(params.get('security')) ? '1' : '0',
+                tls_sni: params.get('sni'),
+                tls_alpn: params.get('alpn') ? decodeURIComponent(params.get('alpn')).split(',') : null,
+                tls_reality: (params.get('security') === 'reality') ? '1' : '0',
+                tls_reality_public_key: params.get('pbk') ? decodeURIComponent(params.get('pbk')) : null,
+                tls_reality_short_id: params.get('sid'),
+                tls_utls: params.get('fp'),
+                vless_flow: ['tls', 'reality'].includes(params.get('security')) ? params.get('flow') : null
+            };
+            switch (params.get('type')) {
+                case 'grpc':
+                    config.grpc_servicename = params.get('serviceName');
+                    break;
+                case 'http':
+                case 'tcp':
+                    if (config.transport === 'http' || params.get('headerType') === 'http') {
+                        config.http_host = params.get('host') ? decodeURIComponent(params.get('host')).split(',') : null;
+                        config.http_path = params.get('path') ? decodeURIComponent(params.get('path')) : null;
+                    }
+                    break;
+                case 'httpupgrade':
+                    config.httpupgrade_host = params.get('host') ? decodeURIComponent(params.get('host')) : null;
+                    config.http_path = params.get('path') ? decodeURIComponent(params.get('path')) : null;
+                    break;
+                case 'ws':
+                    config.ws_host = params.get('host') ? decodeURIComponent(params.get('host')) : null;
+                    splitWsEarlyData(config, params.get('path') ? decodeURIComponent(params.get('path')) : null);
+                    break;
+            }
+            break;
+        }
+        case 'vmess': {
+            if (uri[1].includes('&')) return null;
+            let vmess;
+            try {
+                vmess = JSON.parse(decodeBase64Str(uri[1]));
+            } catch (e) { return null; }
+
+            if (vmess.v != '2') return null;
+            if (['kcp', 'quic'].includes(vmess.net)) return null;
+
+            config = {
+                label: vmess.ps,
+                type: 'vmess',
+                address: vmess.add,
+                port: vmess.port,
+                uuid: vmess.id,
+                vmess_alterid: vmess.aid,
+                vmess_encrypt: vmess.scy || 'auto',
+                transport: vmess.net !== 'tcp' ? vmess.net : null,
+                tls: vmess.tls === 'tls' ? '1' : '0',
+                tls_sni: vmess.sni || vmess.host,
+                tls_alpn: vmess.alpn ? vmess.alpn.split(',') : null,
+                tls_utls: vmess.fp
+            };
+            switch (vmess.net) {
+                case 'grpc':
+                    config.grpc_servicename = vmess.path;
+                    break;
+                case 'h2':
+                case 'tcp':
+                    if (vmess.net === 'h2' || vmess.type === 'http') {
+                        config.transport = 'http';
+                        config.http_host = vmess.host ? vmess.host.split(',') : null;
+                        config.http_path = vmess.path;
+                    }
+                    break;
+                case 'httpupgrade':
+                    config.httpupgrade_host = vmess.host;
+                    config.http_path = vmess.path;
+                    break;
+                case 'ws':
+                    config.ws_host = vmess.host;
+                    splitWsEarlyData(config, vmess.path);
+                    break;
+            }
+            break;
         }
     }
 
-    if (config) {
-        if (!config.address || !config.port) return null;
-        if (!config.label) config.label = config.address + ':' + config.port;
-        config.address = config.address.replace(/\[|\]/g, '');
+    return finalizeConfig(config);
+}
+
+function flowToJSON(s) {
+    let i = 0;
+    const n = s.length;
+
+    function ws() { while (i < n && /\s/.test(s[i])) i++; }
+
+    function readQuoted(q) {
+        i++;
+        let val = '';
+        while (i < n && s[i] !== q) {
+            if (q === '"' && s[i] === '\\') { val += s[i] + s[i + 1]; i += 2; continue; }
+            val += s[i]; i++;
+        }
+        i++; // closing quote
+        return q === '"' ? '"' + val + '"' : JSON.stringify(val);
     }
 
-    return config;
+    function readBareUntil(stops) {
+        let start = i;
+        while (i < n && !stops.includes(s[i])) i++;
+        return s.slice(start, i).trim();
+    }
+
+    function quoteScalar(raw) {
+        if (raw === 'true' || raw === 'false' || raw === 'null') return raw;
+        if (raw === '~' || raw === '') return 'null';
+        if (/^-?\d+(\.\d+)?$/.test(raw)) return raw;
+        return JSON.stringify(raw);
+    }
+
+    function key() {
+        ws();
+        if (s[i] === '"') return readQuoted('"');
+        if (s[i] === "'") return readQuoted("'");
+        return JSON.stringify(readBareUntil([':']));
+    }
+
+    function value() {
+        ws();
+        if (s[i] === '{') return obj();
+        if (s[i] === '[') return arr();
+        if (s[i] === '"') return readQuoted('"');
+        if (s[i] === "'") return readQuoted("'");
+        return quoteScalar(readBareUntil([',', '}', ']']));
+    }
+
+    function obj() {
+        i++; ws(); // {
+        const parts = [];
+        while (s[i] !== '}') {
+            const k = key();
+            ws();
+            if (s[i] === ':') i++;
+            const v = value();
+            ws();
+            parts.push(k + ':' + v);
+            if (s[i] === ',') { i++; ws(); }
+        }
+        i++; // }
+        return '{' + parts.join(',') + '}';
+    }
+
+    function arr() {
+        i++; ws(); // [
+        const parts = [];
+        while (s[i] !== ']') {
+            parts.push(value());
+            ws();
+            if (s[i] === ',') { i++; ws(); }
+        }
+        i++; // ]
+        return '[' + parts.join(',') + ']';
+    }
+
+    ws();
+    if (s[i] !== '{') return null;
+    return obj();
+}
+
+function parseNode(input) {
+    if (typeof input !== 'string') return null;
+    let line = input.trim();
+    if (!line) return null;
+
+    if (/^[a-zA-Z0-9]+:\/\//.test(line)) return parseShareLink(line);
+
+    if (line.startsWith('-') || line.startsWith('{')) {
+        let node = parseFlowYAML(line);
+        if (!node || !node.type || !node.server || !node.port) return null;
+        return {
+            type: node.type,
+            label: node.name || (node.server + ':' + node.port),
+            address: node.server,
+            port: String(node.port),
+            clash_raw: JSON.stringify(node)
+        };
+    }
+
+    return null;
+}
+
+function flowToJSON(s) {
+    let i = 0;
+    const n = s.length;
+
+    function ws() { while (i < n && /\s/.test(s[i])) i++; }
+
+    function readQuoted(q) {
+        i++;
+        let val = '';
+        while (i < n && s[i] !== q) {
+            if (q === '"' && s[i] === '\\') { val += s[i] + s[i + 1]; i += 2; continue; }
+            val += s[i]; i++;
+        }
+        i++;
+        return q === '"' ? '"' + val + '"' : JSON.stringify(val);
+    }
+
+    function readBareUntil(stops) {
+        let start = i;
+        while (i < n && !stops.includes(s[i])) i++;
+        return s.slice(start, i).trim();
+    }
+
+    function quoteScalar(raw) {
+        if (raw === 'true' || raw === 'false' || raw === 'null') return raw;
+        if (raw === '~' || raw === '') return 'null';
+        if (/^-?\d+(\.\d+)?$/.test(raw)) return raw;
+        return JSON.stringify(raw);
+    }
+
+    function key() {
+        ws();
+        if (s[i] === '"') return readQuoted('"');
+        if (s[i] === "'") return readQuoted("'");
+        return JSON.stringify(readBareUntil([':']));
+    }
+
+    function value() {
+        ws();
+        if (s[i] === '{') return obj();
+        if (s[i] === '[') return arr();
+        if (s[i] === '"') return readQuoted('"');
+        if (s[i] === "'") return readQuoted("'");
+        return quoteScalar(readBareUntil([',', '}', ']']));
+    }
+
+    function obj() {
+        i++; ws(); // {
+        const parts = [];
+        while (s[i] !== '}') {
+            const k = key();
+            ws();
+            if (s[i] === ':') i++;
+            const v = value();
+            ws();
+            parts.push(k + ':' + v);
+            if (s[i] === ',') { i++; ws(); }
+        }
+        i++; // }
+        return '{' + parts.join(',') + '}';
+    }
+
+    function arr() {
+        i++; ws(); // [
+        const parts = [];
+        while (s[i] !== ']') {
+            parts.push(value());
+            ws();
+            if (s[i] === ',') { i++; ws(); }
+        }
+        i++; // ]
+        return '[' + parts.join(',') + ']';
+    }
+
+    ws();
+    if (s[i] !== '{') return null;
+    return obj();
+}
+
+function parseFlowYAML(str) {
+    let s = str.trim();
+    if (s.startsWith('-')) s = s.slice(1).trim();
+    const jsonText = flowToJSON(s);
+    if (!jsonText) return null;
+    try {
+        return JSON.parse(jsonText);
+    } catch (e) {
+        return null;
+    }
 }
 
 return view.extend({
@@ -1327,13 +1521,13 @@ return view.extend({
             const textarea = E('textarea', {
                 'style': 'height:250px; font-family: Consolas;',
                 'placeholder':
-                    'vless://eeb6823c-b926-4ea2-866a-5542edd26e59@162.159.11.57:2083/?type=ws&encryption=none&flow=&host=t1s1.rittbo.kdns.fr&path=%2F&security=tls&sni=t1s1.rittbo.kdns.fr&fp=chrome#IP%28%E7%88%B1%E5%88%86%E4%BA%AB%E7%9A%84%E5%B0%8F%E4%BC%81%E9%B9%85%294\n' +
                     'trojan://HW85960347@renewed-porpoise.rooster465.autos:443/?type=tcp&security=tls&sni=renewed-porpoise.rooster465.autos&allowInsecure=1#Relay_%F0%9F%87%BA%F0%9F%87%B8US-%F0%9F%87%BA%F0%9F%87%B8US\n' +
-                    'ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo5MzA2OWQyMjZmMDAzZmFi@154.205.147.166:11201#DE%28%E8%8A%82%E7%82%B9%E5%88%86%E4%BA%AB%29144%20%E2%AC%87%EF%B8%8F20.08MB%2Fs\n'
+                    'ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo5MzA2OWQyMjZmMDAzZmFi@154.205.147.166:11201#DE%28%E8%8A%82%E7%82%B9%E5%88%86%E4%BA%AB%29144%20%E2%AC%87%EF%B8%8F20.08MB%2Fs\n' +
+                    "{ name: '[hy2]香港 2 直连', server: jptv02.outleft-hy.xyz, port: 5002, sni: jptv02.outleft-hy.xyz, up: 700, down: 700, skip-cert-verify: false, type: hysteria2, password: fe19b600-2979-3689-9815-cb0ec465c0ad, obfs: salamander, obfs-password: YTRkMDE1MzQ4NmFlNmQxng== }\n"
             });
 
             ui.showModal(_('Import share links'), [
-                E('p', _('Support Hysteria, Shadowsocks, Trojan, v2rayN (VMess), and XTLS (VLESS) share link format.')),
+                E('p', _('Support Hysteria, Shadowsocks, Trojan, v2rayN (VMess), XTLS (VLESS) share links, and single-line Clash proxy entries.')),
                 textarea,
                 E('div', { class: 'button-row' }, [
                     E('button', {
@@ -1348,7 +1542,7 @@ return view.extend({
 
                             let imported_node = 0;
                             input_links.forEach(l => {
-                                let config = parseShareLink(l);
+                                let config = parseNode(l);
                                 if (config) {
                                     let sid = uci.add('nikki', 'node', getRandom());
                                     Object.keys(config).forEach(k => {
@@ -1365,7 +1559,6 @@ return view.extend({
                                     _('Successfully imported %s nodes of total %s.').format(imported_node, input_links.length)));
 
                             return uci.save()
-                                // .then(function () uci.apply())
                                 .then(L.bind(this.map.load, this.map))
                                 .then(L.bind(this.map.reset, this.map))
                                 .then(L.ui.hideModal)

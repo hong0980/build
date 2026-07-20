@@ -543,7 +543,7 @@ return view.extend({
 		const syntaxid = 'syntax-' + Date.now();
 		const path = file.linkTarget || file.path;
 		const mode = this.detectFileMode(file.name, content);
-		const container = E('div', { id: containerId, style: 'width:100%;height:320px;border:1px solid #ccc;' });
+		const container = E('div', { id: containerId, style: 'height:320px;border:1px solid #ccc;' });
 		const changeIndicator = E('span', {
 			style: 'display:none;cursor:pointer;color:#e74c3c;font-size:22px;line-height:1;',
 			title: _('The document has been modified, click to undo all'),
@@ -640,7 +640,7 @@ return view.extend({
 				_('Source: %s').format(path)
 			]),
 			fullscreenWrapper
-		]);
+		], 'cbi-modal');
 
 		requestAnimationFrame(() => {
 			this.getOrCreateEditor(containerId, {
@@ -675,7 +675,7 @@ return view.extend({
 				const isDirty = ev.target.value !== originalContent;
 				saveBtn.style.display = (isDirty && !ev.target.readOnly) ? 'inline-block' : 'none';
 			},
-			style: 'width:100%;height:320px;font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;'
+			style: 'height:320px;font-family:Consolas;background-color:#212121;color:#fff;font-size:14px;'
 		}, content);
 		const saveBtn = E('button', {
 			class: 'btn cbi-button-positive important', style: `display:${!!editable ? 'inline-block' : 'none'};`,
@@ -753,7 +753,7 @@ return view.extend({
 				_('Source: %s').format(file.linkTarget || file.path)
 			]),
 			fullscreenWrapper
-		]);
+		], 'cbi-modal');
 		requestAnimationFrame(() => this.Draggable());
 	},
 
