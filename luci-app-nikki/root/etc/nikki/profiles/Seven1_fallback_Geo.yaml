@@ -10,9 +10,9 @@
 # ══ 订阅锚点 ══
 Anchor_PR: &Anchor_PR {type: http, interval: 86400, proxy: DIRECT, health-check: {enable: true, url: 'https://www.g.cn/generate_204', interval: 300}, filter: "^(?!.*(到期|过期|剩余|网址|官网|邮箱|订阅|套餐|流量|说明|重置|域名)).*$"}
 # ══ 出站锚点 ══
-Anchor_PG: &Anchor_PG {type: select, proxies: [香港-故转, 日本-故转, 新加坡-故转, 台湾-故转, 美国-故转, 韩国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 美国-自动, 韩国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动, 🎯 国内]}
-Anchor_OP: &Anchor_OP {type: select, proxies: [一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 美国-故转, 韩国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 美国-自动, 韩国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动, 🎯 国内]}
-Anchor_LD: &Anchor_LD {type: select, hidden: true, proxies: [🎯 国内, 一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 美国-故转, 韩国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 美国-自动, 韩国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动]}
+Anchor_PG: &Anchor_PG {type: select, proxies: [香港-故转, 日本-故转, 新加坡-故转, 台湾-故转, 美国-故转, 韩国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 美国-自动, 韩国-自动, 欧洲-自动, 🇭🇰香港-手动, 🇹🇼台湾-手动, 🇯🇵日本-手动, 🇸🇬新加坡-手动, 🇰🇷韩国-手动, 🇺🇸美国-手动, 🇪🇺欧洲-手动, 其他-手动, 🎯 国内]}
+Anchor_OP: &Anchor_OP {type: select, proxies: [一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 美国-故转, 韩国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 美国-自动, 韩国-自动, 欧洲-自动, 🇭🇰香港-手动, 🇹🇼台湾-手动, 🇯🇵日本-手动, 🇸🇬新加坡-手动, 🇰🇷韩国-手动, 🇺🇸美国-手动, 🇪🇺欧洲-手动, 其他-手动, 🎯 国内]}
+Anchor_LD: &Anchor_LD {type: select, hidden: true, proxies: [🎯 国内, 一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 美国-故转, 韩国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 美国-自动, 韩国-自动, 欧洲-自动, 🇭🇰香港-手动, 🇹🇼台湾-手动, 🇯🇵日本-手动, 🇸🇬新加坡-手动, 🇰🇷韩国-手动, 🇺🇸美国-手动, 🇪🇺欧洲-手动, 其他-手动]}
 Anchor_DR: &Anchor_DR {type: select, proxies: [DIRECT], hidden: true}
 # ══ 策略锚点 ══
 Anchor_HS: &Anchor_HS {type: select, include-all: true}
@@ -103,8 +103,8 @@ sniffer:
 # ══ DNS配置 ══
 dns:
   enable: true                                         # 解析服务  启用 Clash 内置 DNS 服务
-  ipv6: false                                          # 网络协议  启用 IPv6 DNS 解析支持
   cache-algorithm: arc                                 # DNS 缓存淘汰算法
+  ipv6: false                                          # 网络协议  启用 IPv6 DNS 解析支持
   listen: 0.0.0.0:7874                                 # 监听服务  DNS 服务监听地址与端口
   enhanced-mode: fake-ip                               # 增强模式  FDNS 增强模式（Fake-IP，用于防止 DNS 泄露）
   fake-ip-range: 198.18.0.1/16                         # 虚拟地址  Fake-IP 虚拟地址池范围
@@ -125,14 +125,14 @@ dns:
 proxy-groups:
   - {name: 🚀 AI,         <<: *Anchor_UT, hidden: false, filter: "(?i)^(?!.*(俄罗斯|土耳其|印度|港|HK|国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Claude.png}
 # ══ 手动组 ══
-  - {name: 香港-手动,   <<: *Anchor_HS, filter: *Anchor_HK, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
-  - {name: 新加坡-手动, <<: *Anchor_HS, filter: *Anchor_SG, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/SG.png}
-  - {name: 台湾-手动,   <<: *Anchor_HS, filter: *Anchor_TW, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
-  - {name: 日本-手动,   <<: *Anchor_HS, filter: *Anchor_JP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
-  - {name: 韩国-手动,   <<: *Anchor_HS, filter: *Anchor_KR, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
-  - {name: 美国-手动,   <<: *Anchor_HS, filter: *Anchor_US, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
-  - {name: 欧洲-手动,   <<: *Anchor_HS, filter: *Anchor_EU, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/EU.png}
-  - {name: 其他-手动,   <<: *Anchor_HS, filter: *Anchor_OT, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OT.png}
+  - {name: 🇭🇰香港-手动,   <<: *Anchor_HS, filter: *Anchor_HK}
+  - {name: 🇸🇬新加坡-手动, <<: *Anchor_HS, filter: *Anchor_SG}
+  - {name: 🇹🇼台湾-手动,  <<: *Anchor_HS, filter: *Anchor_TW}
+  - {name: 🇯🇵日本-手动,   <<: *Anchor_HS, filter: *Anchor_JP}
+  - {name: 🇰🇷韩国-手动,  <<: *Anchor_HS, filter: *Anchor_KR}
+  - {name: 🇺🇸美国-手动,  <<: *Anchor_HS, filter: *Anchor_US}
+  - {name: 🇪🇺欧洲-手动,  <<: *Anchor_HS, filter: *Anchor_EU}
+  - {name: 其他-手动,    <<: *Anchor_HS, filter: *Anchor_OT, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OT.png}
 
   - {name: 一键代理,    <<: *Anchor_PG, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
   - {name: YouTube,    <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/YouTube.png}
@@ -153,13 +153,13 @@ proxy-groups:
   - {name: 🐟 漏网之鱼,    <<: *Anchor_OP, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/MATCH.png}
   - {name: 🎯 国内,    <<: *Anchor_DR, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/China.png}
 # ══ 故转组 ══
-  - {name: 香港-故转,   <<: *Anchor_FB, proxies: [香港-手动, 香港-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
-  - {name: 台湾-故转,   <<: *Anchor_FB, proxies: [台湾-手动, 台湾-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
-  - {name: 日本-故转,   <<: *Anchor_FB, proxies: [日本-手动, 日本-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
-  - {name: 新加坡-故转, <<: *Anchor_FB, proxies: [新加坡-手动, 新加坡-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/SG.png}
-  - {name: 韩国-故转,   <<: *Anchor_FB, proxies: [韩国-手动, 韩国-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
-  - {name: 美国-故转,   <<: *Anchor_FB, proxies: [美国-手动, 美国-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
-  - {name: 欧洲-故转,   <<: *Anchor_FB, proxies: [欧洲-手动, 欧洲-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/EU.png}
+  - {name: 香港-故转,   <<: *Anchor_FB, proxies: [🇭🇰香港-手动, 香港-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
+  - {name: 台湾-故转,   <<: *Anchor_FB, proxies: [🇹🇼台湾-手动, 台湾-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
+  - {name: 日本-故转,   <<: *Anchor_FB, proxies: [🇯🇵日本-手动, 日本-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
+  - {name: 新加坡-故转, <<: *Anchor_FB, proxies: [🇸🇬新加坡-手动, 新加坡-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/SG.png}
+  - {name: 韩国-故转,   <<: *Anchor_FB, proxies: [🇰🇷韩国-手动, 韩国-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
+  - {name: 美国-故转,   <<: *Anchor_FB, proxies: [🇺🇸美国-手动, 美国-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
+  - {name: 欧洲-故转,   <<: *Anchor_FB, proxies: [🇪🇺欧洲-手动, 欧洲-自动], icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/EU.png}
 # ══ 自动组 ══
   - {name: 香港-自动,   <<: *Anchor_UT, filter: *Anchor_HK, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
   - {name: 台湾-自动,   <<: *Anchor_UT, filter: *Anchor_TW, icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}

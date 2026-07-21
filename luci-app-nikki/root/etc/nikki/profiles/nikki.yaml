@@ -2,22 +2,11 @@
 # 官方完整配置示例: https://github.com/MetaCubeX/mihomo/blob/Meta/docs/config.yaml
 # ============================================================================
 
+Anchor_PR: &Anchor_PR {type: http, interval: 86400, proxy: DIRECT, health-check: {enable: true, url: 'https://www.g.cn/generate_204', interval: 300}, filter: "^(?!.*(到期|过期|剩余|网址|官网|邮箱|订阅|套餐|流量|说明|重置|域名)).*$"}
 # ================= 机场订阅 =================
 proxy-providers:
-  cloud:
-    url: ''                           # 订阅链接
-    type: http
-    interval: 86400                  # 自动更新间隔（秒）
-    # path: "./proxy_provider/airport.yaml"   # 订阅缓存落盘路径
-    filter: "(?i)^(?!.*(到期|域名|剩余|去除)).*$" # 过滤掉机场塞入的提示性虚假节点
-    # proxy: 🎯 国内                    # 拉取订阅用的出口，须为节点名而非策略组名
-    health-check:
-      enable: true
-      url: https://cp.cloudflare.com/generate_204   # 健康检测地址，204 视为存活
-      interval: 300                  # 探测间隔（秒）
-    override:                        # 覆写订阅节点的部分字段
-      packet-encoding: ""            # 清空 packet-encoding，避免部分机场写死 xudp 导致 UDP 异常
-      client-fingerprint: "chrome"   # 统一覆盖节点 TLS 指纹为 chrome
+#  机场名: {<<: *Anchor_PR, url: '订阅链接', override: {additional-prefix: '[机场名] '}}
+  cloud: {<<: *Anchor_PR, url: '', override: {additional-prefix: '[cloud] '}}
 
 # ================= 全局设置 =================
 
@@ -38,17 +27,6 @@ client-fingerprint: chrome           # 全局默认 TLS 指纹
 keep-alive-idle: 600                 # TCP keepalive 空闲探测时间（秒）
 keep-alive-interval: 15              # TCP keepalive 探测间隔（秒）
 disable-keep-alive: false            # 是否禁用 keepalive
-
-# 配置文件持久化设置
-profile:
-  store-selected: true                # 记住策略组手动选择的节点
-  store-fake-ip: true                 # 持久化 fake-ip 映射表
-
-external-ui: ui                       # WebUI 目录
-external-ui-name: Zashboard           # WebUI 名称
-external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip  # WebUI 下载地址
-external-controller: '[::]:9090'      # RESTful API 监听地址
-secret: "709777"                      # RESTful API 鉴权密钥
 
 # ================= 嗅探 =================
 sniffer:
@@ -86,58 +64,35 @@ sniffer:
 
 # ================= DNS模块 =================
 dns:
-  enable: true                                 # 启用内置 DNS 服务器
-  cache-algorithm: arc                         # DNS 缓存淘汰算法
-  listen: '[::]:1053'                          # 内置 DNS 监听地址（IPv4/IPv6），配合 tun.dns-hijack 使用
-  ipv6: false                                  # 关闭后不解析 AAAA 记录
-  respect-rules: true                          # DNS 服务器自身连接也遵循 rules 分流
-  enhanced-mode: fake-ip                       # 使用 fake-ip 模式，需配合 Tun
-  fake-ip-range: 198.18.0.1/16                 # fake-ip 地址池（保留网段，避免冲突）
-  fake-ip-filter-mode: blacklist               # 默认全部分配 fake-ip，命中 filter 的例外
+  enable: true
+  cache-algorithm: arc
+  listen: 0.0.0.0:1053
+  ipv6: false
+  respect-rules: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 28.0.0.1/8
+  fake-ip-filter-mode: blacklist
+  fake-ip-filter:
+    - '*.lan'
+    - "rule-set:fakeipfilter_domain,direct_domain,cn_domain"
 
-  fake-ip-filter:                              # 命中以下域名不走 fake-ip，直接返回真实 IP
-    - "rule-set:private_domain,cn_domain"      # 私有/国内域名
-    - "*.lan"                                  # 局域网域名
-    - "*.local"                                # mDNS 本地域名
-    - "+.services.googleapis.cn"               # 国内 Google 服务镜像
-    - "+.xn--ngstr-lra8j.com"                  # Google 域名 Punycode 形式
-    - "time.*.com"                             # 时间同步服务
-    - "+.pool.ntp.org"                         # NTP 时间同步池
-    - "+.ntp.tencent.com"                      # 腾讯 NTP 服务器
-    - "+.ntp1.aliyun.com"                      # 阿里 NTP 服务器
-    - "+.ntp.ntsc.ac.cn"                       # 国家授时中心 NTP 服务器
-    - "+.cn.ntp.org.cn"                        # NTP 时间同步服务
-    - "*.microsoftonline.com"                  # 微软账号登录域名
-    - "*.wql.us"                               # 自定义保留域名
-    - "*.microsoft.com"                        # 微软主域名
-    - "*.keywordsstudios.cn"                   # 自定义保留域名
-
-  default-nameserver:                          # 解析下方 DoH/DoT 服务器自身域名，须为纯 IP
+  default-nameserver:
     - 223.5.5.5
     - 119.29.29.29
 
-  proxy-server-nameserver:                     # 解析机场节点 server 字段（若为域名）
-    - https://223.5.5.5/dns-query
-    - https://1.12.12.12/dns-query
+  proxy-server-nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
 
-  nameserver:                                  # 主 DNS，未命中 nameserver-policy 走这里
-    - https://8.8.8.8/dns-query
-    - https://1.1.1.1/dns-query
+  nameserver:
+    - https://dns.google/dns-query
+    - https://dns.cloudflare.com/dns-query
 
-  fallback:                                    # nameserver 解析结果可疑时改用此处重新查询
-    - https://8.8.8.8/dns-query
-    - https://1.1.1.1/dns-query
-
-  fallback-filter:
-    geoip: true                                # 启用基于 geoip 的污染判断
-    geoip-code: CN                             # 解析结果属于 CN 则视为可信
-    ipcidr:
-      - 240.0.0.0/4                            # 命中该网段强制触发 fallback
-
-  nameserver-policy:                           # 按域名/规则集指定专用 DNS，优先级高于 nameserver
-    "rule-set:private_domain,cn_domain,apple_domain": # 国内域名规则集
-      - https://223.5.5.5/dns-query
-      - https://1.12.12.12/dns-query
+  nameserver-policy:
+    "rule-set:private_domain,cn_domain,apple_domain":
+      - https://doh.pub/dns-query
+      - https://dns.alidns.com/dns-query
+    "rule-set,ww_reject": rcode://success
 
 # ================= 入站 Tun =================
 tun:
@@ -154,7 +109,7 @@ domain:      &domain      {type: http, interval: 86400, behavior: domain,    for
 class:       &class       {type: http, interval: 86400, behavior: classical, format: text}
 domain_text: &domain_text {type: http, interval: 86400, behavior: domain,    format: yaml}
 class_yaml:  &class_yaml  {type: http, interval: 86400, behavior: classical, format: yaml}
-groups:      &groups      {type: url-test, use: [cloud], include-all: true, tolerance: 50, interval: 300, url: https://cp.cloudflare.com/generate_204}
+groups:      &groups      {type: url-test, include-all: true, tolerance: 50, interval: 300, url: https://cp.cloudflare.com/generate_204}
 # 策略组公共锚点：url-test 自动选延迟最低节点；use 引用订阅；include-all 纳入全部已知节点；
 # tolerance 为同档延迟容差（ms）；url 为测速探测地址
 
@@ -162,15 +117,15 @@ proxies:
   - {name: 🎯 国内, type: direct, udp: true, proxies: [DIRECT]} # 手写国内节点，供订阅拉取出口及规则引用
 
 proxy-groups:
-  - {name: 自动选择, <<: *groups, filter: "(?i)^(?!.*(国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
-  - {name: 🚀 AI, <<: *groups, filter: "(?i)^(?!.*(俄罗斯|土耳其|印度|港|HK|国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Claude.png}
-  - {name: 香港自动, <<: *groups, filter: "(?i)(香港|HK)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
-  - {name: 日本自动, <<: *groups, filter: "(?i)(日本|jp)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
-  - {name: 台湾自动, <<: *groups, filter: "(?i)(台湾|tw)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
-  - {name: 美国自动, <<: *groups, filter: "(?i)(美国|us)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
+  - {name: 自动选择,  <<: *groups, filter: "(?i)^(?!.*(国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
+  - {name: 🚀 AI,    <<: *groups, filter: "(?i)^(?!.*(俄罗斯|土耳其|印度|港|HK|国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Claude.png}
+  - {name: 香港自动,   <<: *groups, filter: "(?i)(香港|HK)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
+  - {name: 日本自动,   <<: *groups, filter: "(?i)(日本|jp)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
+  - {name: 台湾自动,   <<: *groups, filter: "(?i)(台湾|tw)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
+  - {name: 美国自动,   <<: *groups, filter: "(?i)(美国|us)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
   - {name: 新加坡自动, <<: *groups, filter: "(?i)(新加坡|sg)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/SG.png}
-  - {name: 韩国自动, <<: *groups, filter: "(?i)(韩国|🇰🇷)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
-  - {name: 其他, <<: *groups, filter: "(?i)^(?!.*(港|HK|台|日|美|新|国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OT.png}
+  - {name: 韩国自动,  <<: *groups, filter: "(?i)(韩国|🇰🇷)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
+  - {name: 其他,     <<: *groups, filter: "(?i)^(?!.*(港|HK|台|日|美|新|国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OT.png}
   # 各分组按节点命名关键字筛选，依赖机场命名规范一致
 
 rules:
@@ -201,11 +156,22 @@ rules:
   - RULE-SET,paypal_domain,自动选择
   - RULE-SET,gfw_domain,自动选择
   - RULE-SET,geolocation-!cn,自动选择
+  - RULE-SET,direct_domain,🎯 国内
   - GEOIP,CN,🎯 国内                    # 兜底：目标 IP 属地中国大陆国内
   - GEOIP,PRIVATE,🎯 国内               # 私有/内网 IP 段国内
   - MATCH,自动选择                       # 兜底规则，需放最后
 
-geodata-mode: false                     # false 使用 .dat 格式；true 需改用 .metadb（与 geox-url 对应）
+# 配置文件持久化设置
+profile:
+  store-selected: true                # 记住策略组手动选择的节点
+  store-fake-ip: true                 # 持久化 fake-ip 映射表
+
+external-ui: ui                       # WebUI 目录
+external-ui-name: Zashboard           # WebUI 名称
+external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip  # WebUI 下载地址
+external-controller: '[::]:9090'      # RESTful API 监听地址
+secret: "709777"                      # RESTful API 鉴权密钥
+geodata-mode: false                   # false 使用 .dat 格式；true 需改用 .metadb（与 geox-url 对应）
 geodata-loader: standard
 geox-url:
   mmdb: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb
@@ -216,6 +182,7 @@ geox-url:
 
 rule-providers:
   # 远程规则集，指向 meta-rules-dat 仓库的预编译 .mrs 文件
+  direct_domain:   {<<: *domain, url: "https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/rules/Seven1_Direct_Domain.mrs"}
   ai_domain:       {<<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-ai-!cn.mrs"}
   pt_classical:    {<<: *class_yaml, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/classical/category-pt.yaml"}
   ww_reject:       {<<: *domain, url: "https://testingcf.jsdelivr.net/gh/wwqgtxx/clash-rules@release/reject.mrs"}
@@ -233,6 +200,7 @@ rule-providers:
   gfw_domain:     { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/gfw.mrs"}
   geolocation-!cn: { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/geolocation-!cn.mrs"}
   cn_domain:     { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/cn.mrs"}
-  cn_ip:         { <<: *ip,     url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/cn.mrs"}
   cdn_cn:        {<<: *domain,  url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-cdn-cn.mrs"}
+  cn_ip:         { <<: *ip,     url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/cn.mrs"}
+  fakeipfilter_domain: {<<: *domain, url: "https://testingcf.jsdelivr.net/gh/wwqgtxx/clash-rules@release/fakeip-filter.mrs"}
   # 均为 24 小时自动更新一次，第三方仓库（ww_proxy/ww_reject）失效会导致对应规则失效

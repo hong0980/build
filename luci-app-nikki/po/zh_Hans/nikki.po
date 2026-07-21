@@ -2014,5 +2014,8 @@ msgstr "统一延迟计算"
 msgid "Calculate latency using a consistent method across protocols, excluding connection setup time. Recommended together with Tolerance for more accurate comparisons."
 msgstr "使用统一方式计算不同协议的延迟，排除连接建立耗时的干扰。建议与「测速容差」搭配使用，使延迟对比更准确"
 
+msgid "Add a subscription to a startup profile"
+msgstr "为启动配置文件添加订阅"
+
 msgid ""
 msgstr ""

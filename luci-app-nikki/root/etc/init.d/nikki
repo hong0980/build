@@ -64,13 +64,13 @@ start_service() {
 	config_get_bool ipv4_dns_hijack "proxy" "ipv4_dns_hijack" 0
 	config_get_bool ipv6_dns_hijack "proxy" "ipv6_dns_hijack" 0
 
-	local profile core_only test_profile
+	local profile core_only test_profile profile_name
 	config_get      profile      "config" "profile"
 	config_get_bool core_only    "config" "core_only"         0
 	config_get_bool test_profile "config" "test_profile"      0
 
 	if [ "${profile%%:*}" = "file" ]; then
-		local profile_name; profile_name="${profile#*:}"
+		profile_name="${profile#*:}"
 		local profile_file; profile_file="$PROFILES_DIR/$profile_name"
 		log "Profile" "Use file: %s." "$profile_name"
 		if [ ! -f "$profile_file" ]; then
@@ -139,11 +139,13 @@ start_service() {
 			.rule-providers? |= with_entries(.key as $k | ((.value.path | select(. != "")) // ("./rule_provider/" + $k)) as $base | .value.path = (($base | select(test("/$")) | . + $k) // $base))
 			' "$TEMP_CONFIG" $mixin_extra_file - >/dev/null 2>&1
 
+		[ -z "$profile_name" ] && file_url=""
 		export file_url urltest_url interval tolerance timeout lazy max_failed_times unified_delay
 		yq -Mi '
-			(strenv(urltest_url)      // "") as $u |
-			(strenv(interval)         // "") as $i |
-			(strenv(tolerance)        // "") as $t |
+			(strenv(urltest_url)      // "") as $u  |
+			(strenv(interval)         // "") as $i  |
+			(strenv(tolerance)        // "") as $t  |
+			(strenv(file_url)         // "") as $fu |
 			(strenv(timeout)          // "") as $to |
 			(strenv(lazy)             // "") as $lz |
 			(strenv(max_failed_times) // "") as $mf |
@@ -151,15 +153,15 @@ start_service() {
 			(.proxy-groups // []) |= map(
 				((select($u  != "") | .url = $u) // .) |
 				((select($i  != "" and (.type == "url-test" or .type == "fallback")) | .interval = ($i | tonumber)) // .) |
-				((select($t  != "" and .type == "url-test") | .tolerance = ($t | tonumber)) // .) |
+				((select($t  != "" and  .type == "url-test") | .tolerance = ($t | tonumber)) // .) |
 				((select($to != "" and (.type == "url-test" or .type == "fallback")) | .timeout = ($to | tonumber)) // .) |
-				((select($lz != "" and .type == "url-test") | .lazy = ($lz | (. == "true"))) // .) |
+				((select($lz != "" and  .type == "url-test") | .lazy = ($lz | (. == "true"))) // .) |
 				((select($mf != "" and (.type == "url-test" or .type == "fallback")) | .["max-failed-times"] = ($mf | tonumber)) // .)
 			) |
 			((select($ud != "") | .["unified-delay"] = ($ud | (. == "true"))) // .) |
 			(.proxy-providers // {}) |= with_entries(
-				select(.value.url) | .value.url = strenv(file_url) |
-				select(.value.health-check) | .value.health-check.url = $u
+				((select($fu != "" and .value.url) | .value.url = $fu) // .) |
+				((select($u  != "" and .value.health-check) | .value.health-check.url = $u) // .)
 			)
 		' "$TEMP_CONFIG" >/dev/null 2>&1
 

@@ -286,10 +286,11 @@ return view.extend({
             return { title: value, path: `/etc/nikki/mixin/${value}` }
         });
 
-        o = s.option(form.Value, 'file_url', _('文件订阅'), _('为启动配置文件添加订阅'));
-        o.depends({ profile: 'file', '!contains': true });
+        o = s.option(form.Value, 'file_url', _('Subscription'), _('Add a subscription to a startup profile'));
+        o.depends({ profile: 'file', '!contains': true, core_only: 0 });
         o.password = true;
         o.retain = true;
+        o.placeholder = _('Unmodified');
 
         o = s.option(form.Flag, 'core_only', _('Core Only'), _('When enabled, mixin configs will not be used; Mihomo will auto-configure instead'));
         o.depends({ profile: 'file', '!contains': true });

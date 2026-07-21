@@ -1433,7 +1433,7 @@ return view.extend({
 
         o = s.option(form.Value, 'name', _('Subscription Name'));
         o.rmempty = false;
-        o.datatype = 'uciname';
+        // o.datatype = 'uciname';
         o.write = function (section_id, value) {
             const oldName = this.cfgvalue(section_id);
             if (oldName && oldName !== value)
@@ -1619,7 +1619,7 @@ return view.extend({
             self.pendingDeletes = [];
             return Promise.all(tasks);
         }).then(function () {
-            return classes.ui.changes.apply(mode == '0');
+            return ui.changes.apply(mode == '0');
         });
     }
 });
