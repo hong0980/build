@@ -70,37 +70,6 @@ return view.extend({
         this.textarea = E('textarea', { style: 'width:100%;height:380px;box-sizing:border-box;', wrap: 'off' });
         const statEl = E('span', { style: 'margin-left:10px;font-size:12px;color:#888;vertical-align:middle;' });
         const aceDiv = E('div', { style: 'width:auto;height:100%;display:none;' });
-        const container = E('div', { style: 'position:relative;width:auto;height:380px;margin-top:10px;' }, [
-            aceDiv, this.textarea,
-            E('button', {
-                type: 'button', title: _('Fullscreen'),
-                style: 'position:absolute;top:3px;right:15px;padding:3px 8px;font-size:18px;z-index:1000;background:#557ef1;color:#fff;border:none;cursor:pointer;border-radius:3px;line-height:1;',
-                click: ui.createHandlerFn(this, () =>
-                    (aceDiv.requestFullscreen || aceDiv.webkitRequestFullscreen).call(aceDiv))
-            }, '⛶')
-        ]);
-
-        const select = E('select', {
-            class: 'cbi-input-select',
-            change: L.bind(function (ev) {
-                const value = ev.target.value;
-                this.currentPath = value || null;
-                const item = data.find(i => i.path === value);
-                statEl.textContent = item?.stat ?? '';
-                if (!value) {
-                    this.textarea.value = '';
-                    this.aceEditor?.setValue('', -1);
-                    return;
-                }
-                return L.resolveDefault(fs.read_direct(value), '').then((c) => {
-                    if (this.aceEditor) this.aceEditor.setValue(c, -1);
-                    else this.textarea.value = c;
-                });
-            }, this)
-        }, [
-            E('option', { value: '' }, _('-- Please choose --')),
-            ...data.map(item => E('option', { value: item.path }, item.name))
-        ]);
 
         preloadAce().then(() => {
             this.textarea.style.display = 'none';
@@ -125,12 +94,43 @@ return view.extend({
             E('div', { class: 'cbi-section' }, [
                 E('div', { class: 'cbi-value' }, [
                     E('label', { class: 'cbi-value-title' }, _('Choose File')),
-                    E('div', { class: 'cbi-value-field' }, [select, statEl])
-                ]),
-                E('div', { class: 'cbi-value' }, [
-                    E('div', { class: 'cbi-value-field' }, [container])
+                    E('div', { class: 'cbi-value-field' }, [
+                        E('select', {
+                            class: 'cbi-input-select',
+                            change: L.bind(function (ev) {
+                                const value = ev.target.value;
+                                this.currentPath = value || null;
+                                const item = data.find(i => i.path === value);
+                                statEl.textContent = item?.stat ?? '';
+                                if (!value) {
+                                    this.textarea.value = '';
+                                    this.aceEditor?.setValue('', -1);
+                                    return;
+                                }
+                                return L.resolveDefault(fs.read_direct(value), '').then((c) => {
+                                    if (this.aceEditor) {
+                                        this.aceEditor.setValue(c, -1);
+                                        this.aceEditor.resize(true);
+                                    }
+                                    else this.textarea.value = c;
+                                });
+                            }, this)
+                        }, [
+                            E('option', { value: '' }, _('-- Please choose --')),
+                            ...data.map(item => E('option', { value: item.path }, item.name))
+                        ]), statEl])
                 ])
-            ])
+            ]),
+            E('div', {}, [
+                E('div', { style: 'position:relative;width:auto;height:380px;margin-top:10px;' }, [
+                    aceDiv, this.textarea,
+                    E('button', {
+                        type: 'button', title: _('Fullscreen'),
+                        style: 'position:absolute;top:3px;right:15px;padding:3px 8px;font-size:18px;z-index:1000;background:#557ef1;color:#fff;border:none;cursor:pointer;border-radius:3px;line-height:1;',
+                        click: ui.createHandlerFn(this, () =>
+                            (aceDiv.requestFullscreen || aceDiv.webkitRequestFullscreen).call(aceDiv))
+                    }, '⛶')
+                ])])
         ]);
     },
 

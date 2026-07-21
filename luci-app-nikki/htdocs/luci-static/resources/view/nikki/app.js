@@ -290,7 +290,7 @@ return view.extend({
         o.depends({ profile: 'file', '!contains': true, core_only: 0 });
         o.password = true;
         o.retain = true;
-        o.placeholder = _('Unmodified');
+        o.placeholder = _('Not used');
 
         o = s.option(form.Flag, 'core_only', _('Core Only'), _('When enabled, mixin configs will not be used; Mihomo will auto-configure instead'));
         o.depends({ profile: 'file', '!contains': true });

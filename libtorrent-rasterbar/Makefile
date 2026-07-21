@@ -59,6 +59,7 @@ CMAKE_OPTIONS += \
 	-Dpython-bindings=ON \
 	-Dpython-egg-info=ON \
 	-DPython3_EXECUTABLE=$(PYTHON3) \
+	-Dboost-python-module-name=python3 \
 	-DBoost_NO_BOOST_CMAKE=ON \
 	-DBoost_NO_SYSTEM_PATHS=ON \
 	-DBOOST_ROOT=$(STAGING_DIR)/usr \

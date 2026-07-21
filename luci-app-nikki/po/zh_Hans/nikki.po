@@ -2017,5 +2017,8 @@ msgstr "使用统一方式计算不同协议的延迟，排除连接建立耗时
 msgid "Add a subscription to a startup profile"
 msgstr "为启动配置文件添加订阅"
 
+msgid "Not used"
+msgstr "不使用"
+
 msgid ""
 msgstr ""

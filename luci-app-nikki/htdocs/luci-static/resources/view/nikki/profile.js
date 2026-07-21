@@ -1433,7 +1433,7 @@ return view.extend({
 
         o = s.option(form.Value, 'name', _('Subscription Name'));
         o.rmempty = false;
-        // o.datatype = 'uciname';
+        o.datatype = 'string';
         o.write = function (section_id, value) {
             const oldName = this.cfgvalue(section_id);
             if (oldName && oldName !== value)
