@@ -20,10 +20,10 @@ PKG_BUILD_DEPENDS:=libtirpc
 
 PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=LICENSE
-PKG_MAINTAINER:=Jeffery To <jeffery.to@gmail.com>
+PKG_MAINTAINER:=Alexandru Ardelean <ardeleanalex@gmail.com>
 PKG_CPE_ID:=cpe:/a:twistedmatrix:twisted
 
-PKG_BUILD_DEPENDS+=python-hatchling/host python-hatch-fancy-pypi-readme/host python-incremental/host
+PKG_BUILD_DEPENDS:=python-hatchling/host python-hatch-fancy-pypi-readme/host python-incremental/host
 
 include ../pypi.mk
 include $(INCLUDE_DIR)/package.mk
@@ -61,6 +61,7 @@ endef
 define Py3Package/python3-twisted/filespec
 +|$(PYTHON3_PKG_DIR)
 -|$(PYTHON3_PKG_DIR)/twisted/conch/scripts/tkconch.py
+-|$(PYTHON3_PKG_DIR)/twisted/test
 endef
 
 define Py3Package/python3-twisted/install

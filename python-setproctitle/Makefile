@@ -11,8 +11,6 @@ PKG_RELEASE:=1
 PYPI_NAME:=setproctitle
 PKG_HASH:=c9f32b96c700bb384f33f7cf07954bb609d35dd82752cef57fb2ee0968409169
 
-PKG_BUILD_DEPENDS:=python-setuptools/host
-
 include $(TOPDIR)/feeds/packages/lang/python/pypi.mk
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/python/python3-package.mk
