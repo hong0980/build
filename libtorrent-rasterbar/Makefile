@@ -13,7 +13,7 @@ PKG_LICENSE:=BSD-3-Clause
 PKG_LICENSE_FILES:=COPYING
 
 PKG_BUILD_DEPENDS:=boost
-PKG_CONFIG_DEPENDS:=CONFIG_PACKAGE_python3-libtorrent
+PKG_BUILD_DEPENDS+=$(if $(CONFIG_PACKAGE_python3-libtorrent),boost-python3)
 
 CMAKE_INSTALL:=1
 PYTHON3_PKG_BUILD:=0
@@ -41,7 +41,7 @@ define Package/python3-libtorrent
   CATEGORY:=Languages
   SUBMENU:=Python
   TITLE+= (Python 3)
-  DEPENDS:=+libtorrent-rasterbar +boost-python3
+  DEPENDS:=+libtorrent-rasterbar +boost +boost-python3
 endef
 
 define Package/libtorrent-rasterbar/description
