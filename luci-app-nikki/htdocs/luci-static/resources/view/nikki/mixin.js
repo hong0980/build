@@ -202,7 +202,7 @@ return view.extend({
         o = s.taboption("general", form.Value, "urltest_url", _("URL-Test Address Modify"), _("Batch override the test URL for all url-test / fallback groups. Leave empty to keep each group's original setting."));
         o.placeholder = _('Unmodified');
         o.value("https://www.g.cn/generate_204", _("Google (CN)"));
-        o.value("http://www.gstatic.com/generate_204", _("Google (Gstatic)"));
+        o.value("https://www.gstatic.com/generate_204", _("Google (Gstatic)"));
         o.value("http://cp.cloudflare.com/generate_204", _("Cloudflare (HTTP)"));
         o.value("https://cp.cloudflare.com/generate_204", _("Cloudflare (HTTPS)"));
         o.value("https://captive.apple.com/generate_204", _("Apple"));

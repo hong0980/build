@@ -6,6 +6,8 @@ PKG_RELEASE:=1
 PYPI_NAME:=$(PKG_NAME)
 PKG_HASH:=f0fc64e052334ef294ca3951975dd926f129d62813f6c909bb523d914abe6537
 
+PKG_BUILD_DEPENDS:=python-setuptools/host
+
 include $(TOPDIR)/feeds/packages/lang/python/pypi.mk
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/python/python3-package.mk

@@ -23,7 +23,7 @@ PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=Jeffery To <jeffery.to@gmail.com>
 PKG_CPE_ID:=cpe:/a:twistedmatrix:twisted
 
-PKG_BUILD_DEPENDS:=python-hatchling/host python-hatch-fancy-pypi-readme/host python-incremental/host
+PKG_BUILD_DEPENDS+=python-hatchling/host python-hatch-fancy-pypi-readme/host python-incremental/host
 
 include ../pypi.mk
 include $(INCLUDE_DIR)/package.mk
@@ -64,12 +64,12 @@ define Py3Package/python3-twisted/filespec
 endef
 
 define Py3Package/python3-twisted/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(CP) $(PKG_INSTALL_DIR)/usr/bin/* $(1)/usr/bin/
-	for bin in $(1)/usr/bin/*; do \
-		mv $$$$bin $$$${bin}3 ; \
-		$(LN) $$$${bin##*/}3 $$$$bin ; \
-	done
+  $(INSTALL_DIR) $(1)/usr/bin
+  $(CP) $(PKG_INSTALL_DIR)/usr/bin/* $(1)/usr/bin/
+  for bin in $(1)/usr/bin/*; do \
+    mv $$$$bin $$$${bin}3 ; \
+    $(LN) $$$${bin##*/}3 $$$$bin ; \
+  done
 endef
 
 $(eval $(call Py3Package,python3-twisted))
