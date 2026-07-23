@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=libtorrent-rasterbar
 PKG_VERSION:=2.0.11
-PKG_RELEASE:=1
+PKG_RELEASE:=3
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/arvidn/libtorrent/releases/download/v$(PKG_VERSION)/
@@ -13,7 +13,7 @@ PKG_LICENSE:=BSD-3-Clause
 PKG_LICENSE_FILES:=COPYING
 
 PKG_BUILD_DEPENDS:=boost
-PKG_BUILD_DEPENDS+=$(if $(CONFIG_PACKAGE_python3-libtorrent),boost-python3)
+PKG_CONFIG_DEPENDS:=CONFIG_PACKAGE_python3-libtorrent
 
 CMAKE_INSTALL:=1
 PYTHON3_PKG_BUILD:=0
@@ -56,15 +56,8 @@ endef
 
 ifneq ($(CONFIG_PACKAGE_python3-libtorrent),)
 CMAKE_OPTIONS += \
-	-Dpython-bindings=ON \
-	-Dpython-egg-info=ON \
-	-DPython3_EXECUTABLE=$(PYTHON3) \
-	-Dboost-python-module-name=python3 \
-	-DBoost_NO_BOOST_CMAKE=ON \
-	-DBoost_NO_SYSTEM_PATHS=ON \
-	-DBOOST_ROOT=$(STAGING_DIR)/usr \
-	-DBoost_INCLUDE_DIR=$(STAGING_DIR)/usr/include \
-	-DBoost_LIBRARY_DIR=$(STAGING_DIR)/usr/lib
+	-Dpython-bindings=OFF \
+	-Dpython-egg-info=OFF
 endif
 
 define Build/Configure
