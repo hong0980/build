@@ -38,7 +38,7 @@ endef
 define Package/$(PKG_NAME)-ui-web
 	$(call Package/deluge/Default)
 	TITLE+= (Web UI)
-	DEPENDS:=deluge +python3-mako +python3-markupsafe
+	DEPENDS:=deluge +python3-mako
 endef
 
 define Package/$(PKG_NAME)/description

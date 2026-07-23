@@ -8,11 +8,11 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=rencode
-PKG_VERSION:=1.0.6
+PKG_VERSION:=1.0.8
 PKG_RELEASE:=3
 
 PYPI_NAME:=$(PKG_NAME)
-PKG_HASH:=2586435c4ea7d45f74e26765ad33d75309de7cf47c4d762e8efabd39905c0718
+PKG_HASH:=cd28e05eb693cd5065ba1667dcad7f85bbfc7cb0f5cf5c113ee587d26cb3db74
 
 include $(TOPDIR)/feeds/packages/lang/python/pypi.mk
 include $(INCLUDE_DIR)/package.mk
