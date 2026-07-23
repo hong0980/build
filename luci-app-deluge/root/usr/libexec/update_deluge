@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, re, subprocess, hashlib, random
+import os, re, subprocess, hashlib, random, sys
 from deluge.configmanager import ConfigManager, set_config_dir
 
 def str_to_bool(value):
@@ -7,6 +7,12 @@ def str_to_bool(value):
     if s not in {'1', '0', 'true', 'false'}:
         return value
     return s in {'1', 'true'}
+
+def safe_int(value, default):
+    try:
+        return int(value) if value is not None and str(value).strip() != '' else default
+    except (ValueError, TypeError):
+        return default
 
 def sha1_hash(password, salt):
     return hashlib.sha1(salt.encode() + password.encode()).hexdigest()
@@ -36,16 +42,27 @@ def get_uci_config():
     return config
 
 def initialize_web_config(config_dir):
-    if not os.path.exists(os.path.join(config_dir, "web.conf")):
+    web_conf = os.path.join(config_dir, "web.conf")
+    if os.path.exists(web_conf):
+        return
+
+    try:
         from deluge.ui.web.server import DelugeWeb
         web = DelugeWeb()
         web.daemon = False
         web.start()
         web.shutdown()
+    except Exception as e:
+        print(f"Warning: failed to initialize web.conf: {e}", file=sys.stderr)
+        # 创建最小默认配置
+        os.makedirs(config_dir, exist_ok=True)
+        with open(web_conf, 'w') as f:
+            f.write('{}')
 
 def main():
     uci_config = get_uci_config()
     config_dir = os.path.normpath(uci_config.get("profile_dir", "/etc/deluge"))
+    os.makedirs(config_dir, exist_ok=True)
     set_config_dir(config_dir)
     initialize_web_config(config_dir)
 
@@ -53,11 +70,12 @@ def main():
     core_config = ConfigManager("core.conf")
 
     salt = web_config.get("pwd_salt") or generate_salt()
-    hashed_password = sha1_hash(uci_config["password"], salt) if uci_config.get("password") else None
+    password = uci_config.get("password") or "deluge"
+    hashed_password = sha1_hash(password, salt)
 
     core_changed = update_config(core_config, {
-        "send_info": False, #发送匿名统计
-        "new_release_check": False, #自动报告新版本/定期检查更新
+        "send_info": False,
+        "new_release_check": False,
         "geoip_db_location": uci_config.get("geoip_db_location", ""),
         "download_location": uci_config.get("download_location", ""),
         "move_completed_path": uci_config.get("move_completed_path", ""),
@@ -69,23 +87,23 @@ def main():
         "pre_allocate_storage": str_to_bool(uci_config.get("pre_allocate_storage", False)),
         "prioritize_first_last_pieces": str_to_bool(uci_config.get("prioritize_first_last_pieces", False)),
 
-        "cache_size": int(uci_config.get("cache_size", 16384)),
-        "cache_expiry": int(uci_config.get("cache_expiry", 60)),
-        "max_upload_speed": int(uci_config.get("max_upload_speed", -1)),
-        "max_download_speed": int(uci_config.get("max_download_speed", -1)),
-        "max_active_downloading": int(uci_config.get("max_active_downloading", 3)),
-        "max_active_limit": int(uci_config.get("max_active_limit", -1)),
-        "max_active_seeding": int(uci_config.get("max_active_seeding", -1)),
-        "max_connections_global": int(uci_config.get("max_connections_global", 200)),
-        "max_upload_slots_global": int(uci_config.get("max_upload_slots_global", -1)),
+        "cache_size": safe_int(uci_config.get("cache_size"), 16384),
+        "cache_expiry": safe_int(uci_config.get("cache_expiry"), 60),
+        "max_upload_speed": safe_int(uci_config.get("max_upload_speed"), -1),
+        "max_download_speed": safe_int(uci_config.get("max_download_speed"), -1),
+        "max_active_downloading": safe_int(uci_config.get("max_active_downloading"), 3),
+        "max_active_limit": safe_int(uci_config.get("max_active_limit"), -1),
+        "max_active_seeding": safe_int(uci_config.get("max_active_seeding"), -1),
+        "max_connections_global": safe_int(uci_config.get("max_connections_global"), 200),
+        "max_upload_slots_global": safe_int(uci_config.get("max_upload_slots_global"), -1),
     })
 
     web_changed = update_config(web_config, {
         "pwd_salt": salt,
         "pwd_sha1": hashed_password,
         "language": uci_config.get("language", "en_GB"),
-        "port": int(uci_config.get("port", 8112)),
-        "session_timeout": int(uci_config.get("session_timeout", 3600)),
+        "port": safe_int(uci_config.get("port"), 8112),
+        "session_timeout": safe_int(uci_config.get("session_timeout"), 3600),
         "https": str_to_bool(uci_config.get("https", False)),
         "show_session_speed": str_to_bool(uci_config.get("show_session_speed", True)),
     })

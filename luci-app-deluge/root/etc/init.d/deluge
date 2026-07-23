@@ -59,6 +59,7 @@ start_service() {
 
     procd_open_instance 'deluged'
     procd_set_param command /usr/bin/deluged -d -c "$profile_dir" $log_param
+    procd_set_param env PYTHONWARNINGS=ignore
     [ -n "$user" ] && procd_set_param user "$user"
     procd_set_param respawn 300 5 5
     procd_set_param stdout 1
@@ -69,6 +70,7 @@ start_service() {
 
     procd_open_instance 'deluge-web'
     procd_set_param command /usr/bin/deluge-web -d -c "$profile_dir" $log_param $port_param
+    procd_set_param env PYTHONWARNINGS=ignore
     [ -n "$user" ] && procd_set_param user "$user"
     procd_set_param respawn
     procd_set_param stdout 1
@@ -88,18 +90,9 @@ start_service() {
 }
 
 stop_service() {
-    local deluge_pid=$(pgrep -x deluged)
-    [ -z "$deluge_pid" ] && return 0
-
-    kill -TERM "$deluge_pid" 2>/dev/null
-
-    timeout=10
-    while kill -0 "$deluge_pid" 2>/dev/null && [ $((timeout--)) -gt 0 ]; do
-        sleep 1
+    for proc in deluge-web deluged; do
+        pgrep -x "$proc" >/dev/null && log_msg "Stopping $proc"
     done
-
-    kill -0 "$deluge_pid" 2>/dev/null && kill -KILL "$deluge_pid"
-    log_msg 'Stop deluged service'
 }
 
 reload_service() {
