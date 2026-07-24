@@ -173,6 +173,7 @@ proxy-groups:
 # ███████████████████████████ 规则匹配 ███████████████████████████
 rules:
   - RULE-SET,ww_reject,REJECT
+  - AND,((NETWORK,TCP),(DST-PORT,22),(DOMAIN-SUFFIX,github.com)),🎯 国内
   - RULE-SET,private_domain,🎯 国内                   # Private
   - RULE-SET,private_ip,🎯 国内,no-resolve            # Private
   - RULE-SET,cdn_cn,🎯 国内
@@ -182,7 +183,6 @@ rules:
   # - RULE-SET,gemini_domain,🚀 AI
   - RULE-SET,youtube_domain,YouTube                    # YouTube
   - RULE-SET,google_domain,Google                      # Google
-  - AND,((DOMAIN-SUFFIX,github.com),(DST-PORT,22)),🎯 国内
   - RULE-SET,github_domain,👨🏿‍💻 GitHub                      # GitHub
   - RULE-SET,onedrive_domain,OneDrive                  # OneDrive
   - RULE-SET,microsoft_domain,Microsoft                # 微软服务

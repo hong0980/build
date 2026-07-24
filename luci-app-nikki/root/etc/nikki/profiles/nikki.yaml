@@ -128,6 +128,7 @@ rules:
   #- IP-CIDR,192.168.6.0/24,DIRECT
   #- AND,((DOMAIN-SUFFIX,netflix.com),(NETWORK,UDP)),REJECT
   - RULE-SET,ww_reject,REJECT
+  - AND,((NETWORK,TCP),(DST-PORT,22),(DOMAIN-SUFFIX,github.com)),🎯 国内
   - RULE-SET,private_domain,🎯 国内     # 局域网/内网保留域名国内
   - RULE-SET,cn_domain,🎯 国内          # 国内域名国内
   - RULE-SET,cn_ip,🎯 国内,no-resolve   # 国内 IP 段国内，不为此规则单独触发解析
@@ -136,7 +137,6 @@ rules:
   - RULE-SET,pt_classical,🎯 国内
   - RULE-SET,ai_domain,🚀 AI
   - RULE-SET,bybit_domain,日本自动
-  - AND,((DOMAIN-SUFFIX,github.com),(DST-PORT,22)),🎯 国内
   - RULE-SET,github_domain,自动选择
   - RULE-SET,youtube_domain,自动选择
   - RULE-SET,tiktok_domain,自动选择
