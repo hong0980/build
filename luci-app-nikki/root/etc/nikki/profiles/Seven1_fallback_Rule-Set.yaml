@@ -182,6 +182,7 @@ rules:
   # - RULE-SET,gemini_domain,🚀 AI
   - RULE-SET,youtube_domain,YouTube                    # YouTube
   - RULE-SET,google_domain,Google                      # Google
+  - AND,((DOMAIN-SUFFIX,github.com),(DST-PORT,22)),🎯 国内
   - RULE-SET,github_domain,👨🏿‍💻 GitHub                      # GitHub
   - RULE-SET,onedrive_domain,OneDrive                  # OneDrive
   - RULE-SET,microsoft_domain,Microsoft                # 微软服务

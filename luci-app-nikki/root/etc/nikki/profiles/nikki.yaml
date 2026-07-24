@@ -136,6 +136,7 @@ rules:
   - RULE-SET,pt_classical,🎯 国内
   - RULE-SET,ai_domain,🚀 AI
   - RULE-SET,bybit_domain,日本自动
+  - AND,((DOMAIN-SUFFIX,github.com),(DST-PORT,22)),🎯 国内
   - RULE-SET,github_domain,自动选择
   - RULE-SET,youtube_domain,自动选择
   - RULE-SET,tiktok_domain,自动选择
