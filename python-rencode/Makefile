@@ -8,6 +8,7 @@ PYPI_NAME:=$(PKG_NAME)
 PKG_HASH:=83b2d9b6d84adc35615b7a09b74279211abaaf57a578af10ad012455a99a7722
 
 PKG_BUILD_DEPENDS:=python-cython/host
+HOST_BUILD_DEPENDS:=python3/host python-build/host python-cython/host
 
 include $(TOPDIR)/feeds/packages/lang/python/pypi.mk
 include $(INCLUDE_DIR)/package.mk
