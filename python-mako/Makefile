@@ -6,11 +6,11 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=python-mako
-PKG_VERSION:=1.3.12
+PKG_VERSION:=1.3.0
 PKG_RELEASE:=1
 
 PYPI_NAME:=Mako
-PKG_HASH:=9f778e93289bd410bb35daadeb4fc66d95a746f0b75777b942088b7fd7af550a
+PKG_HASH:=e3a9d388fd00e87043edbe8792f45880ac0114e9c4adc69f6e9bfb2c55e3b11b
 
 PKG_MAINTAINER:=Jeffery To <jeffery.to@gmail.com>
 PKG_LICENSE:=MIT
@@ -26,11 +26,11 @@ HOST_BUILD_DEPENDS:= \
   python-wheel/host \
   python-markupsafe/host
 
-include $(TOPDIR)/feeds/packages/lang/python/pypi.mk
+include ../pypi.mk
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/host-build.mk
-include $(TOPDIR)/feeds/packages/lang/python/python3-package.mk
-include $(TOPDIR)/feeds/packages/lang/python/python3-host-build.mk
+include ../python3-package.mk
+include ../python3-host-build.mk
 
 define Package/python3-mako
   SECTION:=lang

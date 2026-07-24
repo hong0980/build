@@ -1,10 +1,3 @@
-#
-# Copyright (C) 2011-2021 Entware
-#
-# This is free software, licensed under the GNU General Public License v2.
-# See /LICENSE for more information.
-#
-
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=rencode
@@ -13,6 +6,8 @@ PKG_RELEASE:=3
 
 PYPI_NAME:=$(PKG_NAME)
 PKG_HASH:=cd28e05eb693cd5065ba1667dcad7f85bbfc7cb0f5cf5c113ee587d26cb3db74
+
+HOST_BUILD_DEPENDS:=python3-cython/host
 
 include $(TOPDIR)/feeds/packages/lang/python/pypi.mk
 include $(INCLUDE_DIR)/package.mk
