@@ -72,24 +72,28 @@ endif
 
 define Build/Configure
   $(call Build/Configure/Default)
+ifneq ($(CONFIG_PACKAGE_python3-libtorrent),)
+  $(call Py3Build/Configure)
+endif
 endef
 
 define Build/Compile
   $(call Build/Compile/Default)
+ifneq ($(CONFIG_PACKAGE_python3-libtorrent),)
+  $(call Py3Build/Compile)
+endif
 endef
 
 define Build/Install
   $(call Build/Install/Default)
+ifneq ($(CONFIG_PACKAGE_python3-libtorrent),)
+  $(call Py3Build/Install/Default)
+endif
 endef
 
 define Package/libtorrent-rasterbar/install
   $(INSTALL_DIR) $(1)/usr/lib
   $(CP) $(PKG_INSTALL_DIR)/usr/lib/libtorrent-rasterbar.so.* $(1)/usr/lib/
-endef
-
-define Package/python3-libtorrent/install
-  $(INSTALL_DIR) $(1)$(PYTHON3_PKG_DIR)
-  $(CP) $(PKG_INSTALL_DIR)$(PYTHON3_PKG_DIR)/* $(1)$(PYTHON3_PKG_DIR)/
 endef
 
 $(eval $(call BuildPackage,libtorrent-rasterbar))
