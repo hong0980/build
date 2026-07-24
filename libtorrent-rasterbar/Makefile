@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=libtorrent-rasterbar
 PKG_VERSION:=2.0.11
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/arvidn/libtorrent/releases/download/v$(PKG_VERSION)/
@@ -54,36 +54,42 @@ define Package/python3-libtorrent/description
   This package contains Python 3 bindings for the libtorrent-rasterbar library.
 endef
 
+PKG_BUILD_DEPENDS+=$(if $(CONFIG_PACKAGE_python3-libtorrent),boost-python3)
+
 ifneq ($(CONFIG_PACKAGE_python3-libtorrent),)
 CMAKE_OPTIONS += \
-	-Dpython-bindings=OFF \
-	-Dpython-egg-info=OFF
+  -Dpython-bindings=ON \
+  -Dpython-egg-info=ON \
+  -Dpython-install-system-dir=ON \
+  -DPython3_EXECUTABLE=$(PYTHON3) \
+  -DBoost_NO_BOOST_CMAKE=ON \
+  -DBoost_NO_SYSTEM_PATHS=ON \
+  -DBOOST_ROOT=$(STAGING_DIR)/usr \
+  -DBoost_INCLUDE_DIR=$(STAGING_DIR)/usr/include \
+  -DBoost_LIBRARY_DIR=$(STAGING_DIR)/usr/lib \
+  -DBoost_PYTHON_VERSION=$(PYTHON3_VERSION)
 endif
 
 define Build/Configure
-	$(call Build/Configure/Default)
-ifneq ($(CONFIG_PACKAGE_python3-libtorrent),)
-	$(call Py3Build/Configure)
-endif
+  $(call Build/Configure/Default)
 endef
 
 define Build/Compile
-	$(call Build/Compile/Default)
-ifneq ($(CONFIG_PACKAGE_python3-libtorrent),)
-	$(call Py3Build/Compile)
-endif
+  $(call Build/Compile/Default)
 endef
 
 define Build/Install
-	$(call Build/Install/Default)
-ifneq ($(CONFIG_PACKAGE_python3-libtorrent),)
-	$(call Py3Build/Install/Default)
-endif
+  $(call Build/Install/Default)
 endef
 
 define Package/libtorrent-rasterbar/install
-	$(INSTALL_DIR) $(1)/usr/lib
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libtorrent-rasterbar.so.* $(1)/usr/lib/
+  $(INSTALL_DIR) $(1)/usr/lib
+  $(CP) $(PKG_INSTALL_DIR)/usr/lib/libtorrent-rasterbar.so.* $(1)/usr/lib/
+endef
+
+define Package/python3-libtorrent/install
+  $(INSTALL_DIR) $(1)$(PYTHON3_PKG_DIR)
+  $(CP) $(PKG_INSTALL_DIR)$(PYTHON3_PKG_DIR)/* $(1)$(PYTHON3_PKG_DIR)/
 endef
 
 $(eval $(call BuildPackage,libtorrent-rasterbar))

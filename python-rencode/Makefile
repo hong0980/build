@@ -1,11 +1,13 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=rencode
-PKG_VERSION:=1.0.6
-PKG_RELEASE:=3
+PKG_VERSION:=1.0.8
+PKG_RELEASE:=1
 
 PYPI_NAME:=$(PKG_NAME)
-PKG_HASH:=2586435c4ea7d45f74e26765ad33d75309de7cf47c4d762e8efabd39905c0718
+PKG_HASH:=83b2d9b6d84adc35615b7a09b74279211abaaf57a578af10ad012455a99a7722
+
+PKG_BUILD_DEPENDS:=python-cython/host
 
 include $(TOPDIR)/feeds/packages/lang/python/pypi.mk
 include $(INCLUDE_DIR)/package.mk
