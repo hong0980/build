@@ -9,7 +9,7 @@ log_msg() {
 
 get_config() {
     for val in $@; do
-        config_get "$val" main "$val" ""
+        config_get "$val" main "$val"
     done
 }
 
@@ -40,6 +40,8 @@ start_service() {
     config_get_bool enabled main enabled 0
     [ "$enabled" -eq 0 ] && return 1
 
+    local port user log_dir log_level profile_dir enable_logging \
+          download_location move_completed_path torrentfiles_location
     get_config port user log_dir log_level profile_dir enable_logging \
                download_location move_completed_path torrentfiles_location
 
@@ -59,7 +61,7 @@ start_service() {
 
     procd_open_instance 'deluged'
     procd_set_param command /usr/bin/deluged -d -c "$profile_dir" $log_param
-    procd_set_param env PYTHONWARNINGS=ignore
+    procd_set_param env PYTHONWARNINGS="ignore::UserWarning:deluge.pluginmanagerbase"
     [ -n "$user" ] && procd_set_param user "$user"
     procd_set_param respawn 300 5 5
     procd_set_param stdout 1
@@ -70,7 +72,7 @@ start_service() {
 
     procd_open_instance 'deluge-web'
     procd_set_param command /usr/bin/deluge-web -d -c "$profile_dir" $log_param $port_param
-    procd_set_param env PYTHONWARNINGS=ignore
+    procd_set_param env PYTHONWARNINGS="ignore::UserWarning:deluge.pluginmanagerbase"
     [ -n "$user" ] && procd_set_param user "$user"
     procd_set_param respawn
     procd_set_param stdout 1
@@ -89,10 +91,9 @@ start_service() {
     ) &
 }
 
-stop_service() {
-    for proc in deluge-web deluged; do
-        pgrep -x "$proc" >/dev/null && log_msg "Stopping $proc"
-    done
+service_stopped() {
+    local instance="$1"
+    log_msg "$instance stopped"
 }
 
 reload_service() {
