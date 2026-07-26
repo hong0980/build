@@ -80,15 +80,14 @@ return view.extend({
 		return Promise.all([
 			fs.exec_direct('/bin/df', ['-h']),
 			L.resolveDefault(this.getStatus(), false),
-			uci.load('deluge').then(r => ({
-				port: uci.get(r, 'main', 'port') || '8112',
-				proto: uci.get(r, 'main', 'https') === 1 ? 'https' : 'http'
-			}))
+			uci.load('deluge')
 		])
 	},
 
-	render: function ([diskList, running, config]) {
-		var m, s, o, { port, proto } = config || {};
+	render: function ([diskList, running]) {
+		var m, s, o;
+		var port = uci.get('deluge', 'main', 'port') || '8112';
+		var proto = uci.get_bool('deluge', 'main', 'https') ? 'https' : 'http';
 
 		m = new form.Map('deluge', _('Deluge Downloader'),
 			_('Deluge is a lightweight BT client based on Python and libtorrent.'));
@@ -103,7 +102,7 @@ return view.extend({
 		s = m.section(form.TypedSection);
 		s.render = () => E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [statusEl, btnEl]);
 
-		s = m.section(form.NamedSection, 'main', 'deluge');
+		s = m.section(form.NamedSection, 'main');
 		s.addremove = false;
 		s.anonymous = true;
 
@@ -136,6 +135,7 @@ return view.extend({
 		o.value('zh_CN', _('Simplified Chinese'));
 		o.value('en_GB', _('English'));
 		o.default = 'zh_CN';
+		o.rmempty = false;
 
 		o = s.taboption("settings", form.Value, 'port', _('Listening Port'),
 			_("Default port: 8112"));
@@ -146,6 +146,7 @@ return view.extend({
 		o = s.taboption("settings", form.Value, 'password', _('WebUI Password'),
 			_("Default password: deluge"));
 		o.password = true;
+		o.rmempty = false;
 		o.default = "deluge";
 		o.datatype = 'and(rangelength(6, 10), string)';
 
