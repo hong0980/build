@@ -117,6 +117,7 @@ return view.extend({
 		o = s.taboption("settings", form.Value, 'profile_dir', _('Root Path of the Profile'),
 			_("Saved by default in /etc/deluge"));
 		o.default = '/etc/deluge';
+		o.rmempty = false;
 
 		o = s.taboption("settings", form.Value, 'download_location', _('Download File Path'),
 			_('The files are stored in the download directory automatically created under the selected mounted disk'));
@@ -179,6 +180,7 @@ return view.extend({
 		o.disabled = 'false';      // 不勾选时写入 false 值
 
 		o = s.taboption("download", form.Value, 'move_completed_path', _('Path'));
+		o.rmempty = false;
 		o.depends('move_completed', 'true');
 		o.placeholder = "/mnt/sda3/download";
 
