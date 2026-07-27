@@ -513,79 +513,111 @@ clear_logs() {
 	}
 }
 
+_try_download() {
+	local url="$1" ua="$2" out="$3" hdr="$4"
+	local sep req_url
+
+	case "$url" in
+		*\?*) sep='&' ;;
+		*)    sep='?' ;;
+	esac
+	req_url="${url}${sep}flag=${ua}"
+
+	curl -sfL --max-time 120 --connect-timeout 15 --retry 2 -A "$ua" -D "$hdr" -o "$out" "$req_url" > /dev/null 2>&1 || return 1
+	[ "$(yq -r '(has("proxies") or has("proxy-providers")) // false' "$out" 2>/dev/null)" = "true" ]
+}
+
 update_subscription() {
 	local section="$1"
-	[ x"$section" = 'x' ] && return
-
+	[ -z "$section" ] && return
 	config_load nikki
-	local success=0 url name opt info_url user_agent file header_tmpfile info_header_tmpfile info_file
+
+	local url name info_url user_agent detected_ua success=0 \
+		  header_tmpfile info_header_tmpfile info_file used_ua ua
+
 	config_get url        "$section" url
 	config_get name       "$section" name
 	config_get info_url   "$section" info_url
 	config_get user_agent "$section" user_agent
-	log "Profile" "Update subscription: %s." "$name"
+	config_get detected_ua "$section" detected_user_agent
 
-	file="$SUBSCRIPTIONS_DIR/$name.yaml"
+	log "Profile" "Update subscription: %s." "${name:-<unnamed>}"
 	header_tmpfile="$TEMP_DIR/$section.header"
 	info_header_tmpfile="$TEMP_DIR/$section.info.header"
 
-	if [ -n "$info_url" ]; then
-		log "Profile" "Fetch subscription info."
-		if curl -sfL --max-time 120 --connect-timeout 15 --retry 3 -A "$user_agent" -D "$info_header_tmpfile" "$info_url" > /dev/null 2>&1; then
-			if [ ! -f "$info_file" ] && grep -q -i "subscription-userinfo:" "$info_header_tmpfile"; then
-				info_file="$info_header_tmpfile"
-			fi
-		fi
-	fi
-
 	log "Profile" "Download subscription."
-	if curl -sfL --max-time 120 --connect-timeout 15 --retry 3 -A "$user_agent" -D "$header_tmpfile" -o "$TEMP_CONFIG" "$url" > /dev/null 2>&1; then
-		log "Profile" "Subscription download successful."
-		if [ ! -f "$info_file" ] && grep -q -i "subscription-userinfo:" "$header_tmpfile"; then
-			info_file="$header_tmpfile"
-		fi
-		if yq -r 'has("proxies") or has("proxy-providers")' "$TEMP_CONFIG" > /dev/null 2>&1; then
+	if [ -z "$user_agent" -o "$user_agent" = "auto" ]; then
+		set -- "$detected_ua" meta clash clash.meta mihomo
+	else
+		set -- "$user_agent"
+	fi
+
+	for ua in "$@"; do
+		[ -z "$ua" ] && continue
+		_try_download "$url" "$ua" "$TEMP_CONFIG" "$header_tmpfile" && {
 			success=1
-			log "Profile" "Subscription is valid."
-		else
-			log "Profile" "Subscription is not valid."
-		fi
-	else
-		log "Profile" "Subscription download failed."
+			used_ua="$ua"
+			break
+		}
+	done
+
+	if [ -n "$info_url" -a -n "$used_ua" ]; then
+		log "Profile" "Fetch subscription info."
+		curl -sfL --max-time 120 --connect-timeout 15 --retry 3 -A "$used_ua" -D "$info_header_tmpfile" "$info_url" > /dev/null 2>&1
 	fi
-	if [ "$success" = 1 ]; then
-		# for opt in expire upload download total used avaliable update success; do
-		# 	uci_remove nikki "$section" "$opt" > /dev/null 2>&1
-		# done
-		log "Profile" "Subscription update successful."
-		if [ -f "$info_file" ]; then
-			local userinfo expire upload download total used avaliable
-			userinfo=$(grep -i "subscription-userinfo: " "$info_file")
-			total=$(echo    "$userinfo" | sed -En 's/.*total=([0-9]*).*/\1/p')
-			expire=$(echo   "$userinfo" | sed -En 's/.*expire=([0-9]*).*/\1/p')
-			upload=$(echo   "$userinfo" | sed -En 's/.*upload=([0-9]*).*/\1/p')
-			download=$(echo "$userinfo" | sed -En 's/.*download=([0-9]*).*/\1/p')
+	if grep -q -i "subscription-userinfo:" "$info_header_tmpfile" 2>/dev/null; then
+		info_file="$info_header_tmpfile"
+	elif grep -q -i "subscription-userinfo:" "$header_tmpfile" 2>/dev/null; then
+		info_file="$header_tmpfile"
+	fi
 
-			if [ -n "$upload" -a -n "$download" ]; then
-				used=$((upload + download))
-				# [ -n "$total" ] && avaliable=$((total - used))
-			fi
-
-			[ -n "$used" ]      && uci_set nikki "$section" used      "$(format_filesize "$used")"
-			[ -n "$total" ]     && uci_set nikki "$section" total     "$(format_filesize "$total")"
-			# [ -n "$upload" ]    && uci_set nikki "$section" upload    "$(format_filesize "$upload")"
-			# [ -n "$download" ]  && uci_set nikki "$section" download  "$(format_filesize "$download")"
-			# [ -n "$avaliable" ] && uci_set nikki "$section" avaliable "$(format_filesize "$avaliable")"
-			[ -n "$expire" ]    && uci_set nikki "$section" expire    "$(date "+%Y-%m-%d %H:%M:%S" -d "@$expire")"
-		fi
-		uci_set nikki "$section" update "$(date "+%Y-%m-%d %H:%M:%S")"
-		mv -f "$TEMP_CONFIG" "$file"
-	else
+	if [ "$success" != 1 ]; then
 		log "Profile" "Subscription update failed."
-		rm -f "$TEMP_CONFIG"
+		rm -f "$TEMP_CONFIG" "$header_tmpfile" "$info_header_tmpfile"
+		uci_commit nikki
+		return 1
 	fi
 
+	local userinfo expire upload download total used avaliable \
+		  web_page_url content_disp sub_name name_changed=0
+
+	content_disp=$(cat "$header_tmpfile" "$info_header_tmpfile" 2>/dev/null | grep -m1 -i "^content-disposition:" | tr -d '\r')
+	content_disp=$(echo "$content_disp" | sed -En "s/.*filename\*=UTF-8''([^;[:space:]]*).*/\1/p")
+	[ -n "$content_disp" ] && sub_name=$(printf '%b' "${content_disp//%/\\x}")
+
+	if [ -z "$name" ]; then
+		name="${sub_name:-subscription-$(date +%s)}"
+		name_changed=1
+	fi
+	log "Profile" "Subscription update successful."
+
+	if [ -f "$info_file" ]; then
+		userinfo=$(grep -i "subscription-userinfo:" "$info_file" | tr -d '\r')
+		total=$(echo    "$userinfo" | sed -En 's/.*total=([0-9]*).*/\1/p')
+		expire=$(echo   "$userinfo" | sed -En 's/.*expire=([0-9]*).*/\1/p')
+		upload=$(echo   "$userinfo" | sed -En 's/.*upload=([0-9]*).*/\1/p')
+		download=$(echo "$userinfo" | sed -En 's/.*download=([0-9]*).*/\1/p')
+
+		if [ -n "$upload" ] && [ -n "$download" ]; then
+			used=$((upload + download))
+			[ -n "$total" ] && avaliable=$((total - used))
+		fi
+
+		web_page_url=$(grep -m1 -i "^profile-web-page-url:" "$info_file" | sed -En 's/^[^:]*:[[:space:]]*(.*)$/\1/p' | tr -d '\r')
+
+		for opt in used total avaliable; do
+			eval "val=\$$opt"
+			[ -n "$val" ] && uci_set nikki "$section" "$opt" "$(format_filesize "$val")"
+		done
+		[ -n "$expire" ]       && uci_set nikki "$section" expire       "$(date "+%Y-%m-%d %H:%M:%S" -d "@$expire")"
+		[ -n "$web_page_url" ] && uci_set nikki "$section" web_page_url "$web_page_url"
+	fi
+
+	[ "$name_changed" = 1 ] && uci_set nikki "$section" name "$name"
+	[ -n "$used_ua" ] && [ "$used_ua" != "$detected_ua" ] && uci_set nikki "$section" detected_user_agent "$used_ua"
+	uci_set nikki "$section" update "$(date "+%Y-%m-%d %H:%M:%S")"
+	mv -f "$TEMP_CONFIG" "$SUBSCRIPTIONS_DIR/$name.yaml"
 	rm -f "$header_tmpfile" "$info_header_tmpfile"
 	uci_commit nikki
-	[ "$success" = 1 ] && return 0 || return 1
+	return 0
 }

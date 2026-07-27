@@ -193,6 +193,7 @@ return view.extend({
 		o = s.taboption("download", form.Value, 'torrentfiles_location', _('Path'));
 		o.depends('copy_torrent_file', 'true');
 		o.placeholder = "/mnt/sda3/download";
+		o.rmempty = false;
 
 		o = s.taboption("download", form.Flag, "speed_enable",
 			_("Enable Bandwidth Control"),
@@ -208,6 +209,7 @@ return view.extend({
 					'-1';
 			o.depends("speed_enable", '1');
 			o.datatype = 'and(min(-1), integer)';
+			o.rmempty = false;
 			o.validate = (section, value) => {
 				value = parseInt(value);
 				if (isNaN(value)) {
@@ -243,6 +245,7 @@ return view.extend({
 		o.value('debug', _('Debug'));
 		o.depends('enable_logging', '1');
 		o.default = 'error';
+		o.rmempty = false;
 
 		o = s.taboption("other", form.Value, 'geoip_db_location', _('GeoIP Database Path'));
 		o.placeholder = '/usr/share/GeoIP/GeoIP.dat';
@@ -257,6 +260,7 @@ return view.extend({
 			_("Disk cache size in 16 KiB blocks (e.g. 16384 = 256 MiB)"));
 		o.default = "16384";
 		o.datatype = "integer";
+		o.rmempty = false;
 		o.validate = (section_id, value) => {
 			const size = +value;
 			if (size < 1024) return _("Minimum: 1024 (16 MiB)");
@@ -267,6 +271,7 @@ return view.extend({
 
 		o = s.taboption("other", form.Value, 'cache_expiry', _('Cache Expiry (seconds)'));
 		o.default = "60";
+		o.rmempty = false;
 		o.datatype = 'integer';
 
 		L.Poll.add(L.bind(() => this.getStatus().then((running) => {

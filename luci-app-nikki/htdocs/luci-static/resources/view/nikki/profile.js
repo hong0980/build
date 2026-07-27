@@ -1418,8 +1418,9 @@ return view.extend({
         };
 
         o = s.option(form.Value, 'name', _('Subscription Name'));
-        o.rmempty = false;
+        o.rmempty = true;
         o.datatype = 'string';
+        o.placeholder = _('Auto-filled from subscription response if empty');
         o.write = function (section_id, value) {
             const oldName = this.cfgvalue(section_id);
             if (oldName && oldName !== value)
@@ -1433,6 +1434,11 @@ return view.extend({
         o.readonly = true;
 
         o = s.option(form.Value, 'used', _('Used'));
+        o.modalonly = false;
+        o.optional = true;
+        o.readonly = true;
+
+        o = s.option(form.Value, 'avaliable', _('Available'));
         o.modalonly = false;
         o.optional = true;
         o.readonly = true;
@@ -1467,8 +1473,7 @@ return view.extend({
                 .then(function () {
                     const row = document.getElementById('cbi-nikki-' + section_id);
                     if (!row) return;
-
-                    ['total', 'used', 'expire', 'update'].forEach(function (optName) {
+                    ['name', 'total', 'used', 'avaliable', 'expire', 'update'].forEach(function (optName) {
                         const cell = row.querySelector('[data-name="' + optName + '"]');
                         const newVal = uci.get('nikki', section_id, optName) || '';
                         if (cell) cell.textContent = newVal;
@@ -1485,12 +1490,19 @@ return view.extend({
         o.rmempty = false;
 
         o = s.option(form.Value, 'user_agent', _('User Agent'));
-        o.default = 'clash';
+        o.default = 'auto';
         o.modalonly = true;
         o.rmempty = false;
+        o.value('auto', _('Auto'));
+        o.value('meta');
         o.value('clash');
         o.value('clash.meta');
         o.value('mihomo');
+
+        o = s.option(form.Value, 'detected_user_agent', _('Detected User Agent'));
+        o.modalonly = true;
+        o.optional = true;
+        o.readonly = true;
 
         o = s.option(form.ListValue, 'prefer', _('Prefer'));
         o.default = 'local';
@@ -1498,6 +1510,26 @@ return view.extend({
         o.rmempty = false;
         o.value('remote', _('Remote'));
         o.value('local', _('Local'));
+
+        // o = s.option(form.Value, 'upload', _('Uploaded'));
+        // o.modalonly = true;
+        // o.optional = true;
+        // o.readonly = true;
+
+        // o = s.option(form.Value, 'download', _('Downloaded'));
+        // o.modalonly = true;
+        // o.optional = true;
+        // o.readonly = true;
+
+        o = s.option(form.Value, 'web_page_url', _('Panel URL'));
+        o.modalonly = true;
+        o.optional = true;
+        o.readonly = true;
+        o.render = function (option_index, section_id) {
+            const url = uci.get('nikki', section_id, 'web_page_url');
+            if (!url) return E('span');
+            return E('a', { href: url, target: '_blank', rel: 'noreferrer' }, url);
+        };
 
         s = m.section(form.GridSection, 'node', _('Nodes'));
         s.addremove = true;
