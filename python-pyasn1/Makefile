@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2018 OpenWrt.org
+# Copyright (C) 2015, 2018-2020, 2023 Jeffery To
 #
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
@@ -15,8 +15,8 @@ PYPI_NAME:=pyasn1
 PKG_HASH:=9c447d8431c947fe4c8febc4ed9e760bc29011a5b01e5c74b67025bd9fb8ce81
 
 PKG_LICENSE:=BSD-2-Clause
-PKG_LICENSE_FILES:=LICENSE.txt
-PKG_MAINTAINER:=Jeffery To <jeffery.to@gmail.com>
+PKG_LICENSE_FILES:=LICENSE.rst
+PKG_MAINTAINER:=Alexandru Ardelean <ardeleanalex@gmail.com>
 
 include $(TOPDIR)/feeds/packages/lang/python/pypi.mk
 include $(INCLUDE_DIR)/package.mk
@@ -26,9 +26,9 @@ define Package/python3-pyasn1
   SECTION:=lang
   CATEGORY:=Languages
   SUBMENU:=Python
-  TITLE:=ASN.1 library for Python
-  URL:=https://github.com/etingof/pyasn1
-  DEPENDS:=+python3-light
+  TITLE:=ASN.1 types and DER/BER/CER codecs (X.208)
+  URL:=https://github.com/pyasn1/pyasn1
+  DEPENDS:=+python3-light +python3-logging
 endef
 
 define Package/python3-pyasn1/description

@@ -1474,16 +1474,12 @@ return view.extend({
                     const row = document.getElementById('cbi-nikki-' + section_id);
                     if (!row) return;
                     ['name', 'total', 'used', 'avaliable', 'expire', 'update'].forEach(function (optName) {
-                        const cell = row.querySelector('[data-name="' + optName + '"]');
-                        const newVal = uci.get('nikki', section_id, optName) || '';
-                        if (cell) cell.textContent = newVal;
+                        const cell = row.querySelector(`[data-name="${optName}"]`);
+                        if (cell) cell.textContent = uci.get('nikki', section_id, optName) || '';
                     })
                 })
                 .catch(function (err) { if (err) console.error(err); });
         };
-
-        o = s.option(form.Value, 'info_url', _('Subscription Info Url'));
-        o.modalonly = true;
 
         o = s.option(form.Value, 'url', _('Subscription Url'));
         o.modalonly = true;
@@ -1510,6 +1506,9 @@ return view.extend({
         o.rmempty = false;
         o.value('remote', _('Remote'));
         o.value('local', _('Local'));
+
+        o = s.option(form.Value, 'info_url', _('Subscription Info Url'));
+        o.modalonly = true;
 
         // o = s.option(form.Value, 'upload', _('Uploaded'));
         // o.modalonly = true;
