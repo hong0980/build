@@ -113,6 +113,7 @@ return view.extend({
 
 		o = s.taboption("settings", widgets.UserSelect, 'user', _('Run daemon as user'));
 		o.default = 'root';
+		o.rmempty = false;
 
 		o = s.taboption("settings", form.Value, 'profile_dir', _('Root Path of the Profile'),
 			_("Saved by default in /etc/deluge"));
@@ -167,6 +168,7 @@ return view.extend({
 		o.default = '1';
 
 		o = s.taboption("download", form.Flag, 'add_paused', _('Add torrents in Paused state'));
+		o.rmempty = false;
 		o.default = '0';
 
 		o = s.taboption("download", form.Flag, 'pre_allocate_storage', _('Pre-allocate disk space'));
@@ -180,12 +182,12 @@ return view.extend({
 		o.disabled = 'false';      // 不勾选时写入 false 值
 
 		o = s.taboption("download", form.Value, 'move_completed_path', _('Path'));
-		o.rmempty = false;
+		// o.rmempty = false;
 		o.depends('move_completed', 'true');
 		o.placeholder = "/mnt/sda3/download";
 
 		o = s.taboption("download", form.Flag, 'copy_torrent_file', _('Copy Torrent File to'));
-		o.rmempty = false;
+		// o.rmempty = false;
 		o.default = 'false';
 		o.enabled = 'true';
 		o.disabled = 'false';
@@ -193,7 +195,7 @@ return view.extend({
 		o = s.taboption("download", form.Value, 'torrentfiles_location', _('Path'));
 		o.depends('copy_torrent_file', 'true');
 		o.placeholder = "/mnt/sda3/download";
-		o.rmempty = false;
+		// o.rmempty = false;
 
 		o = s.taboption("download", form.Flag, "speed_enable",
 			_("Enable Bandwidth Control"),
@@ -230,7 +232,7 @@ return view.extend({
 		o.datatype = 'integer';
 
 		o = s.taboption("other", form.Flag, 'enable_logging', _('Enable Log'));
-		o.default = '1';
+		o.default = '0';
 		o.rmempty = false;
 
 		o = s.taboption("other", form.Value, 'log_dir', _('Log Path'),

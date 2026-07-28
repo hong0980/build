@@ -2,9 +2,7 @@
 	"admin/nas/qbittorrent": {
 		"title": "qBittorrent",
 		"order": 30,
-		"action": {
-			"type": "firstchild"
-		},
+		"action": { "type": "firstchild" },
 		"depends": {
 			"acl": [ "luci-app-qbittorrent" ],
 			"uci": { "qbittorrent": true }

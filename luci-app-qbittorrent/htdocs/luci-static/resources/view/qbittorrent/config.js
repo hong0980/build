@@ -80,19 +80,17 @@ return view.extend({
 				statusEl, btnEl,
 			]);
 
-		s = m.section(form.NamedSection, 'main', 'qbittorrent');
+		s = m.section(form.NamedSection, 'main');
 
 		s.tab("basic", _("Basic Settings"));
 		s.tab("advanced", _("Advanced Settings"));
 
 		o = s.taboption("basic", form.Flag, "EnableService", _("Enabled"))
-		o.default = 0;
-		o.rmempty = false;
 
-		o = s.taboption("basic", form.Value, "RootProfilePath",
-			_("Root Path of the Profile"),
+		o = s.taboption("basic", form.Value, "RootProfilePath", _("Root Path of the Profile"),
 			_("Specify the root path of all profiles"))
 		o.default = '/etc/qb';
+		o.rmempty = false;
 
 		o = s.taboption("basic", form.Value, "DefaultSavePath", _("Save Path"),
 			_("The files are stored in the download directory automatically created under the selected mounted disk"))
@@ -111,11 +109,13 @@ return view.extend({
 		o.value("zh_CN", _("Simplified Chinese"));
 		o.value("en", _("English"));
 		o.default = "zh_CN";
+		o.rmempty = false;
 
 		o = s.taboption("basic", form.Value, "port", _("Listening Port"),
 			_("The listening port for WebUI."));
 		o.datatype = "port";
 		o.default = '8080';
+		o.rmempty = false;
 
 		o = s.taboption("basic", form.Flag, "PasswordEnabled", _("Enable"),
 			_("Enable first login default login Username: admin Password: password"));
@@ -137,27 +137,26 @@ return view.extend({
 			_("Using the UPnP / NAT-PMP port of the router for connecting to WebUI."));
 		o.enabled = "true";
 		o.disabled = "false";
-		o.default = "true";
+		o.default = o.enabled;
 		o.rmempty = false;
 
 		o = s.taboption("advanced", form.Flag, "CSRFProtection", _("CSRF Protection"),
 			_("Disable Cross-Site Request Forgery (CSRF) protection"));
 		o.enabled = "false";
 		o.disabled = "true";
-		o.default = "false";
+		o.default = o.enabled;
 		o.rmempty = false;
 
 		o = s.taboption('advanced', form.Flag, 'Enabled', _('Enable Log'),
 			_('Enable logger to log file.'));
 		o.enabled = 'true';
 		o.disabled = 'false';
-		o.default = "true";
+		o.default = o.enabled;
 		o.rmempty = false;
 
 		o = s.taboption('advanced', form.Value, 'Path', _('Log Path'),
 			_("Modify the path to save log files"));
 		o.depends('Enabled', 'true');
-		o.rmempty = true;
 
 		o = s.taboption("advanced", form.Value, "BinaryLocation",
 			_("Enable additional qBittorrent"),
