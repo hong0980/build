@@ -100,19 +100,50 @@ if (uci_bool(uci.get('nikki', 'mixin', 'dns_nameserver'))) {
 	});
 };
 if (uci_bool(uci.get('nikki', 'mixin', 'dns_proxy_server_nameserver_policy'))) {
-	config['dns']['proxy-server-nameserver-policy'] = {};
-	uci.foreach('nikki', 'proxy_server_nameserver_policy', (section) => {
-		if (!uci_bool(section.enabled)) return;
-		config['dns']['proxy-server-nameserver-policy'][section.matcher] = uci_array(section.nameserver);
-	});
+    config['dns']['fallback-filter'] = {};
+    config['dns']['proxy-server-nameserver-policy'] = {};
+    uci.foreach('nikki', 'proxy_server_nameserver_policy', (section) => {
+        if (!uci_bool(section.enabled)) return;
+
+        if (section.type == 'fallback-filter') {
+            if (section.nameserver) {
+                config['dns']['fallback-filter'][section.matcher] = uci_array(section.nameserver);
+            } else if (section.matcher) {
+                let pos = index(section.matcher, ':');
+                if (pos > 0) {
+                    let key = trim(substr(section.matcher, 0, pos));
+                    let val = trim(substr(section.matcher, pos + 1));
+                    if (val == 'true') {
+                        val = true;
+                    } else if (val == 'false') {
+                        val = false;
+                    } else if (match(val, /^[0-9]+$/)) {
+                        val = int(val);
+                    }
+                    config['dns']['fallback-filter'][key] = val;
+                } else {
+                    config['dns']['fallback-filter'][section.matcher] = true;
+                }
+            }
+        } else {
+            if (section.nameserver) {
+                config['dns'][section.type][section.matcher] = uci_array(section.nameserver);
+            }
+        }
+    });
 };
 config['dns']['direct-nameserver-follow-policy'] = uci_bool(uci.get('nikki', 'mixin', 'dns_direct_nameserver_follow_policy'));
 if (uci_bool(uci.get('nikki', 'mixin', 'dns_nameserver_policy'))) {
-	config['dns']['nameserver-policy'] = {};
-	uci.foreach('nikki', 'nameserver_policy', (section) => {
-		if (!uci_bool(section.enabled)) return;
-		config['dns']['nameserver-policy'][section.matcher] = uci_array(section.nameserver);
-	});
+    config['dns']['nameserver-policy'] = {};
+    uci.foreach('nikki', 'nameserver_policy', (section) => {
+        if (!uci_bool(section.enabled)) return;
+        let ns = uci_array(section.nameserver);
+        if (length(ns) == 1) {
+            config['dns']['nameserver-policy'][section.matcher] = ns[0];
+        } else {
+            config['dns']['nameserver-policy'][section.matcher] = ns;
+        }
+    });
 };
 if (uci_bool(uci.get('nikki', 'mixin', 'wanDns'))) {
     const wanDns = ubus.call('network.interface.wan', 'status')?.['dns-server'];

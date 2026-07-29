@@ -69,6 +69,7 @@ config mixin 'mixin'
 	option sniffer_sniff '0'
 	option mixin_content '0'
 	option geodata_loader 'standard'
+	option dns_cache_algorithm 'arc'
 
 config authentication
 	option enabled '1'
@@ -80,30 +81,6 @@ config hosts
 	option domain_name 'localhost'
 	list ip '127.0.0.1'
 	list ip '::1'
-
-config nameserver
-	option enabled '1'
-	option type 'nameserver'
-	list nameserver 'https://doh.pub/dns-query'
-	list nameserver 'https://dns.alidns.com/dns-query'
-
-config nameserver
-	option enabled '1'
-	option type 'default-nameserver'
-	list nameserver '223.5.5.5'
-	list nameserver '223.6.6.6'
-
-config nameserver
-	option enabled '0'
-	option type 'proxy-server-nameserver'
-	list nameserver 'https://doh.pub/dns-query'
-	list nameserver 'https://dns.alidns.com/dns-query'
-
-config nameserver
-	option enabled '0'
-	option type 'direct-nameserver'
-	list nameserver '223.5.5.5'
-	list nameserver '119.29.29.29'
 
 config nameserver_policy
 	option enabled '1'
@@ -224,3 +201,103 @@ config log 'log'
 	option scheduled_clear_cron '*/35 * * * *'
 
 config status 'status'
+
+config proxy_server_nameserver_policy
+	option enabled '1'
+	list nameserver '114.114.114.114'
+	option type 'proxy-server-nameserver-policy'
+	option matcher 'www.yournode.com'
+
+config proxy_server_nameserver_policy
+	option enabled '1'
+	option type 'fallback-filter'
+	option matcher 'geoip: true'
+
+config proxy_server_nameserver_policy
+	option enabled '1'
+	option type 'fallback-filter'
+	option matcher 'ipcidr'
+	list nameserver '240.0.0.0/4'
+	list nameserver '0.0.0.0/32'
+
+config lan_access_control
+	option enabled '1'
+	list ip '192.168.2.116'
+	option dns '0'
+	option proxy '0'
+
+config nameserver
+	option enabled '1'
+	option type 'nameserver'
+	list nameserver 'https://doh.pub/dns-query'
+	list nameserver 'https://dns.cloudflare.com/dns-query'
+
+config nameserver
+	option enabled '0'
+	option type 'nameserver'
+	list nameserver '8.8.8.8'
+	list nameserver '114.114.114.114'
+
+config nameserver
+	option enabled '0'
+	option type 'nameserver'
+	list nameserver 'tls://dns.quad9.net'
+	list nameserver 'tls://1.1.1.1'
+	list nameserver 'tls://223.5.5.5'
+
+config nameserver
+	option enabled '0'
+	option type 'nameserver'
+	list nameserver 'udp://223.5.5.5'
+	list nameserver 'udp://119.28.28.28'
+
+config nameserver
+	option enabled '0'
+	option type 'default-nameserver'
+	list nameserver '223.5.5.5'
+	list nameserver '223.6.6.6'
+
+config nameserver
+	option enabled '0'
+	option type 'default-nameserver'
+	list nameserver '114.114.114.114'
+	list nameserver '119.29.29.29'
+	list nameserver '8.8.8.8'
+
+config nameserver
+	option enabled '0'
+	option type 'default-nameserver'
+	list nameserver 'tls://1.12.12.12:853'
+	list nameserver 'tls://223.5.5.5:853'
+
+config nameserver
+	option enabled '0'
+	option type 'direct-nameserver'
+	list nameserver '223.5.5.5'
+	list nameserver '119.29.29.29'
+
+config nameserver
+	option enabled '1'
+	option type 'proxy-server-nameserver'
+	list nameserver 'tls://223.5.5.5:853'
+	list nameserver 'https://doh.pub/dns-query'
+	list nameserver 'https://dns.alidns.com/dns-query'
+
+config nameserver
+	option enabled '0'
+	option type 'fallback'
+	list nameserver 'https://doh.pub/dns-query'
+	list nameserver 'https://dns.alidns.com/dns-query'
+
+config nameserver
+	option enabled '0'
+	option type 'fallback'
+	list nameserver 'udp://9.9.9.9'
+	list nameserver 'udp://8.8.8.8'
+	list nameserver 'tcp://1.1.1.1'
+
+config nameserver
+	option enabled '0'
+	option type 'fallback'
+	list nameserver 'https://dns.google/dns-query'
+	list nameserver 'https://dns.cloudflare.com/dns-query'

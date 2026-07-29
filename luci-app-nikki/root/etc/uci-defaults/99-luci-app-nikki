@@ -14,27 +14,18 @@ config_load nikki
 migrate_rac_cgroup_item() {
 	local cgroup="$1" cfg="$2"
 	[ -d "/sys/fs/cgroup/$cgroup" ] && return
-	[ -d "/sys/fs/cgroup/services/$cgroup" ] && {
-		uci -q del_list "nikki.$cfg.cgroup=$cgroup"
-		uci -q add_list "nikki.$cfg.cgroup=services/$cgroup"
-	}
+	uci -q del_list "nikki.$cfg.cgroup=$cgroup"
 }
 
 migrate_router_access_control_cgroup() {
-	local cfg="$1"
+	local cfg="$1" dns proxy
+	config_get_bool dns   "$cfg" dns
+	config_get_bool proxy "$cfg" proxy
+	[ "$dns" = 0 ] && uci -q set "nikki.$cfg.dns=$proxy"
 	config_list_foreach "$cfg" cgroup migrate_rac_cgroup_item "$cfg"
 }
 
 config_foreach migrate_router_access_control_cgroup router_access_control
-
-sync_dns_from_proxy() {
-	local cfg="$1" proxy dns
-	config_get dns   "$cfg" dns
-	config_get proxy "$cfg" proxy
-	[ -z "$dns" ] && uci -q set "nikki.$cfg.dns=$proxy"
-}
-
-config_foreach sync_dns_from_proxy router_access_control
 
 config_get init config init
 [ -n "$init" ] && {

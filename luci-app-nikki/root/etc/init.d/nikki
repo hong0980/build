@@ -162,7 +162,9 @@ start_service() {
 			(.proxy-providers // {}) |= with_entries(
 				((select($fu != "" and .value.url) | .value.url = $fu) // .) |
 				((select($u  != "" and .value.health-check) | .value.health-check.url = $u) // .)
-			)
+			) |
+			with(select(.dns."respect-rules" == true and ((.dns."proxy-server-nameserver" // []) | length == 0));
+			.dns."proxy-server-nameserver" = ["https://dns.alidns.com/dns-query", "https://doh.pub/dns-query"])
 		' "$TEMP_CONFIG" >/dev/null 2>&1
 
 		if [ "$proxy_enabled" = 1 ]; then

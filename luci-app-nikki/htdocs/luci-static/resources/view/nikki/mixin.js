@@ -429,12 +429,12 @@ return view.extend({
         o.retain = true;
         o.depends('fake_ip_filter', '1');
 
-        o = s.taboption('dns', form.ListValue, 'fake_ip_filter_mode', _('Fake-IP Filter Mode'));
+        o = s.taboption('dns', form.RichListValue, 'fake_ip_filter_mode', _('Fake-IP Filter Mode'));
         o.optional = true;
         o.placeholder = _('Unmodified');
-        o.value('blacklist', _('Block Mode'));
-        o.value('whitelist', _('Allow Mode'));
-        o.value('rule', _('Rule Mode'));
+        o.value('blacklist', _('blacklist'), _('Block Mode'));
+        o.value('whitelist', _('whitelist'), _('Allow Mode'));
+        o.value('rule', _('rule'), _('Rule Mode'));
 
         o = s.taboption('dns', form.ListValue, 'fake_ip_cache', _('Fake-IP Cache'));
         o.optional = true;
@@ -499,14 +499,35 @@ return view.extend({
         so = o.subsection.option(form.Flag, 'enabled', _('Enable'));
         so.rmempty = false;
 
-        so = o.subsection.option(form.ListValue, 'type', _('Type'));
-        so.value('default-nameserver');
-        so.value('proxy-server-nameserver');
-        so.value('direct-nameserver');
-        so.value('nameserver');
-        so.value('fallback');
+        so = o.subsection.option(form.RichListValue, 'type', _('Type'));
+        so.value('nameserver', _('nameserver'), _('主要 DNS 配置，影响所有直连，确保使用对大陆解析精准的 DNS'));
+        so.value('default-nameserver', _('default-nameserver'), _('用于解析 nameserver/fallback 等配置的 DNS 服务域名，只能使用纯 IP'));
+        so.value('proxy-server-nameserver', _('proxy-server-nameserver'), _('专用于节点域名解析的 DNS 服务器'));
+        so.value('direct-nameserver', _('direct-nameserver'), _('专用于 direct 出口域名解析的 DNS 服务器'));
+        so.value('fallback', _('fallback'), _('当 nameserver 返回的 IP 非大陆时，使用 fallback 中的 DNS 查询结果'));
+        so.value('nameserver-policy', _('nameserver-policy'), _('按域名指定使用的 DNS 服务器，优先级最高'));
 
         so = o.subsection.option(form.DynamicList, 'nameserver', _('Nameserver'));
+        so.validate = function (section_id, value) {
+            var typeOpts = this.map.lookupOption('type', section_id);
+            if (!typeOpts || !typeOpts[0]) return true;
+
+            var typeVal = typeOpts[0].formvalue(section_id);
+            if (typeVal !== 'default-nameserver') return true;
+
+            var vals = Array.isArray(value) ? value : [value];
+            for (var i = 0; i < vals.length; i++) {
+                var v = vals[i];
+                if (!v) continue;
+                var m4 = v.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+                var isV4 = m4 && (+m4[1] <= 255) && (+m4[2] <= 255) && (+m4[3] <= 255) && (+m4[4] <= 255);
+
+                if (!isV4) {
+                    return _('valid IPv4 address');
+                }
+            }
+            return true;
+        };
 
         o = s.taboption('dns', form.Flag, 'dns_proxy_server_nameserver_policy', _('Overwrite Proxy Server Nameserver Policy'));
         o.rmempty = false;
@@ -522,16 +543,14 @@ return view.extend({
         so = o.subsection.option(form.Flag, 'enabled', _('Enable'));
         so.rmempty = false;
 
+        so = o.subsection.option(form.RichListValue, 'type', _('Type'));
+        so.value('fallback-filter', _('fallback-filter'), _('配置 fallback 的触发条件，如 geoip、ipcidr、domain'));
+        so.value('proxy-server-nameserver-policy', _('proxy-server-nameserver-policy'), _('按域名指定节点解析用的 DNS，格式同 nameserver-policy'));
+
         so = o.subsection.option(form.Value, 'matcher', _('Matcher'));
         so.rmempty = false;
 
         so = o.subsection.option(form.DynamicList, 'nameserver', _('Nameserver'));
-
-        o = s.taboption('dns', form.ListValue, 'dns_direct_nameserver_follow_policy', _('Direct Nameserver Follow Policy'));
-        o.optional = true;
-        o.placeholder = _('Unmodified');
-        o.value('0', _('Disable'));
-        o.value('1', _('Enable'));
 
         o = s.taboption('dns', form.Flag, 'dns_nameserver_policy', _('Overwrite Nameserver Policy'));
         o.rmempty = false;
@@ -551,6 +570,9 @@ return view.extend({
         so.rmempty = false;
 
         so = o.subsection.option(form.DynamicList, 'nameserver', _('Nameserver'));
+
+        o = s.taboption('dns', form.Flag, 'dns_direct_nameserver_follow_policy', _('Direct Nameserver Follow Policy'), _('是否遵循nameserver-policy，默认为不遵守，仅当direct-nameserver不为空时生效'));
+        o.default = o.disabled;
 
         o = s.taboption('dns', form.Flag, 'wanDns', _('覆盖 nameserver'), _('使用运营商提供的 DNS 为 nameserver（优先）'));
         o.default = o.disabled;
