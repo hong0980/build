@@ -120,11 +120,17 @@ add_wizard() {
 				uci_set network wan device "$device"
 				uci_set network wan username "$wan_pppoe_user"
 				uci_set network wan password "$wan_pppoe_pass"
+
 				if [ "$ipv6" = '0' ]; then
-					uci_remove dhcp lan dhcpv6
 					uci_set network wan ipv6 0
-					uci_remove network wan6
+					uci_set network lan multipath off
 					uci_set network wan multipath off
+
+					uci_remove network wan6
+					uci_remove dhcp lan ra
+					uci_remove dhcp lan dhcpv6
+					uci_remove dhcp lan ra_flags
+					uci_remove dhcp lan ra_slaac
 					uci show firewall | grep "name='wan'" | while read line; do
 						section=$(echo "$line" | cut -d. -f2)
 						uci_remove_list firewall ${section} network wan6
@@ -245,7 +251,7 @@ boot() {
 	[ -d "/etc/network_bk" ] || mkdir -p "/etc/network_bk"
 	for file in dhcp network firewall wireless; do
 		[ -s /etc/config/$file -a ! -s /etc/network_bk/$file ] && \
-			uci -q export $file > /etc/network_bk/$file
+			cp /etc/config/$file /etc/network_bk/$file
 	done
 }
 

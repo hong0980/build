@@ -86,11 +86,12 @@ export function get_cgroups() {
 	const result = [];
 	if (get_cgroups_version() == 2) {
 		const cgroup_path = '/sys/fs/cgroup/';
-		const process = popen(`find ${cgroup_path} -type d -mindepth 1`);
+		const process = popen(`find ${cgroup_path} -type d -mindepth 2 -maxdepth 2`);
 		if (process) {
 			for (let line = process.read('line'); length(line); line = process.read('line')) {
 				push(result, substr(trim(line), length(cgroup_path)));
 			}
+			process.close();
 		}
 	}
 	return result;
