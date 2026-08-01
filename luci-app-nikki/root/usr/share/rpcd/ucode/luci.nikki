@@ -193,11 +193,13 @@ const methods = {
 				}
 
 				if (found) {
+					run('rm -f ' + shellQuote(target));
 					run('cp -f ' + shellQuote(found) + ' ' + shellQuote(target));
 				} else {
 					return { status: 'error', message: 'extract: no file found in tar.gz, tar output: ' + (extract_out || 'empty') };
 				}
 			} else {
+				run('rm -f ' + shellQuote(target));
 				extract_out = run('gunzip -c ' + shellQuote(path) + ' > ' + shellQuote(target) + ' 2>&1');
 			}
 
@@ -277,7 +279,7 @@ const methods = {
 			const tmpFilepath = '/var/run/nikki/profile.json';
 			if (access(filepath, 'r')) {
 				writefile(tmpFilepath, defaults);
-				const process = run(`yq -Mp yaml -o json eval-all 'select(fi == 0) *? select(fi == 1)' ${tmpFilepath} ${filepath}`);
+				const process = run(`yq -M p yaml -o json eval-all 'select(fi == 0) *? select(fi == 1)' ${tmpFilepath} ${filepath}`);
 				if (process) profile = json(process);
 			}
 			return profile;

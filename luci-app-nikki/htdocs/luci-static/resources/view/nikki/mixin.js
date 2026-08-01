@@ -135,14 +135,14 @@ return view.extend({
         s.tab('geox', _('GeoX Config'));
         s.tab('rule', _('Rule Config'));
 
-        o = s.taboption('general', form.ListValue, 'mode', _('Mode'));
+        o = s.taboption('general', form.RichListValue, 'mode', _('Mode'));
         o.optional = true;
         o.placeholder = _('Unmodified');
-        o.value('global', _('Global Mode'));
-        o.value('rule', _('Rule Mode'));
-        o.value('direct', _('Direct Mode'));
+        o.value('global', _('global'), _('Global Mode'));
+        o.value('rule', _('rule'), _('Rule Mode'));
+        o.value('direct', _('direct'), _('Direct Mode'));
 
-        o = s.taboption('general', form.ListValue, 'match_process', _('Match Process'));
+        o = s.taboption('general', form.ListValue, 'match_process', _('Match Process'), _('find-process-mode'));
         o.optional = true;
         o.placeholder = _('Unmodified');
         o.value('always', _('Enable'));
@@ -158,7 +158,7 @@ return view.extend({
         o.value('info', _('Info'));
         o.value('debug', _('Debug'));
 
-        o = s.taboption('general', form.ListValue, 'outbound_interface', _('Outbound Interface'));
+        o = s.taboption('general', form.ListValue, 'outbound_interface', _('Outbound Interface'), _('interface-name'));
         o.optional = true;
         o.placeholder = _('Unmodified');
 
@@ -167,35 +167,35 @@ return view.extend({
             o.value(network.getName());
         }
 
-        o = s.taboption('general', form.ListValue, 'ipv6', 'IPv6');
+        o = s.taboption('general', form.ListValue, 'ipv6', _('IPv6'));
         o.optional = true;
         o.placeholder = _('Unmodified');
         o.value('0', _('Disable'));
         o.value('1', _('Enable'));
 
-        o = s.taboption('general', form.ListValue, 'unify_delay', _('Unify Delay'));
+        o = s.taboption('general', form.ListValue, 'unify_delay', _('Unify Delay'), _('unified-delay'));
         o.optional = true;
         o.placeholder = _('Unmodified');
         o.value('0', _('Disable'));
         o.value('1', _('Enable'));
 
-        o = s.taboption('general', form.ListValue, 'tcp_concurrent', _('TCP Concurrent'));
+        o = s.taboption('general', form.ListValue, 'tcp_concurrent', _('TCP Concurrent'), _('tcp-concurrent'));
         o.optional = true;
         o.placeholder = _('Unmodified');
         o.value('0', _('Disable'));
         o.value('1', _('Enable'));
 
-        o = s.taboption('general', form.ListValue, 'disable_tcp_keep_alive', _('Disable TCP Keep Alive'));
+        o = s.taboption('general', form.ListValue, 'disable_tcp_keep_alive', _('Disable TCP Keep Alive'), _('disable-keep-alive'));
         o.optional = true;
         o.placeholder = _('Unmodified');
         o.value('0', _('Disable'));
         o.value('1', _('Enable'));
 
-        o = s.taboption('general', form.Value, 'tcp_keep_alive_idle', _('TCP Keep Alive Idle'), _('In seconds.'));
+        o = s.taboption('general', form.Value, 'tcp_keep_alive_idle', _('TCP Keep Alive Idle'), _('keep-alive-idle ') + _('In seconds.'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
 
-        o = s.taboption('general', form.Value, 'tcp_keep_alive_interval', _('TCP Keep Alive Interval'), _('In seconds.'));
+        o = s.taboption('general', form.Value, 'tcp_keep_alive_interval', _('TCP Keep Alive Interval'), _('keep-alive-interval ') + _('In seconds.'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
 
@@ -351,31 +351,31 @@ return view.extend({
         o = s.taboption('tun', form.Value, 'tun_device', _('Device Name'));
         o.placeholder = _('Unmodified');
 
-        o = s.taboption('tun', form.ListValue, 'tun_stack', _('Stack'));
+        o = s.taboption('tun', form.RichListValue, 'tun_stack', _('Stack'), _('stack'));
         o.optional = true;
         o.placeholder = _('Unmodified');
-        o.value('system', 'System');
-        o.value('gvisor', 'gVisor');
-        o.value('mixed', 'Mixed');
+        o.value('system', _('system'), _('System'));
+        o.value('gvisor', _('gvisor'), _('gVisor'));
+        o.value('mixed', _('mixed'), _('Mixed'));
 
-        o = s.taboption('tun', form.Value, 'tun_mtu', _('MTU'));
+        o = s.taboption('tun', form.Value, 'tun_mtu', _('MTU'), _('mtu'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
 
-        o = s.taboption('tun', form.ListValue, 'tun_gso', _('GSO'));
+        o = s.taboption('tun', form.ListValue, 'tun_gso', _('GSO'), _('gso'));
         o.optional = true;
         o.placeholder = _('Unmodified');
         o.value('0', _('Disable'));
         o.value('1', _('Enable'));
 
-        o = s.taboption('tun', form.Value, 'tun_gso_max_size', _('GSO Max Size'));
+        o = s.taboption('tun', form.Value, 'tun_gso_max_size', _('GSO Max Size'), _('gso-max-size'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
 
         o = s.taboption('tun', form.Flag, 'tun_dns_hijack', _('Overwrite DNS Hijack'));
         o.rmempty = false;
 
-        o = s.taboption('tun', form.DynamicList, 'tun_dns_hijacks', _('Edit DNS Hijacks'));
+        o = s.taboption('tun', form.DynamicList, 'tun_dns_hijacks', _('Edit DNS Hijacks'), _('dns-hijack'));
         o.retain = true;
         o.depends('tun_dns_hijack', '1');
         o.value('tcp://any:53');

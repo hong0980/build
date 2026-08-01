@@ -8,6 +8,7 @@ chmod +x /etc/init.d/nikki \
 . /lib/functions.sh
 . /etc/nikki/scripts/include.sh
 mkdir -p "$SUBSCRIPTIONS_DIR" "$RULE_PROVIDERS_DIR" "$PROXY_PROVIDERS_DIR" /etc/nikki/certs
+[ -x /usr/bin/mihomo ] && ln -sf /usr/bin/mihomo "$PROG"
 
 config_load nikki
 

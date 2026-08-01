@@ -2089,6 +2089,9 @@ msgstr "启用 LightGBM 模型"
 msgid "Collect Training Data"
 msgstr "收集训练数据"
 
+msgid "Collector Size (MB)"
+msgstr "训练数据大小 (MB)"
+
 msgid "Sample Rate"
 msgstr "采样率"
 

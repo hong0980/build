@@ -175,52 +175,16 @@ start_service() {
 			fi
 		fi
 	else
-		yq -Mi '... comments="" | explode(.) |
-				.tun = (.tun // {})          |
-				.tun.enable = true           |
-				.tun.stack = "mixed"         |
-				.tun["auto-route"] = true    |
-				.tun["auto-redirect"] = true |
-				.tun["auto-detect-interface"] = true
-				' "$TEMP_CONFIG"
+		yq -Mi '
+			... comments="" | explode(.) |
+			.tun = (.tun // {})          |
+			.tun.enable = true           |
+			.tun.stack = "mixed"         |
+			.tun["auto-route"] = true    |
+			.tun["auto-redirect"] = true |
+			.tun["auto-detect-interface"] = true
+		' "$TEMP_CONFIG"
 	fi
-
-	local core uselightgbm collectdata sample_rate prefer_asn smart_strategy policy_priority
-	config_get core            config core
-	config_get uselightgbm     config uselightgbm
-	config_get collectdata     config collectdata
-	config_get sample_rate     config sample_rate
-	config_get prefer_asn      config prefer_asn
-	config_get smart_strategy  config smart_strategy
-	config_get policy_priority config policy_priority
-
-	[ "$core" = 'smart' ] && {
-		log "Smart" "Convert all url-test groups to smart + apply LightGBM settings."
-		local yq_expr='
-			(.proxy-groups // []) |= map(
-				select(.type == "url-test") |= (
-					.type = "smart"                 |
-					.uselightgbm = '"$uselightgbm"' |
-					.collectdata = '"$collectdata"' |
-					.sample-rate = '"$sample_rate"' |
-					.prefer-asn  = '"$prefer_asn"'  |
-					.strategy    = "'"$smart_strategy"'"
-				)
-			)
-		'
-
-		[ -n "$policy_priority" ] && {
-			yq_expr="$yq_expr"'
-				| (.proxy-groups // []) |= map(
-					select(.type == "smart") |= (
-						.["policy-priority"] = "'"$policy_priority"'"
-					)
-				)
-			'
-		}
-
-		yq -Mi "$yq_expr" "$TEMP_CONFIG"
-	}
 
 	if [ "$core_only" = 0 -a "$proxy_enabled" = 1 ]; then
 		# log "Profile" "Checking..."
@@ -261,6 +225,44 @@ start_service() {
 		fi
 		# log "Profile" "Check passed."
 	fi
+
+	local core uselightgbm
+	config_get core        config core
+	config_get uselightgbm config uselightgbm '0'
+
+	[ "$core" = 'smart' -a "$uselightgbm" = '1' ] && {
+		local collectdata sample_rate prefer_asn smart_strategy policy_priority collector_size lgbm_url
+		config_get lgbm_url        config lgbm_url
+		config_get collectdata     config collectdata          '0'
+		config_get sample_rate     config sample_rate          '1.0'
+		config_get prefer_asn      config prefer_asn           '1'
+		config_get smart_strategy  config smart_strategy       'sticky-sessions'
+		config_get policy_priority config policy_priority
+		config_get collector_size  config smart_collector_size '100'
+		log "Smart" "Convert all url-test groups to smart + apply LightGBM settings."
+		[ -n "$lgbm_url" ] && lgbm_url="https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/$lgbm_url"
+		export uselightgbm collectdata sample_rate prefer_asn smart_strategy policy_priority lgbm_url collector_size
+		yq -Mi '
+			.profile = (.profile // {}) |
+			.profile["smart-collector-size"] = (strenv(collector_size) | tonumber) |
+			((select(strenv(lgbm_url) != "")     |
+				.["lgbm-url"] = strenv(lgbm_url) |
+				.["lgbm-auto-update"]     = true |
+				.["lgbm-update-interval"] = 72
+			) // .) |
+			(.proxy-groups // []) |= map(
+				select(.type == "url-test" or .type == "load-balance")  |= (
+					.type = "smart"                                     |
+					.strategy        = strenv(smart_strategy)           |
+					.uselightgbm     = (strenv(uselightgbm) == "1")     |
+					.collectdata     = (strenv(collectdata) == "1")     |
+					.["prefer-asn"]  = (strenv(prefer_asn)  == "1")     |
+					.["sample-rate"] = (strenv(sample_rate) | tonumber) |
+					((select(strenv(policy_priority) != "") | .["policy-priority"] = strenv(policy_priority)) // .)
+				)
+			)
+		' "$TEMP_CONFIG"
+	}
 	mv -f "$TEMP_CONFIG" "$RUN_PROFILE_PATH"
 
 	if [ "$test_profile" = 1 ]; then
