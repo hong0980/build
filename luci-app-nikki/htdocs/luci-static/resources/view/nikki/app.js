@@ -251,6 +251,137 @@ return view.extend({
         o = s.option(form.Flag, 'enabled', _('Enable'));
         o.rmempty = false;
 
+        o = s.option(form.ListValue, 'core', _('Core'));
+        o.value('meta', _('Stable'));
+        o.value('alpha', _('Alpha'));
+        o.value('smart', _('Smart'));
+        o.rmempty = false;
+
+        o.renderWidget = function (section_id, option_index, cfgvalue) {
+            const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            const core_version = uci.get('nikki', 'config', 'core_version');
+            const btn = E('button', {
+                'class': 'btn cbi-button-positive',
+                'click': ui.createHandlerFn(this, function (ev) {
+                    ev.preventDefault();
+                    const val = this.formvalue(section_id).trim();
+                    if (!val)
+                        return ui.addNotification(null, E('p', _('Please select a core first.')), 'error');
+
+                    if (!core_version || core_version === '0')
+                        return ui.addNotification(null, E('p', _('Unknown device architecture, cannot download core.')), 'error');
+
+                    ui.addTimeLimitedNotification(null, E('p', _('Checking latest version...')), 5000, 'info');
+                    return nikki.get_core_url(val, core_version)
+                        .then(function (info) {
+                            if (info.status !== 'ok')
+                                throw new Error(info.message || 'Failed to get download URL');
+                            ui.addTimeLimitedNotification(null, E('p', _('Downloading %s...').format(info.version)), 5000, 'info');
+
+                            const filename = info.istargz ? 'mihomo.tar.gz' : 'mihomo.gz';
+                            return nikki.download_file_curl(info.url, '/tmp', filename, '1')
+                                .then(function (result) {
+                                    return { result: result, istargz: info.istargz };
+                                });
+                        })
+                        .then(function (data) {
+                            if (data.result.status !== 'ok')
+                                throw new Error(data.result.message || _('Download failed'));
+
+                            return nikki.upgrade_core(data.result.path, data.istargz);
+                        })
+                        .then(function (result) {
+                            if (result.status === 'ok') {
+                                ui.addTimeLimitedNotification(null, E('p', _('Core updated successfully, restarting service...')), 5000, 'success');
+                                return nikki.service('restart');
+                            }
+                            throw new Error(result.message || _('Extraction failed'));
+                        })
+                        .then(function () {
+                            ui.addTimeLimitedNotification(null, E('p', _('Service restarted successfully!')), 5000, 'success');
+                        })
+                        .catch(function (err) {
+                            ui.addNotification(null, E('p', _('Update failed: %s').format(err.message || err)), 'error');
+                        });
+                })
+            }, _('Update Core'));
+            node.classList.add('control-group');
+            node.appendChild(btn);
+            return node;
+        };
+
+        // Model Version
+        o = s.option(form.ListValue, 'lgbm_custom', _('Model Version'));
+        o.rmempty = true;
+        o.value('Model.bin', _('Light'));
+        o.value('Model-middle.bin', _('Middle'));
+        o.value('Model-large.bin', _('Large'));
+        o.depends('core', 'smart');
+        o.renderWidget = function (section_id, option_index, cfgvalue) {
+            const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            const btn = E('button', {
+                'class': 'btn cbi-button-positive',
+                'click': ui.createHandlerFn(this, function (ev) {
+                    ev.preventDefault();
+                    const val = this.formvalue(section_id).trim();
+                    if (!val)
+                        return ui.addNotification(null, E('p', _('Please select a model version first.')), 'error');
+
+                    const url = 'https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/' + val;
+                    ui.addTimeLimitedNotification(null, E('p', _('Downloading model...')), 5000, 'info');
+
+                    return nikki.download_file_curl(url, nikki.runDir, 'Model.bin')
+                        .then(function (result) {
+                            if (result.status === 'ok') {
+                                ui.addTimeLimitedNotification(null, E('p', _('Model updated successfully! Path: %s').format(result.path)), 5000, 'success');
+                            } else {
+                                ui.addNotification(null, E('p', _('Update failed: %s').format(result.message || 'Unknown error')), 'error');
+                            }
+                        })
+                        .catch(function (err) {
+                            ui.addNotification(null, E('p', _('RPC request failed: %s').format(err.message || err)), 'error');
+                        });
+                })
+            }, _('Download Model'));
+            node.classList.add('control-group');
+            node.appendChild(btn);
+            return node;
+        };
+
+        o = s.option(form.Flag, 'uselightgbm', _('Enable LightGBM'));
+        o.default = '1';
+        o.rmempty = false;
+        o.depends('core', 'smart');
+
+        o = s.option(form.Flag, 'collectdata', _('Collect Training Data'));
+        o.default = '0';
+        o.rmempty = false;
+        o.depends('core', 'smart');
+
+        o = s.option(form.Value, 'sample_rate', _('Sample Rate'));
+        o.datatype = 'range(0.1, 1.0)';
+        o.default = '1.0';
+        o.placeholder = '0.1 ~ 1.0';
+        o.rmempty = false;
+        o.depends({ 'core': 'smart', 'collectdata': '1' });
+
+        o = s.option(form.Flag, 'prefer_asn', _('Prefer ASN'));
+        o.default = '1';
+        o.rmempty = false;
+        o.depends('core', 'smart');
+
+        o = s.option(form.ListValue, 'smart_strategy', _('Strategy'));
+        o.value('sticky-sessions', _('Sticky Sessions (Recommended)'));
+        o.value('round-robin', _('Round Robin'));
+        o.default = 'sticky-sessions';
+        o.rmempty = false;
+        o.depends('core', 'smart');
+
+        o = s.option(form.Value, 'policy_priority', _('Policy Priority'));
+        o.placeholder = 'Premium:0.9;SG:1.2;HK:1.1';
+        o.rmempty = true;
+        o.depends('core', 'smart');
+
         o = s.option(form.ListValue, 'profile', _('Choose Profile'));
         o.optional = true;
 
@@ -288,7 +419,7 @@ return view.extend({
 
         o = s.option(form.Value, 'file_url', _('Subscription'), _('Add a subscription to a startup profile'));
         o.depends({ profile: 'file', '!contains': true, core_only: 0 });
-        o.password = true;
+        // o.password = true;
         o.retain = true;
         o.placeholder = _('Not used');
 
@@ -328,6 +459,24 @@ return view.extend({
             }, _('verify'));
             node.classList.add('control-group');
             node.appendChild(btn);
+            return node;
+        };
+
+        o = s.option(form.Value, 'github_token', _('GitHub token'));
+        o.password = true;
+        o.renderWidget = function () {
+            let node = form.Value.prototype.renderWidget.apply(this, arguments);
+
+            (node.querySelector('.control-group') || node).appendChild(E('button', {
+                'class': 'cbi-button cbi-button-apply',
+                'title': _('Save'),
+                'click': ui.createHandlerFn(this, () => {
+                    return this.map.save(null, true).then(() => {
+                        ui.changes.apply(true);
+                    });
+                }, this.option)
+            }, [_('Save')]));
+
             return node;
         };
 

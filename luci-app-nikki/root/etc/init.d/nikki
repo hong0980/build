@@ -3,7 +3,6 @@
 START=99
 STOP=10
 USE_PROCD=1
-PROG="/usr/bin/mihomo"
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
 
 extra_command 'clear_logs' 'Clear logs if size exceeds the limit'
@@ -112,7 +111,7 @@ start_service() {
 		[ "$dns_nameserver"        = 1 ] && yq -Mi 'del(.dns.default-nameserver) | del(.dns.fallback) | del(.dns.proxy-server-nameserver) | del(.dns.direct-nameserver) | del(.dns.nameserver)' "$TEMP_CONFIG"
 
 		local mixin_file file_url github_mod urltest_url interval tolerance \
-		      timeout lazy max_failed_times unified_delay mixin_extra_file=""
+			  timeout lazy max_failed_times unified_delay mixin_extra_file=""
 		config_get file_url          config file_url
 		config_get mixin_file        config mixin_file
 		config_get github_mod        mixin  github_mod
@@ -185,6 +184,43 @@ start_service() {
 				.tun["auto-detect-interface"] = true
 				' "$TEMP_CONFIG"
 	fi
+
+	local core uselightgbm collectdata sample_rate prefer_asn smart_strategy policy_priority
+	config_get core            config core
+	config_get uselightgbm     config uselightgbm
+	config_get collectdata     config collectdata
+	config_get sample_rate     config sample_rate
+	config_get prefer_asn      config prefer_asn
+	config_get smart_strategy  config smart_strategy
+	config_get policy_priority config policy_priority
+
+	[ "$core" = 'smart' ] && {
+		log "Smart" "Convert all url-test groups to smart + apply LightGBM settings."
+		local yq_expr='
+			(.proxy-groups // []) |= map(
+				select(.type == "url-test") |= (
+					.type = "smart"                 |
+					.uselightgbm = '"$uselightgbm"' |
+					.collectdata = '"$collectdata"' |
+					.sample-rate = '"$sample_rate"' |
+					.prefer-asn  = '"$prefer_asn"'  |
+					.strategy    = "'"$smart_strategy"'"
+				)
+			)
+		'
+
+		[ -n "$policy_priority" ] && {
+			yq_expr="$yq_expr"'
+				| (.proxy-groups // []) |= map(
+					select(.type == "smart") |= (
+						.["policy-priority"] = "'"$policy_priority"'"
+					)
+				)
+			'
+		}
+
+		yq -Mi "$yq_expr" "$TEMP_CONFIG"
+	}
 
 	if [ "$core_only" = 0 -a "$proxy_enabled" = 1 ]; then
 		# log "Profile" "Checking..."

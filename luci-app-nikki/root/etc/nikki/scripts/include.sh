@@ -11,6 +11,7 @@ PROVIDERS_DIR="$RUN_DIR/providers"
 RULE_PROVIDERS_DIR="$PROVIDERS_DIR/rule"
 PROXY_PROVIDERS_DIR="$PROVIDERS_DIR/proxy"
 
+PROG="$RUN_DIR/mihomo"
 # log
 LOG_DIR="/var/log/nikki"
 APP_LOG_PATH="$LOG_DIR/app.log"

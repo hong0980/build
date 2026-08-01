@@ -83,11 +83,33 @@ const callConnStat = rpc.declare({
     expect: { '': {} }
 });
 
+const calldownload_file = rpc.declare({
+    object: 'luci.nikki',
+    method: 'download_file',
+    params: ['url', 'path', 'filename', 'chmod', 'ua', 'secret', 'headers'],
+    expect: { '': {} }
+});
+
+const callUpgradeCore = rpc.declare({
+    object: 'luci.nikki',
+    method: 'upgrade_core',
+    params: ['path', 'istargz'],
+    expect: { '': {} }
+});
+
+const callGetCoreUrl = rpc.declare({
+    object: 'luci.nikki',
+    method: 'get_core_url',
+    params: ['core_type', 'arch'],
+    expect: { '': {} }
+});
+
 const homeDir = '/etc/nikki';
 const profilesDir = `${homeDir}/profiles`;
 const subscriptionsDir = `${homeDir}/subscriptions`;
 const mixinFilePath = `${homeDir}/mixin.yaml`;
 const runDir = `${homeDir}/run`;
+const PROG = `${runDir}/mihomo`
 const runProfilePath = `${runDir}/config.yaml`;
 const providersDir = `${runDir}/providers`;
 const ruleProvidersDir = `${providersDir}/rule`;
@@ -105,6 +127,7 @@ const ui_array = [
 ];
 
 return baseclass.extend({
+    PROG: PROG,
     homeDir: homeDir,
     profilesDir: profilesDir,
     subscriptionsDir: subscriptionsDir,
@@ -146,6 +169,24 @@ return baseclass.extend({
             promise = promise.then(() => callFileWrite(path, chunk, append, mode));
         }
         return promise;
+    },
+
+    get_core_url: function (core_type, arch) {
+        return callGetCoreUrl(core_type, arch);
+    },
+
+    upgrade_core: function (path, istargz) {
+        istargz = (istargz == null || istargz === false || istargz === 0 || istargz === '')
+            ? ''
+            : (typeof istargz === 'string' ? istargz : '1');
+        return callUpgradeCore(path, istargz);
+    },
+
+    download_file_curl: function (url, path, filename, chmod, ua, secret, headers) {
+        chmod = (chmod == null || chmod === false || chmod === 0 || chmod === '')
+            ? ''
+            : (typeof chmod === 'string' ? chmod : '1');
+        return calldownload_file(url, path, filename, chmod, ua, secret, headers);
     },
 
     version: function () {

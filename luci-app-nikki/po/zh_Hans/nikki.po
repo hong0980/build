@@ -2020,5 +2020,92 @@ msgstr "为启动配置文件添加订阅"
 msgid "Not used"
 msgstr "不使用"
 
+msgid "Core"
+msgstr "内核"
+
+msgid "Stable"
+msgstr "稳定版"
+
+msgid "Alpha"
+msgstr "Alpha 版"
+
+msgid "Smart"
+msgstr "Smart 版"
+
+msgid "Update Core"
+msgstr "更新内核"
+
+msgid "Please select a core first."
+msgstr "请先选择内核。"
+
+msgid "Unknown device architecture, cannot download core."
+msgstr "无法识别设备架构，无法下载内核。"
+
+msgid "Checking latest version..."
+msgstr "正在检查最新版本..."
+
+msgid "Downloading %s..."
+msgstr "正在下载 %s..."
+
+msgid "Core updated successfully, restarting service..."
+msgstr "内核更新成功，正在重启服务..."
+
+msgid "Service restarted successfully!"
+msgstr "服务重启成功！"
+
+msgid "Update failed: %s"
+msgstr "更新失败：%s"
+
+msgid "Model Version"
+msgstr "模型版本"
+
+msgid "Light"
+msgstr "轻量版"
+
+msgid "Middle"
+msgstr "中等版"
+
+msgid "Large"
+msgstr "完整版"
+
+msgid "Download Model"
+msgstr "下载模型"
+
+msgid "Please select a model version first."
+msgstr "请先选择模型版本。"
+
+msgid "Downloading model..."
+msgstr "正在下载模型..."
+
+msgid "Model updated successfully! Path: %s"
+msgstr "模型更新成功！路径：%s"
+
+msgid "RPC request failed: %s"
+msgstr "RPC 请求失败：%s"
+
+msgid "Enable LightGBM"
+msgstr "启用 LightGBM 模型"
+
+msgid "Collect Training Data"
+msgstr "收集训练数据"
+
+msgid "Sample Rate"
+msgstr "采样率"
+
+msgid "Prefer ASN"
+msgstr "优先 ASN"
+
+msgid "Strategy"
+msgstr "策略"
+
+msgid "Sticky Sessions (Recommended)"
+msgstr "粘性会话（推荐）"
+
+msgid "Round Robin"
+msgstr "轮询"
+
+msgid "Policy Priority"
+msgstr "策略优先级"
+
 msgid ""
 msgstr ""

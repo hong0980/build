@@ -35,6 +35,50 @@ config_get init config init
 	uci -q set nikki.@authentication[0].password="$random"
 }
 
+source "/etc/openwrt_release"
+case "${DISTRIB_ARCH}" in
+    aarch64_*)
+        core_arch="linux-arm64"
+        ;;
+    arm_*_neon*|arm_*_vfpv3*|arm_*_vfpv4*|arm_*_neon-vfpv4*)
+        core_arch="linux-armv7"
+        ;;
+    arm_*_vfp*)
+        core_arch="linux-armv6"
+        ;;
+    arm*)
+        core_arch="linux-armv5"
+        ;;
+    i386_*|i686_*)
+        core_arch="linux-386"
+        ;;
+    x86_64)
+        core_arch="linux-amd64"
+        ;;
+    mips64el_*)
+        core_arch="linux-mips64le"
+        ;;
+    mips64_*)
+        core_arch="linux-mips64"
+        ;;
+    mipsel_*)
+        core_arch="linux-mipsle-softfloat"
+        ;;
+    mips_*)
+        core_arch="linux-mips-softfloat"
+        ;;
+    riscv64_*)
+        core_arch="linux-riscv64"
+        ;;
+    loongarch64_*|loong64_*)
+        core_arch="linux-loong64-abi1"
+        ;;
+    *)
+        core_arch="0"
+        ;;
+esac
+uci -q set nikki.config.core_version="$core_arch"
+
 uci -q batch <<-EOF > /dev/null
 	del firewall.nikki
 	set firewall.nikki=include
