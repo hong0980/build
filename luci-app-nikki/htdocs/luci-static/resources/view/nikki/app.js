@@ -260,51 +260,55 @@ return view.extend({
             const self = this;
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
             const core_version = uci.get('nikki', 'config', 'core_version');
-            const btn = E('button', {
-                'class': 'btn cbi-button-positive',
+            const updateBtn = E('button', {
+                'class': 'btn cbi-button-action',
                 'click': ui.createHandlerFn(this, function (ev) {
                     ev.preventDefault();
                     const val = self.formvalue(section_id).trim();
                     if (!val)
                         return ui.addNotification(null, E('p', _('Please select a core first.')), 'error');
+                    if (cfgvalue === val) return;
 
-                    return nikki.get_core_url(val, core_version)
-                        .then(function (info) {
-                            if (info.status !== 'ok')
-                                throw new Error(info.message || 'Failed to get download URL');
-
-                            const filename = info.istargz ? 'mihomo.tar.gz' : 'mihomo.gz';
-                            return nikki.download_file_curl(info.url, '/tmp', filename, '1')
-                                .then(function (result) {
-                                    return { result: result, istargz: info.istargz };
-                                });
-                        })
-                        .then(function (data) {
-                            if (data.result.status !== 'ok')
-                                throw new Error(data.result.message || _('Download failed'));
-                            return nikki.upgrade_core(data.result.path, data.istargz);
-                        })
-                        .then(function (result) {
-                            if (result.status !== 'ok')
-                                throw new Error(result.message || _('Extraction failed'));
-                            return nikki.service('restart');
-                        })
-                        .then(function () {
-                            ui.addTimeLimitedNotification(null, E('p', _('Service restarted successfully!')), 5000, 'success');
-                            if (cfgvalue !== val) {
-                                uci.set('nikki', 'config', 'core', val);
-                                return self.map.save(null, true).then(() => {
-                                    ui.changes.apply(true);
-                                });
-                            }
+                    return nikki.cache_core(val, core_version)
+                        .then(function (res) {
+                            if (res.status !== 'ok')
+                                throw new Error(res.message || _('Cache failed'));
+                            ui.addTimeLimitedNotification(null, E('p', _('Core cached: %s').format(res.path || '')), 4000, 'info');
                         })
                         .catch(function (err) {
                             ui.addNotification(null, E('p', _('Update failed: %s').format(err.message || err)), 'error');
                         });
                 })
             }, _('Update Core'));
+            const switchBtn = E('button', {
+                'class': 'btn cbi-button-positive',
+                'click': ui.createHandlerFn(this, function (ev) {
+                    ev.preventDefault();
+                    const val = self.formvalue(section_id).trim();
+                    if (!val)
+                        return ui.addNotification(null, E('p', _('Please select a core first.')), 'error');
+                    if (cfgvalue === val) return;
+
+                    return nikki.switch_core(val, core_version)
+                        .then(function (res) {
+                            if (res.status !== 'ok')
+                                throw new Error(res.message || _('Switch failed'));
+
+                            ui.addTimeLimitedNotification(null, E('p', _('Switched to %s').format(val)), 4000, 'success');
+                            if (cfgvalue !== val) {
+                                uci.set('nikki', 'config', 'core', val);
+                                return self.map.save(null, true)
+                                    .then(() => ui.changes.apply(true));
+                            }
+                        })
+                        .catch(function (err) {
+                            ui.addNotification(null, E('p', _('Switch failed: %s').format(err.message || err)), 'error');
+                        });
+                })
+            }, _('Switch Core'));
             node.classList.add('control-group');
-            node.appendChild(btn);
+            node.appendChild(switchBtn);
+            node.appendChild(updateBtn);
             return node;
         };
 

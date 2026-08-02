@@ -90,16 +90,23 @@ const calldownload_file = rpc.declare({
     expect: { '': {} }
 });
 
-const callUpgradeCore = rpc.declare({
-    object: 'luci.nikki',
-    method: 'upgrade_core',
-    params: ['path', 'istargz'],
-    expect: { '': {} }
-});
-
 const callGetCoreUrl = rpc.declare({
     object: 'luci.nikki',
     method: 'get_core_url',
+    params: ['core_type', 'arch'],
+    expect: { '': {} }
+});
+
+const callCacheCore = rpc.declare({
+    object: 'luci.nikki',
+    method: 'cache_core',
+    params: ['core_type', 'arch'],
+    expect: { '': {} }
+});
+
+const callSwitchCore = rpc.declare({
+    object: 'luci.nikki',
+    method: 'switch_core',
     params: ['core_type', 'arch'],
     expect: { '': {} }
 });
@@ -171,15 +178,16 @@ return baseclass.extend({
         return promise;
     },
 
-    get_core_url: function (core_type, arch) {
-        return callGetCoreUrl(core_type, arch);
+    cache_core: function (core_type, arch) {
+        return callCacheCore(core_type, arch);
     },
 
-    upgrade_core: function (path, istargz) {
-        istargz = (istargz == null || istargz === false || istargz === 0 || istargz === '')
-            ? ''
-            : (typeof istargz === 'string' ? istargz : '1');
-        return callUpgradeCore(path, istargz);
+    switch_core: function (core_type, arch) {
+        return callSwitchCore(core_type, arch);
+    },
+
+    get_core_url: function (core_type, arch) {
+        return callGetCoreUrl(core_type, arch);
     },
 
     download_file_curl: function (url, path, filename, chmod, ua, secret, headers) {

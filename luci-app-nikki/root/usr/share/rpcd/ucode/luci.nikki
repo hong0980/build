@@ -160,60 +160,6 @@ const methods = {
 			};
 		}
 	},
-	upgrade_core: {
-		args: { path: 'path', istargz: 'istargz' },
-		call: function (req) {
-			const path = req.args?.path;
-			const istargz = req.args?.istargz;
-			const target = '/etc/nikki/run/mihomo';
-
-			if (!path || !access(path, 'r'))
-				return { status: 'error', message: 'invalid download path' };
-
-			let extract_out;
-			if (istargz) {
-				const tmpdir = '/tmp/mihomo_extract';
-				run('rm -rf ' + shellQuote(tmpdir) + ' && mkdir -p ' + shellQuote(tmpdir));
-				extract_out = run('tar -xzf ' + shellQuote(path) + ' -C ' + shellQuote(tmpdir) + ' 2>&1');
-
-				const ls_out = run('ls -1 ' + shellQuote(tmpdir) + ' 2>/dev/null');
-				let found = null;
-				if (ls_out) {
-					const lines = split(ls_out, '\n');
-					for (let i = 0; i < length(lines); i++) {
-						const name = trim(lines[i]);
-						if (name && name != '.' && name != '..') {
-							const fullpath = tmpdir + '/' + name;
-							if (access(fullpath, 'r')) {
-								found = fullpath;
-								break;
-							}
-						}
-					}
-				}
-
-				if (found) {
-					run('rm -f ' + shellQuote(target));
-					run('cp -f ' + shellQuote(found) + ' ' + shellQuote(target));
-				} else {
-					return { status: 'error', message: 'extract: no file found in tar.gz, tar output: ' + (extract_out || 'empty') };
-				}
-			} else {
-				run('rm -f ' + shellQuote(target));
-				extract_out = run('gunzip -c ' + shellQuote(path) + ' > ' + shellQuote(target) + ' 2>&1');
-			}
-
-			if (!access(target, 'r'))
-				return { status: 'error', message: 'extract failed: ' + (extract_out || 'unknown') };
-
-			system(['/bin/chmod', '755', target]);
-
-			run('rm -f ' + shellQuote(path));
-			if (istargz) run('rm -rf /tmp/mihomo_extract');
-
-			return { status: 'ok', path: target };
-		}
-	},
 	download_file: {
 		args: { url: 'url', path: 'path', filename: 'filename', chmod: 'chmod', ua: 'ua', secret: 'secret', headers: 'headers' },
 		call: function (req) {
@@ -335,5 +281,112 @@ const methods = {
 		}
 	}
 };
+methods.cache_core = {
+	args: { core_type: 'core_type', arch: 'arch' },
+	call: function (req) {
+		const arch = req.args?.arch;
+		const core_type = req.args?.core_type;
+		const cache_dir = '/etc/nikki/run/core';
+		const out_name = core_type + '-mihomo';
+		const tmp_out = cache_dir + '/' + out_name + '.tmp';
+		const final_out = cache_dir + '/' + out_name;
 
+		if (!core_type || !arch) return { status: 'error', message: 'missing params' };
+
+		run('mkdir -p ' + shellQuote(cache_dir));
+
+		let core_info;
+		try {
+			core_info = methods.get_core_url.call({ args: { core_type, arch } });
+		} catch (e) {
+			return { status: 'error', message: 'get_core_url failed: ' + (e.message || e) };
+		}
+
+		if (!core_info || core_info.status != 'ok')
+			return { status: 'error', message: core_info?.message || 'no core info' };
+
+		const archive_name = core_info.filename || (core_info.istargz ? 'mihomo.tar.gz' : 'mihomo.gz');
+		const archive_cache_name = core_type + '-' + archive_name;
+		const archive_fullpath = cache_dir + '/' + archive_cache_name;
+
+		let dl;
+		try {
+			dl = methods.download_file.call({
+				args: { url: core_info.url, path: cache_dir, filename: archive_cache_name, chmod: '1' }
+			});
+		} catch (e) {
+			return { status: 'error', message: 'download_file failed: ' + (e.message || e) };
+		}
+
+		if (!dl || dl.status != 'ok')
+			return { status: 'error', message: dl?.message || 'download failed' };
+
+		run('rm -f ' + shellQuote(tmp_out));
+
+		if (core_info.istargz) {
+			const tmpdir = '/tmp/mihomo_extract';
+			run('rm -rf ' + shellQuote(tmpdir) + ' && mkdir -p ' + shellQuote(tmpdir));
+
+			const tar_out = run('tar -xzf ' + shellQuote(archive_fullpath) + ' -C ' + shellQuote(tmpdir) + ' 2>&1');
+			const ls_out = run('ls -1 ' + shellQuote(tmpdir) + ' 2>/dev/null') || '';
+
+			let found = null;
+			for (let name in split(ls_out, '\n')) {
+				name = trim(name);
+				if (name && access(tmpdir + '/' + name, 'r')) {
+					found = tmpdir + '/' + name;
+					break;
+				}
+			}
+
+			if (!found) {
+				run('rm -rf ' + shellQuote(tmpdir));
+				return { status: 'error', message: 'extract failed: ' + (tar_out || 'no file') };
+			}
+
+			run('cp -f ' + shellQuote(found) + ' ' + shellQuote(tmp_out));
+			run('rm -rf ' + shellQuote(tmpdir));
+		} else {
+			const out = run('gunzip -c ' + shellQuote(archive_fullpath) + ' > ' + shellQuote(tmp_out) + ' 2>&1');
+			if (!access(tmp_out, 'r'))
+				return { status: 'error', message: out || 'gunzip failed' };
+		}
+
+		run('chmod 755 ' + shellQuote(tmp_out));
+		run('mv ' + shellQuote(tmp_out) + ' ' + shellQuote(final_out));
+		run('rm -f ' + shellQuote(archive_fullpath));
+
+		return { status: 'ok', path: final_out, archive: archive_fullpath };
+	}
+};
+
+methods.switch_core = {
+	args: { core_type: 'core_type', arch: 'arch' },
+	call: function (req) {
+		const arch = req.args?.arch;
+		const core_type = req.args?.core_type;
+		if (!core_type) return { status: 'error', message: 'missing core_type' };
+
+		const target = '/etc/nikki/run/mihomo';
+		const final_out = '/etc/nikki/run/core/' + core_type + '-mihomo';
+
+		if (!access(final_out, 'r')) {
+			const cache = methods.cache_core.call({
+				args: { core_type: core_type, arch: arch }
+			});
+
+			if (!cache || cache.status != 'ok')
+				return { status: 'error', message: cache?.message || ('cached binary not found: ' + final_out) };
+		}
+
+		run('rm -f ' + shellQuote(target));
+
+		const out = run('ln -s ' + shellQuote(final_out) + ' ' + shellQuote(target));
+		if (out) return { status: 'error', message: 'switch failed: ' + out };
+
+		system(['/bin/chmod', '755', final_out]);
+
+		return { status: 'ok', path: target };
+	}
+};
 return { 'luci.nikki': methods };

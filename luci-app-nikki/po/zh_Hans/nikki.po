@@ -2035,6 +2035,9 @@ msgstr "Smart 版"
 msgid "Update Core"
 msgstr "更新内核"
 
+msgid "Switch Core"
+msgstr "切换内核"
+
 msgid "Please select a core first."
 msgstr "请先选择内核。"
 
@@ -2050,8 +2053,14 @@ msgstr "正在下载 %s..."
 msgid "Core updated successfully, restarting service..."
 msgstr "内核更新成功，正在重启服务..."
 
-msgid "Service restarted successfully!"
-msgstr "服务重启成功！"
+msgid "Switch failed: %s"
+msgstr "切换失败：%s"
+
+msgid "Switched to %s"
+msgstr "已切换至 %s"
+
+msgid "Switch failed"
+msgstr "切换失败"
 
 msgid "Update failed: %s"
 msgstr "更新失败：%s"
