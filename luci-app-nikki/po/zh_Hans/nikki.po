@@ -2110,5 +2110,65 @@ msgstr "轮询"
 msgid "Policy Priority"
 msgstr "策略优先级"
 
+msgid "Default DNS Hijack"
+msgstr "默认 DNS 劫持"
+
+msgid "Enable DNS hijacking for users not explicitly configured"
+msgstr "为未显式配置的用户启用 DNS 劫持"
+
+msgid "Default Proxy Enable"
+msgstr "默认代理启用"
+
+msgid "Enable proxy for users not explicitly configured"
+msgstr "为未显式配置的用户启用代理"
+
+msgid "Whitelist Access Control"
+msgstr "白名单访问控制"
+
+msgid "Blacklist Bypass Control"
+msgstr "黑名单绕过控制"
+
+msgid "Default DNS Hijack"
+msgstr "默认 DNS 劫持"
+
+msgid "Enable DNS hijacking for devices not explicitly configured"
+msgstr "为未显式配置的设备启用 DNS 劫持"
+
+msgid "Default Proxy Enable"
+msgstr "默认代理启用"
+
+msgid "Enable proxy for devices not explicitly configured"
+msgstr "为未显式配置的设备启用代理"
+
+msgid "Whitelist Access Control"
+msgstr "白名单访问控制"
+
+msgid "Blacklist Bypass Control"
+msgstr "黑名单绕过控制"
+
+msgid "User"
+msgstr "用户"
+
+msgid "Group"
+msgstr "组"
+
+msgid "CGroup"
+msgstr "CGroup"
+
+msgid "DNS"
+msgstr "DNS"
+
+msgid "Proxy"
+msgstr "代理"
+
+msgid "IP"
+msgstr "IP"
+
+msgid "IP6"
+msgstr "IPv6"
+
+msgid "MAC"
+msgstr "MAC 地址"
+
 msgid ""
 msgstr ""
