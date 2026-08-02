@@ -7,1205 +7,1189 @@ msgstr ""
 "Language: zh_Hans\n"
 "MIME-Version: 1.0\n"
 "Content-Transfer-Encoding: 8bit\n"
+"X-Generator: verify_po.py\n"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:111
 msgid "API Listen"
 msgstr "API 监听"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:128
 msgid "API Secret"
 msgstr "API 密码"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:119
 msgid "API TLS Cert"
 msgstr "API TLS 证书"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:125
 msgid "API TLS ECH Key"
 msgstr "APL TLS ECH 密钥"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:122
 msgid "API TLS Key"
 msgstr "API TLS 密钥"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:115
 msgid "API TLS Listen"
 msgstr "API TLS 监听"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:69
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:122
 msgid "Access Control"
 msgstr "访问控制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:240
 msgid "Adaptive Replacement Cache (ARC)"
 msgstr "自适应替换缓存（ARC）"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:147
 msgid "Address Space Size Hard Limit"
 msgstr "地址空间大小硬限制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:143
 msgid "Address Space Size Soft Limit"
 msgstr "地址空间大小软限制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:181
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:186
 msgid "All Port"
 msgstr "全部端口"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:140
 msgid "Allow Lan"
 msgstr "允许局域网访问"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:281
 msgid "Allow Mode"
 msgstr "白名单模式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:94
-#: applications/luci-app-nikki/root/usr/share/luci/menu.d/luci-app-nikki.json:13
 msgid "App Config"
 msgstr "插件配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:54
 msgid "App Log"
 msgstr "插件日志"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:43
 msgid "App Version"
 msgstr "插件版本"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:530
 msgid "Append Rule"
 msgstr "追加规则"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:461
 msgid "Append Rule Provider"
 msgstr "追加规则提供者"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:517
 msgid "Behavior"
 msgstr "行为"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:280
 msgid "Block Mode"
 msgstr "黑名单模式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:171
 msgid "Bypass"
 msgstr "绕过"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:173
 msgid "Bypass China Mainland IP"
 msgstr "绕过中国大陆 IP"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:176
 msgid "Bypass China Mainland IP6"
 msgstr "绕过中国大陆 IP6"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:189
 msgid "Bypass DSCP"
 msgstr "绕过 DSCP"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:192
 msgid "Bypass FWMark"
 msgstr "绕过 FWMark"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:93
 msgid "CGroup"
 msgstr "控制组"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/editor.js:29
 msgid "Choose File"
 msgstr "选择文件"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:99
 msgid "Choose Profile"
 msgstr "选择配置文件"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:29
 msgid "Clear At Stop"
 msgstr "停止时清空"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:58
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:91
 msgid "Clear Log"
 msgstr "清空日志"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:182
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:187
 msgid "Commonly Used Port"
 msgstr "常用端口"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:87
 msgid "Core Log"
 msgstr "核心日志"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:125
 msgid "Core Only"
 msgstr "仅核心"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:57
 msgid "Core Status"
 msgstr "核心状态"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:50
 msgid "Core Version"
 msgstr "核心版本"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:99
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:165
 msgid "DNS"
 msgstr "DNS"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:236
 msgid "DNS Cache Algorithm"
 msgstr "DNS 缓存算法"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:228
 msgid "DNS Config"
 msgstr "DNS 配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:242
 msgid "DNS Listen"
 msgstr "DNS 监听"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:252
 msgid "DNS Mode"
 msgstr "DNS 模式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:120
 msgid "Debug Log"
 msgstr "调试日志"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:553
 msgid "Destination IP"
 msgstr "目标 IP"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:557
 msgid "Destination IP Geo"
 msgstr "目标 IP（Geo）"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:554
 msgid "Destination Port"
 msgstr "目标端口"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:179
 msgid "Destination TCP Port to Proxy"
 msgstr "要代理的 TCP 目标端口"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:184
 msgid "Destination UDP Port to Proxy"
 msgstr "要代理的 UDP 目标端口"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:195
 msgid "Device Name"
 msgstr "设备名称"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:43
 msgid "Direct Mode"
 msgstr "直连模式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:375
 msgid "Direct Nameserver Follow Policy"
 msgstr "Direct Nameserver 跟随查询策略"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:66
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:72
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:78
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:84
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:135
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:143
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:192
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:212
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:233
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:249
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:287
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:293
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:299
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:305
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:311
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:378
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:405
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:411
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:417
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:605
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:38
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:45
 msgid "Disable"
 msgstr "禁用"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:197
 msgid "Disable ECN of quic-go"
 msgstr "禁用 quic-go 的显式拥塞通知"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:194
 msgid "Disable GSO of quic-go"
 msgstr "禁用 quic-go 的通用分段卸载"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:191
 msgid "Disable Loopback Detector"
 msgstr "禁用回环检测"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:81
 msgid "Disable TCP Keep Alive"
 msgstr "禁用 TCP Keep Alive"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:296
 msgid "DoH Prefer HTTP/3"
 msgstr "DoH 优先 HTTP/3"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:328
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:548
 msgid "Domain Name"
 msgstr "域名"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:556
 msgid "Domain Name Geo"
 msgstr "域名（Geo）"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:551
 msgid "Domain Name Keyword"
 msgstr "域名（关键字）"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:552
 msgid "Domain Name Regex"
 msgstr "域名（正则表达式）"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:549
 msgid "Domain Name Suffix"
 msgstr "域名（后缀）"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:550
 msgid "Domain Name Wildcard"
 msgstr "域名（通配符）"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:169
 msgid "Edit Authentications"
 msgstr "编辑身份验证"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:222
 msgid "Edit DNS Hijacks"
 msgstr "编辑 DNS 劫持"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:273
 msgid "Edit Fake-IP Filters"
 msgstr "编辑 Fake-IP 过滤列表"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:317
 msgid "Edit Hosts"
 msgstr "编辑 Hosts"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:384
 msgid "Edit Nameserver Policies"
 msgstr "编辑 DNS 服务器查询策略"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:336
 msgid "Edit Nameservers"
 msgstr "编辑 DNS 服务器"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:359
 msgid "Edit Proxy Server Nameserver Policies"
 msgstr "编辑 DNS 服务器查询策略（节点用）"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:464
 msgid "Edit Rule Providers"
 msgstr "编辑规则提供者"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:533
 msgid "Edit Rules"
 msgstr "编辑规则"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:32
 msgid "Edit Subscription"
 msgstr "编辑订阅"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/editor.js:27
-#: applications/luci-app-nikki/root/usr/share/luci/menu.d/luci-app-nikki.json:45
 msgid "Editor"
 msgstr "编辑器"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:96
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:67
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:73
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:79
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:85
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:136
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:144
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:177
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:189
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:193
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:213
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:230
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:234
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:250
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:288
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:294
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:300
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:306
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:312
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:325
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:344
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:367
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:379
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:392
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:402
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:406
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:412
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:418
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:444
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:472
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:541
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:606
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:614
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:33
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:66
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:77
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:107
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:130
 msgid "Enable"
 msgstr "启用"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:173
 msgid "Environment Variable Config"
 msgstr "环境变量配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:47
 msgid "Expire At"
 msgstr "到期时间"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:95
 msgid "External Control Config"
 msgstr "外部控制配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:284
 msgid "Fake-IP Cache"
 msgstr "Fake-IP 缓存"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:277
 msgid "Fake-IP Filter Mode"
 msgstr "Fake-IP 过滤模式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:61
 msgid "Fake-IP Ping Hijack"
 msgstr "Fake-IP Ping 劫持"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:258
 msgid "Fake-IP Range"
 msgstr "Fake-IP 范围"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:266
 msgid "Fake-IP TTL"
 msgstr "Fake-IP TTL"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:262
 msgid "Fake-IP6 Range"
 msgstr "Fake-IP6 范围"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:132
 msgid "Fast Reload"
 msgstr "快速重载"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:511
 msgid "File Format"
 msgstr "文件格式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:505
 msgid "File Path"
 msgstr "文件路径"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:499
 msgid "File Size Limit"
 msgstr "文件大小限制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/editor.js:48
 msgid "File for Mixin"
 msgstr "用于混入的文件"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:103
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/editor.js:33
 msgid "File:"
 msgstr "文件："
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:423
 msgid "Force Sniff Domain Name"
 msgstr "强制嗅探的域名"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:209
 msgid "GSO"
 msgstr "通用分段卸载"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:215
 msgid "GSO Max Size"
 msgstr "分段最大长度"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:130
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:27
 msgid "General Config"
 msgstr "全局配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:124
 msgid "Generate & Download"
 msgstr "生成并下载"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:584
 msgid "GeoData Loader"
 msgstr "GeoData 加载器"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:578
 msgid "GeoIP Format"
 msgstr "GeoIP 格式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:599
 msgid "GeoIP(ASN) Url"
 msgstr "GeoIP(ASN) 下载地址"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:596
 msgid "GeoIP(DAT) Url"
 msgstr "GeoIP(DAT) 下载地址"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:593
 msgid "GeoIP(MMDB) Url"
 msgstr "GeoIP(MMDB) 下载地址"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:590
 msgid "GeoSite Url"
 msgstr "GeoSite 下载地址"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:602
 msgid "GeoX Auto Update"
 msgstr "定时更新GeoX文件"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:576
 msgid "GeoX Config"
 msgstr "GeoX 配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:608
 msgid "GeoX Update Interval"
 msgstr "GeoX 文件更新间隔"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:41
 msgid "Global Mode"
 msgstr "全局模式"
 
-#: applications/luci-app-nikki/root/usr/share/rpcd/acl.d/luci-app-nikki.json:3
 msgid "Grant access to nikki procedures"
 msgstr "授予访问 nikki 程序的权限"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:87
 msgid "Group"
 msgstr "用户组"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:146
 msgid "HTTP Port"
 msgstr "HTTP 端口"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:155
 msgid "Heap Size Hard Limit"
 msgstr "堆大小硬限制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:151
 msgid "Heap Size Soft Limit"
 msgstr "堆大小软限制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:38
 msgid "How To Use"
 msgstr "使用说明"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:49
 msgid "IPv4 DNS Hijack"
 msgstr "IPv4 DNS 劫持"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:55
 msgid "IPv4 Proxy"
 msgstr "IPv4 代理"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:52
 msgid "IPv6 DNS Hijack"
 msgstr "IPv6 DNS 劫持"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:58
 msgid "IPv6 Proxy"
 msgstr "IPv6 代理"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:430
 msgid "Ignore Sniff Domain Name"
 msgstr "忽略嗅探的域名"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:138
 msgid "Inbound Config"
 msgstr "入站配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:110
 msgid "Inbound Interface"
 msgstr "入站接口"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:105
 msgid "LAN Proxy"
 msgstr "局域网代理"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:239
 msgid "Least Recently Used (LRU)"
 msgstr "最近最少使用（LRU）"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:85
 msgid "Local"
 msgstr "本地"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:25
-#: applications/luci-app-nikki/root/usr/share/luci/menu.d/luci-app-nikki.json:53
 msgid "Log"
 msgstr "日志"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:27
 msgid "Log Config"
 msgstr "日志配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:29
 msgid "Log Level"
 msgstr "日志级别"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:205
 msgid "MTU"
 msgstr "最大传输单元"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:45
 msgid "Match Process"
 msgstr "匹配进程"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:370
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:395
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:559
 msgid "Matcher"
 msgstr "匹配"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:588
 msgid "Memory Conservative Loader"
 msgstr "为内存受限设备优化的加载器"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:194
 msgid "Misc"
 msgstr "杂项"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:154
 msgid "Mixed Port"
 msgstr "混合端口"
 
-#: applications/luci-app-nikki/root/usr/share/luci/menu.d/luci-app-nikki.json:29
 msgid "Mixin Config"
 msgstr "混入配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:612
 msgid "Mixin File Content"
 msgstr "混入文件内容"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:25
 msgid "Mixin Option"
 msgstr "混入选项"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:38
 msgid "Mode"
 msgstr "模式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:478
 msgid "Name"
 msgstr "名称"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:354
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:373
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:398
 msgid "Nameserver"
 msgstr "DNS 服务器"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:38
-#: applications/luci-app-nikki/root/usr/share/luci/menu.d/luci-app-nikki.json:3
 msgid "Nikki"
 msgstr "Nikki"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:570
 msgid "No Resolve"
 msgstr "不解析"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:492
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:563
 msgid "Node"
 msgstr "节点"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:15
 msgid "Not Running"
 msgstr "未在运行"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:170
 msgid "Number of Open Files Hard Limit"
 msgstr "打开文件数量硬限制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:167
 msgid "Number of Open Files Soft Limit"
 msgstr "打开文件数量软限制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:140
 msgid "Number of Processes Hard Limit"
 msgstr "进程数硬限制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:137
 msgid "Number of Processes Soft Limit"
 msgstr "进程数软限制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:89
 msgid "Open Dashboard"
 msgstr "打开面板"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:52
 msgid "Outbound Interface"
 msgstr "出站接口"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:166
 msgid "Overwrite Authentication"
 msgstr "覆盖身份验证"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:219
 msgid "Overwrite DNS Hijack"
 msgstr "覆盖 DNS 劫持"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:456
 msgid "Overwrite Destination"
 msgstr "将嗅探结果作为连接目标"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:270
 msgid "Overwrite Fake-IP Filter"
 msgstr "覆盖 Fake-IP 过滤列表"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:420
 msgid "Overwrite Force Sniff Domain Name"
 msgstr "覆盖强制嗅探的域名"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:314
 msgid "Overwrite Hosts"
 msgstr "覆盖 Hosts"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:427
 msgid "Overwrite Ignore Sniff Domain Name"
 msgstr "覆盖忽略嗅探的域名"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:333
 msgid "Overwrite Nameserver"
 msgstr "覆盖 DNS 服务器"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:381
 msgid "Overwrite Nameserver Policy"
 msgstr "覆盖 DNS 服务器查询策略"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:356
 msgid "Overwrite Proxy Server Nameserver Policy"
 msgstr "覆盖 DNS 服务器查询策略（节点用）"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:434
 msgid "Overwrite Sniff By Protocol"
 msgstr "覆盖按协议嗅探"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:183
 msgid "Password"
 msgstr "密码"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:614
 msgid "Please go to the editor tab to edit the file for mixin"
 msgstr "请前往编辑器标签编辑用于混入的文件"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:453
 msgid "Port"
 msgstr "端口"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:81
 msgid "Prefer"
 msgstr "优先"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:555
 msgid "Process Name"
 msgstr "进程名"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:18
-#: applications/luci-app-nikki/root/usr/share/luci/menu.d/luci-app-nikki.json:21
 msgid "Profile"
 msgstr "配置文件"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/editor.js:49
 msgid "Profile for Startup"
 msgstr "用于启动的配置文件"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:447
 msgid "Protocol"
 msgstr "协议"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:102
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:168
 msgid "Proxy"
 msgstr "代理"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:29
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:31
-#: applications/luci-app-nikki/root/usr/share/luci/menu.d/luci-app-nikki.json:37
 msgid "Proxy Config"
 msgstr "代理配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/editor.js:45
 msgid "Proxy Provider:"
 msgstr "代理提供者："
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:135
 msgid "RLIMIT Config"
 msgstr "资源限制配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:39
 msgid "Redirect Mode"
 msgstr "Redirect 模式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:158
 msgid "Redirect Port"
 msgstr "Redirect 端口"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:69
 msgid "Reload Service"
 msgstr "重载服务"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:84
 msgid "Remote"
 msgstr "远程"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:196
 msgid "Reserved IP"
 msgstr "IPv4 保留地址"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:199
 msgid "Reserved IP6"
 msgstr "IPv6 保留地址"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:290
 msgid "Respect Rules"
 msgstr "遵循分流规则"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:76
 msgid "Restart Service"
 msgstr "重启服务"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:64
 msgid "Router Proxy"
 msgstr "路由器代理"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:459
 msgid "Rule Config"
 msgstr "规则配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:42
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:282
 msgid "Rule Mode"
 msgstr "规则模式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/editor.js:41
 msgid "Rule Provider:"
 msgstr "规则提供者："
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:547
 msgid "Rule Set"
 msgstr "规则集"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:15
 msgid "Running"
 msgstr "运行中"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:150
 msgid "SOCKS Port"
 msgstr "SOCKS 端口"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:175
 msgid "Safe Paths"
 msgstr "安全路径"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:132
 msgid "Save Proxy Selection"
 msgstr "保存节点/策略组选择"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:32
 msgid "Scheduled Clear"
 msgstr "定时清空"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:35
 msgid "Scheduled Clear Cron"
 msgstr "Cron 表达式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:40
 msgid "Scheduled Clear Size Limit"
 msgstr "日志大小上限"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:46
 msgid "Scheduled Clear Size Limit Unit"
 msgstr "日志大小上限单位"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:114
 msgid "Scheduled Restart"
 msgstr "定时重启"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:117
 msgid "Scheduled Restart Cron"
 msgstr "Cron 表达式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:81
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/log.js:114
 msgid "Scroll To Bottom"
 msgstr "滚动到底部"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:200
 msgid "Skip System IPv6 Check"
 msgstr "跳过系统 IPv6 检查"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:437
 msgid "Sniff By Protocol"
 msgstr "按协议嗅探"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:414
 msgid "Sniff Pure IP"
 msgstr "嗅探纯 IP 连接"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:408
 msgid "Sniff Redir-Host"
 msgstr "嗅探 Redir-Host 流量"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:400
 msgid "Sniffer Config"
 msgstr "嗅探器配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:198
 msgid "Stack"
 msgstr "栈"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:163
 msgid "Stack Size Hard Limit"
 msgstr "栈大小硬限制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:159
 msgid "Stack Size Soft Limit"
 msgstr "栈大小软限制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:587
 msgid "Standard Loader"
 msgstr "标准加载器"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:110
 msgid "Start Delay"
 msgstr "启动延迟"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:112
 msgid "Start Immidiately"
 msgstr "立即启动"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:40
 msgid "Status"
 msgstr "状态"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:28
 msgid "Subscription"
 msgstr "订阅"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:66
 msgid "Subscription Info Url"
 msgstr "订阅信息链接"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:34
 msgid "Subscription Name"
 msgstr "订阅名称"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:69
 msgid "Subscription Url"
 msgstr "订阅链接"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:107
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/editor.js:37
 msgid "Subscription:"
 msgstr "订阅："
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:75
 msgid "TCP Concurrent"
 msgstr "TCP 并发"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:87
 msgid "TCP Keep Alive Idle"
 msgstr "TCP Keep Alive 空闲"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:91
 msgid "TCP Keep Alive Interval"
 msgstr "TCP Keep Alive 间隔"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:36
 msgid "TCP Mode"
 msgstr "TCP 模式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:40
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:46
 msgid "TPROXY Mode"
 msgstr "TPROXY 模式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:162
 msgid "TPROXY Port"
 msgstr "TPROXY 端口"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:187
 msgid "TUN Config"
 msgstr "TUN 配置"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:206
 msgid "TUN Interval"
 msgstr "TUN 等待间隔"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:41
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:47
 msgid "TUN Mode"
 msgstr "TUN 模式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:202
 msgid "TUN Timeout"
 msgstr "TUN 等待超时"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:122
 msgid "Test Profile"
 msgstr "检查配置文件"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:42
 msgid "Total"
 msgstr "总量"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:38
 msgid "Transparent Proxy with Mihomo on OpenWrt."
 msgstr "在 OpenWrt 上使用 Mihomo 进行透明代理。"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:347
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:481
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:545
 msgid "Type"
 msgstr "类型"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:43
 msgid "UDP Mode"
 msgstr "UDP 模式"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:100
 msgid "UI Name"
 msgstr "UI 名称"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:97
 msgid "UI Path"
 msgstr "UI 路径"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:103
 msgid "UI Url"
 msgstr "UI 下载地址"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:69
 msgid "Unify Delay"
 msgstr "统一延迟"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:145
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:149
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:153
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:157
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:161
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:165
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:185
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:189
 msgid "Unlimited"
 msgstr "无限制"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:31
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:40
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:47
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:54
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:65
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:71
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:77
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:83
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:89
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:93
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:98
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:101
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:104
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:113
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:117
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:120
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:123
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:126
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:130
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:134
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:142
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:148
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:152
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:156
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:160
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:164
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:191
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:196
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:200
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:207
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:211
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:217
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:232
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:238
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:244
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:248
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:254
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:260
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:264
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:268
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:279
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:286
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:292
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:298
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:304
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:310
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:377
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:404
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:410
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:416
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:580
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:586
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:591
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:594
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:597
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:600
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:604
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:610
 msgid "Unmodified"
 msgstr "不修改"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:60
 msgid "Update"
 msgstr "更新"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:52
 msgid "Update At"
 msgstr "更新时间"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:83
 msgid "Update Dashboard"
 msgstr "更新面板"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:524
 msgid "Update Interval"
 msgstr "更新间隔"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:20
 msgid "Upload Profile"
 msgstr "上传配置文件"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:487
 msgid "Url"
 msgstr "下载地址"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:308
 msgid "Use Hosts"
 msgstr "使用 Hosts"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:302
 msgid "Use System Hosts"
 msgstr "使用系统的 Hosts"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:37
 msgid "Used"
 msgstr "已使用"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/proxy.js:81
 msgid "User"
 msgstr "用户"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/profile.js:73
 msgid "User Agent"
 msgstr "用户代理（UA）"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:180
 msgid "Username"
 msgstr "用户名"
 
-#: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/app.js:128
 msgid "procd Config"
 msgstr "procd 配置"
 
-msgid "Expecting: %s"
-msgstr "请输入：%s"
+msgid "Start after %s seconds."
+msgstr "%s 秒后启动。"
 
-msgid "unique value"
-msgstr "独立值"
+msgid "Use file: %s."
+msgstr "使用文件：%s。"
 
-msgid "Are you sure to allow insecure?"
-msgstr "确定要允许不安全连接吗？"
+msgid "%s Mixin config."
+msgstr "%s 混入配置。"
 
-msgid "Node"
-msgstr "节点"
+msgid "Waiting for tun device online within %s seconds..."
+msgstr "等待 TUN 设备上线，超时时间 %s 秒..."
 
-msgid "Add a node"
-msgstr "新增节点"
+msgid "Logs are cleared due to clear at stop is enabled."
+msgstr "由于已启用停止时清理，日志已清空。"
 
-msgid "Label"
-msgstr "标签"
+msgid "Proxy all UDP ports. High conntrack load. Use only when you need every UDP packet proxied."
+msgstr "代理所有 UDP 端口。连接跟踪负载较高，仅在需要代理全部 UDP 流量时使用。"
 
-msgid "Type"
-msgstr "类型"
+msgid "Bypass proxy for these IPv4 addresses."
+msgstr "对这些 IPv4 地址绕过代理。"
 
-msgid "Direct"
+msgid "Bypass proxy for these IPv6 addresses."
+msgstr "对这些 IPv6 地址绕过代理。"
+
+msgid "Bypass proxy for these MAC addresses."
+msgstr "对这些 MAC 地址绕过代理。"
+
+msgid "Bypass proxy for these system users."
+msgstr "对这些系统用户绕过代理。"
+
+msgid "Match by IPv4 address. nftables: ip saddr."
+msgstr "按 IPv4 地址匹配。nftables：ip saddr。"
+
+msgid "Match by IPv6 address. nftables: ip6 saddr."
+msgstr "按 IPv6 地址匹配。nftables：ip6 saddr。"
+
+msgid "Match by MAC address. nftables: ether saddr."
+msgstr "按 MAC 地址匹配。nftables：ether saddr。"
+
+msgid "Match by cgroup path. Useful for Docker containers or systemd services. Requires cgroup v2."
+msgstr "按 cgroup 路径匹配。适用于 Docker 容器或 systemd 服务。需要 cgroup v2。"
+
+msgid "Match by system group ID (GID)."
+msgstr "按系统用户组 ID（GID）匹配。"
+
+msgid "Match by system user ID (UID). Example: force a specific service account to use proxy."
+msgstr "按系统用户 ID（UID）匹配。例如：强制某个服务账户走代理。"
+
+msgid "Matched users are forced to use proxy and DNS. Priority: after blacklist, before default policy. nftables: router_access_control chain."
+msgstr "匹配的用户将被强制使用代理和 DNS。优先级：黑名单之后、默认策略之前。nftables：router_access_control 链。"
+
+msgid "Highest priority. Devices listed here bypass proxy. Example: NAS (SMB performance), printer, IoT devices, game console with NAT issues."
+msgstr "最高优先级。此处列出的设备绕过代理。例如：NAS（SMB 性能问题）、打印机、IoT 设备、NAT 异常的游戏机。"
+
+msgid "Highest priority. Matched users bypass proxy immediately. Add root or ubus here to prevent locking yourself out. nftables: router_bypass_control chain."
+msgstr "最高优先级。匹配的用户立即绕过代理。建议在此添加 root 或 ubus，防止把自己锁在外面。nftables：router_bypass_control 链。"
+
+msgid "Force specific devices (by IP, IPv6 or MAC) to use proxy and DNS. Example: Apple TV, game console, specific PC."
+msgstr "强制指定设备（按 IP、IPv6 或 MAC）使用代理和 DNS。例如：Apple TV、游戏机、特定电脑。"
+
+msgid "Only intercept traffic entering from these interfaces. nftables: iifname @lan_inbound_device. IMPORTANT: never select wan or loopback."
+msgstr "仅拦截从这些接口进入的流量。nftables：iifname @lan_inbound_device。重要：切勿选择 wan 或 loopback。"
+
+msgid "Enable transparent proxy for devices on the local network."
+msgstr "为局域网设备启用透明代理。"
+
+msgid "Enable proxy for devices not explicitly configured. nftables: jump lan_tproxy or lan_redirect."
+msgstr "对未单独配置的设备启用代理。nftables：jump lan_tproxy 或 lan_redirect。"
+
+msgid "Enable DNS hijacking for devices not explicitly configured. Prevents smart TVs and phones from using public DNS servers."
+msgstr "对未单独配置的设备启用 DNS 劫持。防止智能电视和手机使用公共 DNS。"
+
+msgid "Enable proxy for users not explicitly configured. nftables: jump router_tproxy or router_redirect."
+msgstr "对未单独配置的用户启用代理。nftables：jump router_tproxy 或 router_redirect。"
+
+msgid "Enable DNS hijacking for users not explicitly configured in access control lists. nftables: jump router_dns_hijack."
+msgstr "对访问控制列表中未单独配置的用户启用 DNS 劫持。nftables：jump router_dns_hijack。"
+
+msgid "Enable proxy for traffic originating from the router itself (e.g. opkg, curl, Docker containers)."
+msgstr "为路由器自身产生的流量启用代理（如 opkg、curl、Docker 容器）。"
+
+msgid "Enable or disable the entire Nikki proxy subsystem."
+msgstr "启用或禁用整个 Nikki 代理子系统。"
+
+msgid "Private and internal IPv4 addresses that always bypass proxy. nftables: ip daddr @reserved_ip counter return."
+msgstr "始终绕过代理的 IPv4 私网/内网地址。nftables：ip daddr @reserved_ip counter return。"
+
+msgid "Private and internal IPv6 addresses that always bypass proxy. nftables: ip6 daddr @reserved_ip6 counter return."
+msgstr "始终绕过代理的 IPv6 私网/内网地址。nftables：ip6 daddr @reserved_ip6 counter return。"
+
+msgid "Packets with these DSCP values bypass proxy. Advanced usage for QoS integration. nftables: ip dscp @bypass_dscp return."
+msgstr "具有这些 DSCP 值的数据包绕过代理。用于 QoS 集成的高级用法。nftables：ip dscp @bypass_dscp return。"
+
+msgid "Packets already marked with these fwmarks bypass proxy. Useful for Docker, WireGuard or other VPN coexistence. nftables: meta mark & mask == fwmark return."
+msgstr "已被这些 fwmark 标记的数据包绕过代理。适用于 Docker、WireGuard 或其他 VPN 共存场景。nftables：meta mark & mask == fwmark return。"
+
+msgid "Only proxy traffic destined to these TCP ports. nftables: meta l4proto . th dport != @proxy_dport return."
+msgstr "仅代理发往这些 TCP 端口的流量。nftables：meta l4proto . th dport != @proxy_dport return。"
+
+msgid "Only proxy traffic destined to these UDP ports. nftables: meta l4proto . th dport != @proxy_dport return."
+msgstr "仅代理发往这些 UDP 端口的流量。nftables：meta l4proto . th dport != @proxy_dport return。"
+
+msgid "Skip proxy for Chinese mainland IPv4 addresses. nftables: ip daddr @china_ip counter return. Highly recommended for better performance."
+msgstr "对中国大陆 IPv4 地址绕过代理。nftables：ip daddr @china_ip counter return。强烈推荐以提升性能。"
+
+msgid "Skip proxy for Chinese mainland IPv6 addresses. nftables: ip6 daddr @china_ip6 counter return."
+msgstr "对中国大陆 IPv6 地址绕过代理。nftables：ip6 daddr @china_ip6 counter return。"
+
+msgid "Redirect ICMP Echo Request to Fake-IP range. Prevents Fake-IP detection by ping probes."
+msgstr "将 ICMP Echo Request 重定向到 Fake-IP 网段。防止通过 ping 探测出 Fake-IP。"
+
+msgid "Intercept IPv4 UDP/53 DNS requests and redirect them to Nikki built-in DNS. Prevents DNS leaks."
+msgstr "拦截 IPv4 UDP/53 DNS 请求并重定向到 Nikki 内置 DNS。防止 DNS 泄漏。"
+
+msgid "Intercept IPv6 UDP/53 DNS requests. Critical to avoid IPv6 DNS leaks when IPv6 proxy is enabled."
+msgstr "拦截 IPv6 UDP/53 DNS 请求。启用 IPv6 代理时，避免 IPv6 DNS 泄漏至关重要。"
+
+msgid "Apply proxy rules to IPv4 traffic. nftables uses meta nfproto ipv4 to match."
+msgstr "对 IPv4 流量应用代理规则。nftables 使用 meta nfproto ipv4 匹配。"
+
+msgid "Apply proxy rules to IPv6 traffic. Requires proper IPv6 routing. Disable if your ISP has unstable IPv6."
+msgstr "对 IPv6 流量应用代理规则。需要正确的 IPv6 路由。若运营商 IPv6 不稳定请禁用。"
+
+msgid "Idle timeout for TUN connections in seconds. Connections with no data for this long will be closed."
+msgstr "TUN 连接空闲超时时间（秒）。超过此时长无数据的连接将被关闭。"
+
+msgid "Interval in seconds for cleaning up dead TUN connections."
+msgstr "清理失效 TUN 连接的时间间隔（秒）。"
+
+msgid "Whether this whitelist entry should also hijack DNS."
+msgstr "此白名单条目是否同时劫持 DNS。"
+
+msgid "Whether this whitelist entry should be proxied."
+msgstr "此白名单条目是否走代理。"
+
+msgid "Auto"
+msgstr "自动"
+
+msgid "DIRECT"
 msgstr "直连"
 
-msgid "Address"
-msgstr "地址"
+msgid "DOMAIN"
+msgstr "域名"
 
-msgid "Port"
-msgstr "端口"
+msgid "DOMAIN-KEYWORD"
+msgstr "域名关键字"
 
-msgid "Username"
-msgstr "用户名"
+msgid "DOMAIN-REGEX"
+msgstr "域名正则表达式"
 
-msgid "Password"
-msgstr "密码"
+msgid "DOMAIN-SUFFIX"
+msgstr "域名后缀"
 
-msgid "non-empty value"
-msgstr "非空值"
+msgid "DOMAIN-WILDCARD"
+msgstr "域名通配符"
 
-msgid "Proxy protocol"
-msgstr "代理协议"
+msgid "DST-PORT"
+msgstr "目标端口"
+
+msgid "Debug"
+msgstr "调试"
+
+msgid "Dismiss"
+msgstr "取消"
+
+msgid "Error"
+msgstr "错误"
+
+msgid "GEOIP"
+msgstr "GeoIP"
+
+msgid "GEOSITE"
+msgstr "GeoSite"
+
+msgid "GLOBAL"
+msgstr "全局"
+
+msgid "Info"
+msgstr "信息"
+
+msgid "MATCH"
+msgstr "匹配"
+
+msgid "PROCESS-NAME"
+msgstr "进程名"
+
+msgid "REJECT"
+msgstr "拒绝"
+
+msgid "REJECT-DROP"
+msgstr "拒绝丢弃"
+
+msgid "RULE-SET"
+msgstr "规则集"
+
+msgid "Silent"
+msgstr "静默"
+
+msgid "Warning"
+msgstr "警告"
+
+msgid "System"
+msgstr "系统"
+
+msgid "Mixed"
+msgstr "混合"
+
+msgid "gVisor"
+msgstr "gVisor"
+
+msgid "stack"
+msgstr "协议栈"
+
+msgid "mtu"
+msgstr "MTU"
+
+msgid "gso"
+msgstr "通用分段卸载"
+
+msgid "gso-max-size"
+msgstr "GSO 最大长度"
+
+msgid "interface-name"
+msgstr "出接口名"
+
+msgid "find-process-mode"
+msgstr "进程匹配模式"
+
+msgid "tcp-concurrent"
+msgstr "TCP 并发"
+
+msgid "disable-keep-alive"
+msgstr "禁用 Keep Alive"
+
+msgid "keep-alive-idle"
+msgstr "Keep Alive 空闲时间"
+
+msgid "keep-alive-interval"
+msgstr "Keep Alive 间隔"
+
+msgid "unified-delay"
+msgstr "统一延迟"
+
+msgid "dns-hijack"
+msgstr "DNS 劫持"
+
+msgid "nameserver"
+msgstr "DNS 服务器"
+
+msgid "nameserver-policy"
+msgstr "DNS 服务器策略"
+
+msgid "proxy-server-nameserver"
+msgstr "节点解析 DNS"
+
+msgid "proxy-server-nameserver-policy"
+msgstr "节点解析 DNS 策略"
+
+msgid "default-nameserver"
+msgstr "默认 DNS 服务器"
+
+msgid "fallback"
+msgstr "备用 DNS"
+
+msgid "fallback-filter"
+msgstr "备用过滤"
+
+msgid "whitelist"
+msgstr "白名单"
+
+msgid "blacklist"
+msgstr "黑名单"
+
+msgid "rule"
+msgstr "规则"
+
+msgid "direct"
+msgstr "直连"
+
+msgid "global"
+msgstr "全局"
+
+msgid "none"
+msgstr "无"
+
+msgid "Github Address Modify"
+msgstr "Github 地址修改"
+
+msgid "At least 2 fields separated by commas are required (type,matcher[,node])."
+msgstr "至少需要 2 个逗号分隔的字段（type,matcher[,node]）。"
+
+msgid "Missing \"url\" field."
+msgstr "缺少 \"url\" 字段。"
+
+msgid "Missing node/policy field (type,matcher,node)."
+msgstr "缺少节点/策略字段（type,matcher,node）。"
+
+msgid "Missing provider name."
+msgstr "缺少提供者名称。"
+
+msgid "Only \"%s\" type is supported here; \"%s\" will be skipped."
+msgstr "此处仅支持 \"%s\" 类型；\"%s\" 将被跳过。"
+
+msgid "Only %s type entries can be imported this way; %s entries will be skipped (please add them manually)."
+msgstr "仅可导入 %s 类型条目；%s 条目将被跳过（请手动添加）。"
+
+msgid "Batch override the test URL for all url-test / fallback groups. Leave empty to keep each group's original setting."
+msgstr "批量覆盖所有 url-test / fallback 组的测试 URL。留空则保留各组原始设置。"
+
+msgid "Calculate latency using a consistent method across protocols, excluding connection setup time. Recommended together with Tolerance for more accurate comparisons."
+msgstr "跨协议使用一致的延迟计算方法，排除连接建立时间。建议配合容差使用以获得更准确的比较。"
+
+msgid "Consecutive failed tests before a node is marked unavailable."
+msgstr "节点被标记为不可用前的连续失败测试次数。"
+
+msgid "How often (seconds) each group re-tests node latency."
+msgstr "每个代理组重新测试节点延迟的间隔（秒）。"
+
+msgid "Maximum time (ms) to wait for a test response before marking it a failure."
+msgstr "等待测试响应的最大时间（毫秒），超时则标记为失败。"
+
+msgid "When enabled, groups only test when there is active traffic instead of testing on a fixed interval, saving resources."
+msgstr "启用后，代理组仅在存在活跃流量时才测试，而非固定间隔测试，节省资源。"
+
+msgid "Delay difference (ms) tolerated before switching to a faster node. Higher values reduce switching frequency but respond slower to real improvements."
+msgstr "切换到更快节点所容忍的延迟差（毫秒）。值越大切换越少，但对真实改善响应越慢。"
+
+msgid "In seconds."
+msgstr "单位：秒。"
+
+msgid "Please paste the %s field of a mihomo config, one rule per line."
+msgstr "请粘贴 mihomo 配置的 %s 字段，每行一条规则。"
+
+msgid "Import mihomo config"
+msgstr "导入 mihomo 配置"
+
+msgid "No valid rule found."
+msgstr "未找到有效规则。"
+
+msgid "Successfully imported %s of %s line(s)."
+msgstr "成功导入 %s / %s 行。"
+
+msgid "%s line(s) failed:"
+msgstr "%s 行失败："
+
+msgid "Line %s: %s — %s"
+msgstr "第 %s 行：%s — %s"
+
+msgid "%s entry(ies) failed:"
+msgstr "%s 条条目失败："
+
+msgid "Match the local process or application name that initiated the request."
+msgstr "匹配发起请求的本地进程或应用名称。"
+
+msgid "Match the target port number or range (e.g., 80 or 80-443)."
+msgstr "匹配目标端口号或范围（如 80 或 80-443）。"
+
+msgid "Match specified IPv4 or IPv6 CIDR addresses (e.g., 192.168.1.0/24)."
+msgstr "匹配指定的 IPv4 或 IPv6 CIDR 地址（如 192.168.1.0/24）。"
+
+msgid "Match the country/region of the destination IP (e.g., geoip:cn)."
+msgstr "匹配目标 IP 的国家/地区（如 geoip:cn）。"
+
+msgid "Match the exact full domain name (e.g., google.com)."
+msgstr "匹配完整域名（如 google.com）。"
+
+msgid "Match the domain and all its subdomains (e.g., google.com matches abc.google.com)."
+msgstr "匹配域名及其所有子域名（如 google.com 匹配 abc.google.com）。"
+
+msgid "Match if the domain contains this keyword (e.g., containing google)."
+msgstr "如果域名包含此关键字则匹配（如包含 google）。"
+
+msgid "Match domains using regular expressions."
+msgstr "使用正则表达式匹配域名。"
+
+msgid "Match domains using wildcards (e.g., *.google.com)."
+msgstr "使用通配符匹配域名（如 *.google.com）。"
+
+msgid "Match predefined GeoSite categories (e.g., geosite:cn)."
+msgstr "匹配预定义的 GeoSite 分类（如 geosite:cn）。"
+
+msgid "Catch-all rule that matches any remaining traffic not handled by previous rules."
+msgstr "兜底规则，匹配所有未被前面规则处理的剩余流量。"
+
+msgid "Block the request immediately and return an error to the client (commonly used for ad blocking)."
+msgstr "立即阻断请求并向客户端返回错误（常用于广告拦截）。"
+
+msgid "Silently drop the request packets, causing the client to wait until it times out."
+msgstr "静默丢弃请求数据包，使客户端一直等待直至超时。"
+
+msgid "Route traffic to the Mihomo GLOBAL policy group."
+msgstr "将流量路由到 Mihomo GLOBAL 策略组。"
+
+msgid "Import external or local rule set files for batch matching."
+msgstr "导入外部或本地的规则集文件以批量匹配。"
+
+msgid "Please paste the %s field of a mihomo config."
+msgstr "请粘贴 mihomo 配置的 %s 字段。"
+
+msgid "MetaCubeX-Version"
+msgstr "MetaCubeX 版本"
+
+msgid "uTLS fingerprint"
+msgstr "uTLS 指纹"
+
+msgid "uTLS is a fork of \"crypto/tls\", which provides ClientHello fingerprinting resistance."
+msgstr "uTLS 是 crypto/tls 的分支，提供 ClientHello 指纹伪装能力。"
+
+msgid "Validating"
+msgstr "验证中"
+
+msgid "Valid"
+msgstr "有效"
+
+msgid "Invalid"
+msgstr "无效"
+
+msgid "Packet encoding"
+msgstr "数据包编码"
+
+msgid "TLS"
+msgstr "TLS"
+
+msgid "REALITY"
+msgstr "REALITY"
+
+msgid "Detects the TLS version and uses the corresponding cipher suite."
+msgstr "自动检测 TLS 版本并使用对应的加密套件。"
+
+msgid "Skip certificate verification (insecure)."
+msgstr "跳过证书验证（不安全）。"
 
 msgid "Write proxy protocol in the connection header."
 msgstr "在连接头中写入代理协议。"
 
-msgid "Idle session check interval"
-msgstr "空闲会话检查间隔"
-
 msgid "Interval checking for idle sessions, in seconds."
-msgstr "空闲会话检查间隔（单位：秒）。"
-
-msgid "Idle session check timeout"
-msgstr "空闲会话检查超时"
+msgstr "空闲会话检查间隔（秒）。"
 
 msgid "In the check, close sessions that have been idle for longer than this, in seconds."
-msgstr "在检查中，关闭空闲时间超过此值的会话（单位：秒）。"
-
-msgid "Minimum idle sessions"
-msgstr "最小空闲会话数"
+msgstr "检查中，关闭空闲超过此时长的会话（秒）。"
 
 msgid "In the check, at least the first <code>n</code> idle sessions are kept open."
-msgstr "在检查中，至少保持前 <code>n</code> 个空闲会话处于打开状态。"
+msgstr "检查中，至少保留前 <code>n</code> 个空闲会话不关闭。"
 
 msgid "Hopping port"
-msgstr "跳跃端口"
+msgstr "跳端口"
 
 msgid "Hop interval"
-msgstr "跳跃间隔"
+msgstr "跳端口间隔"
 
 msgid "Port hopping interval in seconds."
-msgstr "端口跳跃间隔（单位：秒）。"
-
-msgid "Protocol"
-msgstr "协议"
+msgstr "端口跳跃间隔（秒）。"
 
 msgid "Authentication type"
 msgstr "认证类型"
-
-msgid "String"
-msgstr "字符串"
 
 msgid "Authentication payload"
 msgstr "认证载荷"
@@ -1213,20 +1197,17 @@ msgstr "认证载荷"
 msgid "Obfuscate type"
 msgstr "混淆类型"
 
-msgid "Salamander"
-msgstr "Salamander"
-
 msgid "Obfuscate password"
 msgstr "混淆密码"
 
 msgid "Max download speed"
 msgstr "最大下载速度"
 
-msgid "Max download speed in Mbps."
-msgstr "最大下载速度（Mbps）。"
-
 msgid "Max upload speed"
 msgstr "最大上传速度"
+
+msgid "Max download speed in Mbps."
+msgstr "最大下载速度（Mbps）。"
 
 msgid "Max upload speed in Mbps."
 msgstr "最大上传速度（Mbps）。"
@@ -1234,20 +1215,20 @@ msgstr "最大上传速度（Mbps）。"
 msgid "QUIC stream receive window"
 msgstr "QUIC 流接收窗口"
 
-msgid "The QUIC stream-level flow control window for receiving data."
-msgstr "用于接收数据的 QUIC 流级流控制窗口。"
-
 msgid "QUIC connection receive window"
-msgstr "QUIC 连接窗口"
+msgstr "QUIC 连接接收窗口"
+
+msgid "The QUIC stream-level flow control window for receiving data."
+msgstr "用于接收数据的 QUIC 流级流控窗口。"
 
 msgid "The QUIC connection-level flow control window for receiving data."
-msgstr "用于接收数据的 QUIC 连接级流控制窗口。"
+msgstr "用于接收数据的 QUIC 连接级流控窗口。"
 
 msgid "Disable Path MTU discovery"
-msgstr "禁用路径 MTU 探测"
+msgstr "禁用路径 MTU 发现"
 
 msgid "Disables Path MTU Discovery (RFC 8899). Packets will then be at most 1252 (IPv4) / 1232 (IPv6) bytes in size."
-msgstr "禁用路径 MTU 发现 (RFC 8899)。 数据包的大小最多为 1252 (IPv4) / 1232 (IPv6) 字节。"
+msgstr "禁用路径 MTU 发现（RFC 8899）。此后数据包最大为 1252（IPv4）/ 1232（IPv6）字节。"
 
 msgid "Encrypt method"
 msgstr "加密方式"
@@ -1255,14 +1236,17 @@ msgstr "加密方式"
 msgid "Plugin"
 msgstr "插件"
 
-msgid "none"
-msgstr "无"
-
 msgid "Plugin opts"
 msgstr "插件参数"
 
 msgid "ShadowTLS version"
 msgstr "ShadowTLS 版本"
+
+msgid "ShadowTLS tunnel password"
+msgstr "ShadowTLS 隧道密码"
+
+msgid "Authentication password for the shadow-tls plugin layer itself, separate from the underlying Shadowsocks password above."
+msgstr "Shadow-TLS 插件层自身的认证密码，与上方底层 Shadowsocks 密码相互独立。"
 
 msgid "Socks version"
 msgstr "Socks 版本"
@@ -1271,13 +1255,13 @@ msgid "Client version"
 msgstr "客户端版本"
 
 msgid "Random version will be used if empty."
-msgstr "如留空，则使用随机版本。"
+msgstr "留空则使用随机版本。"
 
 msgid "Host key"
 msgstr "主机密钥"
 
 msgid "Accept any if empty."
-msgstr "留空则不校验。"
+msgstr "留空则接受任意主机密钥。"
 
 msgid "Host key algorithms"
 msgstr "主机密钥算法"
@@ -1286,49 +1270,49 @@ msgid "Private key"
 msgstr "私钥"
 
 msgid "Private key passphrase"
-msgstr "私钥指纹"
+msgstr "私钥密码"
+
+msgid "UUID"
+msgstr "UUID"
 
 msgid "Congestion control algorithm"
 msgstr "拥塞控制算法"
 
-msgid "QUIC congestion control algorithm."
-msgstr "QUIC 拥塞控制算法。"
-
 msgid "UDP relay mode"
 msgstr "UDP 中继模式"
 
-msgid "UDP packet relay mode."
-msgstr "UDP 包中继模式。"
-
-msgid "Default"
-msgstr "默认"
-
-msgid "Native"
-msgstr "原生"
-
 msgid "UDP over stream"
-msgstr "UDP over stream"
+msgstr "UDP 走流模式"
+
+msgid "QUIC stream based UDP relay mode."
+msgstr "基于 QUIC 流的 UDP 中继模式。"
 
 msgid "Enable 0-RTT handshake"
 msgstr "启用 0-RTT 握手"
+
+msgid "Enable 0-RTT QUIC connection handshake on the client side. Disabling this is highly recommended, as it is vulnerable to replay attacks."
+msgstr "在客户端启用 0-RTT QUIC 连接握手。强烈建议禁用，因为它易受重放攻击。"
 
 msgid "Heartbeat interval"
 msgstr "心跳间隔"
 
 msgid "Interval for sending heartbeat packets for keeping the connection alive (in seconds)."
-msgstr "发送心跳包以保持连接存活的时间间隔（单位：秒）。"
+msgstr "发送心跳包以保持连接存活的间隔（秒）。"
 
 msgid "Flow"
 msgstr "流控"
 
-msgid "None"
-msgstr "无"
-
 msgid "Alter ID"
-msgstr "额外 ID"
+msgstr "Alter ID"
+
+msgid "Legacy protocol support (VMess MD5 Authentication) is provided for compatibility purposes only, use of alterId > 1 is not recommended."
+msgstr "VMess MD5 认证仅为兼容旧协议而保留，不建议使用 alterId > 1。"
 
 msgid "Global padding"
 msgstr "全局填充"
+
+msgid "Protocol parameter. Will waste traffic randomly if enabled."
+msgstr "协议参数。启用后会随机浪费流量。"
 
 msgid "Authenticated length"
 msgstr "认证长度"
@@ -1337,34 +1321,34 @@ msgid "Protocol parameter. Enable length block encryption."
 msgstr "协议参数。启用长度块加密。"
 
 msgid "Transport"
-msgstr "传输层"
+msgstr "传输方式"
 
 msgid "No TCP transport, plain HTTP is merged into the HTTP transport."
-msgstr "无 TCP 传输层, 纯 HTTP 已合并到 HTTP 传输层。"
+msgstr "无 TCP 传输时，纯 HTTP 合并到 HTTP 传输中。"
 
 msgid "TLS is not enforced. If TLS is not configured, plain HTTP 1.1 is used."
-msgstr "不强制执行 TLS。如未配置 TLS，将使用纯 HTTP 1.1。"
-
-msgid "The timeout (in seconds) that after performing a keepalive check, the client will wait for activity. If no activity is detected, the connection will be closed."
-msgstr "经过一段时间（单位：秒）之后，客户端将执行 keepalive 检查并等待活动。如果没有检测到任何活动，则会关闭连接。"
+msgstr "不强制 TLS。若未配置 TLS，则使用纯 HTTP/1.1。"
 
 msgid "gRPC service name"
-msgstr "gRPC 服务名称"
+msgstr "gRPC 服务名"
+
+msgid "Required by mihomo — leaving this empty will cause the connection to fail."
+msgstr "Mihomo 必需项 —— 留空将导致连接失败。"
 
 msgid "gRPC permit without stream"
-msgstr "gRPC 允许无活动连接"
+msgstr "gRPC 无流时允许"
 
 msgid "If enabled, the client transport sends keepalive pings even with no active connections."
-msgstr "如果启用，客户端传输即使没有活动连接也会发送 keepalive ping。"
+msgstr "启用后，即使没有活跃连接，客户端传输也会发送保活探测。"
 
 msgid "Host"
-msgstr "主机名"
+msgstr "主机"
 
 msgid "Path"
 msgstr "路径"
 
 msgid "Method"
-msgstr "方式"
+msgstr "方法"
 
 msgid "Idle timeout"
 msgstr "空闲超时"
@@ -1373,37 +1357,37 @@ msgid "Ping timeout"
 msgstr "Ping 超时"
 
 msgid "Early data"
-msgstr "前置数据"
+msgstr "早期数据"
+
+msgid "Early data header name"
+msgstr "早期数据头名称"
 
 msgid "Allowed payload size is in the request."
 msgstr "请求中允许的载荷大小。"
 
-msgid "Early data header name"
-msgstr "前置数据标头"
+msgid "Specifies the period of time (in seconds) after which a health check will be performed using a ping frame if no frames have been received on the connection."
+msgstr "若连接在此时长（秒）内未收到任何帧，则使用 ping 帧执行健康检查。"
 
-msgid "Packet encoding"
-msgstr "数据包编码"
+msgid "Specifies the timeout duration (in seconds) after sending a PING frame, within which a response must be received."
+msgstr "发送 PING 帧后等待响应的超时时长（秒）。"
 
-msgid "packet addr (v2ray-core v5+)"
-msgstr "packet addr (v2ray-core v5+)"
+msgid "If the transport doesn't see any activity after a duration of this time (in seconds), it pings the client to check if the connection is still active."
+msgstr "若传输在此时间（秒）内无任何活动，则 ping 客户端以检查连接是否仍活跃。"
 
-msgid "Xudp (Xray-core)"
-msgstr "Xudp (Xray-core)"
+msgid "The timeout (in seconds) that after performing a keepalive check, the client will wait for activity. If no activity is detected, the connection will be closed."
+msgstr "执行保活检查后客户端等待活动的超时时间（秒）。若未检测到活动，连接将被关闭。"
 
 msgid "Local address"
 msgstr "本地地址"
 
 msgid "List of IP (v4 or v6) addresses prefixes to be assigned to the interface."
-msgstr "分配给接口的 IP（v4 或 v6）地址前缀列表。"
+msgstr "要分配给接口的 IP（v4 或 v6）地址前缀列表。"
 
 msgid "WireGuard requires base64-encoded private keys."
-msgstr "WireGuard 要求 base64 编码的私钥。"
+msgstr "WireGuard 需要 base64 编码的私钥。"
 
 msgid "WireGuard peer public key."
 msgstr "WireGuard 对端公钥。"
-
-msgid "Pre-shared key"
-msgstr "预共享密钥"
 
 msgid "WireGuard pre-shared key."
 msgstr "WireGuard 预共享密钥。"
@@ -1412,7 +1396,7 @@ msgid "Reserved field bytes"
 msgstr "保留字段字节"
 
 msgid "Persistent keepalive interval"
-msgstr "持久 keepalive 间隔"
+msgstr "持久保活间隔"
 
 msgid "In seconds. Disabled by default."
 msgstr "单位：秒。默认禁用。"
@@ -1420,434 +1404,422 @@ msgstr "单位：秒。默认禁用。"
 msgid "Multiplex"
 msgstr "多路复用"
 
-msgid "Multiplex protocol."
-msgstr "多路复用协议。"
+msgid "Maximum multiplexed streams in a connection before opening a new connection.<br/>"
+msgstr "在新建连接前，单个连接中最大的多路复用流数量。"
 
-msgid "Maximum connections"
-msgstr "最大连接数"
+msgid "TLS SNI"
+msgstr "TLS SNI"
 
-msgid "Minimum streams"
-msgstr "最小流数量"
+msgid "TLS ALPN"
+msgstr "TLS ALPN"
 
-msgid "Minimum multiplexed streams in a connection before opening a new connection."
-msgstr "在打开新连接之前，连接中的最小多路复用流数量。"
+msgid "Detected User Agent"
+msgstr "检测到的 User Agent"
 
-msgid "Maximum streams"
-msgstr "最大流数量"
+msgid "Panel URL"
+msgstr "面板地址"
 
-msgid "Enable padding"
-msgstr "启用填充"
-
-msgid "Enable TCP Brutal"
-msgstr "启用 TCP Brutal"
-
-msgid "Enable TCP Brutal congestion control algorithm"
-msgstr "启用 TCP Brutal 拥塞控制算法。"
-
-msgid "Download bandwidth"
-msgstr "下载带宽"
-
-msgid "Download bandwidth in Mbps."
-msgstr "下载带宽（单位：Mbps）。"
-
-msgid "Upload bandwidth"
-msgstr "上传带宽"
-
-msgid "Upload bandwidth in Mbps."
-msgstr "上传带宽（单位：Mbps）。"
-
-msgid "Used to verify the hostname on the returned certificates unless insecure is given."
-msgstr "用于验证返回证书上的主机名。如允许不安全连接，此配置无效。"
-
-msgid "List of supported application level protocols, in order of preference."
-msgstr "支持的应用层协议协商列表，按顺序排列。"
+msgid "Skip certificate verification"
+msgstr "跳过证书验证"
 
 msgid "Allow insecure"
 msgstr "允许不安全连接"
 
-msgid "Allow insecure connection at TLS client."
-msgstr "允许 TLS 客户端侧的不安全连接。"
+msgid "Are you sure to allow insecure?"
+msgstr "确定要允许不安全连接吗？"
 
-msgid "This is <strong>DANGEROUS</strong>, your traffic is almost like <strong>PLAIN TEXT</strong>! Use at your own risk!"
-msgstr "这是危险行为，您的流量将几乎等同于<strong>明文</strong>！使用风险自负！"
+msgid "Auto-filled from subscription response if empty"
+msgstr "留空时根据订阅响应自动填充"
 
-msgid "Minimum TLS version"
-msgstr "最低 TLS 版本"
+msgid "Downloaded"
+msgstr "已下载"
 
-msgid "The minimum TLS version that is acceptable."
-msgstr "可接受的最低 TLS 版本。"
+msgid "Available"
+msgstr "可用"
 
-msgid "default"
-msgstr "默认"
+msgid "Upload %s"
+msgstr "上传 %s"
 
-msgid "Maximum TLS version"
-msgstr "最大 TLS 版本"
+msgid "Uploaded"
+msgstr "已上传"
 
-msgid "The maximum TLS version that is acceptable."
-msgstr "可接受的最高 TLS 版本。"
+msgid "Successfully uploaded %s."
+msgstr "成功上传 %s。"
 
-msgid "Cipher suites"
-msgstr "密码套件"
-
-msgid "The elliptic curves that will be used in an ECDHE handshake, in preference order. If empty, the default will be used."
-msgstr "将在 ECDHE 握手中使用的椭圆曲线，按优先顺序排列。留空使用默认值。"
-
-msgid "Append self-signed certificate"
-msgstr "追加自签名证书"
-
-msgid "If you have the root certificate, use this option instead of allowing insecure."
-msgstr "如果你拥有根证书，使用此选项而不是允许不安全连接。"
-
-msgid "Certificate path"
-msgstr "证书路径"
-
-msgid "The path to the server certificate, in PEM format."
-msgstr "服务端证书路径，需要 PEM 格式。"
-
-msgid "Upload certificate"
-msgstr "上传证书"
-
-msgid "<strong>Save your configuration before uploading files!</strong>"
-msgstr "<strong>上传文件前请先保存配置！</strong>"
-
-msgid "Upload..."
-msgstr "上传..."
-
-msgid "certificate"
-msgstr "证书"
-
-msgid "Enable ECH"
-msgstr "启用 ECH"
-
-msgid "ECH (Encrypted Client Hello) is a TLS extension that allows a client to encrypt the first part of its ClientHello message."
-msgstr "ECH（Encrypted Client Hello）是一个 TLS 扩展，它允许客户端加密其 ClientHello 信息的第一部分。"
-
-msgid "ECH config path"
-msgstr "ECH 配置路径"
-
-msgid "The path to the ECH config, in PEM format. If empty, load from DNS will be attempted."
-msgstr "PEM 格式的 ECH 配置路径。如果为空，将尝试从 DNS 加载。"
-
-msgid "Upload ECH config"
-msgstr "上传 ECH 配置"
-
-msgid "ECH config"
-msgstr "ECH 配置"
-
-msgid "uTLS fingerprint"
-msgstr "uTLS 指纹"
-
-msgid "Unsupported fingerprint!"
-msgstr "不支持的指纹！"
-
-msgid "REALITY public key"
-msgstr "REALITY 公钥"
-
-msgid "REALITY short ID"
-msgstr "REALITY 标识符"
-
-msgid "TCP fast open"
-msgstr "TCP 快速打开"
-
-msgid "MultiPath TCP"
-msgstr "多路径 TCP（MPTCP）"
-
-msgid "Remote"
-msgstr "远程"
-
-msgid "Local"
-msgstr "本地"
-
-msgid "Nodes"
-msgstr "节点"
-
-msgid "Import share links"
-msgstr "导入分享链接"
-
-msgid "Cancel"
-msgstr "取消"
-
-msgid "No valid share link found."
-msgstr "找不到有效分享链接。"
-
-msgid "Successfully imported %s nodes of total %s."
-msgstr "成功导入 %s 个节点，共 %s 个。"
-
-msgid "Import"
-msgstr "导入"
-
-msgid "unique UCI identifier"
-msgstr "独立 UCI 标识"
-
-msgid "All Levels"
-msgstr "所有级别"
-
-msgid "Reverse"
-msgstr "倒序"
-
-msgid "Wrap"
-msgstr "换行"
-
-msgid "Upload Mixin"
-msgstr "上传混入文件"
+msgid "Failed to upload %s: %s"
+msgstr "上传 %s 失败：%s"
 
 msgid "Select a local file to upload, it will directly overwrite %s"
-msgstr "选择本地文件上传，会直接覆盖 %s"
+msgstr "选择要上传的本地文件，它将直接覆盖 %s"
 
-msgid "Uploading..."
-msgstr "正在上传..."
+msgid "valid IPv4 address"
+msgstr "有效的 IPv4 地址"
+
+msgid "valid base64 key"
+msgstr "有效的 base64 密钥"
+
+msgid "valid UUID"
+msgstr "有效的 UUID"
+
+msgid "valid port (1-65535)"
+msgstr "有效端口（1-65535）"
+
+msgid "valid port range"
+msgstr "有效端口范围"
+
+msgid "start port ≤ end port"
+msgstr "起始端口 ≤ 结束端口"
+
+msgid "unique value"
+msgstr "唯一值"
+
+msgid "unique UCI identifier"
+msgstr "唯一 UCI 标识符"
+
+msgid "non-empty value"
+msgstr "非空值"
+
+msgid "absolute path"
+msgstr "绝对路径"
+
+msgid "Expecting: %s"
+msgstr "期望：%s"
+
+msgid "Salamander"
+msgstr "Salamander"
+
+msgid "Baidu"
+msgstr "百度"
+
+msgid "163Music"
+msgstr "网易云音乐"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "Google"
+msgstr "谷歌"
+
+msgid "YouTube"
+msgstr "YouTube"
+
+msgid "Connection check"
+msgstr "连接检查"
+
+msgid "unchecked"
+msgstr "未检测"
+
+msgid "%s (Timeout)"
+msgstr "%s（超时）"
+
+msgid "Core cached: %s"
+msgstr "核心已缓存：%s"
+
+msgid "Cache failed"
+msgstr "缓存失败"
+
+msgid "Update failed:"
+msgstr "更新失败："
+
+msgid "Update failed: %s"
+msgstr "更新失败：%s"
+
+msgid "Switched to %s"
+msgstr "已切换到 %s"
+
+msgid "Switch failed"
+msgstr "切换失败"
+
+msgid "Switch failed: %s"
+msgstr "切换失败：%s"
+
+msgid "Please select a core first."
+msgstr "请先选择一个核心。"
+
+msgid "Please enter a cron expression first."
+msgstr "请先输入 cron 表达式。"
+
+msgid "Not Installed"
+msgstr "未安装"
+
+msgid "Please wait, downloading %s..."
+msgstr "请稍候，正在下载 %s……"
+
+msgid "Download Model"
+msgstr "下载模型"
+
+msgid "Downloading %s..."
+msgstr "正在下载 %s……"
+
+msgid "Downloading model..."
+msgstr "正在下载模型……"
+
+msgid "Model updated successfully! Path: %s"
+msgstr "模型更新成功！路径：%s"
+
+msgid "Please select a model version first."
+msgstr "请先选择模型版本。"
+
+msgid "Unknown device architecture, cannot download core."
+msgstr "未知设备架构，无法下载核心。"
+
+msgid "Subscription download failed."
+msgstr "订阅下载失败。"
+
+msgid "Subscription download successful."
+msgstr "订阅下载成功。"
+
+msgid "Subscription is not valid."
+msgstr "订阅无效。"
+
+msgid "Subscription is valid."
+msgstr "订阅有效。"
+
+msgid "RPC request failed: %s"
+msgstr "RPC 请求失败：%s"
 
 msgid "Upload failed"
 msgstr "上传失败"
 
-msgid "Upload succeeded, %s has been overwritten"
-msgstr "上传成功，%s 已被覆盖"
-
 msgid "Upload failed: %s"
 msgstr "上传失败：%s"
+
+msgid "Uploading..."
+msgstr "正在上传……"
+
+msgid "Upload succeeded, %s has been overwritten"
+msgstr "上传成功，%s 已被覆盖"
 
 msgid "Select File"
 msgstr "选择文件"
 
-msgid "Support Hysteria, Shadowsocks, Trojan, v2rayN (VMess), XTLS (VLESS) share links, and single-line Clash proxy entries."
-msgstr "支持 Hysteria、Shadowsocks、Trojan、v2rayN (VMess)、XTLS (VLESS) 共享链接和单行 Clash 代理条目。"
-
-msgid "unique UCI identifier"
-msgstr "换行"
-
-msgid "Wrap"
-msgstr "换行"
-
-msgid "Import mihomo config"
-msgstr "导入 mihomo 配置"
-
-msgid "Please paste the %s field of a mihomo config."
-msgstr "请粘贴 mihomo 配置中的 %s 字段。"
-
-msgid "Only %s type entries can be imported this way; %s entries will be skipped (please add them manually)."
-msgstr "此方式仅支持导入 %s 类型的条目，%s 类型的条目将被跳过（请手动添加）。"
-
-msgid "No valid rule-provider entry found."
-msgstr "未找到有效的规则提供者条目。"
-
-msgid "At least 2 fields separated by commas are required (type,matcher[,node])."
-msgstr "至少需要 2 个以逗号分隔的字段（type,matcher[,node]）。"
-
-msgid "Unknown rule type: %s"
-msgstr "未知的规则类型：%s"
-
-msgid "Missing node/policy field (type,matcher,node)."
-msgstr "缺少节点/策略字段（type,matcher,node）。"
-
-msgid "Missing provider name."
-msgstr "缺少规则集名称。"
-
-msgid "Only \"%s\" type is supported here; \"%s\" will be skipped."
-msgstr "此处仅支持 \"%s\" 类型；\"%s\" 将被跳过。"
-
-msgid "Missing \"url\" field."
-msgstr "缺少 \"url\" 字段。"
-
-msgid "%s entry(ies) failed:"
-msgstr "%s 条失败："
-
-msgid "%s: %s"
-msgstr "%s：%s"
-
-msgid "%s line(s) failed:"
-msgstr "%s 行失败："
-
-msgid "Line %s: %s — %s"
-msgstr "第 %s 行：%s — %s"
-
-msgid "Successfully imported %s of %s entries."
-msgstr "成功导入 %s / %s 条条目。"
-
-msgid "Import external or local rule set files for batch matching."
-msgstr "引入外部或本地规则集文件进行批量匹配。"
-
-msgid "Match the exact full domain name (e.g., google.com)."
-msgstr "精确匹配完整的域名（例如 google.com）。"
-
-msgid "Match the domain and all its subdomains (e.g., google.com matches abc.google.com)."
-msgstr "匹配该域名及其所有子域名（例如 google.com 匹配 abc.google.com）。"
-
-msgid "Match domains using wildcards (e.g., *.google.com)."
-msgstr "使用通配符匹配（例如 *.google.com）。"
-
-msgid "Match if the domain contains this keyword (e.g., containing google)."
-msgstr "只要域名中包含该关键字即匹配（例如包含 google）。"
-
-msgid "Match domains using regular expressions."
-msgstr "使用正则表达式自由匹配域名。"
-
-msgid "Match specified IPv4 or IPv6 CIDR addresses (e.g., 192.168.1.0/24)."
-msgstr "匹配指定的 IPv4 或 IPv6 CIDR 地址（例如 192.168.1.0/24）。"
-
-msgid "Match the target port number or range (e.g., 80 or 80-443)."
-msgstr "匹配请求的目标端口号或端口范围（例如 80 或 80-443）。"
-
-msgid "Match the local process or application name that initiated the request."
-msgstr "匹配发起请求的本地进程或程序名称。"
-
-msgid "Match predefined GeoSite categories (e.g., geosite:cn)."
-msgstr "匹配 GeoSite 预设类别（例如 geosite:cn）。"
-
-msgid "Match the country/region of the destination IP (e.g., geoip:cn)."
-msgstr "匹配目标 IP 所属国家或地区的 GeoIP 库（例如 geoip:cn）。"
-
-msgid "Route traffic to the Mihomo GLOBAL policy group."
-msgstr "将流量导向 Mihomo 的全局（GLOBAL）策略组。"
-
-msgid "Traffic bypasses the proxy and is sent directly via the local network."
-msgstr "流量不经过代理，直接由本地 network 发送。"
-
-msgid "Block the request immediately and return an error to the client (commonly used for ad blocking)."
-msgstr "直接阻断该请求，并向客户端返回错误（通常用于去广告）。"
-
-msgid "Silently drop the request packets, causing the client to wait until it times out."
-msgstr "直接丢弃请求的数据包，客户端会一直等待直到超时。"
+msgid "Reverse"
+msgstr "反向"
 
 msgid "Match All"
-msgstr "全匹配"
+msgstr "全部匹配"
 
-msgid "Catch-all rule that matches any remaining traffic not handled by previous rules."
-msgstr "全匹配：无条件匹配所有剩余流量（通常用作最后一条兜底规则）。"
+msgid "In mseconds."
+msgstr "单位：毫秒。"
 
 msgid "Default auto-select node. <font color=\"red\">Required: \"NCloud\" must exist in proxy-groups.</font>"
-msgstr "默认自动选择最优节点。<font color=\"red\">必须：订阅中必须包含 \"NCloud\" 策略组。</font>"
+msgstr "默认自动选择节点。<font color=\"red\">要求：proxy-groups 中必须存在 \"NCloud\"。</font>"
 
-msgid "Please paste the %s field of a mihomo config, one rule per line."
-msgstr "请粘贴 mihomo 配置的 %s 字段，每行一条规则。"
+msgid "Checking latest version..."
+msgstr "正在检查最新版本……"
 
-msgid "MetaCubeX-Version"
-msgstr "MetaCubeX-版本"
+msgid "Core updated successfully, restarting service..."
+msgstr "核心更新成功，正在重启服务……"
 
-msgid "Please wait, downloading %s..."
-msgstr "请稍等，%s 下载中..."
+msgid "Edit"
+msgstr "编辑"
 
-#
-# App
-#
-msgid "Start after %s seconds."
-msgstr "%s 秒后启动。"
+msgid "Save"
+msgstr "保存"
+
+msgid "verify"
+msgstr "验证"
+
+msgid "△ Show Newest First"
+msgstr "△ 从新到旧"
+
+msgid "▽ Show Oldest First"
+msgstr "▽ 从旧到新"
+
+msgid "Failed to export debug log:"
+msgstr "导出调试日志失败："
+
+msgid "All Levels"
+msgstr "全部级别"
+
+msgid "-- Please choose --"
+msgstr "-- 请选择 --"
+
+msgid "Fullscreen"
+msgstr "全屏"
+
+msgid "Unknown"
+msgstr "未知"
+
+msgid "Last modified: %s, Size: %s"
+msgstr "最后修改：%s，大小：%s"
+
+msgid "Mixin:"
+msgstr "混入："
+
+msgid "No file selected"
+msgstr "未选择文件"
+
+msgid "Config saved, files updated"
+msgstr "配置已保存，文件已更新"
+
+msgid "Saved, reloading..."
+msgstr "已保存，正在重载……"
+
+msgid "Saved, restarting..."
+msgstr "已保存，正在重启……"
+
+msgid "AnyTLS"
+msgstr "AnyTLS"
+
+msgid "Hysteria"
+msgstr "Hysteria"
+
+msgid "Hysteria2"
+msgstr "Hysteria2"
+
+msgid "Shadowsocks"
+msgstr "Shadowsocks"
+
+msgid "ShadowTLS"
+msgstr "ShadowTLS"
+
+msgid "Socks"
+msgstr "Socks"
+
+msgid "SSH"
+msgstr "SSH"
+
+msgid "Trojan"
+msgstr "Trojan"
+
+msgid "TUIC"
+msgstr "TUIC"
+
+msgid "WireGuard"
+msgstr "WireGuard"
+
+msgid "VLESS"
+msgstr "VLESS"
+
+msgid "VMess"
+msgstr "VMess"
+
+msgid "HTTP"
+msgstr "HTTP"
+
+msgid "CUBIC"
+msgstr "CUBIC"
+
+msgid "New Reno"
+msgstr "New Reno"
+
+msgid "BBR"
+msgstr "BBR"
+
+msgid "Native"
+msgstr "原生"
+
+msgid "QUIC"
+msgstr "QUIC"
+
+msgid "WebSocket"
+msgstr "WebSocket"
+
+msgid "gRPC"
+msgstr "gRPC"
+
+msgid "HTTPUpgrade"
+msgstr "HTTPUpgrade"
+
+msgid "Socks4"
+msgstr "Socks4"
+
+msgid "Socks4A"
+msgstr "Socks4A"
+
+msgid "Socks5"
+msgstr "Socks5"
+
+msgid "PUT"
+msgstr "PUT"
+
+msgid "GET"
+msgstr "GET"
+
+msgid "v1"
+msgstr "v1"
+
+msgid "v2"
+msgstr "v2"
+
+msgid "v3"
+msgstr "v3"
+
+msgid "auto"
+msgstr "自动"
+
+msgid "zero"
+msgstr "零填充"
+
+msgid "packet addr (v2ray-core v5+)"
+msgstr "packet addr（v2ray-core v5+）"
+
+msgid "Xudp (Xray-core)"
+msgstr "Xudp（Xray-core）"
+
+msgid "File"
+msgstr "文件"
+
+msgid "Address"
+msgstr "地址"
+
+msgid "Label"
+msgstr "标签"
+
+msgid "Proxy protocol"
+msgstr "代理协议"
+
+msgid "Idle session check interval"
+msgstr "空闲会话检查间隔"
+
+msgid "Idle session check timeout"
+msgstr "空闲会话检查超时"
+
+msgid "Minimum idle sessions"
+msgstr "最小空闲会话数"
+
+msgid "Start."
+msgstr "启动。"
+
+msgid "Enabled."
+msgstr "已启用。"
 
 msgid "Disabled."
 msgstr "已禁用。"
 
 msgid "Exit."
-msgstr "已退出。"
-
-msgid "Enabled."
-msgstr "已启用。"
-
-msgid "Start."
-msgstr "启动中。"
+msgstr "退出。"
 
 msgid "Core is not executable."
-msgstr "核心程序不可执行。"
-
-msgid "Set scheduled restart."
-msgstr "已设置定时重启。"
-
-msgid "Set log scheduled clear."
-msgstr "已设置日志定时清理。"
-
-#
-# Profile
-#
-msgid "Use file: %s."
-msgstr "使用文件：%s。"
+msgstr "核心文件不可执行。"
 
 msgid "File not found."
-msgstr "文件不存在。"
+msgstr "文件未找到。"
 
 msgid "Use subscription: %s."
 msgstr "使用订阅：%s。"
 
 msgid "Subscription file not found."
-msgstr "订阅文件不存在。"
+msgstr "订阅文件未找到。"
 
 msgid "No profile/subscription selected."
-msgstr "未选择配置文件/订阅。"
+msgstr "未选择配置文件或订阅。"
 
 msgid "Checking..."
-msgstr "检查中..."
-
-msgid "Check failed."
-msgstr "检查失败。"
-
-msgid "DNS should be enabled and listen should be defined."
-msgstr "DNS 应启用，且需要定义监听地址。"
-
-msgid "Redirect Port/Listener should be defined."
-msgstr "需要定义 Redirect 端口/监听器。"
-
-msgid "TPROXY Port/Listener should be defined."
-msgstr "需要定义 TPROXY 端口/监听器。"
-
-msgid "TUN should be defined."
-msgstr "需要定义 TUN。"
-
-msgid "Check passed."
-msgstr "检查通过。"
-
-msgid "Testing..."
-msgstr "检测中..."
+msgstr "检查中……"
 
 msgid "Test passed."
-msgstr "检测通过。"
+msgstr "测试通过。"
 
 msgid "Test failed."
-msgstr "检测失败。"
+msgstr "测试失败。"
 
 msgid "Please check the core log to find out the problem."
-msgstr "请检查核心日志以排查问题。"
+msgstr "请查看核心日志以定位问题。"
 
-msgid "Update subscription: %s."
-msgstr "更新订阅：%s。"
-
-msgid "Fetch subscription info."
-msgstr "获取订阅信息。"
-
-msgid "Download subscription."
-msgstr "下载订阅。"
-
-msgid "Subscription download successful."
-msgstr "订阅下载成功。"
-
-msgid "Subscription is valid."
-msgstr "订阅有效。"
-
-msgid "Subscription is not valid."
-msgstr "订阅无效。"
-
-msgid "Subscription download failed."
-msgstr "订阅下载失败。"
-
-msgid "Subscription update successful."
-msgstr "订阅更新成功。"
-
-msgid "Subscription update failed."
-msgstr "订阅更新失败。"
-
-msgid "%s Subscription update successful."
-msgstr "%s 订阅更新成功。"
-
-msgid "%s Subscription update failed."
-msgstr "%s 订阅更新失败。"
-
-#
-# Mixin
-#
-msgid "%s Mixin config."
-msgstr "%s 混入配置。"
-
-#
-# Proxy
-#
-msgid "Waiting for tun device online within %s seconds..."
-msgstr "等待 TUN 设备上线，超时时间 %s 秒..."
+msgid "Core Start."
+msgstr "核心启动。"
 
 msgid "TUN device is online."
 msgstr "TUN 设备已上线。"
@@ -1855,329 +1827,65 @@ msgstr "TUN 设备已上线。"
 msgid "Timeout, TUN device is not online."
 msgstr "超时，TUN 设备未上线。"
 
+msgid "TUN should be defined."
+msgstr "TUN 必须已定义。"
+
+msgid "TPROXY Port/Listener should be defined."
+msgstr "TPROXY 端口/监听器必须已定义。"
+
+msgid "Redirect Port/Listener should be defined."
+msgstr "Redirect 端口/监听器必须已定义。"
+
+msgid "DNS should be enabled and listen should be defined."
+msgstr "DNS 应已启用且 listen 必须已定义。"
+
+msgid "Check passed."
+msgstr "检查通过。"
+
+msgid "Check failed."
+msgstr "检查失败。"
+
 msgid "Hijack successful."
 msgstr "劫持成功。"
 
 msgid "Hijack failed."
 msgstr "劫持失败。"
 
-#
-# Log
-#
-msgid "Logs are cleared due to clear at stop is enabled."
-msgstr "由于已启用停止时清理，日志已清空。"
+msgid "Set scheduled restart."
+msgstr "已设置定时重启。"
+
+msgid "Set log scheduled clear."
+msgstr "已设置日志定时清理。"
 
 msgid "App log is cleared due to scheduled clear and exceeding size limits."
-msgstr "由于已启用定时清理且超出大小限制，应用日志已清空。"
+msgstr "应用日志因定时清理及超出大小限制已被清除。"
 
 msgid "Core log is cleared due to scheduled clear and exceeding size limits."
-msgstr "由于已启用定时清理且超出大小限制，核心日志已清空。"
+msgstr "核心日志因定时清理及超出大小限制已被清除。"
 
-msgid ""
-msgstr ""
+msgid "Download subscription."
+msgstr "下载订阅。"
 
-msgid "Select files to add to mixin"
-msgstr "选择文件加入混入"
+msgid "Update subscription: %s."
+msgstr "更新订阅：%s。"
 
-msgid "Select mixin file"
-msgstr "选择混入文件"
+msgid "Subscription update successful."
+msgstr "订阅更新成功。"
 
-msgid "%s (Timeout)"
-msgstr "%s (超时)"
+msgid "Subscription update failed."
+msgstr "订阅更新失败。"
 
-msgid "Not Installed"
-msgstr "未安装"
+msgid "Fetch subscription info."
+msgstr "获取订阅信息。"
 
-msgid "Mixin:"
-msgstr "混入："
+msgid "Convert all url-test groups to smart + apply LightGBM settings."
+msgstr "将所有 url-test 组转换为 smart 并应用 LightGBM 设置。"
 
-msgid "When enabled, mixin configs will not be used; Mihomo will auto-configure instead"
-msgstr "启用后不使用所有混入配置，有 Mihomo 自动配置"
+msgid "Testing..."
+msgstr "测试中……"
 
-msgid "Config saved, files updated"
-msgstr "配置已保存，文件已更新"
+msgid "Proxy Enabled."
+msgstr "代理已启用。"
 
-msgid "No file selected"
-msgstr "未选择文件"
-
-msgid "Saved, reloading..."
-msgstr "已保存，正在重新加载..."
-
-msgid "Saved, restarting..."
-msgstr "已保存，正在重新启动..."
-
-msgid "Last modified: %s, Size: %s"
-msgstr "最后修改: %s, 大小: %s"
-
-msgid "Edit: %s"
-msgstr "编辑： %s"
-
-msgid "URL-Test Address Modify"
-msgstr "URL 测速地址修改"
-
-msgid "Batch override the test URL for all url-test / fallback groups. Leave empty to keep each group's original setting."
-msgstr "批量覆盖所有 url-test / fallback 分组的测速地址，留空则保留各分组原有设置"
-
-msgid "Google (CN)"
-msgstr "谷歌（国内）"
-
-msgid "Google (Gstatic)"
-msgstr "谷歌（Gstatic）"
-
-msgid "Cloudflare (HTTP)"
-msgstr "Cloudflare（HTTP）"
-
-msgid "Cloudflare (HTTPS)"
-msgstr "Cloudflare（HTTPS）"
-
-msgid "Apple"
-msgstr "苹果"
-
-msgid "URL-Test Group Tolerance"
-msgstr "URL 测速容差"
-
-msgid "Delay difference (ms) tolerated before switching to a faster node. Higher values reduce switching frequency but respond slower to real improvements."
-msgstr "切换到更快节点前允许的延迟差值（毫秒）。数值越大切换越不频繁，但对真实的延迟改善反应也越慢"
-
-msgid "In mseconds."
-msgstr "单位毫秒"
-
-msgid "In seconds."
-msgstr "单位秒"
-
-msgid "50 ms (sensitive)"
-msgstr "50 毫秒（灵敏）"
-
-msgid "100 ms (default)"
-msgstr "100 毫秒（默认）"
-
-msgid "150 ms (stable)"
-msgstr "150 毫秒（稳定）"
-
-msgid "200 ms (very stable)"
-msgstr "200 毫秒（非常稳定）"
-
-msgid "URL-Test Interval Modify"
-msgstr "URL 测速间隔修改"
-
-msgid "How often (seconds) each group re-tests node latency."
-msgstr "各分组重新测速节点延迟的间隔（秒）"
-
-msgid "180 s (3 min, frequent)"
-msgstr "180 秒（3 分钟，频繁）"
-
-msgid "300 s (5 min, default)"
-msgstr "300 秒（5 分钟，默认）"
-
-msgid "600 s (10 min, relaxed)"
-msgstr "600 秒（10 分钟，宽松）"
-
-msgid "URL-Test Timeout Modify"
-msgstr "URL 测速超时修改"
-
-msgid "Maximum time (ms) to wait for a test response before marking it a failure."
-msgstr "等待测速响应的最长时间（毫秒），超过则判定为失败"
-
-msgid "2000 ms (default)"
-msgstr "2000 毫秒（默认）"
-
-msgid "3000 ms (lenient)"
-msgstr "3000 毫秒（宽松）"
-
-msgid "5000 ms (high-latency network)"
-msgstr "5000 毫秒（高延迟网络）"
-
-msgid "URL-Test Lazy Mode"
-msgstr "URL 测速懒惰模式"
-
-msgid "When enabled, groups only test when there is active traffic instead of testing on a fixed interval, saving resources."
-msgstr "启用后，分组仅在有实际流量时才测速，而非按固定间隔测速，可节省资源"
-
-msgid "URL-Test Max Failed Times"
-msgstr "URL 测速最大失败次数"
-
-msgid "Consecutive failed tests before a node is marked unavailable."
-msgstr "连续测速失败达到该次数后，节点将被标记为不可用"
-
-msgid "3 (default)"
-msgstr "3（默认）"
-
-msgid "5 (tolerant)"
-msgstr "5（宽容）"
-
-msgid "10 (very tolerant)"
-msgstr "10（非常宽容）"
-
-msgid "Unified Delay"
-msgstr "统一延迟计算"
-
-msgid "Calculate latency using a consistent method across protocols, excluding connection setup time. Recommended together with Tolerance for more accurate comparisons."
-msgstr "使用统一方式计算不同协议的延迟，排除连接建立耗时的干扰。建议与「测速容差」搭配使用，使延迟对比更准确"
-
-msgid "Add a subscription to a startup profile"
-msgstr "为启动配置文件添加订阅"
-
-msgid "Not used"
-msgstr "不使用"
-
-msgid "Core"
-msgstr "内核"
-
-msgid "Stable"
-msgstr "稳定版"
-
-msgid "Alpha"
-msgstr "Alpha 版"
-
-msgid "Smart"
-msgstr "Smart 版"
-
-msgid "Update Core"
-msgstr "更新内核"
-
-msgid "Switch Core"
-msgstr "切换内核"
-
-msgid "Please select a core first."
-msgstr "请先选择内核。"
-
-msgid "Unknown device architecture, cannot download core."
-msgstr "无法识别设备架构，无法下载内核。"
-
-msgid "Checking latest version..."
-msgstr "正在检查最新版本..."
-
-msgid "Downloading %s..."
-msgstr "正在下载 %s..."
-
-msgid "Core updated successfully, restarting service..."
-msgstr "内核更新成功，正在重启服务..."
-
-msgid "Switch failed: %s"
-msgstr "切换失败：%s"
-
-msgid "Switched to %s"
-msgstr "已切换至 %s"
-
-msgid "Switch failed"
-msgstr "切换失败"
-
-msgid "Update failed: %s"
-msgstr "更新失败：%s"
-
-msgid "Model Version"
-msgstr "模型版本"
-
-msgid "Light"
-msgstr "轻量版"
-
-msgid "Middle"
-msgstr "中等版"
-
-msgid "Large"
-msgstr "完整版"
-
-msgid "Download Model"
-msgstr "下载模型"
-
-msgid "Please select a model version first."
-msgstr "请先选择模型版本。"
-
-msgid "Downloading model..."
-msgstr "正在下载模型..."
-
-msgid "Model updated successfully! Path: %s"
-msgstr "模型更新成功！路径：%s"
-
-msgid "RPC request failed: %s"
-msgstr "RPC 请求失败：%s"
-
-msgid "Enable LightGBM"
-msgstr "启用 LightGBM 模型"
-
-msgid "Collect Training Data"
-msgstr "收集训练数据"
-
-msgid "Collector Size (MB)"
-msgstr "训练数据大小 (MB)"
-
-msgid "Sample Rate"
-msgstr "采样率"
-
-msgid "Prefer ASN"
-msgstr "优先 ASN"
-
-msgid "Strategy"
-msgstr "策略"
-
-msgid "Sticky Sessions (Recommended)"
-msgstr "粘性会话（推荐）"
-
-msgid "Round Robin"
-msgstr "轮询"
-
-msgid "Policy Priority"
-msgstr "策略优先级"
-
-msgid "Default DNS Hijack"
-msgstr "默认 DNS 劫持"
-
-msgid "Enable DNS hijacking for users not explicitly configured"
-msgstr "为未显式配置的用户启用 DNS 劫持"
-
-msgid "Default Proxy Enable"
-msgstr "默认代理启用"
-
-msgid "Enable proxy for users not explicitly configured"
-msgstr "为未显式配置的用户启用代理"
-
-msgid "Whitelist Access Control"
-msgstr "白名单访问控制"
-
-msgid "Blacklist Bypass Control"
-msgstr "黑名单绕过控制"
-
-msgid "Default DNS Hijack"
-msgstr "默认 DNS 劫持"
-
-msgid "Enable DNS hijacking for devices not explicitly configured"
-msgstr "为未显式配置的设备启用 DNS 劫持"
-
-msgid "Default Proxy Enable"
-msgstr "默认代理启用"
-
-msgid "Enable proxy for devices not explicitly configured"
-msgstr "为未显式配置的设备启用代理"
-
-msgid "Whitelist Access Control"
-msgstr "白名单访问控制"
-
-msgid "Blacklist Bypass Control"
-msgstr "黑名单绕过控制"
-
-msgid "User"
-msgstr "用户"
-
-msgid "Group"
-msgstr "组"
-
-msgid "CGroup"
-msgstr "CGroup"
-
-msgid "DNS"
-msgstr "DNS"
-
-msgid "Proxy"
-msgstr "代理"
-
-msgid "IP"
-msgstr "IP"
-
-msgid "IP6"
-msgstr "IPv6"
-
-msgid "MAC"
-msgstr "MAC 地址"
-
-msgid ""
-msgstr ""
+msgid "Proxy Disabled."
+msgstr "代理已禁用。"
