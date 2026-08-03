@@ -253,19 +253,12 @@ return view.extend({
         o.rmempty = false;
 
         let coreBtn, coreDownload = false;
-        o = s.option(form.ListValue, 'core', _('Core'));
+        o = s.option(form.ListValue, 'core', _('Core'), _('使用代理下载能减少等待时间'));
         o.value('meta', _('Stable'));
         o.value('alpha', _('Alpha'));
         o.value('smart', _('Smart'));
         o.rmempty = false;
 
-        o.load = function (section_id) {
-            const savedCore = this.super('load', section_id);
-            const exists = list?.some(f =>
-                f.type === 'file' && f.name === `${savedCore}-mihomo`
-            ) ?? false;
-            coreDownload = !savedCore && !exists;
-        };
         o.onchange = function (ev, section_id, value) {
             if (!coreBtn) return;
             const savedCore = this.cfgvalue(section_id);
