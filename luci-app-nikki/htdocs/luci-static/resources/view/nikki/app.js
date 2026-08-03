@@ -121,10 +121,11 @@ return view.extend({
             nikki.listfiles('/etc/nikki/mixin'),
             nikki.listfiles('/etc/nikki/profiles'),
             nikki.listfiles('/etc/nikki/subscriptions'),
+            L.resolveDefault(fs.stat('/etc/nikki/run/Model.bin').then(st => st?.size || null), null),
             uci.load('nikki')
         ]);
     },
-    render: function ([v, running, mixinfiles, profiles, subfiles]) {
+    render: function ([v, running, mixinfiles, profiles, subfiles, modelsize]) {
         let m, s, o;
         preloadAce().catch(() => {});
 
@@ -267,11 +268,10 @@ return view.extend({
                     const val = self.formvalue(section_id).trim();
                     if (!val)
                         return ui.addNotification(null, E('p', _('Please select a core first.')), 'error');
-                    if (cfgvalue === val) return;
 
                     return nikki.cache_core(val, core_version)
                         .then(function (res) {
-                            if (res.status !== 'ok')
+                            if (res?.status !== 'ok')
                                 throw new Error(res.message || _('Cache failed'));
                             ui.addTimeLimitedNotification(null, E('p', _('Core cached: %s').format(res.path || '')), 4000, 'info');
                         })
@@ -291,14 +291,13 @@ return view.extend({
 
                     return nikki.switch_core(val, core_version)
                         .then(function (res) {
-                            if (res.status !== 'ok')
+                            if (res?.status !== 'ok')
                                 throw new Error(res.message || _('Switch failed'));
 
                             ui.addTimeLimitedNotification(null, E('p', _('Switched to %s').format(val)), 4000, 'success');
                             if (cfgvalue !== val) {
-                                uci.set('nikki', 'config', 'core', val);
-                                return self.map.save(null, true)
-                                    .then(() => ui.changes.apply(true));
+                                nikki.uciSetAndCommit('nikki', 'config', 'core', val).then(() =>
+                                    nikki.service('reload'))
                             }
                         })
                         .catch(function (err) {
@@ -323,6 +322,54 @@ return view.extend({
         o.value('Model-middle.bin', _('Middle'));
         o.value('Model-large.bin', _('Large'));
         o.depends('uselightgbm', '1');
+        let downloadBtn = null;
+        function needDownload(value) {
+            const modelRanges = {
+                'Model.bin': [7, 9],
+                'Model-middle.bin': [10, 13],
+                'Model-large.bin': [19, 22]
+            };
+            const range = modelRanges[value];
+            if (!modelsize || !range) return true;
+            const currentMB = modelsize / 1024 / 1024;
+            return currentMB < range[0] || currentMB > range[1];
+        }
+        o.onchange = function (ev, section_id, value) {
+            if (downloadBtn)
+                downloadBtn.style.display = needDownload(value) ? '' : 'none';
+        };
+
+        o.renderWidget = function (section_id, option_index, cfgvalue) {
+            const default_label = _('Download Model');
+            const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            downloadBtn = E('button', {
+                'class': 'btn cbi-button-positive',
+                'style': needDownload(cfgvalue) ? '' : 'display:none',
+                'click': ui.createHandlerFn(this, function () {
+                    const mode = this.formvalue(section_id).trim();
+                    if (!mode) return false;
+                    downloadBtn.textContent = _('Please wait, downloading %s...').format(mode);
+                    return nikki.download_file({
+                        url: 'https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/' + mode,
+                        path: '/etc/nikki/run/Model.bin'
+                    }).then(function (res) {
+                        if (res?.status !== 'ok')
+                            throw new Error(res.message || _('Cache failed'));
+                        nikki.uciSetAndCommit('nikki', 'config', 'lgbm_url', mode).then((res) => {
+                            if (res?.status !== 'ok')
+                                throw new Error(res.message || _('Cache failed'));
+                            downloadBtn.textContent = _('更新成功');
+                            nikki.service('reload');
+                        });
+                    }).catch(function (err) {
+                        ui.addNotification(null, E('p', _('Update failed: %s').format(err.message || err)), 'error');
+                    }).finally(() => downloadBtn.textContent = default_label);
+                })
+            }, default_label);
+
+            node.appendChild(downloadBtn);
+            return node;
+        };
 
         o = s.option(form.Flag, 'collectdata', _('Collect Training Data'));
         o.default = '0';

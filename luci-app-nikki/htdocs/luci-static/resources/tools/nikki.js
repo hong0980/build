@@ -111,6 +111,13 @@ const callSwitchCore = rpc.declare({
     expect: { '': {} }
 });
 
+const callUciSetCommit = rpc.declare({
+    object: 'luci.nikki',
+    method: 'set_commit',
+    params: ['config', 'section', 'option', 'value'],
+    expect: { '': {} }
+});
+
 const homeDir = '/etc/nikki';
 const profilesDir = `${homeDir}/profiles`;
 const subscriptionsDir = `${homeDir}/subscriptions`;
@@ -156,6 +163,10 @@ return baseclass.extend({
         return callRCInit('nikki', command);
     },
 
+    uciSetAndCommit(config, section, option, value) {
+        return callUciSetCommit(config, section, option, value);
+    },
+
     writefile: function (path, data, mode) {
         data = (data != null) ? String(data) : '';
         mode = (mode != null) ? mode : 0o644;
@@ -190,10 +201,22 @@ return baseclass.extend({
         return callGetCoreUrl(core_type, arch);
     },
 
-    download_file_curl: function (url, path, filename, chmod, ua, secret, headers) {
+    download_file: function (opts) {
+        if (typeof opts !== 'object') {
+            throw new Error('download_file expects an options object');
+        }
+
+        const url = opts.url || '';
+        const path = opts.path || '';
+        const filename = opts.filename || '';
+        const ua = opts.ua || '';
+        const secret = opts.secret || '';
+        const headers = opts.headers || '';
+        let chmod = opts.chmod;
         chmod = (chmod == null || chmod === false || chmod === 0 || chmod === '')
             ? ''
             : (typeof chmod === 'string' ? chmod : '1');
+
         return calldownload_file(url, path, filename, chmod, ua, secret, headers);
     },
 
@@ -262,7 +285,6 @@ return baseclass.extend({
             : `${baseUrl}/?${query}`;
 
         setTimeout(() => window.open(finalUrl, '_blank'), 0);
-
         return Promise.resolve();
     },
 
@@ -289,4 +311,4 @@ return baseclass.extend({
     update_ui: function (url, name) {
         return update_ui(url, name);
     },
-})
+});

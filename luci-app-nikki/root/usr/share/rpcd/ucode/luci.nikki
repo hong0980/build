@@ -1,63 +1,100 @@
 #!/usr/bin/ucode
 // https://ucode.mein.io/module-fs.html
 'use strict';
+
 import { cursor } from 'uci';
 import { access, popen, writefile } from 'fs';
-import { get_users, get_groups, get_cgroups, load_profile, shellQuote, run }
-	from '/etc/nikki/ucode/include.uc';
+import {
+	get_users, get_groups, get_cgroups, load_profile, shellQuote, run
+} from '/etc/nikki/ucode/include.uc';
 
 const uci = cursor();
 const github_token = uci.get('nikki', 'config', 'github_token');
 
 const methods = {
+	set_commit: {
+		args: { config: 'config', section: 'section', option: 'option', value: 'value' },
+		call: function (req) {
+			const config  = req.args?.config;
+			const section = req.args?.section;
+			const option  = req.args?.option;
+			const value   = req.args?.value;
+
+			if (!uci.get(config, section))
+				return { status: 'error', message: 'section not found' };
+
+			uci.set(config, section, option, value);
+			uci.commit(config);
+			return { status: 'ok' };
+		}
+	},
 	connection_check: {
 		args: { url: 'url' },
 		call: function (req) {
-			if (!req.args?.url) return { httpcode: null, error: 'illegal url' };
-			const out = run(`curl -s -o /dev/null -L -w '%{http_code} %{time_total}' --max-time 3 ${shellQuote(req.args?.url)}`);
+			if (!req.args?.url)
+				return { httpcode: null, error: 'illegal url' };
+
+			const out = run(
+				`curl -s -o /dev/null -L -w '%{http_code} %{time_total}' --max-time 3 ${shellQuote(req.args.url)}`
+			);
+
 			if (!out) return { httpcode: '-1', elapsed_ms: -1 };
-			const parts = split(out, ' ');
-			const httpcode = parts[0] || '-1';
+			const parts      = split(out, ' ');
+			const httpcode   = parts[0] || '-1';
 			const elapsed_ms = parts[1] ? int(+parts[1] * 1000) : -1;
-			return { httpcode: httpcode, elapsed_ms: elapsed_ms };
+			return { httpcode, elapsed_ms };
 		}
 	},
 	update_ui: {
 		args: { url: 'url', name: 'name' },
 		call: function (req) {
-			const url = req.args?.url;
-			const name = req.args?.name;
-			const profile = load_profile();
-			const secret = profile['secret'];
-			const listen = profile['external-controller'];
+			const url      = req.args?.url;
+			const name     = req.args?.name;
+			const profile  = load_profile();
+			const secret   = profile['secret'];
+			const listen   = profile['external-controller'];
 			const tls_listen = profile['external-controller-tls'];
-			if (!listen && !tls_listen) {
+
+			if (!listen && !tls_listen)
 				return { status: 'error', message: 'invalid listen' };
-			}
+
 			const filepath = '/etc/nikki/run/config.yaml';
+
 			if (!url || !name
 				|| !match(name, /^[A-Za-z0-9_-]+$/)
-				|| match(url, /['"`$\\;&|<>(){}\n]/)) {
-				return { status: 'error', message: 'invalid url/name' };
-			};
-			const yq_out = run(`yq -Mi '.["external-ui-url"]="${url}" | .["external-ui-name"]="${name}"' ${filepath} 2>&1`);
-			if (yq_out) return { status: 'error', message: `yq: ${yq_out}` };
+				|| match(url, /['"`$\\;&|<>(){}\n]/)
+			) {return { status: 'error', message: 'invalid url/name' };}
 
-			const reload_out = run(`curl -sS -X PUT -H 'Authorization: Bearer ${secret}' http://${listen}/configs?force=true -d '{"path": "${filepath}", "payload": ""}' 2>&1`);
-			if (reload_out) return { status: 'error', message: `reload: ${reload_out}` };
+			const yq_out = run(
+				`yq -Mi '.["external-ui-url"]="${url}" | .["external-ui-name"]="${name}"' ${filepath} 2>&1`
+			);
+			if (yq_out)
+				return { status: 'error', message: `yq: ${yq_out}` };
+
+			const reload_out = run(
+				`curl -sS -X PUT -H 'Authorization: Bearer ${secret}'
+				 http://${listen}/configs?force=true
+				 -d '{"path": "${filepath}", "payload": ""}' 2>&1`
+			);
+			if (reload_out)
+				return { status: 'error', message: `reload: ${reload_out}` };
 
 			function do_upgrade() {
-				const out = run(`curl -sS -X POST -H 'Authorization: Bearer ${secret}' http://${listen}/upgrade/ui 2>&1`);
-				try { return json(out); } catch (e) { return null; }
-			};
+				const out = run(
+					`curl -sS -X POST -H 'Authorization: Bearer ${secret}'
+					 http://${listen}/upgrade/ui 2>&1`
+				);
+				try { return json(out); } catch (_) { return null; }
+			}
 
-			const DELAYS = [2, 2, 2, 2];
+			const DELAYS = [2, 2, 2];
 			let result = null;
+
 			for (let i = 0; i < length(DELAYS); i++) {
 				system(`sleep ${DELAYS[i]}`);
 				result = do_upgrade();
 				if (result?.status === 'ok') break;
-			};
+			}
 
 			return result?.status === 'ok'
 				? { status: 'ok' }
@@ -67,32 +104,34 @@ const methods = {
 	get_core_url: {
 		args: { core_type: 'core_type', arch: 'arch' },
 		call: function (req) {
+			const arch      = req.args?.arch;
 			const core_type = req.args?.core_type;
-			const arch = req.args?.arch;
+
 			if (!core_type || !arch)
 				return { status: 'error', message: 'missing params' };
 
 			if (core_type == 'smart') {
 				return {
-					status: 'ok',
-					url: 'https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart/clash-' + arch + '-compatible.tar.gz',
+					status:  'ok',
+					url:     `https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart/clash-${arch}-compatible.tar.gz`,
 					version: 'smart',
 					istargz: true
 				};
 			}
 
 			const api_map = {
-				meta: 'https://api.github.com/repos/MetaCubeX/mihomo/releases/latest',
+				meta:  'https://api.github.com/repos/MetaCubeX/mihomo/releases/latest',
 				alpha: 'https://api.github.com/repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha'
 			};
+
 			const api_url = api_map[core_type];
 			if (!api_url)
 				return { status: 'error', message: 'invalid core type' };
 
-			let curl_cmd = 'curl -sL --max-time 15';
+			let curl_cmd = `curl -sL --max-time 15`;
 			if (github_token)
-				curl_cmd += ' -H ' + shellQuote('Authorization: Bearer ' + github_token);
-			curl_cmd += ' ' + shellQuote(api_url);
+				curl_cmd += ` -H ${shellQuote(`Authorization: Bearer ${github_token}`)}`;
+			curl_cmd += ` ${shellQuote(api_url)}`;
 
 			const api_out = run(curl_cmd);
 			if (!api_out)
@@ -103,23 +142,24 @@ const methods = {
 				info = json(api_out);
 			} catch (e) {
 				const preview = length(api_out) > 200 ? substr(api_out, 0, 200) + '...' : api_out;
-				return { status: 'error', message: 'json parse failed: ' + preview };
+				return { status: 'error', message: `json parse failed: ${preview}` };
 			}
 
 			if (info.message && !info.tag_name && !info.assets)
-				return { status: 'error', message: 'github api error: ' + info.message };
+				return { status: 'error', message: `github api error: ${info.message}` };
 
 			if (core_type == 'meta') {
 				const tag = info.tag_name;
 				if (!tag) {
 					const keys = [];
 					for (let k in info) push(keys, k);
-					return { status: 'error', message: 'no tag found, keys: ' + join(keys, ',') };
+					return { status: 'error', message: `no tag found, keys: ${join(keys, ',')}` };
 				}
+
 				const filename = `mihomo-${arch}-compatible-${tag}.gz`;
 				return {
-					status: 'ok',
-					url: `https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${filename}`,
+					status:  'ok',
+					url:     `https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${filename}`,
 					version: tag,
 					istargz: false
 				};
@@ -141,55 +181,55 @@ const methods = {
 					found = assets[i];
 					break;
 				}
-				if (index(name, prefix + '-alpha-') >= 0) {
+				if (index(name, `${prefix}-alpha-`) >= 0) {
 					found = assets[i];
 					continue;
 				}
-				if (!found)
-					found = assets[i];
+				if (!found) found = assets[i];
 			}
 
 			if (!found)
-				return { status: 'error', message: 'no matching asset for ' + arch };
+				return { status: 'error', message: `no matching asset for ${arch}` };
 
 			return {
-				status: 'ok',
-				url: found.browser_download_url,
+				status:  'ok',
+				url:     found.browser_download_url,
 				version: found.name,
 				istargz: false
 			};
 		}
 	},
 	download_file: {
-		args: { url: 'url', path: 'path', filename: 'filename', chmod: 'chmod', ua: 'ua', secret: 'secret', headers: 'headers' },
+		args: {
+			url: 'url', path: 'path', filename: 'filename',
+			chmod: 'chmod', ua: 'ua', secret: 'secret', headers: 'headers'
+		},
 		call: function (req) {
-			const url = req.args?.url;
-			let path = req.args?.path;
+			const url      = req.args?.url;
+			let   path     = req.args?.path;
+			const chmod    = req.args?.chmod;
 			const filename = req.args?.filename;
-			const chmod = req.args?.chmod;
-			const ua = req.args?.ua || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
-			const secret = req.args?.secret;
-			let headers = req.args?.headers;
+			const ua       = req.args?.ua
+				|| 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+			const secret   = req.args?.secret;
+			let   headers  = req.args?.headers;
 
-			if (!url)
-				return { status: 'error', message: 'missing url' };
+			if (!url)        return { status: 'error', message: 'missing url' };
+			if (!path)       return { status: 'error', message: 'missing path' };
 			if (match(url, /['"`$\\;&|<>(){}\n]/))
-				return { status: 'error', message: 'invalid url' };
+							 return { status: 'error', message: 'invalid url' };
 
-			if (!path || !filename)
-				return { status: 'error', message: 'missing path' };
-
-			path = `${path}/${filename}`;
+			path = filename ? `${path}/${filename}` : path;
 
 			let cmd = `curl -SsL --connect-timeout 30 -m 180 --speed-time 30 --speed-limit 1 --retry 2 -o ${shellQuote(path)} -A ${shellQuote(ua)}`;
 
 			if (secret) cmd += ` -H ${shellQuote(secret)}`;
+
 			if (headers) {
 				const headerList = split(headers, '|');
 				for (let i = 0; i < length(headerList); i++) {
-					if (headerList[i]) {
+					if (headerList[i])
 						cmd += ` -H ${shellQuote(trim(headerList[i]))}`;
-					}
 				}
 			}
 
@@ -198,48 +238,55 @@ const methods = {
 			const out = run(cmd);
 			if (access(path, 'r')) {
 				if (chmod) run(`chmod 755 ${shellQuote(path)}`);
-				return { status: 'ok', path: path };
-			} else {
-				return { status: 'error', message: out || 'download failed' };
+				return { status: 'ok', path };
 			}
+
+			return { status: 'error', message: out || 'download failed' };
 		}
 	},
 	version: {
 		call: function () {
-			let app = null, core = null;
+			let app  = null;
+			let core = null;
+
 			if (access('/usr/bin/apk', 'x')) {
-				app = run("apk list -I luci-app-nikki | sed -nr 's/.*nikki-(.*)-.*noarch.*/\\1/p'");
+				app = run(`apk list -I luci-app-nikki | sed -nr 's/.*nikki-(.*)-.*noarch.*/\\1/p'`);
 			} else if (access('/bin/opkg', 'x')) {
-				app = run("opkg list-installed luci-app-nikki | sed -nr 's/.*nikki - (.*)-.*/\\1/p'");
+				app = run(`opkg list-installed luci-app-nikki | sed -nr 's/.*nikki - (.*)-.*/\\1/p'`);
 			}
-			core = run('/etc/nikki/run/mihomo -v | grep Mihomo | cut -d " " -f 3');
+
+			core = run(`/etc/nikki/run/mihomo -v | grep Mihomo | cut -d " " -f 3`);
+
 			return { app, core };
 		}
 	},
 	profile: {
 		args: { defaults: {} },
 		call: function (req) {
-			let profile = {};
-			const defaults = req.args?.defaults ?? {};
-			const filepath = '/etc/nikki/run/config.yaml';
+			const defaults    = req.args?.defaults ?? {};
+			const filepath    = '/etc/nikki/run/config.yaml';
 			const tmpFilepath = '/var/run/nikki/profile.json';
+
 			if (access(filepath, 'r')) {
 				writefile(tmpFilepath, defaults);
-				const process = run(`yq -Mpy -o json eval-all 'select(fi == 0) *? select(fi == 1)' ${tmpFilepath} ${filepath}`);
-				if (process) profile = json(process);
+				const process = run(
+					`yq -Mpy -o json eval-all 'select(fi == 0) *? select(fi == 1)' ${tmpFilepath} ${filepath}`
+				);
+				if (process) return json(process);
 			}
-			return profile;
+
+			return {};
 		}
 	},
 	update_subscription: {
 		args: { section_id: 'section_id' },
 		call: function (req) {
-			let success = false;
 			const section_id = req.args?.section_id;
-			if (section_id) {
-				success = system(['service', 'nikki', 'update_subscription', section_id]) == 0;
-			}
-			return { success: success };
+			const success    = section_id
+				? system(['service', 'nikki', 'update_subscription', section_id]) == 0
+				: false;
+
+			return { success };
 		}
 	},
 	api: {
@@ -248,66 +295,78 @@ const methods = {
 			let result = {};
 
 			const method = req.args?.method;
-			const path = req.args?.path;
-			const query = req.args?.query;
-			const body = req.args?.body;
+			const path   = req.args?.path;
+			const query  = req.args?.query;
+			const body   = req.args?.body;
 
-			const profile = load_profile();
-			const api_listen = profile['external-controller'];
+			const profile        = load_profile();
+			const api_listen     = profile['external-controller'];
 			const api_tls_listen = profile['external-controller-tls'];
-			const api_secret = profile['secret'];
-			if (!api_listen && !api_tls_listen) return result;
+			const api_secret     = profile['secret'];
+
+			if (!api_listen && !api_tls_listen)
+				return result;
 
 			const protocol = api_tls_listen ? 'https' : 'http';
-			const url = api_listen + path;
-			const process = run(`curl --proto-default '${protocol}' --insecure --request '${method}' --oauth2-bearer '${api_secret}' --url-query '${query}' --data '${body}' '${url}'`);
-			if (process) result = json(process);
+			const url      = `${api_listen}${path}`;
 
+			const process = run(
+				`curl --proto-default '${protocol}' --insecure
+				 --request '${method}'
+				 --oauth2-bearer '${api_secret}'
+				 --url-query '${query}'
+				 --data '${body}'
+				 '${url}'`
+			);
+
+			if (process) result = json(process);
 			return result;
 		}
 	},
 	get_identifiers: {
 		call: function () {
-			const users =   filter(get_users(),   (x) => x != '');
-			const groups =  filter(get_groups(),  (x) => x != '');
+			const users   = filter(get_users(),   (x) => x != '');
+			const groups  = filter(get_groups(),  (x) => x != '');
 			const cgroups = filter(get_cgroups(), (x) => x != '' && index(x, 'services/nikki') < 0);
-			return { users: users, groups: groups, cgroups: cgroups };
+
+			return { users, groups, cgroups };
 		}
 	},
 	debug: {
 		call: function () {
 			const success = system('/etc/nikki/scripts/debug.sh > /var/log/nikki/debug.log') == 0;
-			return { success: success };
+			return { success };
 		}
 	}
 };
 methods.cache_core = {
 	args: { core_type: 'core_type', arch: 'arch' },
 	call: function (req) {
-		const arch = req.args?.arch;
+		const arch      = req.args?.arch;
 		const core_type = req.args?.core_type;
 		const cache_dir = '/etc/nikki/run/core';
-		const out_name = core_type + '-mihomo';
-		const tmp_out = cache_dir + '/' + out_name + '.tmp';
-		const final_out = cache_dir + '/' + out_name;
+		const out_name  = `${core_type}-mihomo`;
+		const tmp_out   = `${cache_dir}/${out_name}.tmp`;
+		const final_out = `${cache_dir}/${out_name}`;
 
-		if (!core_type || !arch) return { status: 'error', message: 'missing params' };
+		if (!core_type || !arch)
+			return { status: 'error', message: 'missing params' };
 
-		run('mkdir -p ' + shellQuote(cache_dir));
+		run(`mkdir -p ${shellQuote(cache_dir)}`);
 
 		let core_info;
 		try {
 			core_info = methods.get_core_url.call({ args: { core_type, arch } });
 		} catch (e) {
-			return { status: 'error', message: 'get_core_url failed: ' + (e.message || e) };
+			return { status: 'error', message: `get_core_url failed: ${e.message || e}` };
 		}
 
 		if (!core_info || core_info.status != 'ok')
 			return { status: 'error', message: core_info?.message || 'no core info' };
 
-		const archive_name = core_info.filename || (core_info.istargz ? 'mihomo.tar.gz' : 'mihomo.gz');
-		const archive_cache_name = core_type + '-' + archive_name;
-		const archive_fullpath = cache_dir + '/' + archive_cache_name;
+		const archive_name       = core_info.filename || (core_info.istargz ? 'mihomo.tar.gz' : 'mihomo.gz');
+		const archive_cache_name = `${core_type}-${archive_name}`;
+		const archive_fullpath   = `${cache_dir}/${archive_cache_name}`;
 
 		let dl;
 		try {
@@ -315,46 +374,46 @@ methods.cache_core = {
 				args: { url: core_info.url, path: cache_dir, filename: archive_cache_name, chmod: '1' }
 			});
 		} catch (e) {
-			return { status: 'error', message: 'download_file failed: ' + (e.message || e) };
+			return { status: 'error', message: `download_file failed: ${e.message || e}` };
 		}
 
 		if (!dl || dl.status != 'ok')
 			return { status: 'error', message: dl?.message || 'download failed' };
 
-		run('rm -f ' + shellQuote(tmp_out));
+		run(`rm -f ${shellQuote(tmp_out)}`);
 
 		if (core_info.istargz) {
 			const tmpdir = '/tmp/mihomo_extract';
-			run('rm -rf ' + shellQuote(tmpdir) + ' && mkdir -p ' + shellQuote(tmpdir));
+			run(`rm -rf ${shellQuote(tmpdir)} && mkdir -p ${shellQuote(tmpdir)}`);
 
-			const tar_out = run('tar -xzf ' + shellQuote(archive_fullpath) + ' -C ' + shellQuote(tmpdir) + ' 2>&1');
-			const ls_out = run('ls -1 ' + shellQuote(tmpdir) + ' 2>/dev/null') || '';
+			const tar_out = run(`tar -xzf ${shellQuote(archive_fullpath)} -C ${shellQuote(tmpdir)} 2>&1`);
+			const ls_out  = run(`ls -1 ${shellQuote(tmpdir)} 2>/dev/null`) || '';
 
 			let found = null;
 			for (let name in split(ls_out, '\n')) {
 				name = trim(name);
-				if (name && access(tmpdir + '/' + name, 'r')) {
-					found = tmpdir + '/' + name;
+				if (name && access(`${tmpdir}/${name}`, 'r')) {
+					found = `${tmpdir}/${name}`;
 					break;
 				}
 			}
 
 			if (!found) {
-				run('rm -rf ' + shellQuote(tmpdir));
-				return { status: 'error', message: 'extract failed: ' + (tar_out || 'no file') };
+				run(`rm -rf ${shellQuote(tmpdir)}`);
+				return { status: 'error', message: `extract failed: ${tar_out || 'no file'}` };
 			}
 
-			run('cp -f ' + shellQuote(found) + ' ' + shellQuote(tmp_out));
-			run('rm -rf ' + shellQuote(tmpdir));
+			run(`cp -f ${shellQuote(found)} ${shellQuote(tmp_out)}`);
+			run(`rm -rf ${shellQuote(tmpdir)}`);
 		} else {
-			const out = run('gunzip -c ' + shellQuote(archive_fullpath) + ' > ' + shellQuote(tmp_out) + ' 2>&1');
+			const out = run(`gunzip -c ${shellQuote(archive_fullpath)} > ${shellQuote(tmp_out)} 2>&1`);
 			if (!access(tmp_out, 'r'))
 				return { status: 'error', message: out || 'gunzip failed' };
 		}
 
-		run('chmod 755 ' + shellQuote(tmp_out));
-		run('mv ' + shellQuote(tmp_out) + ' ' + shellQuote(final_out));
-		run('rm -f ' + shellQuote(archive_fullpath));
+		run(`chmod 755 ${shellQuote(tmp_out)}`);
+		run(`mv ${shellQuote(tmp_out)} ${shellQuote(final_out)}`);
+		run(`rm -f ${shellQuote(archive_fullpath)}`);
 
 		return { status: 'ok', path: final_out, archive: archive_fullpath };
 	}
@@ -363,30 +422,31 @@ methods.cache_core = {
 methods.switch_core = {
 	args: { core_type: 'core_type', arch: 'arch' },
 	call: function (req) {
-		const arch = req.args?.arch;
+		const arch      = req.args?.arch;
 		const core_type = req.args?.core_type;
-		if (!core_type) return { status: 'error', message: 'missing core_type' };
 
-		const target = '/etc/nikki/run/mihomo';
-		const final_out = '/etc/nikki/run/core/' + core_type + '-mihomo';
+		if (!core_type)
+			return { status: 'error', message: 'missing core_type' };
+
+		const target    = '/etc/nikki/run/mihomo';
+		const final_out = `/etc/nikki/run/core/${core_type}-mihomo`;
 
 		if (!access(final_out, 'r')) {
-			const cache = methods.cache_core.call({
-				args: { core_type: core_type, arch: arch }
-			});
-
+			const cache = methods.cache_core.call({ args: { core_type, arch } });
 			if (!cache || cache.status != 'ok')
-				return { status: 'error', message: cache?.message || ('cached binary not found: ' + final_out) };
+				return { status: 'error', message: cache?.message || `cached binary not found: ${final_out}` };
 		}
 
-		run('rm -f ' + shellQuote(target));
+		run(`rm -f ${shellQuote(target)}`);
 
-		const out = run('ln -s ' + shellQuote(final_out) + ' ' + shellQuote(target));
-		if (out) return { status: 'error', message: 'switch failed: ' + out };
+		const out = run(`ln -s ${shellQuote(final_out)} ${shellQuote(target)}`);
+		if (out)
+			return { status: 'error', message: `switch failed: ${out}` };
 
 		system(['/bin/chmod', '755', final_out]);
 
 		return { status: 'ok', path: target };
 	}
 };
+
 return { 'luci.nikki': methods };
