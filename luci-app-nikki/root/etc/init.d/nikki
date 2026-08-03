@@ -230,6 +230,9 @@ start_service() {
 	config_get core        config core
 	config_get uselightgbm config uselightgbm '0'
 
+	set -- ${RUN_DIR}/core/${core}-mihomo
+	[ -x "$1" ] && ln -sf "$1" "$PROG"
+
 	[ "$core" = 'smart' -a "$uselightgbm" = '1' ] && {
 		local collectdata sample_rate prefer_asn smart_strategy policy_priority collector_size lgbm_url
 		config_get lgbm_url        config lgbm_url

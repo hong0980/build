@@ -71,21 +71,13 @@ const methods = {
 			if (yq_out)
 				return { status: 'error', message: `yq: ${yq_out}` };
 
-			const reload_out = run(
-				`curl -sS -X PUT -H 'Authorization: Bearer ${secret}'
-				 http://${listen}/configs?force=true
-				 -d '{"path": "${filepath}", "payload": ""}' 2>&1`
-			);
-			if (reload_out)
-				return { status: 'error', message: `reload: ${reload_out}` };
+			const reload_out = run(`curl -sS -X PUT -H 'Authorization: Bearer ${secret}' http://${listen}/configs?force=true -d '{"path": "${filepath}", "payload": ""}' 2>&1`);
+			if (reload_out) return { status: 'error', message: `reload: ${reload_out}` };
 
 			function do_upgrade() {
-				const out = run(
-					`curl -sS -X POST -H 'Authorization: Bearer ${secret}'
-					 http://${listen}/upgrade/ui 2>&1`
-				);
-				try { return json(out); } catch (_) { return null; }
-			}
+				const out = run(`curl -sS -X POST -H 'Authorization: Bearer ${secret}' http://${listen}/upgrade/ui 2>&1`);
+				try { return json(out); } catch (e) { return null; }
+			};
 
 			const DELAYS = [2, 2, 2];
 			let result = null;
@@ -94,7 +86,7 @@ const methods = {
 				system(`sleep ${DELAYS[i]}`);
 				result = do_upgrade();
 				if (result?.status === 'ok') break;
-			}
+			};
 
 			return result?.status === 'ok'
 				? { status: 'ok' }
@@ -117,7 +109,7 @@ const methods = {
 					version: 'smart',
 					istargz: true
 				};
-			}
+			};
 
 			const api_map = {
 				meta:  'https://api.github.com/repos/MetaCubeX/mihomo/releases/latest',
@@ -128,12 +120,12 @@ const methods = {
 			if (!api_url)
 				return { status: 'error', message: 'invalid core type' };
 
-			let curl_cmd = `curl -sL --max-time 15`;
+			let cmd = 'curl -sL --max-time 15';
 			if (github_token)
-				curl_cmd += ` -H ${shellQuote(`Authorization: Bearer ${github_token}`)}`;
-			curl_cmd += ` ${shellQuote(api_url)}`;
+				cmd += ' -H ' + shellQuote('Authorization: Bearer ' + github_token);
+			cmd += ' ' + shellQuote(api_url);
 
-			const api_out = run(curl_cmd);
+			const api_out = run(cmd);
 			if (!api_out)
 				return { status: 'error', message: 'failed to fetch release info (empty response)' };
 
@@ -143,7 +135,7 @@ const methods = {
 			} catch (e) {
 				const preview = length(api_out) > 200 ? substr(api_out, 0, 200) + '...' : api_out;
 				return { status: 'error', message: `json parse failed: ${preview}` };
-			}
+			};
 
 			if (info.message && !info.tag_name && !info.assets)
 				return { status: 'error', message: `github api error: ${info.message}` };
@@ -163,7 +155,7 @@ const methods = {
 					version: tag,
 					istargz: false
 				};
-			}
+			};
 
 			const assets = info.assets;
 			if (!assets || !length(assets))
@@ -186,7 +178,7 @@ const methods = {
 					continue;
 				}
 				if (!found) found = assets[i];
-			}
+			};
 
 			if (!found)
 				return { status: 'error', message: `no matching asset for ${arch}` };
@@ -221,7 +213,7 @@ const methods = {
 
 			path = filename ? `${path}/${filename}` : path;
 
-			let cmd = `curl -SsL --connect-timeout 30 -m 180 --speed-time 30 --speed-limit 1 --retry 2 -o ${shellQuote(path)} -A ${shellQuote(ua)}`;
+			let cmd = `curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 --retry-max-time 180 -o ${shellQuote(path)} -A ${shellQuote(ua)}`;
 
 			if (secret) cmd += ` -H ${shellQuote(secret)}`;
 
@@ -230,8 +222,8 @@ const methods = {
 				for (let i = 0; i < length(headerList); i++) {
 					if (headerList[i])
 						cmd += ` -H ${shellQuote(trim(headerList[i]))}`;
-				}
-			}
+				};
+			};
 
 			cmd += ` ${shellQuote(url)}`;
 
@@ -239,7 +231,7 @@ const methods = {
 			if (access(path, 'r')) {
 				if (chmod) run(`chmod 755 ${shellQuote(path)}`);
 				return { status: 'ok', path };
-			}
+			};
 
 			return { status: 'error', message: out || 'download failed' };
 		}
@@ -253,7 +245,7 @@ const methods = {
 				app = run(`apk list -I luci-app-nikki | sed -nr 's/.*nikki-(.*)-.*noarch.*/\\1/p'`);
 			} else if (access('/bin/opkg', 'x')) {
 				app = run(`opkg list-installed luci-app-nikki | sed -nr 's/.*nikki - (.*)-.*/\\1/p'`);
-			}
+			};
 
 			core = run(`/etc/nikki/run/mihomo -v | grep Mihomo | cut -d " " -f 3`);
 
@@ -273,7 +265,7 @@ const methods = {
 					`yq -Mpy -o json eval-all 'select(fi == 0) *? select(fi == 1)' ${tmpFilepath} ${filepath}`
 				);
 				if (process) return json(process);
-			}
+			};
 
 			return {};
 		}
@@ -359,7 +351,7 @@ methods.cache_core = {
 			core_info = methods.get_core_url.call({ args: { core_type, arch } });
 		} catch (e) {
 			return { status: 'error', message: `get_core_url failed: ${e.message || e}` };
-		}
+		};
 
 		if (!core_info || core_info.status != 'ok')
 			return { status: 'error', message: core_info?.message || 'no core info' };
@@ -375,7 +367,7 @@ methods.cache_core = {
 			});
 		} catch (e) {
 			return { status: 'error', message: `download_file failed: ${e.message || e}` };
-		}
+		};
 
 		if (!dl || dl.status != 'ok')
 			return { status: 'error', message: dl?.message || 'download failed' };
@@ -395,13 +387,13 @@ methods.cache_core = {
 				if (name && access(`${tmpdir}/${name}`, 'r')) {
 					found = `${tmpdir}/${name}`;
 					break;
-				}
-			}
+				};
+			};
 
 			if (!found) {
 				run(`rm -rf ${shellQuote(tmpdir)}`);
 				return { status: 'error', message: `extract failed: ${tar_out || 'no file'}` };
-			}
+			};
 
 			run(`cp -f ${shellQuote(found)} ${shellQuote(tmp_out)}`);
 			run(`rm -rf ${shellQuote(tmpdir)}`);
@@ -409,7 +401,7 @@ methods.cache_core = {
 			const out = run(`gunzip -c ${shellQuote(archive_fullpath)} > ${shellQuote(tmp_out)} 2>&1`);
 			if (!access(tmp_out, 'r'))
 				return { status: 'error', message: out || 'gunzip failed' };
-		}
+		};
 
 		run(`chmod 755 ${shellQuote(tmp_out)}`);
 		run(`mv ${shellQuote(tmp_out)} ${shellQuote(final_out)}`);
@@ -435,7 +427,7 @@ methods.switch_core = {
 			const cache = methods.cache_core.call({ args: { core_type, arch } });
 			if (!cache || cache.status != 'ok')
 				return { status: 'error', message: cache?.message || `cached binary not found: ${final_out}` };
-		}
+		};
 
 		run(`rm -f ${shellQuote(target)}`);
 

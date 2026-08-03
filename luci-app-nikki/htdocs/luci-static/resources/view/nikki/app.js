@@ -121,11 +121,11 @@ return view.extend({
             nikki.listfiles('/etc/nikki/mixin'),
             nikki.listfiles('/etc/nikki/profiles'),
             nikki.listfiles('/etc/nikki/subscriptions'),
-            L.resolveDefault(fs.stat('/etc/nikki/run/Model.bin').then(st => st?.size || null), null),
+            nikki.listfiles('/etc/nikki/run/core'),
             uci.load('nikki')
         ]);
     },
-    render: function ([v, running, mixinfiles, profiles, subfiles, modelsize]) {
+    render: function ([v, running, mixinfiles, profiles, subfiles, list]) {
         let m, s, o;
         preloadAce().catch(() => {});
 
@@ -252,17 +252,38 @@ return view.extend({
         o = s.option(form.Flag, 'enabled', _('Enable'));
         o.rmempty = false;
 
+        let coreBtn, coreDownload = false;
         o = s.option(form.ListValue, 'core', _('Core'));
         o.value('meta', _('Stable'));
         o.value('alpha', _('Alpha'));
         o.value('smart', _('Smart'));
         o.rmempty = false;
+
+        o.load = function (section_id) {
+            const savedCore = this.super('load', section_id);
+            const exists = list?.some(f =>
+                f.type === 'file' && f.name === `${savedCore}-mihomo`
+            ) ?? false;
+            coreDownload = !savedCore && !exists;
+        };
+        o.onchange = function (ev, section_id, value) {
+            if (!coreBtn) return;
+            const savedCore = this.cfgvalue(section_id);
+            const exists = list?.some(f =>
+                f.type === 'file' && f.name === `${value}-mihomo`
+            ) ?? false;
+
+            coreDownload = (!savedCore || savedCore !== value) && !exists;
+            coreBtn.style.display = coreDownload ? '' : 'none';
+        };
+
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const self = this;
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
             const core_version = uci.get('nikki', 'config', 'core_version');
-            const updateBtn = E('button', {
+            coreBtn = E('button', {
                 'class': 'btn cbi-button-action',
+                'style': coreDownload ? '' : 'display:none',
                 'click': ui.createHandlerFn(this, function (ev) {
                     ev.preventDefault();
                     const val = self.formvalue(section_id).trim();
@@ -289,25 +310,14 @@ return view.extend({
                         return ui.addNotification(null, E('p', _('Please select a core first.')), 'error');
                     if (cfgvalue === val) return;
 
-                    return nikki.switch_core(val, core_version)
-                        .then(function (res) {
-                            if (res?.status !== 'ok')
-                                throw new Error(res.message || _('Switch failed'));
-
-                            ui.addTimeLimitedNotification(null, E('p', _('Switched to %s').format(val)), 4000, 'success');
-                            if (cfgvalue !== val) {
-                                nikki.uciSetAndCommit('nikki', 'config', 'core', val).then(() =>
-                                    nikki.service('reload'))
-                            }
-                        })
-                        .catch(function (err) {
-                            ui.addNotification(null, E('p', _('Switch failed: %s').format(err.message || err)), 'error');
-                        });
+                    return self.map.save(null, true).then(() => {
+                        ui.changes.apply(true);
+                    });
                 })
             }, _('Switch Core'));
             node.classList.add('control-group');
             node.appendChild(switchBtn);
-            node.appendChild(updateBtn);
+            node.appendChild(coreBtn);
             return node;
         };
 
@@ -316,69 +326,68 @@ return view.extend({
         o.rmempty = false;
         o.depends('core', 'smart');
 
+        let lgbmBtn, lgbmDownload = false;
         o = s.option(form.ListValue, 'lgbm_url', _('Model Version'));
         o.rmempty = true;
+        o.retain = true;
+        o.default = 'Model.bin';
         o.value('Model.bin', _('Light'));
         o.value('Model-middle.bin', _('Middle'));
         o.value('Model-large.bin', _('Large'));
         o.depends('uselightgbm', '1');
-        let downloadBtn = null;
-        function needDownload(value) {
-            const modelRanges = {
-                'Model.bin': [7, 9],
-                'Model-middle.bin': [10, 13],
-                'Model-large.bin': [19, 22]
-            };
-            const range = modelRanges[value];
-            if (!modelsize || !range) return true;
-            const currentMB = modelsize / 1024 / 1024;
-            return currentMB < range[0] || currentMB > range[1];
-        }
+
         o.onchange = function (ev, section_id, value) {
-            if (downloadBtn)
-                downloadBtn.style.display = needDownload(value) ? '' : 'none';
+            const lgbm = this.cfgvalue(section_id);
+            lgbmDownload = !lgbm || lgbm != value;
+            if (lgbmBtn) lgbmBtn.style.display = lgbmDownload ? '' : 'none';
         };
 
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const default_label = _('Download Model');
+            const lgbm = this.cfgvalue(section_id);
+            lgbmDownload = !lgbm || lgbm != cfgvalue;
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
-            downloadBtn = E('button', {
-                'class': 'btn cbi-button-positive',
-                'style': needDownload(cfgvalue) ? '' : 'display:none',
+            lgbmBtn = E('button', {
+                'class': 'btn cbi-button-action',
+                'style': lgbmDownload ? '' : 'display:none',
                 'click': ui.createHandlerFn(this, function () {
                     const mode = this.formvalue(section_id).trim();
                     if (!mode) return false;
-                    downloadBtn.textContent = _('Please wait, downloading %s...').format(mode);
+
+                    lgbmBtn.textContent = _('Please wait, downloading %s...').format(mode);
                     return nikki.download_file({
                         url: 'https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/' + mode,
                         path: '/etc/nikki/run/Model.bin'
                     }).then(function (res) {
                         if (res?.status !== 'ok')
-                            throw new Error(res.message || _('Cache failed'));
-                        nikki.uciSetAndCommit('nikki', 'config', 'lgbm_url', mode).then((res) => {
-                            if (res?.status !== 'ok')
-                                throw new Error(res.message || _('Cache failed'));
-                            downloadBtn.textContent = _('更新成功');
-                            nikki.service('reload');
-                        });
+                            throw new Error(res.message || _('Update failed'));
+
+                        lgbmBtn.textContent = _('更新成功');
+                        setTimeout(function () {
+                            lgbmBtn.style.display = 'none';
+                        }, 3000);
+                        nikki.uciSetAndCommit('nikki', 'config', 'lgbm_url', mode);
+                        return nikki.service('reload');
                     }).catch(function (err) {
                         ui.addNotification(null, E('p', _('Update failed: %s').format(err.message || err)), 'error');
-                    }).finally(() => downloadBtn.textContent = default_label);
+                    });
                 })
             }, default_label);
-
-            node.appendChild(downloadBtn);
+            node.classList.add('control-group');
+            node.appendChild(lgbmBtn);
             return node;
         };
 
         o = s.option(form.Flag, 'collectdata', _('Collect Training Data'));
         o.default = '0';
         o.rmempty = false;
+        o.retain = true;
         o.depends('uselightgbm', '1');
 
         o = s.option(form.Value, 'sample_rate', _('Sample Rate'));
         o.datatype = 'range(0.1, 1.0)';
         o.default = '1.0';
+        o.retain = true;
         o.placeholder = '0.1 ~ 1.0';
         // o.rmempty = false;
         o.depends('collectdata', '1');
@@ -386,12 +395,14 @@ return view.extend({
         o = s.option(form.Value, 'smart_collector_size', _('Collector Size (MB)'));
         o.datatype = 'uinteger';
         o.placeholder = '100';
+        o.retain = true;
         // o.rmempty = false;
         o.depends('collectdata', '1');
 
         o = s.option(form.Flag, 'prefer_asn', _('Prefer ASN'));
         o.default = '1';
         o.rmempty = false;
+        o.retain = true;
         o.depends('uselightgbm', '1');
 
         o = s.option(form.ListValue, 'smart_strategy', _('Strategy'));
@@ -399,6 +410,7 @@ return view.extend({
         o.value('round-robin', _('Round Robin'));
         o.default = 'sticky-sessions';
         o.rmempty = false;
+        o.retain = true;
         o.depends('uselightgbm', '1');
 
         o = s.option(form.Value, 'policy_priority', _('Policy Priority'));
@@ -467,18 +479,18 @@ return view.extend({
         o.depends('scheduled_restart', '1');
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const node = form.Value.prototype.renderWidget.apply(this, arguments);
-            const input = node.querySelector('input');
             const btn = E('button', {
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function (ev) {
                     ev.preventDefault();
-                    const val = input.value.trim();
-                    if (!val) {
-                        ui.addNotification(null, E('p', _('Please enter a cron expression first.')));
-                        return;
-                    }
-                    const encoded = val.split(/\s+/).join('_');
-                    window.open('https://crontab.guru/#' + encoded, '_blank');
+                    const val = this.formvalue(section_id).trim().replace(/\s+/g, ' ');
+                    if (!val)
+                        return ui.addNotification(null, E('p', _('Please enter a cron expression first.')));
+                    const fields = val.split(' ');
+
+                    if (fields.length !== 5)
+                        return ui.addNotification(null, E('p', _('Invalid cron expression.')));
+                    window.open('https://crontab.guru/#' + fields.join('_'), '_blank');
                 })
             }, _('verify'));
             node.classList.add('control-group');
