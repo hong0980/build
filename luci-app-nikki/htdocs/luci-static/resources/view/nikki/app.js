@@ -279,6 +279,8 @@ return view.extend({
                 'style': coreDownload ? '' : 'display:none',
                 'click': ui.createHandlerFn(this, function (ev) {
                     ev.preventDefault();
+                    if (core_version == '0')
+                        return ui.addNotification(null, E('p', _('Unknown device architecture, cannot download core.')), 'error');
                     const val = self.formvalue(section_id).trim();
                     if (!val)
                         return ui.addNotification(null, E('p', _('Please select a core first.')), 'error');
@@ -286,8 +288,8 @@ return view.extend({
                     return nikki.cache_core(val, core_version)
                         .then(function (res) {
                             if (res?.status !== 'ok')
-                                throw new Error(res.message || _('Cache failed'));
-                            ui.addTimeLimitedNotification(null, E('p', _('Core cached: %s').format(res.path || '')), 4000, 'info');
+                                throw new Error(res.message || _('Update failed'));
+                            ui.addTimeLimitedNotification(null, E('p', _('Core %s updated successfully').format(val || '')), 4000, 'info');
                         })
                         .catch(function (err) {
                             ui.addNotification(null, E('p', _('Update failed: %s').format(err.message || err)), 'error');
@@ -298,14 +300,23 @@ return view.extend({
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function (ev) {
                     ev.preventDefault();
+                    if (core_version == '0')
+                        return ui.addNotification(null, E('p', _('Unknown device architecture, cannot download core.')), 'error');
                     const val = self.formvalue(section_id).trim();
                     if (!val)
                         return ui.addNotification(null, E('p', _('Please select a core first.')), 'error');
                     if (cfgvalue === val) return;
-
-                    return self.map.save(null, true).then(() => {
-                        ui.changes.apply(true);
-                    });
+                    return nikki.switch_core(val, core_version)
+                        .then(function (res) {
+                            if (res?.status !== 'ok')
+                                throw new Error(res.message || _('Switch failed'));
+                            return self.map.save(null, true).then(() => {
+                                ui.changes.apply(true);
+                            });
+                        })
+                        .catch(function (err) {
+                            ui.addNotification(null, E('p', _('Switch failed: %s').format(err.message || err)), 'error');
+                        });
                 })
             }, _('Switch Core'));
             node.classList.add('control-group');

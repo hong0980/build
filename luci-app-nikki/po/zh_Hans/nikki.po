@@ -922,6 +922,9 @@ msgstr "订阅链接"
 msgid "Subscription:"
 msgstr "订阅："
 
+msgid "Detected User Agent"
+msgstr "检测到的 User Agent"
+
 #: applications/luci-app-nikki/htdocs/luci-static/resources/view/nikki/mixin.js:75
 msgid "TCP Concurrent"
 msgstr "TCP 并发"
@@ -2050,8 +2053,8 @@ msgstr "正在检查最新版本..."
 msgid "Downloading %s..."
 msgstr "正在下载 %s..."
 
-msgid "Core updated successfully, restarting service..."
-msgstr "内核更新成功，正在重启服务..."
+msgid "Core %s updated successfully"
+msgstr "内核 %s 更新成功"
 
 msgid "Switch failed: %s"
 msgstr "切换失败：%s"
@@ -2060,6 +2063,9 @@ msgid "Switched to %s"
 msgstr "已切换至 %s"
 
 msgid "Switch failed"
+msgstr "切换失败"
+
+msgid "Update failed"
 msgstr "切换失败"
 
 msgid "Update failed: %s"
@@ -2119,389 +2125,35 @@ msgstr "轮询"
 msgid "Policy Priority"
 msgstr "策略优先级"
 
-msgid "Default DNS Hijack"
-msgstr "默认 DNS 劫持"
-
-msgid "Enable DNS hijacking for users not explicitly configured"
-msgstr "为未显式配置的用户启用 DNS 劫持"
-
-msgid "Default Proxy Enable"
-msgstr "默认代理启用"
-
-msgid "Enable proxy for users not explicitly configured"
-msgstr "为未显式配置的用户启用代理"
-
-msgid "Whitelist Access Control"
-msgstr "白名单访问控制"
-
-msgid "Blacklist Bypass Control"
-msgstr "黑名单绕过控制"
-
-msgid "Default DNS Hijack"
-msgstr "默认 DNS 劫持"
-
-msgid "Enable DNS hijacking for devices not explicitly configured"
-msgstr "为未显式配置的设备启用 DNS 劫持"
-
-msgid "Default Proxy Enable"
-msgstr "默认代理启用"
-
-msgid "Enable proxy for devices not explicitly configured"
-msgstr "为未显式配置的设备启用代理"
-
-msgid "Whitelist Access Control"
-msgstr "白名单访问控制"
-
-msgid "Blacklist Bypass Control"
-msgstr "黑名单绕过控制"
-
-msgid "User"
-msgstr "用户"
-
-msgid "Group"
-msgstr "组"
-
-msgid "CGroup"
-msgstr "CGroup"
-
-msgid "DNS"
-msgstr "DNS"
-
-msgid "Proxy"
-msgstr "代理"
-
-msgid "IP"
-msgstr "IP"
-
-msgid "IP6"
-msgstr "IPv6"
-
-msgid "MAC"
-msgstr "MAC 地址"
-
-msgid "Proxy Config"
-msgstr "代理配置"
-
-msgid "Enable"
-msgstr "启用"
-
-msgid "Enable or disable the entire Nikki proxy subsystem."
-msgstr "启用或禁用整个 Nikki 代理子系统。"
-
-msgid "TCP Mode"
-msgstr "TCP 模式"
-
-msgid "Redirect Mode"
-msgstr "重定向模式"
-
-msgid "Rewrite destination address in NAT prerouting chain. "
-msgstr "在 NAT PREROUTING 链中重写目的地址。 "
-
-msgid "Pros: best performance, no policy routing required. "
-msgstr "优点：性能最佳，无需策略路由。 "
-
-msgid "Cons: TCP only, cannot handle UDP or QUIC. "
-msgstr "缺点：仅支持 TCP，无法处理 UDP 或 QUIC。 "
-
-msgid "nftables: counter redirect to :port. "
-msgstr "nftables：counter redirect to :port。 "
-
-msgid "Recommended for stable LAN HTTP/HTTPS proxy."
-msgstr "推荐用于稳定的局域网 HTTP/HTTPS 代理。"
-
-msgid "TPROXY Mode"
-msgstr "TPROXY 模式"
-
-msgid "Transparent proxy without changing packet destination. "
-msgstr "透明代理，不改变数据包目的地址。 "
-
-msgid "Pros: supports TCP and UDP, works with Fake-IP. "
-msgstr "优点：支持 TCP 和 UDP，兼容 Fake-IP。 "
-
-msgid "Cons: requires fwmark and policy routing (table 81). "
-msgstr "缺点：需要 fwmark 和策略路由（table 81）。 "
-
-msgid "nftables: meta mark set ... tproxy to :port accept. "
-msgstr "nftables：meta mark set ... tproxy to :port accept。 "
-
-msgid "This is the recommended mode for most home routers."
-msgstr "这是大多数家庭路由器推荐的模式。"
-
-msgid "TUN Mode"
-msgstr "TUN 模式"
-
-msgid "Route packets into a virtual tunnel device. "
-msgstr "将数据包路由到虚拟隧道设备。 "
-
-msgid "Pros: best compatibility, works in all environments. "
-msgstr "优点：兼容性最好，适用于所有环境。 "
-
-msgid "Cons: slightly higher CPU usage than TPROXY. "
-msgstr "缺点：CPU 占用略高于 TPROXY。 "
-
-msgid "nftables: meta mark set ... accept, then routed via tun device. "
-msgstr "nftables：meta mark set ... accept，随后通过 tun 设备路由。 "
-
-msgid "Use this when TPROXY causes issues with Docker or custom kernels."
-msgstr "当 TPROXY 在 Docker 或自定义内核中出问题时使用此模式。"
-
-msgid "UDP Mode"
-msgstr "UDP 模式"
-
-msgid "Transparent UDP proxy without NAT. "
-msgstr "无 NAT 的透明 UDP 代理。 "
-
-msgid "Required for DNS-over-HTTPS, QUIC, VoIP and online games. "
-msgstr "DNS-over-HTTPS、QUIC、VoIP 和在线游戏必须使用此模式。 "
-
-msgid "Requires fwmark and ip rule fwmark 0x81 lookup 81. "
-msgstr "需要 fwmark 和 ip rule fwmark 0x81 lookup 81。 "
-
-msgid "nftables: matches UDP in mangle prerouting, sets fwmark, redirects to TPROXY port."
-msgstr "nftables：在 mangle prerouting 中匹配 UDP，设置 fwmark，重定向到 TPROXY 端口。"
-
-msgid "Send UDP packets into TUN device. "
-msgstr "将 UDP 数据包送入 TUN 设备。 "
-
-msgid "Use this when TPROXY causes issues with Docker or special kernels. "
-msgstr "当 TPROXY 在 Docker 或特殊内核中出问题时使用。 "
-
-msgid "Trade-off: slightly higher latency than TPROXY. "
-msgstr "权衡：延迟略高于 TPROXY。 "
-
-msgid "nftables: marks UDP packets, routed into tun interface by kernel routing table."
-msgstr "nftables：标记 UDP 数据包，由内核路由表送入 tun 接口。"
-
-msgid "IPv4 DNS Hijack"
-msgstr "IPv4 DNS 劫持"
-
-msgid "Intercept IPv4 UDP/53 DNS requests and redirect them to Nikki built-in DNS. Prevents DNS leaks."
-msgstr "拦截 IPv4 UDP/53 DNS 请求并重定向到 Nikki 内置 DNS。防止 DNS 泄漏。"
-
-msgid "IPv6 DNS Hijack"
-msgstr "IPv6 DNS 劫持"
-
-msgid "Intercept IPv6 UDP/53 DNS requests. Critical to avoid IPv6 DNS leaks when IPv6 proxy is enabled."
-msgstr "拦截 IPv6 UDP/53 DNS 请求。启用 IPv6 代理时避免 IPv6 DNS 泄漏的关键。"
-
-msgid "IPv4 Proxy"
-msgstr "IPv4 代理"
-
-msgid "Apply proxy rules to IPv4 traffic. nftables uses meta nfproto ipv4 to match."
-msgstr "对 IPv4 流量应用代理规则。nftables 使用 meta nfproto ipv4 匹配。"
-
-msgid "IPv6 Proxy"
-msgstr "IPv6 代理"
-
-msgid "Apply proxy rules to IPv6 traffic. Requires proper IPv6 routing. Disable if your ISP has unstable IPv6."
-msgstr "对 IPv6 流量应用代理规则。需要正确的 IPv6 路由。若运营商 IPv6 不稳定请关闭。"
-
-msgid "Fake-IP Ping Hijack"
-msgstr "Fake-IP Ping 劫持"
-
-msgid "Redirect ICMP Echo Request to Fake-IP range. Prevents Fake-IP detection by ping probes."
-msgstr "将 ICMP Echo Request 重定向到 Fake-IP 范围。防止通过 ping 探测到 Fake-IP。"
-
-msgid "Router Proxy"
-msgstr "路由器代理"
-
-msgid "Enable proxy for traffic originating from the router itself (e.g. opkg, curl, Docker containers)."
-msgstr "对路由器自身产生的流量启用代理（如 opkg、curl、Docker 容器）。"
-
-msgid "Default DNS Hijack"
-msgstr "默认 DNS 劫持"
-
-msgid "Enable DNS hijacking for users not explicitly configured in access control lists. nftables: jump router_dns_hijack."
-msgstr "对未在访问控制列表中显式配置的用户启用 DNS 劫持。nftables：jump router_dns_hijack。"
-
-msgid "Default Proxy Enable"
-msgstr "默认代理启用"
-
-msgid "Enable proxy for users not explicitly configured. nftables: jump router_tproxy or router_redirect."
-msgstr "对未在访问控制列表中显式配置的用户启用代理。nftables：jump router_tproxy 或 router_redirect。"
-
-msgid "Whitelist Access Control"
-msgstr "白名单访问控制"
-
-msgid "Matched users are forced to use proxy and DNS. Priority: after blacklist, before default policy. nftables: router_access_control chain."
-msgstr "匹配的用户将被强制使用代理和 DNS。优先级：黑名单之后，默认策略之前。nftables：router_access_control 链。"
-
-msgid "User"
-msgstr "用户"
-
-msgid "Match by system user ID (UID). Example: force a specific service account to use proxy."
-msgstr "按系统用户 ID（UID）匹配。例如：强制某个服务账户走代理。"
-
-msgid "Group"
-msgstr "用户组"
-
-msgid "Match by system group ID (GID)."
-msgstr "按系统用户组 ID（GID）匹配。"
-
-msgid "CGroup"
-msgstr "CGroup"
-
-msgid "Match by cgroup path. Useful for Docker containers or systemd services. Requires cgroup v2."
-msgstr "按 cgroup 路径匹配。适用于 Docker 容器或 systemd 服务。需要 cgroup v2。"
-
-msgid "DNS"
-msgstr "DNS"
-
-msgid "Whether this whitelist entry should also hijack DNS."
-msgstr "此白名单条目是否同时劫持 DNS。"
-
-msgid "Proxy"
-msgstr "代理"
-
-msgid "Whether this whitelist entry should be proxied."
-msgstr "此白名单条目是否走代理。"
-
-msgid "Blacklist Bypass Control"
-msgstr "黑名单绕过控制"
-
-msgid "Highest priority. Matched users bypass proxy immediately. Add root or ubus here to prevent locking yourself out. nftables: router_bypass_control chain."
-msgstr "最高优先级。匹配的用户立即绕过代理。请将 root 或 ubus 加入此处以防止把自己锁在外面。nftables：router_bypass_control 链。"
-
-msgid "Bypass proxy for these system users."
-msgstr "这些系统用户将绕过代理。"
-
-msgid "LAN Proxy"
-msgstr "局域网代理"
-
-msgid "Enable transparent proxy for devices on the local network."
-msgstr "对局域网内的设备启用透明代理。"
-
-msgid "Inbound Interface"
-msgstr "入站接口"
-
-msgid "Only intercept traffic entering from these interfaces. nftables: iifname @lan_inbound_device. IMPORTANT: never select wan or loopback."
-msgstr "仅拦截从这些接口进入的流量。nftables：iifname @lan_inbound_device。重要：切勿选择 wan 或 loopback。"
-
-msgid "Enable DNS hijacking for devices not explicitly configured. Prevents smart TVs and phones from using public DNS servers."
-msgstr "对未显式配置的设备启用 DNS 劫持。防止智能电视和手机使用公共 DNS 服务器。"
-
-msgid "Enable proxy for devices not explicitly configured. nftables: jump lan_tproxy or lan_redirect."
-msgstr "对未显式配置的设备启用代理。nftables：jump lan_tproxy 或 lan_redirect。"
-
-msgid "Force specific devices (by IP, IPv6 or MAC) to use proxy and DNS. Example: Apple TV, game console, specific PC."
-msgstr "强制指定设备（按 IP、IPv6 或 MAC）使用代理和 DNS。例如：Apple TV、游戏机、特定电脑。"
-
-msgid "IP"
-msgstr "IP 地址"
-
-msgid "Match by IPv4 address. nftables: ip saddr."
-msgstr "按 IPv4 地址匹配。nftables：ip saddr。"
-
-msgid "IPv6"
-msgstr "IPv6 地址"
-
-msgid "Match by IPv6 address. nftables: ip6 saddr."
-msgstr "按 IPv6 地址匹配。nftables：ip6 saddr。"
-
-msgid "MAC"
-msgstr "MAC 地址"
-
-msgid "Match by MAC address. nftables: ether saddr."
-msgstr "按 MAC 地址匹配。nftables：ether saddr。"
-
-msgid "Highest priority. Devices listed here bypass proxy. Example: NAS (SMB performance), printer, IoT devices, game console with NAT issues."
-msgstr "最高优先级。此处列出的设备绕过代理。例如：NAS（SMB 性能问题）、打印机、IoT 设备、NAT 异常的游戏机。"
-
-msgid "Bypass proxy for these IPv4 addresses."
-msgstr "这些 IPv4 地址将绕过代理。"
-
-msgid "Bypass proxy for these IPv6 addresses."
-msgstr "这些 IPv6 地址将绕过代理。"
-
-msgid "Bypass proxy for these MAC addresses."
-msgstr "这些 MAC 地址将绕过代理。"
-
-msgid "Bypass"
-msgstr "绕过"
-
-msgid "Bypass China Mainland IPv4"
-msgstr "绕过中国大陆 IPv4"
-
-msgid "Skip proxy for Chinese mainland IPv4 addresses. nftables: ip daddr @china_ip counter return. Highly recommended for better performance."
-msgstr "中国大陆 IPv4 地址跳过代理。nftables：ip daddr @china_ip counter return。强烈推荐以提升性能。"
-
-msgid "Bypass China Mainland IPv6"
-msgstr "绕过中国大陆 IPv6"
-
-msgid "Skip proxy for Chinese mainland IPv6 addresses. nftables: ip6 daddr @china_ip6 counter return."
-msgstr "中国大陆 IPv6 地址跳过代理。nftables：ip6 daddr @china_ip6 counter return。"
-
-msgid "Destination TCP Port to Proxy"
-msgstr "代理目标 TCP 端口"
-
-msgid "All Ports"
-msgstr "所有端口"
-
-msgid "Proxy all TCP ports. Highest conntrack load. Use only when you need every TCP connection proxied."
-msgstr "代理所有 TCP 端口。conntrack 负载最高。仅在需要代理所有 TCP 连接时使用。"
-
-msgid "Commonly Used Ports"
-msgstr "常用端口"
-
-msgid "Balanced option. Covers HTTP, HTTPS, FTP, SSH, SMTP, IMAP, POP3, DoH. Recommended for most users."
-msgstr "均衡选项。覆盖 HTTP、HTTPS、FTP、SSH、SMTP、IMAP、POP3、DoH。推荐大多数用户使用。"
-
-msgid "Only proxy traffic destined to these TCP ports. nftables: meta l4proto . th dport != @proxy_dport return."
-msgstr "仅代理发往这些 TCP 端口的流量。nftables：meta l4proto . th dport != @proxy_dport return。"
-
-msgid "Destination UDP Port to Proxy"
-msgstr "代理目标 UDP 端口"
-
-msgid "DNS (QUIC), DoH, gaming. Recommended. Keeps conntrack table small."
-msgstr "DNS (QUIC)、DoH、游戏。推荐。保持 conntrack 表较小。"
-
-msgid "Only proxy traffic destined to these UDP ports. nftables: meta l4proto . th dport != @proxy_dport return."
-msgstr "仅代理发往这些 UDP 端口的 wish 流量。nftables：meta l4proto . th dport != @proxy_dport return。"
-
-msgid "Bypass DSCP"
-msgstr "绕过 DSCP"
-
-msgid "Packets with these DSCP values bypass proxy. Advanced usage for QoS integration. nftables: ip dscp @bypass_dscp return."
-msgstr "具有这些 DSCP 值的数据包绕过代理。高级用法，用于 QoS 集成。nftables：ip dscp @bypass_dscp return。"
-
-msgid "Bypass FWMark"
-msgstr "绕过 FWMark"
-
-msgid "Packets already marked with these fwmarks bypass proxy. Useful for Docker, WireGuard or other VPN coexistence. nftables: meta mark & mask == fwmark return."
-msgstr "已标记这些 fwmark 的数据包绕过代理。适用于 Docker、WireGuard 或其他 VPN 共存。nftables：meta mark & mask == fwmark return。"
-
-msgid "Misc"
-msgstr "其他"
-
-msgid "Reserved IPv4"
-msgstr "保留 IPv4"
-
-msgid "Private and internal IPv4 addresses that always bypass proxy. nftables: ip daddr @reserved_ip counter return."
-msgstr "始终绕过代理的私有和内部 IPv4 地址。nftables：ip daddr @reserved_ip counter return。"
-
-msgid "Reserved IPv6"
-msgstr "保留 IPv6"
-
-msgid "Private and internal IPv6 addresses that always bypass proxy. nftables: ip6 daddr @reserved_ip6 counter return."
-msgstr "始终绕过代理的私有和内部 IPv6 地址。nftables：ip6 daddr @reserved_ip6 counter return。"
-
-msgid "TUN Timeout"
-msgstr "TUN 超时"
-
-msgid "Idle timeout for TUN connections in seconds. Connections with no data for this long will be closed."
-msgstr "TUN 连接的空闲超时时间（秒）。超过此时间无数据的连接将被关闭。"
-
-msgid "TUN Interval"
-msgstr "TUN 清理间隔"
-
-msgid "Interval in seconds for cleaning up dead TUN connections."
-msgstr "清理已死亡 TUN 连接的时间间隔（秒）。"
-
 msgid "Auto-filled from subscription response if empty"
 msgstr "留空时根据订阅响应自动填充"
 
 msgid "Convert all url-test groups to smart + apply LightGBM settings."
 msgstr "将所有 url-test 组转换为 smart 并应用 LightGBM 设置。"
+
+msgid "Baidu"
+msgstr "百度"
+
+msgid "163Music"
+msgstr "网易云音乐"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "Google"
+msgstr "谷歌"
+
+msgid "YouTube"
+msgstr "YouTube"
+
+msgid "Connection check"
+msgstr "连接检查"
+
+msgid "unchecked"
+msgstr "未检测"
+
+msgid "%s (Timeout)"
+msgstr "%s（超时）"
 
 msgid ""
 msgstr ""
