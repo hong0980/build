@@ -2026,7 +2026,7 @@ msgstr "不使用"
 msgid "Core"
 msgstr "内核"
 
-msgid "Stable"
+msgid "Meta"
 msgstr "稳定版"
 
 msgid "Alpha"

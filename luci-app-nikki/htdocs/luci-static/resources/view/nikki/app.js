@@ -112,6 +112,14 @@ function attachFileEditorButton(o, resolveTarget) {
     };
 }
 
+const coreDownload = function (list, current) {
+    if (!current) return false;
+    const exists = (list?.some(f =>
+        f.type === 'file' && f.name.includes(`${current}-mihomo`)
+    ) ?? false);
+    return !exists;
+};
+
 return view.extend({
     aceEditor: null,
     load: function () {
@@ -126,7 +134,7 @@ return view.extend({
         ]);
     },
     render: function ([v, running, mixinfiles, profiles, subfiles, list]) {
-        let m, s, o;
+        let m, s, o, coreBtn;
         preloadAce().catch(() => {});
 
         m = new form.Map('nikki', _('Nikki'), `${_('Transparent Proxy with Mihomo on OpenWrt.')} <a href="https://github.com/nikkinikki-org/OpenWrt-nikki/wiki" target="_blank">${_('How To Use')}</a>`);
@@ -252,31 +260,22 @@ return view.extend({
         o = s.option(form.Flag, 'enabled', _('Enable'));
         o.rmempty = false;
 
-        let coreBtn, coreDownload = false;
-        o = s.option(form.ListValue, 'core', _('Core'), _('使用代理下载能减少等待时间'));
-        o.value('meta', _('Stable'));
+        o = s.option(form.ListValue, 'core', _('Core'));
+        o.value('meta', _('Meta'));
         o.value('alpha', _('Alpha'));
         o.value('smart', _('Smart'));
         o.rmempty = false;
-
         o.onchange = function (ev, section_id, value) {
             if (!coreBtn) return;
-            const savedCore = this.cfgvalue(section_id);
-            const exists = list?.some(f =>
-                f.type === 'file' && f.name === `${value}-mihomo`
-            ) ?? false;
-
-            coreDownload = (!savedCore || savedCore !== value) && !exists;
-            coreBtn.style.display = coreDownload ? '' : 'none';
+            coreBtn.style.display = coreDownload(list, value) ? '' : 'none';
         };
-
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const self = this;
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
             const core_version = uci.get('nikki', 'config', 'core_version');
             coreBtn = E('button', {
                 'class': 'btn cbi-button-action',
-                'style': coreDownload ? '' : 'display:none',
+                'style': coreDownload(list, cfgvalue) ? '' : 'display:none',
                 'click': ui.createHandlerFn(this, function (ev) {
                     ev.preventDefault();
                     if (core_version == '0')
@@ -284,12 +283,12 @@ return view.extend({
                     const val = self.formvalue(section_id).trim();
                     if (!val)
                         return ui.addNotification(null, E('p', _('Please select a core first.')), 'error');
-
                     return nikki.cache_core(val, core_version)
                         .then(function (res) {
                             if (res?.status !== 'ok')
                                 throw new Error(res.message || _('Update failed'));
-                            ui.addTimeLimitedNotification(null, E('p', _('Core %s updated successfully').format(val || '')), 4000, 'info');
+                            coreBtn.style.display = 'none';
+                            ui.addTimeLimitedNotification(null, E('p', _('Core %s updated successfully').format(val)), 4000, 'info');
                         })
                         .catch(function (err) {
                             ui.addNotification(null, E('p', _('Update failed: %s').format(err.message || err)), 'error');
@@ -302,14 +301,18 @@ return view.extend({
                     ev.preventDefault();
                     if (core_version == '0')
                         return ui.addNotification(null, E('p', _('Unknown device architecture, cannot download core.')), 'error');
+
                     const val = self.formvalue(section_id).trim();
                     if (!val)
                         return ui.addNotification(null, E('p', _('Please select a core first.')), 'error');
-                    if (cfgvalue === val) return;
+                    const saved = self.cfgvalue(section_id);
+                    if (saved === val) return;
+
                     return nikki.switch_core(val, core_version)
                         .then(function (res) {
                             if (res?.status !== 'ok')
                                 throw new Error(res.message || _('Switch failed'));
+
                             return self.map.save(null, true).then(() => {
                                 ui.changes.apply(true);
                             });
