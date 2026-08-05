@@ -429,15 +429,17 @@ methods.switch_core = {
 				return { status: 'error', message: cache?.message || `cached binary not found: ${final_out}` };
 		};
 
-		run(`rm -f ${shellQuote(target)}`);
+		const ret = system(['ln', '-sf', final_out, target]) != 0;
+		if (ret) return { status: 'error', message: `switch failed: ${ret}` };
 
-		const out = run(`ln -s ${shellQuote(final_out)} ${shellQuote(target)}`);
-		if (out)
-			return { status: 'error', message: `switch failed: ${out}` };
+		const commit = methods.set_commit.call({
+			args: { config: 'nikki', section: 'config', option: 'core', value: core_type }
+		});
+		if (commit?.status != 'ok') return commit;
 
-		system(['/bin/chmod', '755', final_out]);
+		system(['service', 'nikki', 'restart']);
 
-		return { status: 'ok', path: target };
+		return { status: 'ok' };
 	}
 };
 

@@ -234,8 +234,8 @@ start_service() {
 	[ -x "$1" ] && ln -sf "$1" "$PROG"
 
 	[ "$core" = 'smart' -a "$uselightgbm" = '1' ] && {
-		local collectdata sample_rate prefer_asn smart_strategy policy_priority collector_size lgbm_url
-		config_get lgbm_url        config lgbm_url
+		local collectdata sample_rate prefer_asn smart_strategy policy_priority collector_size lgbm lgbm_url
+		config_get lgbm            config lgbm
 		config_get collectdata     config collectdata          '0'
 		config_get sample_rate     config sample_rate          '1.0'
 		config_get prefer_asn      config prefer_asn           '1'
@@ -243,7 +243,7 @@ start_service() {
 		config_get policy_priority config policy_priority
 		config_get collector_size  config smart_collector_size '100'
 		log "Smart" "Convert all url-test groups to smart + apply LightGBM settings."
-		[ -n "$lgbm_url" ] && lgbm_url="https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/$lgbm_url"
+		[ -n "$lgbm" ] && lgbm_url="https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/$lgbm"
 		export uselightgbm collectdata sample_rate prefer_asn smart_strategy policy_priority lgbm_url collector_size
 		yq -Mi '
 			.profile = (.profile // {}) |

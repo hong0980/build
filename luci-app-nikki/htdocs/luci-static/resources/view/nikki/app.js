@@ -114,6 +114,7 @@ function attachFileEditorButton(o, resolveTarget) {
 
 const coreDownload = function (list, current) {
     if (!current) return false;
+    if (current === 'alpha') return true;
     const exists = (list?.some(f =>
         f.type === 'file' && f.name.includes(`${current}-mihomo`)
     ) ?? false);
@@ -134,7 +135,7 @@ return view.extend({
         ]);
     },
     render: function ([v, running, mixinfiles, profiles, subfiles, list]) {
-        let m, s, o, coreBtn;
+        let m, s, o, coreBtn, lgbmBtn;
         preloadAce().catch(() => {});
 
         m = new form.Map('nikki', _('Nikki'), `${_('Transparent Proxy with Mihomo on OpenWrt.')} <a href="https://github.com/nikkinikki-org/OpenWrt-nikki/wiki" target="_blank">${_('How To Use')}</a>`);
@@ -312,10 +313,7 @@ return view.extend({
                         .then(function (res) {
                             if (res?.status !== 'ok')
                                 throw new Error(res.message || _('Switch failed'));
-
-                            return self.map.save(null, true).then(() => {
-                                ui.changes.apply(true);
-                            });
+                            ui.addTimeLimitedNotification(null, E('p', _('Switched to %s').format(val)), 4000, 'info');
                         })
                         .catch(function (err) {
                             ui.addNotification(null, E('p', _('Switch failed: %s').format(err.message || err)), 'error');
@@ -333,8 +331,7 @@ return view.extend({
         o.rmempty = false;
         o.depends('core', 'smart');
 
-        let lgbmBtn, lgbmDownload = false;
-        o = s.option(form.ListValue, 'lgbm_url', _('Model Version'));
+        o = s.option(form.ListValue, 'lgbm', _('Model Version'));
         o.rmempty = true;
         o.retain = true;
         o.default = 'Model.bin';
@@ -344,19 +341,17 @@ return view.extend({
         o.depends('uselightgbm', '1');
 
         o.onchange = function (ev, section_id, value) {
+            if (!lgbmBtn) return;
             const lgbm = this.cfgvalue(section_id);
-            lgbmDownload = !lgbm || lgbm != value;
-            if (lgbmBtn) lgbmBtn.style.display = lgbmDownload ? '' : 'none';
+            lgbmBtn.style.display = !lgbm || lgbm != value ? '' : 'none';
         };
 
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const default_label = _('Download Model');
-            const lgbm = this.cfgvalue(section_id);
-            lgbmDownload = !lgbm || lgbm != cfgvalue;
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
             lgbmBtn = E('button', {
                 'class': 'btn cbi-button-action',
-                'style': lgbmDownload ? '' : 'display:none',
+                'style': !cfgvalue ? '' : 'display:none',
                 'click': ui.createHandlerFn(this, function () {
                     const mode = this.formvalue(section_id).trim();
                     if (!mode) return false;
@@ -373,7 +368,7 @@ return view.extend({
                         setTimeout(function () {
                             lgbmBtn.style.display = 'none';
                         }, 3000);
-                        nikki.uciSetAndCommit('nikki', 'config', 'lgbm_url', mode);
+                        nikki.uciSetAndCommit('nikki', 'config', 'lgbm', mode);
                         return nikki.service('reload');
                     }).catch(function (err) {
                         ui.addNotification(null, E('p', _('Update failed: %s').format(err.message || err)), 'error');

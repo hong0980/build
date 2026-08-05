@@ -25,7 +25,8 @@
 			"type": "view",
 			"path": "wizard/file"
 		},
-		"depends": { "acl": [ "luci-app-wizard" ]
+		"depends": {
+			"acl": [ "luci-app-wizard" ]
 		}
 	}
 }
