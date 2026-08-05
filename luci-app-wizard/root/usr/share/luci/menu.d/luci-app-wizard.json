@@ -1,29 +1,31 @@
 {
 	"admin/system/wizard": {
 		"title": "Wizard",
-		"order": 10,
+		"order": 80,
 		"action": { "type": "firstchild" },
 		"depends": {
-			"acl": [ "luci-app-wizard" ],
-			"uci": { "wizard": true }
+			"acl": [ "luci-app-wizard" ]
 		}
 	},
-
 	"admin/system/wizard/setup": {
 		"title": "Configuration",
 		"order": 10,
 		"action": {
 			"type": "view",
 			"path": "wizard/setup"
+		},
+		"depends": {
+			"acl": [ "luci-app-wizard" ]
 		}
 	},
-
 	"admin/system/wizard/file": {
 		"title": "Files",
 		"order": 20,
 		"action": {
 			"type": "view",
 			"path": "wizard/file"
+		},
+		"depends": { "acl": [ "luci-app-wizard" ]
 		}
 	}
 }
