@@ -22,11 +22,8 @@ ipv6: false                          # 全局 IPv6 开关，同时控制 DNS 是
 unified-delay: true                  # 统一延迟计算方式，测速更准确
 tcp-concurrent: true                 # 多个解析 IP 并发握手，取最快
 log-level: warning                   # 日志等级：silent/error/warning/info/debug
-find-process-mode: 'off'             # 不匹配进程，路由器场景推荐
-client-fingerprint: chrome           # 全局默认 TLS 指纹
 keep-alive-idle: 600                 # TCP keepalive 空闲探测时间（秒）
 keep-alive-interval: 15              # TCP keepalive 探测间隔（秒）
-disable-keep-alive: false            # 是否禁用 keepalive
 
 # ================= 嗅探 =================
 sniffer:
@@ -42,8 +39,8 @@ sniffer:
   # skip-dst-address:                 # 按目标 IP 跳过嗅探
   #   - 111.1.171.0/24
   #   - 39.174.182.0/23
-  force-domain:
-    - "+.v2ex.com"                    # 强制嗅探该域名
+#   force-domain:
+#     - "+.v2ex.com"                    # 强制嗅探该域名
   skip-domain:                        # 跳过嗅探，改用连接真实 IP/端口判断规则
     - "rule-set:private_domain,cn_domain"
     - "+.goofish.com"
@@ -70,17 +67,17 @@ dns:
   listen: 0.0.0.0:1053
   respect-rules: true
   enhanced-mode: fake-ip
-  fake-ip-range: 28.0.0.1/8
+  fake-ip-range: 198.18.0.0/16
   fake-ip-filter-mode: blacklist
   fake-ip-filter:
     - '*.lan'
     - "rule-set:fakeipfilter_domain,direct_domain,cn_domain"
 
-  nameserver: [https://dns.google/dns-query, https://dns.cloudflare.com/dns-query]
+  nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
   default-nameserver: [223.5.5.5, 119.29.29.29]
   proxy-server-nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
   nameserver-policy:
-    "rule-set,ww_reject": rcode://success
+    "rule-set:ww_reject": rcode://success
     "rule-set:private_domain": [223.5.5.5, 119.29.29.29]
     "rule-set:apple_domain,cn_domain": [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
 
@@ -108,14 +105,14 @@ proxies:
 
 proxy-groups:
   - {name: 自动选择,  <<: *groups, filter: "(?i)^(?!.*(国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
-  - {name: 🚀 AI,    <<: *groups, filter: "(?i)^(?!.*(俄罗斯|土耳其|印度|港|HK|国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Claude.png}
+  - {name: 🚀 AI,    <<: *groups, filter: "(?i)(台|日|美|新|韩)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Claude.png}
   - {name: 香港自动,   <<: *groups, filter: "(?i)(香港|HK)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
   - {name: 日本自动,   <<: *groups, filter: "(?i)(日本|jp)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
   - {name: 台湾自动,   <<: *groups, filter: "(?i)(台湾|tw)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
   - {name: 美国自动,   <<: *groups, filter: "(?i)(美国|us)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
   - {name: 新加坡自动, <<: *groups, filter: "(?i)(新加坡|sg)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/SG.png}
   - {name: 韩国自动,  <<: *groups, filter: "(?i)(韩国|🇰🇷)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
-  - {name: 其他,     <<: *groups, filter: "(?i)^(?!.*(港|HK|台|日|美|新|国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OT.png}
+  - {name: 其他,     <<: *groups, filter: "(?i)^(?!.*(港|HK|台|日|美|新|国内|韩)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OT.png}
   # 各分组按节点命名关键字筛选，依赖机场命名规范一致
 
 rules:

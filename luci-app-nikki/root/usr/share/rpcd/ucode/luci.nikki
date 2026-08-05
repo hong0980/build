@@ -417,28 +417,20 @@ methods.switch_core = {
 		const arch      = req.args?.arch;
 		const core_type = req.args?.core_type;
 
-		if (!core_type)
-			return { status: 'error', message: 'missing core_type' };
-
-		const target    = '/etc/nikki/run/mihomo';
+		if (!core_type) return { status: 'error', message: 'missing core_type' };
 		const final_out = `/etc/nikki/run/core/${core_type}-mihomo`;
-
 		if (!access(final_out, 'r')) {
 			const cache = methods.cache_core.call({ args: { core_type, arch } });
 			if (!cache || cache.status != 'ok')
 				return { status: 'error', message: cache?.message || `cached binary not found: ${final_out}` };
 		};
 
-		const ret = system(['ln', '-sf', final_out, target]) != 0;
-		if (ret) return { status: 'error', message: `switch failed: ${ret}` };
-
 		const commit = methods.set_commit.call({
 			args: { config: 'nikki', section: 'config', option: 'core', value: core_type }
 		});
-		if (commit?.status != 'ok') return commit;
+		if (!commit || commit.status != 'ok') return { status: 'error', message: commit };
 
 		system(['service', 'nikki', 'restart']);
-
 		return { status: 'ok' };
 	}
 };
