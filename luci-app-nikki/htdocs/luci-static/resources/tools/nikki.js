@@ -118,22 +118,22 @@ const callUciSetCommit = rpc.declare({
     expect: { '': {} }
 });
 
-const homeDir = '/etc/nikki';
-const profilesDir = `${homeDir}/profiles`;
-const subscriptionsDir = `${homeDir}/subscriptions`;
-const mixinFilePath = `${homeDir}/mixin.yaml`;
-const runDir = `${homeDir}/run`;
-const PROG = `${runDir}/mihomo`
-const runProfilePath = `${runDir}/config.yaml`;
-const providersDir = `${runDir}/providers`;
-const ruleProvidersDir = `${providersDir}/rule`;
+const homeDir           = '/etc/nikki';
+const profilesDir       = `${homeDir}/profiles`;
+const subscriptionsDir  = `${homeDir}/subscriptions`;
+const mixinFilePath     = `${homeDir}/mixin.yaml`;
+const runDir            = `${homeDir}/run`;
+const PROG              = `${runDir}/mihomo`
+const runProfilePath    = `${runDir}/config.yaml`;
+const providersDir      = `${runDir}/providers`;
+const ruleProvidersDir  = `${providersDir}/rule`;
 const proxyProvidersDir = `${providersDir}/proxy`;
-const logDir = `/var/log/nikki`;
-const appLogPath = `${logDir}/app.log`;
-const coreLogPath = `${logDir}/core.log`;
-const debugLogPath = `${logDir}/debug.log`;
-const nftDir = `${homeDir}/nftables`;
-const ui_array = [
+const logDir            = `/var/log/nikki`;
+const appLogPath        = `${logDir}/app.log`;
+const coreLogPath       = `${logDir}/core.log`;
+const debugLogPath      = `${logDir}/debug.log`;
+const nftDir            = `${homeDir}/nftables`;
+const ui_array          = [
     ["https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip", "Zashboard"],
     ["https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip", "MetaCubeXD"],
     ["https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip", "YACD"],
@@ -141,19 +141,19 @@ const ui_array = [
 ];
 
 return baseclass.extend({
-    PROG: PROG,
-    homeDir: homeDir,
-    profilesDir: profilesDir,
-    subscriptionsDir: subscriptionsDir,
-    mixinFilePath: mixinFilePath,
-    runDir: runDir,
-    runProfilePath: runProfilePath,
-    ruleProvidersDir: ruleProvidersDir,
+    PROG:              PROG,
+    runDir:            runDir,
+    homeDir:           homeDir,
+    ui_array:          ui_array,
+    appLogPath:        appLogPath,
+    profilesDir:       profilesDir,
+    coreLogPath:       coreLogPath,
+    debugLogPath:      debugLogPath,
+    mixinFilePath:     mixinFilePath,
+    runProfilePath:    runProfilePath,
+    subscriptionsDir:  subscriptionsDir,
+    ruleProvidersDir:  ruleProvidersDir,
     proxyProvidersDir: proxyProvidersDir,
-    appLogPath: appLogPath,
-    coreLogPath: coreLogPath,
-    debugLogPath: debugLogPath,
-    ui_array: ui_array,
 
     status: function () {
         return callServiceList('nikki', ['instances', 'nikki', 'running']).then(Boolean);
@@ -174,21 +174,21 @@ return baseclass.extend({
     writefile: function (path, data, mode) {
         data = (data != null) ? String(data) : '';
         mode = (mode != null) ? mode : 0o644;
-        const encoder = new TextEncoder();
-        const decoder = new TextDecoder();
+        const encoder   = new TextEncoder();
+        const decoder   = new TextDecoder();
         const chunkSize = 8 * 1024;
-        const bytes = encoder.encode(data);
+        const bytes     = encoder.encode(data);
         if (bytes.length <= chunkSize) {
             return callFileWrite(path, data, false, mode);
         }
         let promise = Promise.resolve();
         for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-            const end = Math.min(offset + chunkSize, bytes.length);
+            const end        = Math.min(offset + chunkSize, bytes.length);
             const chunkBytes = bytes.slice(offset, end);
-            const isLast = end >= bytes.length;
-            const chunk = decoder.decode(chunkBytes, { stream: !isLast });
-            const append = offset > 0;
-            promise = promise.then(() => callFileWrite(path, chunk, append, mode));
+            const isLast     = end >= bytes.length;
+            const chunk      = decoder.decode(chunkBytes, { stream: !isLast });
+            const append     = offset > 0;
+            promise          = promise.then(() => callFileWrite(path, chunk, append, mode));
         }
         return promise;
     },
@@ -210,12 +210,12 @@ return baseclass.extend({
             throw new Error('download_file expects an options object');
         }
 
-        const url = opts.url || '';
-        const path = opts.path || '';
+        const ua       = opts.ua       || '';
+        const url      = opts.url      || '';
+        const path     = opts.path     || '';
+        const secret   = opts.secret   || '';
+        const headers  = opts.headers  || '';
         const filename = opts.filename || '';
-        const ua = opts.ua || '';
-        const secret = opts.secret || '';
-        const headers = opts.headers || '';
         let chmod = opts.chmod;
         chmod = (chmod == null || chmod === false || chmod === 0 || chmod === '')
             ? ''
@@ -242,16 +242,16 @@ return baseclass.extend({
 
     openDashboard: async function (overrideUiName) {
         const profile = await callNikkiProfile({
-            'external-ui-name': null,
-            'external-controller': null,
-            'external-controller-tls': null,
-            'secret': null
+            'secret':                  null,
+            'external-ui-name':        null,
+            'external-controller':     null,
+            'external-controller-tls': null
         });
 
-        let uiName = (overrideUiName ?? profile['external-ui-name'] ?? '').trim();
-        const apiListen = profile['external-controller'];
+        let uiName         = (overrideUiName ?? profile['external-ui-name'] ?? '').trim();
+        const apiSecret    = profile['secret'] ?? '';
+        const apiListen    = profile['external-controller'];
         const apiTLSListen = profile['external-controller-tls'];
-        const apiSecret = profile['secret'] ?? '';
 
         if (!apiListen && !apiTLSListen) {
             return Promise.reject('API has not been configured');
@@ -278,8 +278,8 @@ return baseclass.extend({
             hash = '#/';
         }
 
-        const params = { hostname: host, host: host, port: port, secret: apiSecret };
-        const query = new URLSearchParams(params).toString();
+        const params  = { hostname: host, host: host, port: port, secret: apiSecret };
+        const query   = new URLSearchParams(params).toString();
         const baseUrl = uiName
             ? `${protocol}://${host}:${port}/ui/${uiName}`
             : `${protocol}://${host}:${port}/ui`;

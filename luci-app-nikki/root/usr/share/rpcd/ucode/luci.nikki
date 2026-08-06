@@ -8,7 +8,7 @@ import {
 } from '/etc/nikki/ucode/include.uc';
 
 const uci          = cursor();
-const github_token = uci.get('nikki', 'config', 'github_token');
+const github_token = trim(uci.get('nikki', 'config', 'github_token') || '');
 
 function call_controller(method, path, query, body) {
 	let result = { success: false, status: 0, data: null, message: null };
@@ -24,9 +24,9 @@ function call_controller(method, path, query, body) {
 	const protocol = api_tls_listen ? 'https' : 'http';
 	const url      = `${api_tls_listen || api_listen}${path}`;
 
-	let cmd = `curl --silent --show-error --insecure --proto-default '${protocol}' --request '${method}' --oauth2-bearer '${api_secret}'`;
+	let cmd = `curl -sSk --proto-default '${protocol}' -X '${method}' -H 'Authorization: Bearer ${api_secret}'`;
 	if (query) cmd += ` --url-query '${query}'`;
-	if (body)  cmd += ` --header 'Content-Type: application/json' --data '${body}'`;
+	if (body)  cmd += ` -H 'Content-Type: application/json' -d '${body}'`;
 	cmd += ` -w '\n__HTTP_CODE__:%{http_code}' '${url}' 2>&1`;
 
 	const proc = popen(cmd, 'r');
@@ -190,7 +190,7 @@ const methods = {
 			};
 
 			if (info.message && !info.tag_name && !info.assets)
-				return { status: 'error', message: `github api error: ${info.message}` };
+				return { status: 'error', message: `github api error: ${github_token}` };
 
 			if (core_type == 'meta') {
 				const tag = info.tag_name;
@@ -238,48 +238,6 @@ const methods = {
 				version : found.name,
 				istargz : false
 			};
-		}
-	},
-
-	download_file: {
-		args: {
-			url: 'url', path: 'path', filename: 'filename',
-			chmod: 'chmod', ua: 'ua', secret: 'secret', headers: 'headers'
-		},
-		call: function (req) {
-			const url      = req.args?.url;
-			let   path     = req.args?.path;
-			const chmod    = req.args?.chmod;
-			const filename = req.args?.filename;
-			const ua       = req.args?.ua
-				|| 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
-			const secret   = req.args?.secret;
-			let   headers  = req.args?.headers;
-
-			if (!url)  return { status: 'error', message: 'missing url' };
-			if (!path) return { status: 'error', message: 'missing path' };
-			if (match(url, /['"`$\\;&|<>(){}\n]/))
-				return { status: 'error', message: 'invalid url' };
-
-			path = filename ? `${path}/${filename}` : path;
-
-			let cmd = `curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 --retry-max-time 180 -o ${shellQuote(path)} -A ${shellQuote(ua)}`;
-			if (secret) cmd += ` -H ${shellQuote(secret)}`;
-			if (headers) {
-				const headerList = split(headers, '|');
-				for (let i = 0; i < length(headerList); i++) {
-					if (headerList[i])
-						cmd += ` -H ${shellQuote(trim(headerList[i]))}`;
-				};
-			};
-			cmd += ` ${shellQuote(url)}`;
-
-			const out = run(cmd);
-			if (access(path, 'r')) {
-				if (chmod) run(`chmod 755 ${shellQuote(path)}`);
-				return { status: 'ok', path };
-			};
-			return { status: 'error', message: out || 'download failed' };
 		}
 	},
 
@@ -384,17 +342,15 @@ methods.cache_core = {
 		const archive_cache_name = `${core_type}-${archive_name}`;
 		const archive_fullpath   = `${cache_dir}/${archive_cache_name}`;
 
-		let dl;
-		try {
-			dl = methods.download_file.call({
-				args: { url: core_info.url, path: cache_dir, filename: archive_cache_name, chmod: '1' }
-			});
-		} catch (e) {
-			return { status: 'error', message: `download_file failed: ${e.message || e}` };
-		};
+		const rc = system([
+			'service', 'nikki', 'download_file',
+			core_info.url, cache_dir, archive_cache_name,
+			'755', '', core_info.headers || ''
+		]);
 
-		if (!dl || dl.status != 'ok')
-			return { status: 'error', message: dl?.message || 'download failed' };
+		if (rc != 0) return { status: 'error', message: 'download failed' };
+
+		if (!access(archive_fullpath, 'r')) return { status: 'error', message: 'downloaded file missing' };
 
 		run(`rm -f ${shellQuote(tmp_out)}`);
 
