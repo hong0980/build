@@ -2122,6 +2122,9 @@ msgstr "粘性会话（推荐）"
 msgid "Round Robin"
 msgstr "轮询"
 
+msgid "Consistent Hashing"
+msgstr "一致性哈希"
+
 msgid "Policy Priority"
 msgstr "策略优先级"
 
@@ -2154,6 +2157,24 @@ msgstr "未检测"
 
 msgid "%s (Timeout)"
 msgstr "%s（超时）"
+
+msgid "Clear FakeIP Cache"
+msgstr "清除 FakeIP 缓存"
+
+msgid "Clear DNS Cache"
+msgstr "清除 DNS 缓存"
+
+msgid "FakeIP cache flushed %s."
+msgstr "FakeIP 缓存清除%s。"
+
+msgid "DNS cache flushed %s."
+msgstr "DNS 缓存清除%s。"
+
+msgid "successfully"
+msgstr "成功"
+
+msgid "failed"
+msgstr "失败"
 
 msgid ""
 msgstr ""

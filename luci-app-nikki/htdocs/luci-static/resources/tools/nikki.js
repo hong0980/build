@@ -159,6 +159,10 @@ return baseclass.extend({
         return callServiceList('nikki', ['instances', 'nikki', 'running']).then(Boolean);
     },
 
+    mihomoAPI: function (method, path, query, body) {
+        return callNikkiAPI(method, path, query || '', body || '');
+    },
+
     service: function (command) {
         return callRCInit('nikki', command);
     },

@@ -144,11 +144,12 @@ start_service() {
 			(strenv(urltest_url)      // "") as $u  |
 			(strenv(interval)         // "") as $i  |
 			(strenv(tolerance)        // "") as $t  |
-			(strenv(file_url)         // "") as $fu |
 			(strenv(timeout)          // "") as $to |
 			(strenv(lazy)             // "") as $lz |
 			(strenv(max_failed_times) // "") as $mf |
 			(strenv(unified_delay)    // "") as $ud |
+			(strenv(file_url)         // "") as $fu |
+			($fu | split(" ") | map(select(length > 0))) as $urls |
 			(.proxy-groups // []) |= map(
 				((select($u  != "") | .url = $u) // .) |
 				((select($i  != "" and (.type == "url-test" or .type == "fallback")) | .interval = ($i | tonumber)) // .) |
@@ -158,10 +159,16 @@ start_service() {
 				((select($mf != "" and (.type == "url-test" or .type == "fallback")) | .["max-failed-times"] = ($mf | tonumber)) // .)
 			) |
 			((select($ud != "") | .["unified-delay"] = ($ud | (. == "true"))) // .) |
-			(.proxy-providers // {}) |= with_entries(
-				((select($fu != "" and .value.url) | .value.url = $fu) // .) |
-				((select($u  != "" and .value.health-check) | .value.health-check.url = $u) // .)
-			) |
+			((select(($urls | length) > 0) | .proxy-providers = ($urls | to_entries | map({
+				"key": ("Airport" + ((.key + 1) | tostring)),
+				"value": ({
+					"type": "http", "url": .value, "interval": 86400, "proxy": "DIRECT"
+				} + ((select($u != "") | {
+					"health-check": {
+						"url": $u, "enable": true, "interval": (((select($i != "") | ($i | tonumber)) // 600))
+					}
+				}) // {}))
+			}) | from_entries)) // .) |
 			with(select(.dns."respect-rules" == true and ((.dns."proxy-server-nameserver" // []) | length == 0));
 			.dns."proxy-server-nameserver" = ["https://dns.alidns.com/dns-query", "https://doh.pub/dns-query"])
 		' "$TEMP_CONFIG" >/dev/null 2>&1

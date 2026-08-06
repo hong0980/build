@@ -198,6 +198,29 @@ return view.extend({
         o.inputtitle = _('Restart Service');
         o.onclick = function () { return nikki.service('restart'); };
 
+        o = s.option(form.Button, '_fakeip');
+        o.inputstyle = 'negative';
+        o.inputtitle = _('Clear FakeIP Cache');
+        o.onclick = function () {
+            return nikki.mihomoAPI('POST', '/cache/fakeip/flush').then(function (res) {
+                ui.addTimeLimitedNotification(null,
+                    E('p', _('FakeIP cache flushed %s.')
+                        .format(res?.status === 204 ? _('successfully') : _('failed'))), 3000, 'message');
+            });
+        };
+
+        o = s.option(form.Button, '_dns');
+        o.inputstyle = 'negative';
+        o.inputtitle = _('Clear DNS Cache');
+        o.onclick = function () {
+            return nikki.mihomoAPI('POST', '/cache/dns/flush').then(function (res) {
+                ui.addTimeLimitedNotification(null,
+                    E('p', _('DNS cache flushed %s.')
+                        .format(res?.status === 204 ? _('successfully') : _('failed'))), 3000, 'message'
+                );
+            });
+        };
+
         o = s.option(form.ListValue, 'ui_url');
         o.ucisection = 'mixin';
         o.ucioption = 'ui_url';
@@ -365,7 +388,7 @@ return view.extend({
                         if (res?.status !== 'ok')
                             throw new Error(res.message || _('Update failed'));
 
-                        lgbmBtn.textContent = _('更新成功');
+                        lgbmBtn.textContent = _('Model updated successfully! Path: %s').format('/etc/nikki/run/Model.bin');
                         setTimeout(function () {
                             lgbmBtn.style.display = 'none';
                         }, 3000);
@@ -411,6 +434,7 @@ return view.extend({
         o = s.option(form.ListValue, 'smart_strategy', _('Strategy'));
         o.value('sticky-sessions', _('Sticky Sessions (Recommended)'));
         o.value('round-robin', _('Round Robin'));
+        o.value('consistent-hashing', _('Consistent Hashing'));
         o.default = 'sticky-sessions';
         o.rmempty = false;
         o.retain = true;
@@ -456,11 +480,10 @@ return view.extend({
             return { title: value, path: `/etc/nikki/mixin/${value}` }
         });
 
-        o = s.option(form.Value, 'file_url', _('Subscription'), _('Add a subscription to a startup profile'));
+        o = s.option(form.DynamicList, 'file_url', _('Subscription'), _('Add a subscription to a startup profile'));
         o.depends({ profile: 'file', '!contains': true, core_only: 0 });
         // o.password = true;
         o.retain = true;
-        o.placeholder = _('Not used');
 
         o = s.option(form.Flag, 'core_only', _('Core Only'), _('When enabled, mixin configs will not be used; Mihomo will auto-configure instead'));
         o.depends({ profile: 'file', '!contains': true });

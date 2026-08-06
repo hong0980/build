@@ -1,15 +1,68 @@
 #!/usr/bin/ucode
 // https://ucode.mein.io/module-fs.html
 'use strict';
-
 import { cursor } from 'uci';
 import { access, popen, writefile } from 'fs';
 import {
 	get_users, get_groups, get_cgroups, load_profile, shellQuote, run
 } from '/etc/nikki/ucode/include.uc';
 
-const uci = cursor();
+const uci          = cursor();
 const github_token = uci.get('nikki', 'config', 'github_token');
+
+function call_controller(method, path, query, body) {
+	let result = { success: false, status: 0, data: null, message: null };
+
+	const profile        = load_profile();
+	const api_secret     = profile['secret'];
+	const api_listen     = profile['external-controller'];
+	const api_tls_listen = profile['external-controller-tls'];
+
+	if (!api_listen && !api_tls_listen)
+		return { message: 'not found: listen', status: 'error' };
+
+	const protocol = api_tls_listen ? 'https' : 'http';
+	const url      = `${api_tls_listen || api_listen}${path}`;
+
+	let cmd = `curl --silent --show-error --insecure --proto-default '${protocol}' --request '${method}' --oauth2-bearer '${api_secret}'`;
+	if (query) cmd += ` --url-query '${query}'`;
+	if (body)  cmd += ` --header 'Content-Type: application/json' --data '${body}'`;
+	cmd += ` -w '\n__HTTP_CODE__:%{http_code}' '${url}' 2>&1`;
+
+	const proc = popen(cmd, 'r');
+	if (!proc) return { message: 'popen failed', status: 'error' };
+
+	const process   = proc.read('all') || '';
+	const exit_code = proc.close();
+
+	if (!process && exit_code != 0)
+		return { message: `curl failed (exit ${exit_code})`, status: 'error' };
+
+	const marker = '\n__HTTP_CODE__:';
+	const idx    = index(process, marker, true);
+
+	let bodyText = process;
+	let httpCode = 0;
+
+	if (idx !== -1) {
+		bodyText = trim(substr(process, 0, idx));
+		httpCode = +trim(substr(process, idx + length(marker))) || 0;
+	}
+
+	result.status  = httpCode;
+	result.success = (httpCode >= 200 && httpCode < 300);
+
+	if (!result.success) {
+		result.message = bodyText || `HTTP ${httpCode} (exit ${exit_code})`;
+		return result;
+	}
+
+	if (bodyText) {
+		try { result.data = json(bodyText); }
+		catch (e) { result.data = bodyText; }
+	}
+	return result;
+}
 
 const methods = {
 	set_commit: {
@@ -28,31 +81,31 @@ const methods = {
 			return { status: 'ok' };
 		}
 	},
+
 	connection_check: {
 		args: { url: 'url' },
 		call: function (req) {
 			if (!req.args?.url)
 				return { httpcode: null, error: 'illegal url' };
 
-			const out = run(
-				`curl -s -o /dev/null -L -w '%{http_code} %{time_total}' --max-time 3 ${shellQuote(req.args.url)}`
-			);
-
+			const out = run(`curl -s -o /dev/null -L -w '%{http_code} %{time_total}' --max-time 3 ${shellQuote(req.args.url)}`);
 			if (!out) return { httpcode: '-1', elapsed_ms: -1 };
+
 			const parts      = split(out, ' ');
 			const httpcode   = parts[0] || '-1';
 			const elapsed_ms = parts[1] ? int(+parts[1] * 1000) : -1;
 			return { httpcode, elapsed_ms };
 		}
 	},
+
 	update_ui: {
 		args: { url: 'url', name: 'name' },
 		call: function (req) {
-			const url      = req.args?.url;
-			const name     = req.args?.name;
-			const profile  = load_profile();
-			const secret   = profile['secret'];
-			const listen   = profile['external-controller'];
+			const url        = req.args?.url;
+			const name       = req.args?.name;
+			const profile    = load_profile();
+			const secret     = profile['secret'];
+			const listen     = profile['external-controller'];
 			const tls_listen = profile['external-controller-tls'];
 
 			if (!listen && !tls_listen)
@@ -63,24 +116,22 @@ const methods = {
 			if (!url || !name
 				|| !match(name, /^[A-Za-z0-9_-]+$/)
 				|| match(url, /['"`$\\;&|<>(){}\n]/)
-			) {return { status: 'error', message: 'invalid url/name' };}
+			) { return { status: 'error', message: 'invalid url/name' }; }
 
-			const yq_out = run(
-				`yq -Mi '.["external-ui-url"]="${url}" | .["external-ui-name"]="${name}"' ${filepath} 2>&1`
-			);
+			const yq_out = run(`yq -Mi '.["external-ui-url"]="${url}" | .["external-ui-name"]="${name}"' ${filepath} 2>&1`);
 			if (yq_out)
 				return { status: 'error', message: `yq: ${yq_out}` };
 
-			const reload_out = run(`curl -sS -X PUT -H 'Authorization: Bearer ${secret}' http://${listen}/configs?force=true -d '{"path": "${filepath}", "payload": ""}' 2>&1`);
-			if (reload_out) return { status: 'error', message: `reload: ${reload_out}` };
+			const reload = call_controller('PUT', '/configs?force=true', null, `{"path": "${filepath}", "payload": ""}`);
+			if (!reload.success)
+				return { status: 'error', message: `reload: ${reload.message || reload.data || 'unknown'}` };
 
 			function do_upgrade() {
-				const out = run(`curl -sS -X POST -H 'Authorization: Bearer ${secret}' http://${listen}/upgrade/ui 2>&1`);
-				try { return json(out); } catch (e) { return null; }
-			};
+				return call_controller('POST', '/upgrade/ui');
+			}
 
 			const DELAYS = [2, 2, 2];
-			let result = null;
+			let result   = null;
 
 			for (let i = 0; i < length(DELAYS); i++) {
 				system(`sleep ${DELAYS[i]}`);
@@ -93,6 +144,7 @@ const methods = {
 				: { status: 'error', message: result?.message || 'please retry' };
 		}
 	},
+
 	get_core_url: {
 		args: { core_type: 'core_type', arch: 'arch' },
 		call: function (req) {
@@ -104,16 +156,16 @@ const methods = {
 
 			if (core_type == 'smart') {
 				return {
-					status:  'ok',
-					url:     `https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart/clash-${arch}-compatible.tar.gz`,
-					version: 'smart',
-					istargz: true
+					status  : 'ok',
+					url     : `https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart/clash-${arch}-compatible.tar.gz`,
+					version : 'smart',
+					istargz : true
 				};
 			};
 
 			const api_map = {
-				meta:  'https://api.github.com/repos/MetaCubeX/mihomo/releases/latest',
-				alpha: 'https://api.github.com/repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha'
+				meta  : 'https://api.github.com/repos/MetaCubeX/mihomo/releases/latest',
+				alpha : 'https://api.github.com/repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha'
 			};
 
 			const api_url = api_map[core_type];
@@ -147,13 +199,12 @@ const methods = {
 					for (let k in info) push(keys, k);
 					return { status: 'error', message: `no tag found, keys: ${join(keys, ',')}` };
 				}
-
 				const filename = `mihomo-${arch}-compatible-${tag}.gz`;
 				return {
-					status:  'ok',
-					url:     `https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${filename}`,
-					version: tag,
-					istargz: false
+					status  : 'ok',
+					url     : `https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${filename}`,
+					version : tag,
+					istargz : false
 				};
 			};
 
@@ -162,13 +213,12 @@ const methods = {
 				return { status: 'error', message: 'no assets found' };
 
 			const prefix = `mihomo-${arch}`;
-			let found = null;
+			let found    = null;
 
 			for (let i = 0; i < length(assets); i++) {
 				const name = assets[i].name;
 				if (index(name, prefix) < 0 || index(name, '.gz') < 0)
 					continue;
-
 				if (index(name, 'compatible') >= 0) {
 					found = assets[i];
 					break;
@@ -180,17 +230,17 @@ const methods = {
 				if (!found) found = assets[i];
 			};
 
-			if (!found)
-				return { status: 'error', message: `no matching asset for ${arch}` };
+			if (!found) return { status: 'error', message: `no matching asset for ${arch}` };
 
 			return {
-				status:  'ok',
-				url:     found.browser_download_url,
-				version: found.name,
-				istargz: false
+				status  : 'ok',
+				url     : found.browser_download_url,
+				version : found.name,
+				istargz : false
 			};
 		}
 	},
+
 	download_file: {
 		args: {
 			url: 'url', path: 'path', filename: 'filename',
@@ -206,17 +256,15 @@ const methods = {
 			const secret   = req.args?.secret;
 			let   headers  = req.args?.headers;
 
-			if (!url)        return { status: 'error', message: 'missing url' };
-			if (!path)       return { status: 'error', message: 'missing path' };
+			if (!url)  return { status: 'error', message: 'missing url' };
+			if (!path) return { status: 'error', message: 'missing path' };
 			if (match(url, /['"`$\\;&|<>(){}\n]/))
-							 return { status: 'error', message: 'invalid url' };
+				return { status: 'error', message: 'invalid url' };
 
 			path = filename ? `${path}/${filename}` : path;
 
 			let cmd = `curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 --retry-max-time 180 -o ${shellQuote(path)} -A ${shellQuote(ua)}`;
-
 			if (secret) cmd += ` -H ${shellQuote(secret)}`;
-
 			if (headers) {
 				const headerList = split(headers, '|');
 				for (let i = 0; i < length(headerList); i++) {
@@ -224,7 +272,6 @@ const methods = {
 						cmd += ` -H ${shellQuote(trim(headerList[i]))}`;
 				};
 			};
-
 			cmd += ` ${shellQuote(url)}`;
 
 			const out = run(cmd);
@@ -232,10 +279,10 @@ const methods = {
 				if (chmod) run(`chmod 755 ${shellQuote(path)}`);
 				return { status: 'ok', path };
 			};
-
 			return { status: 'error', message: out || 'download failed' };
 		}
 	},
+
 	version: {
 		call: function () {
 			let app  = null;
@@ -248,10 +295,10 @@ const methods = {
 			};
 
 			core = run(`/etc/nikki/run/mihomo -v | grep Mihomo | cut -d " " -f 3`);
-
 			return { app, core };
 		}
 	},
+
 	profile: {
 		args: { defaults: {} },
 		call: function (req) {
@@ -261,15 +308,13 @@ const methods = {
 
 			if (access(filepath, 'r')) {
 				writefile(tmpFilepath, defaults);
-				const process = run(
-					`yq -Mpy -o json eval-all 'select(fi == 0) *? select(fi == 1)' ${tmpFilepath} ${filepath}`
-				);
+				const process = run(`yq -Mpy -o json eval-all 'select(fi == 0) *? select(fi == 1)' ${tmpFilepath} ${filepath}`);
 				if (process) return json(process);
-			};
-
+			}
 			return {};
 		}
 	},
+
 	update_subscription: {
 		args: { section_id: 'section_id' },
 		call: function (req) {
@@ -277,53 +322,31 @@ const methods = {
 			const success    = section_id
 				? system(['service', 'nikki', 'update_subscription', section_id]) == 0
 				: false;
-
 			return { success };
 		}
 	},
+
 	api: {
 		args: { method: 'method', path: 'path', query: 'query', body: 'body' },
 		call: function (req) {
-			let result = {};
-
-			const method = req.args?.method;
-			const path   = req.args?.path;
-			const query  = req.args?.query;
-			const body   = req.args?.body;
-
-			const profile        = load_profile();
-			const api_listen     = profile['external-controller'];
-			const api_tls_listen = profile['external-controller-tls'];
-			const api_secret     = profile['secret'];
-
-			if (!api_listen && !api_tls_listen)
-				return result;
-
-			const protocol = api_tls_listen ? 'https' : 'http';
-			const url      = `${api_listen}${path}`;
-
-			const process = run(
-				`curl --proto-default '${protocol}' --insecure
-				 --request '${method}'
-				 --oauth2-bearer '${api_secret}'
-				 --url-query '${query}'
-				 --data '${body}'
-				 '${url}'`
+			return call_controller(
+				req.args?.method || 'GET',
+				req.args?.path   || '/',
+				req.args?.query,
+				req.args?.body
 			);
-
-			if (process) result = json(process);
-			return result;
 		}
 	},
+
 	get_identifiers: {
 		call: function () {
 			const users   = filter(get_users(),   (x) => x != '');
 			const groups  = filter(get_groups(),  (x) => x != '');
 			const cgroups = filter(get_cgroups(), (x) => x != '' && index(x, 'services/nikki') < 0);
-
 			return { users, groups, cgroups };
 		}
 	},
+
 	debug: {
 		call: function () {
 			const success = system('/etc/nikki/scripts/debug.sh > /var/log/nikki/debug.log') == 0;
@@ -331,6 +354,7 @@ const methods = {
 		}
 	}
 };
+
 methods.cache_core = {
 	args: { core_type: 'core_type', arch: 'arch' },
 	call: function (req) {
@@ -419,6 +443,7 @@ methods.switch_core = {
 
 		if (!core_type) return { status: 'error', message: 'missing core_type' };
 		const final_out = `/etc/nikki/run/core/${core_type}-mihomo`;
+
 		if (!access(final_out, 'r')) {
 			const cache = methods.cache_core.call({ args: { core_type, arch } });
 			if (!cache || cache.status != 'ok')
@@ -428,6 +453,7 @@ methods.switch_core = {
 		const commit = methods.set_commit.call({
 			args: { config: 'nikki', section: 'config', option: 'core', value: core_type }
 		});
+
 		if (!commit || commit.status != 'ok') return { status: 'error', message: commit };
 
 		system(['service', 'nikki', 'restart']);

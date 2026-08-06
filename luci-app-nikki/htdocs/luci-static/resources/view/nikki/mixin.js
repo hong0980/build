@@ -612,15 +612,17 @@ return view.extend({
         o = s.taboption('sniffer', form.Flag, 'sniffer_sniff', _('Overwrite Sniff By Protocol'));
         o.rmempty = false;
 
-        o = s.taboption('sniffer', form.SectionValue, '_sniffer_sniffs', form.TableSection, 'sniff', _('Sniff By Protocol'));
+        o = s.taboption('sniffer', form.SectionValue, '_sniffer_sniffs', form.GridSection, 'sniff', _('Sniff By Protocol'));
         o.retain = true;
         o.depends('sniffer_sniff', '1');
 
         o.subsection.anonymous = true;
         o.subsection.addremove = false;
+        o.subsection.sortable = true;
 
         so = o.subsection.option(form.Flag, 'enabled', _('Enable'));
         so.rmempty = false;
+        so.editable = true;
 
         so = o.subsection.option(form.ListValue, 'protocol', _('Protocol'));
         so.value('HTTP');
@@ -633,6 +635,7 @@ return view.extend({
 
         so = o.subsection.option(form.Flag, 'overwrite_destination', _('Overwrite Destination'));
         so.rmempty = false;
+        so.editable = true;
 
         o = s.taboption('rule', form.Flag, 'rule', _('Append Rule'));
         o.rmempty = false;
