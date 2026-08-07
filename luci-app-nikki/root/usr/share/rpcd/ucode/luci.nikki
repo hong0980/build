@@ -235,6 +235,48 @@ const methods = {
 		}
 	},
 
+	download_file: {
+		args: {
+			url: 'url', path: 'path', filename: 'filename',
+			chmod: 'chmod', ua: 'ua', secret: 'secret', headers: 'headers'
+		},
+		call: function (req) {
+			const url      = req.args?.url;
+			let   path     = req.args?.path;
+			const chmod    = req.args?.chmod;
+			const filename = req.args?.filename;
+			const ua       = req.args?.ua
+				|| 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+			const secret   = req.args?.secret;
+			let   headers  = req.args?.headers;
+
+			if (!url)  return { status: 'error', message: 'missing url' };
+			if (!path) return { status: 'error', message: 'missing path' };
+			if (match(url, /['"`$\\;&|<>(){}\n]/))
+				return { status: 'error', message: 'invalid url' };
+
+			path = filename ? `${path}/${filename}` : path;
+
+			let cmd = `curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 --retry-max-time 180 -o ${shellQuote(path)} -A ${shellQuote(ua)}`;
+			if (secret) cmd += ` -H ${shellQuote(secret)}`;
+			if (headers) {
+				const headerList = split(headers, '|');
+				for (let i = 0; i < length(headerList); i++) {
+					if (headerList[i])
+						cmd += ` -H ${shellQuote(trim(headerList[i]))}`;
+				};
+			};
+			cmd += ` ${shellQuote(url)}`;
+
+			const out = run(cmd);
+			if (access(path, 'r')) {
+				if (chmod) run(`chmod 755 ${shellQuote(path)}`);
+				return { status: 'ok', path };
+			};
+			return { status: 'error', message: out || 'download failed' };
+		}
+	},
+
 	version: {
 		call: function () {
 			let app  = null, core = null;
