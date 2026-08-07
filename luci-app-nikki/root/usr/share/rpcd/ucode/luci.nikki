@@ -156,16 +156,14 @@ const methods = {
 
 			if (core_type == 'smart') {
 				return {
-					status  : 'ok',
-					url     : `https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart/clash-${arch}-compatible.tar.gz`,
-					version : 'smart',
-					istargz : true
+					status: 'ok',
+					url   : `https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart/clash-${arch}-compatible.tar.gz`
 				};
 			};
 
 			const api_map = {
-				meta  : 'https://api.github.com/repos/MetaCubeX/mihomo/releases/latest',
-				alpha : 'https://api.github.com/repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha'
+				meta : 'https://api.github.com/repos/MetaCubeX/mihomo/releases/latest',
+				alpha: 'https://api.github.com/repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha'
 			};
 
 			const api_url = api_map[core_type];
@@ -190,7 +188,7 @@ const methods = {
 			};
 
 			if (info.message && !info.tag_name && !info.assets)
-				return { status: 'error', message: `github api error: ${github_token}` };
+				return { status: 'error', message: `github api error: ${info.message}` };
 
 			if (core_type == 'meta') {
 				const tag = info.tag_name;
@@ -201,10 +199,8 @@ const methods = {
 				}
 				const filename = `mihomo-${arch}-compatible-${tag}.gz`;
 				return {
-					status  : 'ok',
-					url     : `https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${filename}`,
-					version : tag,
-					istargz : false
+					status: 'ok',
+					url   : `https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${filename}`
 				};
 			};
 
@@ -233,18 +229,15 @@ const methods = {
 			if (!found) return { status: 'error', message: `no matching asset for ${arch}` };
 
 			return {
-				status  : 'ok',
-				url     : found.browser_download_url,
-				version : found.name,
-				istargz : false
+				status: 'ok',
+				url   : found.browser_download_url
 			};
 		}
 	},
 
 	version: {
 		call: function () {
-			let app  = null;
-			let core = null;
+			let app  = null, core = null;
 
 			if (access('/usr/bin/apk', 'x')) {
 				app = run(`apk list -I luci-app-nikki | sed -nr 's/.*nikki-(.*)-.*noarch.*/\\1/p'`);
@@ -254,6 +247,36 @@ const methods = {
 
 			core = run(`/etc/nikki/run/mihomo -v | grep Mihomo | cut -d " " -f 3`);
 			return { app, core };
+		}
+	},
+
+	check_download: {
+		args: { core_type: 'core_type' },
+		call: function(req) {
+			const core_type   = req.args?.core_type;
+			const status_file = `/tmp/nikki_dl_${core_type}.status`;
+			const final_out   = `/etc/nikki/run/core/${core_type}-mihomo`;
+
+			if (!core_type)
+				return { status: 'error', message: 'missing core_type' };
+
+			if (access(status_file)) {
+				const st = trim(run(`cat ${shellQuote(status_file)}`) || '');
+
+				if (st == 'done')
+					return { status: 'ok', path: final_out, message: 'complete' };
+				else if (st == 'downloading')
+					return { status: 'pending', message: 'in progress' };
+				else if (substr(st, 0, 3) == 'error:')
+					return { status: 'error', message: substr(st, 3) };
+
+				return { status: 'unknown', message: st };
+			}
+
+			if (access(final_out))
+				return { status: 'ok', path: final_out, message: 'already exists' };
+
+			return { status: 'unknown', message: 'no task found' };
 		}
 	},
 
@@ -316,78 +339,88 @@ const methods = {
 methods.cache_core = {
 	args: { core_type: 'core_type', arch: 'arch' },
 	call: function (req) {
-		const arch      = req.args?.arch;
-		const core_type = req.args?.core_type;
-		const cache_dir = '/etc/nikki/run/core';
-		const out_name  = `${core_type}-mihomo`;
-		const tmp_out   = `${cache_dir}/${out_name}.tmp`;
-		const final_out = `${cache_dir}/${out_name}`;
+		const arch        = req.args?.arch;
+		const core_type   = req.args?.core_type;
+		const cache_dir   = '/etc/nikki/run/core';
+		const out_name    = `${core_type}-mihomo`;
+		const final_out   = `${cache_dir}/${out_name}`;
+		const status_file = `/tmp/nikki_dl_${core_type}.status`;
+		const log_file    = `/tmp/nikki_dl_${core_type}.log`;
 
 		if (!core_type || !arch)
 			return { status: 'error', message: 'missing params' };
 
-		run(`mkdir -p ${shellQuote(cache_dir)}`);
+		if (access(status_file)) {
+			const st = trim(run(`cat ${shellQuote(status_file)}`) || '');
+			if (st == 'downloading')
+				return { status: 'pending', message: 'download in progress' };
+		};
 
 		let core_info;
 		try {
 			core_info = methods.get_core_url.call({ args: { core_type, arch } });
 		} catch (e) {
-			return { status: 'error', message: `get_core_url failed: ${e.message || e}` };
+			return { status: 'error', message: `${e.message || e}` };
 		};
 
-		if (!core_info || core_info.status != 'ok')
+		if (core_info?.status != 'ok')
 			return { status: 'error', message: core_info?.message || 'no core info' };
 
-		const archive_name       = core_info.filename || (core_info.istargz ? 'mihomo.tar.gz' : 'mihomo.gz');
+		const archive_name       = core_type == 'smart' ? 'mihomo.tar.gz' : 'mihomo.gz';
 		const archive_cache_name = `${core_type}-${archive_name}`;
 		const archive_fullpath   = `${cache_dir}/${archive_cache_name}`;
 
-		const rc = system([
-			'service', 'nikki', 'download_file',
-			core_info.url, cache_dir, archive_cache_name,
-			'755', '', core_info.headers || ''
-		]);
+		run(`rm -f ${shellQuote(status_file)} ${shellQuote(log_file)} ${shellQuote(archive_fullpath)} ${shellQuote(cache_dir + '/' + out_name + '.tmp')}`);
+		run(`mkdir -p ${cache_dir}`);
 
-		if (rc != 0) return { status: 'error', message: 'download failed' };
+		const istargz = core_type == 'smart' ? '1' : '0';
+		const url     = shellQuote(core_info.url);
+		const afile   = shellQuote(archive_fullpath);
+		const tfile   = shellQuote(`${cache_dir}/${out_name}.tmp`);
+		const ffile   = shellQuote(final_out);
+		const sfile   = shellQuote(status_file);
+		const lfile   = shellQuote(log_file);
+		const cmd     = `( \
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] start" >> ${lfile}; \
+echo "downloading" > ${sfile}; \
+wget -q --timeout=60 --tries=3 -O ${afile} ${url} 2>>${lfile}; \
+if [ -s ${afile} ]; then \
+	echo "[$(date '+%Y-%m-%d %H:%M:%S')] download ok" >> ${lfile}; \
+	rm -f ${tfile}; \
+	if [ "${istargz}" = "1" ]; then \
+		tmpdir=/tmp/mihomo_extract_$$; \
+		rm -rf "$tmpdir" && mkdir -p "$tmpdir"; \
+		echo "[$(date '+%Y-%m-%d %H:%M:%S')] extracting" >> ${lfile}; \
+		if tar -xzf ${afile} -C "$tmpdir" 2>>${lfile}; then \
+			found=$(ls -1 "$tmpdir" 2>/dev/null | head -1); \
+			echo "[$(date '+%Y-%m-%d %H:%M:%S')] found=$found" >> ${lfile}; \
+			if [ -n "$found" ] && [ -r "$tmpdir/$found" ]; then \
+				cp -f "$tmpdir/$found" ${tfile}; \
+			fi; \
+		fi; \
+		rm -rf "$tmpdir"; \
+	else \
+		echo "[$(date '+%Y-%m-%d %H:%M:%S')] gunzip" >> ${lfile}; \
+		gunzip -c ${afile} > ${tfile} 2>>${lfile}; \
+	fi; \
+	if [ -r ${tfile} ]; then \
+		chmod 755 ${tfile}; \
+		mv -f ${tfile} ${ffile}; \
+		rm -f ${afile}; \
+		echo "done" > ${sfile}; \
+		echo "[$(date '+%Y-%m-%d %H:%M:%S')] done" >> ${lfile}; \
+	else \
+		echo "[$(date '+%Y-%m-%d %H:%M:%S')] error: tmp file missing" >> ${lfile}; \
+		echo "error: tmp file missing" > ${sfile}; \
+	fi; \
+else \
+	echo "[$(date '+%Y-%m-%d %H:%M:%S')] error: download failed" >> ${lfile}; \
+	echo "error: download failed" > ${sfile}; \
+fi \
+) >> ${lfile} 2>&1 &`;
 
-		if (!access(archive_fullpath, 'r')) return { status: 'error', message: 'downloaded file missing' };
-
-		run(`rm -f ${shellQuote(tmp_out)}`);
-
-		if (core_info.istargz) {
-			const tmpdir = '/tmp/mihomo_extract';
-			run(`rm -rf ${shellQuote(tmpdir)} && mkdir -p ${shellQuote(tmpdir)}`);
-
-			const tar_out = run(`tar -xzf ${shellQuote(archive_fullpath)} -C ${shellQuote(tmpdir)} 2>&1`);
-			const ls_out  = run(`ls -1 ${shellQuote(tmpdir)} 2>/dev/null`) || '';
-
-			let found = null;
-			for (let name in split(ls_out, '\n')) {
-				name = trim(name);
-				if (name && access(`${tmpdir}/${name}`, 'r')) {
-					found = `${tmpdir}/${name}`;
-					break;
-				};
-			};
-
-			if (!found) {
-				run(`rm -rf ${shellQuote(tmpdir)}`);
-				return { status: 'error', message: `extract failed: ${tar_out || 'no file'}` };
-			};
-
-			run(`cp -f ${shellQuote(found)} ${shellQuote(tmp_out)}`);
-			run(`rm -rf ${shellQuote(tmpdir)}`);
-		} else {
-			const out = run(`gunzip -c ${shellQuote(archive_fullpath)} > ${shellQuote(tmp_out)} 2>&1`);
-			if (!access(tmp_out, 'r'))
-				return { status: 'error', message: out || 'gunzip failed' };
-		};
-
-		run(`chmod 755 ${shellQuote(tmp_out)}`);
-		run(`mv ${shellQuote(tmp_out)} ${shellQuote(final_out)}`);
-		run(`rm -f ${shellQuote(archive_fullpath)}`);
-
-		return { status: 'ok', path: final_out, archive: archive_fullpath };
+		system(['sh', '-c', cmd]);
+		return { status: 'pending', message: 'download started in background' };
 	}
 };
 

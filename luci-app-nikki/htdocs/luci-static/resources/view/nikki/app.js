@@ -198,28 +198,28 @@ return view.extend({
         o.inputtitle = _('Restart Service');
         o.onclick = function () { return nikki.service('restart'); };
 
-        o = s.option(form.Button, '_fakeip');
-        o.inputstyle = 'negative';
-        o.inputtitle = _('Clear FakeIP Cache');
-        o.onclick = function () {
-            return nikki.mihomoAPI('POST', '/cache/fakeip/flush').then(function (res) {
-                ui.addTimeLimitedNotification(null,
-                    E('p', _('FakeIP cache flushed %s.')
-                        .format(res?.status === 204 ? _('successfully') : _('failed'))), 3000, 'message');
-            });
-        };
+        // o = s.option(form.Button, '_fakeip');
+        // o.inputstyle = 'negative';
+        // o.inputtitle = _('Clear FakeIP Cache');
+        // o.onclick = function () {
+        //     return nikki.mihomoAPI('POST', '/cache/fakeip/flush').then(function (res) {
+        //         ui.addTimeLimitedNotification(null,
+        //             E('p', _('FakeIP cache flushed %s.')
+        //                 .format(res?.status === 204 ? _('successfully') : _('failed'))), 3000, 'message');
+        //     });
+        // };
 
-        o = s.option(form.Button, '_dns');
-        o.inputstyle = 'negative';
-        o.inputtitle = _('Clear DNS Cache');
-        o.onclick = function () {
-            return nikki.mihomoAPI('POST', '/cache/dns/flush').then(function (res) {
-                ui.addTimeLimitedNotification(null,
-                    E('p', _('DNS cache flushed %s.')
-                        .format(res?.status === 204 ? _('successfully') : _('failed'))), 3000, 'message'
-                );
-            });
-        };
+        // o = s.option(form.Button, '_dns');
+        // o.inputstyle = 'negative';
+        // o.inputtitle = _('Clear DNS Cache');
+        // o.onclick = function () {
+        //     return nikki.mihomoAPI('POST', '/cache/dns/flush').then(function (res) {
+        //         ui.addTimeLimitedNotification(null,
+        //             E('p', _('DNS cache flushed %s.')
+        //                 .format(res?.status === 204 ? _('successfully') : _('failed'))), 3000, 'message'
+        //         );
+        //     });
+        // };
 
         o = s.option(form.ListValue, 'ui_url');
         o.ucisection = 'mixin';
@@ -305,13 +305,14 @@ return view.extend({
                     ev.preventDefault();
                     if (core_version == '0')
                         return ui.addNotification(null, E('p', _('Unknown device architecture, cannot download core.')), 'error');
+
                     const val = self.formvalue(section_id).trim();
                     if (!val)
                         return ui.addNotification(null, E('p', _('Please select a core first.')), 'error');
+
+                    coreBtn.textContent = _('Please wait, downloading %s...').format(val);
                     return nikki.cache_core(val, core_version)
-                        .then(function (res) {
-                            if (res?.status !== 'ok')
-                                throw new Error(res.message || _('Update failed'));
+                        .then(function () {
                             coreBtn.style.display = 'none';
                             ui.addTimeLimitedNotification(null, E('p', _('Core %s updated successfully').format(val)), 4000, 'info');
                         })

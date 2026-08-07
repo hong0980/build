@@ -118,6 +118,13 @@ const callUciSetCommit = rpc.declare({
     expect: { '': {} }
 });
 
+const callCheckDownload = rpc.declare({
+    object: 'luci.nikki',
+    method: 'check_download',
+    params: ['core_type'],
+    expect: { '': {} }
+});
+
 const homeDir           = '/etc/nikki';
 const profilesDir       = `${homeDir}/profiles`;
 const subscriptionsDir  = `${homeDir}/subscriptions`;
@@ -128,7 +135,7 @@ const runProfilePath    = `${runDir}/config.yaml`;
 const providersDir      = `${runDir}/providers`;
 const ruleProvidersDir  = `${providersDir}/rule`;
 const proxyProvidersDir = `${providersDir}/proxy`;
-const logDir            = `/var/log/nikki`;
+const logDir            = '/var/log/nikki';
 const appLogPath        = `${logDir}/app.log`;
 const coreLogPath       = `${logDir}/core.log`;
 const debugLogPath      = `${logDir}/debug.log`;
@@ -194,7 +201,38 @@ return baseclass.extend({
     },
 
     cache_core: function (core_type, arch) {
-        return callCacheCore(core_type, arch);
+        return callCacheCore(core_type, arch).then(function (res) {
+            if (res.status === 'ok') return;
+
+            if (res.status === 'error')
+                throw new Error(res.message || _('Update failed'));
+
+            return new Promise(function (resolve, reject) {
+                let n = 0;
+                const max = 40;
+
+                const check = function () {
+                    if (++n > max) {
+                        reject(new Error(_('Download timeout')));
+                        return;
+                    }
+                    callCheckDownload(core_type).then(function (r) {
+                        if (r.status === 'ok')
+                            resolve();
+                        else if (r.status === 'error')
+                            reject(new Error(r.message || _('Download failed')));
+                        else
+                            setTimeout(check, 3000);
+                    }).catch(reject);
+                };
+
+                check();
+            });
+        });
+    },
+
+    pollDownload: function (core_type) {
+        return this.cache_core(core_type);
     },
 
     switch_core: function (core_type, arch) {

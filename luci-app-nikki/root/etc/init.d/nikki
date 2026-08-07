@@ -7,7 +7,6 @@ USE_PROCD=1
 
 extra_command 'clear_logs' 'Clear logs if size exceeds the limit'
 extra_command 'update_subscription' 'Update subscription by section id'
-extra_command 'download_file' 'Download file (url path filename chmod ua headers)'
 
 boot() {
 	config_load nikki
@@ -671,30 +670,4 @@ update_subscription() {
 	rm -f "$header_tmpfile" "$info_header_tmpfile"
 	uci_commit nikki
 	return 0
-}
-
-download_file() {
-	local url="$1" base_path="$2" filename="$3" chmod_val="$4" ua="$5" headers="$6"
-
-	[ -z "$url" ] && echo "ERROR: missing url" >&2 && return 1
-	[ -z "$base_path" ] && echo "ERROR: missing path" >&2 && return 1
-	[ -n "$filename" ] && base_path="${base_path}/${filename}"
-
-	local cmd="wget -q --timeout=30 --tries=1 -O '${base_path}'"
-	[ -n "$ua" ] && cmd="${cmd} -U '${ua}'"
-
-	IFS='|'
-	for h in $headers; do
-		[ -n "$h" ] && cmd="${cmd} --header='${h}'"
-	done
-
-	cmd="${cmd} '${url}'"
-
-	if eval "$cmd" && [ -s "$base_path" ]; then
-		[ -n "$chmod_val" ] && chmod "$chmod_val" "$base_path"
-		return 0
-	fi
-
-	rm -f "$base_path"
-	return 1
 }
