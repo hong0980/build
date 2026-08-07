@@ -24,10 +24,10 @@ function call_controller(method, path, query, body) {
 	const protocol = api_tls_listen ? 'https' : 'http';
 	const url      = `${api_tls_listen || api_listen}${path}`;
 
-	let cmd = `curl -sSk --proto-default '${protocol}' -X '${method}' -H 'Authorization: Bearer ${api_secret}'`;
-	if (query) cmd += ` --url-query '${query}'`;
-	if (body)  cmd += ` -H 'Content-Type: application/json' -d '${body}'`;
-	cmd += ` -w '\n__HTTP_CODE__:%{http_code}' '${url}' 2>&1`;
+	let cmd = `curl -sSk --proto-default ${shellQuote(protocol)} -X ${shellQuote(method)} -H ${shellQuote('Authorization: Bearer ' + api_secret)}`;
+	if (query) cmd += ` --url-query ${shellQuote(query)}`;
+	if (body)  cmd += ` -H ${shellQuote('Content-Type: application/json')} -d ${shellQuote(body)}`;
+	cmd += ` -w ${shellQuote('\n__HTTP_CODE__:%{http_code}')} ${shellQuote(url)} 2>&1`;
 
 	const proc = popen(cmd, 'r');
 	if (!proc) return { message: 'popen failed', status: 'error' };
@@ -134,12 +134,12 @@ const methods = {
 			let result   = null;
 
 			for (let i = 0; i < length(DELAYS); i++) {
-				system(`sleep ${DELAYS[i]}`);
+				system(['sleep', '' + DELAYS[i]]);
 				result = do_upgrade();
-				if (result?.status === 'ok') break;
+				if (result?.success) break;
 			};
 
-			return result?.status === 'ok'
+			return result?.success
 				? { status: 'ok' }
 				: { status: 'error', message: result?.message || 'please retry' };
 		}
@@ -269,8 +269,8 @@ const methods = {
 			cmd += ` ${shellQuote(url)}`;
 
 			const out = run(cmd);
-			if (access(path, 'r')) {
-				if (chmod) run(`chmod 755 ${shellQuote(path)}`);
+			if (access(path)) {
+				if (chmod) system(['chmod', '755', path]);
 				return { status: 'ok', path };
 			};
 			return { status: 'error', message: out || 'download failed' };
@@ -281,9 +281,9 @@ const methods = {
 		call: function () {
 			let app  = null, core = null;
 
-			if (access('/usr/bin/apk', 'x')) {
+			if (access('/usr/bin/apk')) {
 				app = run(`apk list -I luci-app-nikki | sed -nr 's/.*nikki-(.*)-.*noarch.*/\\1/p'`);
-			} else if (access('/bin/opkg', 'x')) {
+			} else if (access('/bin/opkg')) {
 				app = run(`opkg list-installed luci-app-nikki | sed -nr 's/.*nikki - (.*)-.*/\\1/p'`);
 			};
 
@@ -309,8 +309,8 @@ const methods = {
 					return { status: 'ok', path: final_out, message: 'complete' };
 				else if (st == 'downloading')
 					return { status: 'pending', message: 'in progress' };
-				else if (substr(st, 0, 3) == 'error:')
-					return { status: 'error', message: substr(st, 3) };
+				else if (substr(st, 0, 6) == 'error:')
+					return { status: 'error', message: substr(st, 6) };
 
 				return { status: 'unknown', message: st };
 			}
@@ -329,7 +329,7 @@ const methods = {
 			const filepath    = '/etc/nikki/run/config.yaml';
 			const tmpFilepath = '/var/run/nikki/profile.json';
 
-			if (access(filepath, 'r')) {
+			if (access(filepath)) {
 				writefile(tmpFilepath, defaults);
 				const process = run(`yq -Mpy -o json eval-all 'select(fi == 0) *? select(fi == 1)' ${tmpFilepath} ${filepath}`);
 				if (process) return json(process);
@@ -412,8 +412,8 @@ methods.cache_core = {
 		const archive_cache_name = `${core_type}-${archive_name}`;
 		const archive_fullpath   = `${cache_dir}/${archive_cache_name}`;
 
-		run(`rm -f ${shellQuote(status_file)} ${shellQuote(log_file)} ${shellQuote(archive_fullpath)} ${shellQuote(cache_dir + '/' + out_name + '.tmp')}`);
-		run(`mkdir -p ${cache_dir}`);
+		system(['rm', '-f', status_file, log_file, archive_fullpath, cache_dir + '/' + out_name + '.tmp']);
+		system(['mkdir', '-p', cache_dir]);
 
 		const istargz = core_type == 'smart' ? '1' : '0';
 		const url     = shellQuote(core_info.url);
@@ -425,7 +425,7 @@ methods.cache_core = {
 		const cmd     = `( \
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] start" >> ${lfile}; \
 echo "downloading" > ${sfile}; \
-wget -q --timeout=60 --tries=3 -O ${afile} ${url} 2>>${lfile}; \
+wget -q --timeout=60 -O ${afile} ${url} 2>>${lfile}; \
 if [ -s ${afile} ]; then \
 	echo "[$(date '+%Y-%m-%d %H:%M:%S')] download ok" >> ${lfile}; \
 	rm -f ${tfile}; \
@@ -471,23 +471,21 @@ methods.switch_core = {
 	call: function (req) {
 		const arch      = req.args?.arch;
 		const core_type = req.args?.core_type;
-
 		if (!core_type) return { status: 'error', message: 'missing core_type' };
 		const final_out = `/etc/nikki/run/core/${core_type}-mihomo`;
 
-		if (!access(final_out, 'r')) {
+		if (!access(final_out)) {
 			const cache = methods.cache_core.call({ args: { core_type, arch } });
-			if (!cache || cache.status != 'ok')
+			if (!cache || cache.status == 'error')
 				return { status: 'error', message: cache?.message || `cached binary not found: ${final_out}` };
+
+			return { status: 'pending', message: 'downloading core' };
 		};
 
-		const commit = methods.set_commit.call({
-			args: { config: 'nikki', section: 'config', option: 'core', value: core_type }
-		});
-
-		if (!commit || commit.status != 'ok') return { status: 'error', message: commit };
-
+		uci.set('nikki', 'config', 'core', core_type);
+		uci.commit('nikki');
 		system(['service', 'nikki', 'restart']);
+
 		return { status: 'ok' };
 	}
 };

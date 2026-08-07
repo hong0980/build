@@ -160,7 +160,7 @@ start_service() {
 			) |
 			((select($ud != "") | .["unified-delay"] = ($ud | (. == "true"))) // .) |
 			((select(($urls | length) > 0) | .proxy-providers = ($urls | to_entries | map({
-				"key": ("Airport" + ((.key + 1) | tostring)),
+				"key": ("provider" + ((.key + 1) | tostring)),
 				"value": ({
 					"type": "http", "url": .value, "interval": 86400, "proxy": "DIRECT"
 				} + ((select($u != "") | {

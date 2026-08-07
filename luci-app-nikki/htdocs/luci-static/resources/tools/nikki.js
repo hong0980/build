@@ -231,12 +231,43 @@ return baseclass.extend({
         });
     },
 
-    pollDownload: function (core_type) {
-        return this.cache_core(core_type);
+    switch_core: function (core_type, arch) {
+        const attempt = function () {
+            return callSwitchCore(core_type, arch).then(function (res) {
+                if (res.status === 'ok') return res;
+
+                if (res.status === 'pending') {
+                    return new Promise(function (resolve, reject) {
+                        let n = 0;
+                        const max = 40;
+                        const check = function () {
+                            if (++n > max) {
+                                reject(new Error(_('Download timeout')));
+                                return;
+                            }
+                            callCheckDownload(core_type).then(function (r) {
+                                if (r.status === 'ok')
+                                    resolve();
+                                else if (r.status === 'error')
+                                    reject(new Error(r.message || _('Download failed')));
+                                else
+                                    setTimeout(check, 3000);
+                            }).catch(reject);
+                        };
+                        check();
+                    }).then(function () {
+                        return attempt();
+                    });
+                }
+
+                throw new Error(res.message || _('Switch failed'));
+            });
+        };
+        return attempt();
     },
 
-    switch_core: function (core_type, arch) {
-        return callSwitchCore(core_type, arch);
+    pollDownload: function (core_type) {
+        return this.cache_core(core_type);
     },
 
     get_core_url: function (core_type, arch) {
