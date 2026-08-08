@@ -86,7 +86,7 @@ const callConnStat = rpc.declare({
 const calldownload_file = rpc.declare({
     object: 'luci.nikki',
     method: 'download_file',
-    params: ['url', 'path', 'filename', 'chmod', 'ua', 'secret', 'headers'],
+    params: ['url', 'path', 'filename', 'chmod', 'ua', 'secret', 'headers', 'task_id'],
     expect: { '': {} }
 });
 
@@ -121,7 +121,7 @@ const callUciSetCommit = rpc.declare({
 const callCheckDownload = rpc.declare({
     object: 'luci.nikki',
     method: 'check_download',
-    params: ['core_type'],
+    params: ['core_type', 'path'],
     expect: { '': {} }
 });
 
@@ -147,7 +147,7 @@ const ui_array          = [
     ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]
 ];
 
-function waitForDownload(core_type, maxRetries) {
+function waitForDownload(core_type, path, maxRetries) {
     maxRetries = maxRetries || 40;
     return new Promise(function (resolve, reject) {
         let n = 0;
@@ -156,8 +156,8 @@ function waitForDownload(core_type, maxRetries) {
                 reject(new Error(_('Download timeout')));
                 return;
             }
-            callCheckDownload(core_type).then(function (r) {
-                if (r.status === 'ok') resolve();
+            callCheckDownload(core_type, path || '').then(function (r) {
+                if (r.status === 'ok') resolve(r);
                 else if (r.status === 'error')
                     reject(new Error(r.message || _('Download failed')));
                 else
@@ -266,7 +266,20 @@ return baseclass.extend({
             ? ''
             : (typeof chmod === 'string' ? chmod : '1');
 
-        return calldownload_file(url, path, filename, chmod, ua, secret, headers);
+        const task_id = opts.task_id || ('file_' + Date.now());
+
+        const attempt = function () {
+            return calldownload_file(url, path, filename, chmod, ua, secret, headers, task_id)
+                .then(function (res) {
+                    if (res.status === 'ok') return res;
+                    if (res.status === 'error')
+                        throw new Error(res.message || _('Download failed'));
+                    if (res.status === 'pending' && res.task_id)
+                        return waitForDownload(res.task_id, path).then(attempt);  // ← 复用
+                    throw new Error(res.message || _('Download failed'));
+                });
+        };
+        return attempt();
     },
 
     version: function () {

@@ -284,6 +284,21 @@ const methods = {
 		}
 	},
 
+	version: {
+		call: function () {
+			let app  = null, core = null;
+
+			if (access('/usr/bin/apk', 'x')) {
+				app = run(`apk list -I luci-app-nikki | sed -nr 's/.*nikki-(.*)-.*noarch.*/\\1/p'`);
+			} else if (access('/bin/opkg', 'x')) {
+				app = run(`opkg list-installed luci-app-nikki | sed -nr 's/.*nikki - (.*)-.*/\\1/p'`);
+			};
+
+			core = run(`/etc/nikki/run/mihomo -v | grep Mihomo | cut -d " " -f 3`);
+			return { app, core };
+		}
+	},
+
 	connection_check: {
 		args: { url: 'url' },
 		call: function (req) {
@@ -315,7 +330,7 @@ const methods = {
 
 			if (!url || !name
 				|| !match(name, /^[A-Za-z0-9_-]+$/)
-				|| match(url, /['"`$\\;&|<>(){}\n]/)
+				|| match(url, /['"`$\\;&|<>(){}\n']/)
 			) { return { status: 'error', message: 'invalid url/name' }; }
 
 			const yq_out = run(`yq -Mi '.["external-ui-url"]="${url}" | .["external-ui-name"]="${name}"' ${CONFIG_PATH} 2>&1`);
@@ -348,7 +363,8 @@ const methods = {
 	download_file: {
 		args: {
 			url: 'url', path: 'path', filename: 'filename',
-			chmod: 'chmod', ua: 'ua', secret: 'secret', headers: 'headers'
+			chmod: 'chmod', ua: 'ua', secret: 'secret', headers: 'headers',
+			task_id: 'task_id'
 		},
 		call: function (req) {
 			const url      = req.args?.url;
@@ -358,55 +374,77 @@ const methods = {
 			const ua       = req.args?.ua || DEFAULT_UA;
 			const secret   = req.args?.secret;
 			let   headers  = req.args?.headers;
+			let   task_id  = req.args?.task_id;
 
 			if (!url)  return { status: 'error', message: 'missing url' };
 			if (!path) return { status: 'error', message: 'missing path' };
-			if (match(url, /['"`$\\;&|<>(){}\n]/))
+			if (match(url, /['"`$\\;&|<>(){}\n']/))
 				return { status: 'error', message: 'invalid url' };
 
 			path = filename ? `${path}/${filename}` : path;
 
-			let cmd = `curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 --retry-max-time 180 -o ${shellQuote(path)} -A ${shellQuote(ua)}`;
-			if (secret) cmd += ` -H ${shellQuote(secret)}`;
+			if (!task_id || !match(task_id, /^[A-Za-z0-9_-]+$/))
+				task_id = 'file_' + time() + '_' + rand();
+
+			const status_file = `/tmp/nikki_dl_${task_id}.status`;
+			const log_file    = `/tmp/nikki_dl_${task_id}.log`;
+
+			if (access(status_file)) {
+				const st = trim(readfile(status_file) || '');
+				if (st == 'downloading')
+					return { status: 'pending', task_id, message: 'download in progress' };
+				if (st == 'done' && access(path))
+					return { status: 'ok', task_id, path, message: 'complete' };
+				if (substr(st, 0, 6) == 'error:')
+					return { status: 'error', task_id, message: substr(st, 6) };
+			};
+
+			unlink(status_file);
+			unlink(log_file);
+			writefile(status_file, 'downloading');
+
+			const sfile = shellQuote(status_file);
+			const lfile = shellQuote(log_file);
+			const pfile = shellQuote(path);
+
+			let curl_cmd = `curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 --retry-max-time 180 -o ${pfile} -A ${shellQuote(ua)}`;
+			if (secret) curl_cmd += ` -H ${shellQuote(secret)}`;
 			if (headers) {
 				const headerList = split(headers, '|');
 				for (let i = 0; i < length(headerList); i++) {
 					if (headerList[i])
-						cmd += ` -H ${shellQuote(trim(headerList[i]))}`;
+						curl_cmd += ` -H ${shellQuote(trim(headerList[i]))}`;
 				};
 			};
-			cmd += ` ${shellQuote(url)}`;
+			curl_cmd += ` ${shellQuote(url)}`;
 
-			const out = run(cmd);
-			if (access(path)) {
-				if (do_chmod) chmod(path, 493);
-				return { status: 'ok', path };
-			};
-			return { status: 'error', message: out || 'download failed' };
-		}
-	},
+			const chmod_cmd = do_chmod ? `chmod 755 ${pfile}` : 'true';
 
-	version: {
-		call: function () {
-			let app  = null, core = null;
+			const cmd = `( \
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] start" >> ${lfile}; \
+${curl_cmd} 2>>${lfile}; \
+if [ -s ${pfile} ]; then \
+	${chmod_cmd}; \
+	echo "done" > ${sfile}; \
+	echo "[$(date '+%Y-%m-%d %H:%M:%S')] done" >> ${lfile}; \
+else \
+	echo "[$(date '+%Y-%m-%d %H:%M:%S')] error: download failed" >> ${lfile}; \
+	echo "error: download failed" > ${sfile}; \
+fi \
+) >> ${lfile} 2>&1 &`;
 
-			if (access('/usr/bin/apk')) {
-				app = run(`apk list -I luci-app-nikki | sed -nr 's/.*nikki-(.*)-.*noarch.*/\\1/p'`);
-			} else if (access('/bin/opkg')) {
-				app = run(`opkg list-installed luci-app-nikki | sed -nr 's/.*nikki - (.*)-.*/\\1/p'`);
-			};
-
-			core = run(`/etc/nikki/run/mihomo -v | grep Mihomo | cut -d " " -f 3`);
-			return { app, core };
+			system(['sh', '-c', cmd]);
+			return { status: 'pending', task_id, message: 'download started in background' };
 		}
 	},
 
 	check_download: {
-		args: { core_type: 'core_type' },
+		args: { core_type: 'core_type', path: 'path' },
 		call: function(req) {
 			const core_type   = req.args?.core_type;
+			const custom_path = req.args?.path;
 			const status_file = `/tmp/nikki_dl_${core_type}.status`;
-			const final_out   = `${CACHE_DIR}/${core_type}-mihomo`;
+			const final_out   = custom_path || `${CACHE_DIR}/${core_type}-mihomo`;
 
 			if (!core_type)
 				return { status: 'error', message: 'missing core_type' };
