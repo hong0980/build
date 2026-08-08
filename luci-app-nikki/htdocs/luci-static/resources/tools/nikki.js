@@ -147,6 +147,27 @@ const ui_array          = [
     ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]
 ];
 
+function waitForDownload(core_type, maxRetries) {
+    maxRetries = maxRetries || 40;
+    return new Promise(function (resolve, reject) {
+        let n = 0;
+        const check = function () {
+            if (++n > maxRetries) {
+                reject(new Error(_('Download timeout')));
+                return;
+            }
+            callCheckDownload(core_type).then(function (r) {
+                if (r.status === 'ok') resolve();
+                else if (r.status === 'error')
+                    reject(new Error(r.message || _('Download failed')));
+                else
+                    setTimeout(check, 3000);
+            }).catch(reject);
+        };
+        check();
+    });
+}
+
 return baseclass.extend({
     PROG:              PROG,
     runDir:            runDir,
@@ -203,31 +224,9 @@ return baseclass.extend({
     cache_core: function (core_type, arch) {
         return callCacheCore(core_type, arch).then(function (res) {
             if (res.status === 'ok') return;
-
             if (res.status === 'error')
                 throw new Error(res.message || _('Update failed'));
-
-            return new Promise(function (resolve, reject) {
-                let n = 0;
-                const max = 40;
-
-                const check = function () {
-                    if (++n > max) {
-                        reject(new Error(_('Download timeout')));
-                        return;
-                    }
-                    callCheckDownload(core_type).then(function (r) {
-                        if (r.status === 'ok')
-                            resolve();
-                        else if (r.status === 'error')
-                            reject(new Error(r.message || _('Download failed')));
-                        else
-                            setTimeout(check, 3000);
-                    }).catch(reject);
-                };
-
-                check();
-            });
+            return waitForDownload(core_type);
         });
     },
 
@@ -235,31 +234,8 @@ return baseclass.extend({
         const attempt = function () {
             return callSwitchCore(core_type, arch).then(function (res) {
                 if (res.status === 'ok') return res;
-
-                if (res.status === 'pending') {
-                    return new Promise(function (resolve, reject) {
-                        let n = 0;
-                        const max = 40;
-                        const check = function () {
-                            if (++n > max) {
-                                reject(new Error(_('Download timeout')));
-                                return;
-                            }
-                            callCheckDownload(core_type).then(function (r) {
-                                if (r.status === 'ok')
-                                    resolve();
-                                else if (r.status === 'error')
-                                    reject(new Error(r.message || _('Download failed')));
-                                else
-                                    setTimeout(check, 3000);
-                            }).catch(reject);
-                        };
-                        check();
-                    }).then(function () {
-                        return attempt();
-                    });
-                }
-
+                if (res.status === 'pending')
+                    return waitForDownload(core_type).then(attempt);
                 throw new Error(res.message || _('Switch failed'));
             });
         };

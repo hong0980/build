@@ -298,6 +298,7 @@ return view.extend({
             const self = this;
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
             const core_version = uci.get('nikki', 'config', 'core_version');
+            const default_label = _('Update Core');
             coreBtn = E('button', {
                 'class': 'btn cbi-button-action',
                 'style': coreDownload(list, cfgvalue) ? '' : 'display:none',
@@ -318,9 +319,10 @@ return view.extend({
                         })
                         .catch(function (err) {
                             ui.addNotification(null, E('p', _('Update failed: %s').format(err.message || err)), 'error');
-                        });
+                        })
+                        .finally(() => btn.textContent = default_label);
                 })
-            }, _('Update Core'));
+            }, default_label);
             const switchBtn = E('button', {
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function (ev) {
