@@ -70,7 +70,8 @@ function attachFileEditorButton(o, resolveTarget) {
                                     const finalValue = window.ace?.edit ? aceDiv.env?.editor?.getValue() ?? textarea.value : textarea.value;
                                     return nikki.writefile(path, finalValue)
                                         .then(() => {
-                                            ui.addTimeLimitedNotification(null, E('p', _('Config saved, files updated')), 5000, 'info');
+                                            ui.addTimeLimitedNotification(null,
+                                                E('p', _('Config saved, files updated')), 5000, 'info');
                                             ui.hideModal();
                                         })
                                         .catch((e) => {
@@ -305,22 +306,26 @@ return view.extend({
                 'click': ui.createHandlerFn(this, function (ev) {
                     ev.preventDefault();
                     if (core_version == '0')
-                        return ui.addNotification(null, E('p', _('Unknown device architecture, cannot download core.')), 'error');
+                        return ui.addNotification(null,
+                            E('p', _('Unknown device architecture, cannot download core.')), 'error');
 
                     const val = self.formvalue(section_id).trim();
                     if (!val)
-                        return ui.addNotification(null, E('p', _('Please select a core first.')), 'error');
+                        return ui.addNotification(null,
+                            E('p', _('Please select a core first.')), 'error');
 
                     coreBtn.textContent = _('Please wait, downloading %s...').format(val);
                     return nikki.cache_core(val, core_version)
                         .then(function () {
                             coreBtn.style.display = 'none';
-                            ui.addTimeLimitedNotification(null, E('p', _('Core %s updated successfully').format(val)), 4000, 'info');
+                            ui.addTimeLimitedNotification(null,
+                                E('p', _('Core %s updated successfully').format(val)), 4000, 'info');
                         })
                         .catch(function (err) {
-                            ui.addNotification(null, E('p', _('Update failed: %s').format(err.message || err)), 'error');
+                            ui.addNotification(null,
+                                E('p', _('Update failed: %s').format(err.message || err)), 'error');
                         })
-                        .finally(() => btn.textContent = default_label);
+                        .finally(() => coreBtn.textContent = default_label);
                 })
             }, default_label);
             const switchBtn = E('button', {
@@ -328,7 +333,8 @@ return view.extend({
                 'click': ui.createHandlerFn(this, function (ev) {
                     ev.preventDefault();
                     if (core_version == '0')
-                        return ui.addNotification(null, E('p', _('Unknown device architecture, cannot download core.')), 'error');
+                        return ui.addNotification(null,
+                            E('p', _('Unknown device architecture, cannot download core.')), 'error');
 
                     const val = self.formvalue(section_id).trim();
                     if (!val)
@@ -340,10 +346,12 @@ return view.extend({
                         .then(function (res) {
                             if (res?.status !== 'ok')
                                 throw new Error(res.message || _('Switch failed'));
-                            ui.addTimeLimitedNotification(null, E('p', _('Switched to %s').format(val)), 4000, 'info');
+                            ui.addTimeLimitedNotification(null,
+                                E('p', _('Switched to %s').format(val)), 4000, 'info');
                         })
                         .catch(function (err) {
-                            ui.addNotification(null, E('p', _('Switch failed: %s').format(err.message || err)), 'error');
+                            ui.addNotification(null,
+                                E('p', _('Switch failed: %s').format(err.message || err)), 'error');
                         });
                 })
             }, _('Switch Core'));
@@ -398,7 +406,8 @@ return view.extend({
                         nikki.uciSetAndCommit('nikki', 'config', 'lgbm', mode);
                         return nikki.service('reload');
                     }).catch(function (err) {
-                        ui.addNotification(null, E('p', _('Update failed: %s').format(err.message || err)), 'error');
+                        ui.addNotification(null,
+                            E('p', _('Update failed: %s').format(err.message || err)), 'error');
                     });
                 })
             }, default_label);
@@ -514,7 +523,8 @@ return view.extend({
                     ev.preventDefault();
                     const val = this.formvalue(section_id).trim().replace(/\s+/g, ' ');
                     if (!val)
-                        return ui.addNotification(null, E('p', _('Please enter a cron expression first.')));
+                        return ui.addNotification(null,
+                            E('p', _('Please enter a cron expression first.')));
                     const fields = val.split(' ');
 
                     if (fields.length !== 5)

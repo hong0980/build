@@ -69,7 +69,7 @@ const callNikkiDebug = rpc.declare({
     expect: { '': {} }
 });
 
-const update_ui = rpc.declare({
+const callUpdateUI = rpc.declare({
     object: 'luci.nikki',
     method: 'update_ui',
     params: ['url', 'name'],
@@ -371,6 +371,13 @@ return baseclass.extend({
     },
 
     update_ui: function (url, name) {
-        return update_ui(url, name);
+        return callUpdateUI(url, name).then(res => {
+            if (res.status === 'ok') return res;
+            if (res.status === 'error')
+                throw new Error(res.message || _('Update UI failed'));
+            if (res.status === 'pending' && res.task_id)
+                return waitForDownload(res.task_id, res.path);
+            throw new Error(res.message || _('Update UI failed'));
+        });
     },
 });

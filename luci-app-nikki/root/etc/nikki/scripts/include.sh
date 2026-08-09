@@ -12,6 +12,10 @@ RULE_PROVIDERS_DIR="$PROVIDERS_DIR/rule"
 PROXY_PROVIDERS_DIR="$PROVIDERS_DIR/proxy"
 
 PROG="$RUN_DIR/mihomo"
+ARCH="$(uci -q get nikki.config.core_version)"
+GITHUB_TOKEN="$(uci -q get nikki.config.github_token)"
+UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+
 # log
 LOG_DIR="/var/log/nikki"
 APP_LOG_PATH="$LOG_DIR/app.log"

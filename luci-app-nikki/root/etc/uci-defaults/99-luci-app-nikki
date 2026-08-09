@@ -1,12 +1,10 @@
 #!/bin/sh
 
-chmod +x /etc/init.d/nikki \
-         /etc/nikki/scripts/debug.sh \
-         /etc/nikki/scripts/include.sh \
-         /etc/nikki/scripts/firewall_include.sh
-
+chmod +x /etc/init.d/nikki
+chmod +x /etc/nikki/scripts/*
 . /lib/functions.sh
 . /etc/nikki/scripts/include.sh
+
 mkdir -p "$SUBSCRIPTIONS_DIR" "$RULE_PROVIDERS_DIR" "$PROXY_PROVIDERS_DIR" /etc/nikki/certs
 [ -x /usr/bin/mihomo ] && ln -sf /usr/bin/mihomo "$PROG"
 
