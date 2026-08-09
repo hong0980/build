@@ -1459,6 +1459,7 @@ return view.extend({
         o.inputtitle = _('Update');
         o.modalonly = false;
         o.onclick = function (ev, section_id) {
+            const self = this;
             return nikki.updateSubscription(section_id)
                 .then(function (r) {
                     const name = uci.get('nikki', section_id, 'name') || '';
@@ -1471,14 +1472,11 @@ return view.extend({
                     return uci.load('nikki');
                 })
                 .then(function () {
-                    const row = document.getElementById('cbi-nikki-' + section_id);
-                    if (!row) return;
-                    ['name', 'total', 'used', 'avaliable', 'expire', 'update'].forEach(function (optName) {
-                        const cell = row.querySelector(`[data-name="${optName}"]`);
-                        if (cell) cell.textContent = uci.get('nikki', section_id, optName) || '';
-                    })
+                    return self.map.load().then(() => {
+                        return self.map.reset();
+                    });
                 })
-                .catch(function (err) { if (err) console.error(err); });
+                .catch((err) => ui.addTimeLimitedNotification(null, E('p', _('Subscription update failed %s.').format(err.message || err)), 8000, 'error'));
         };
 
         o = s.option(form.Value, 'url', _('Subscription Url'));

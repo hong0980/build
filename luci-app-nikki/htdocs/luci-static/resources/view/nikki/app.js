@@ -346,8 +346,20 @@ return view.extend({
                         .then(function (res) {
                             if (res?.status !== 'ok')
                                 throw new Error(res.message || _('Switch failed'));
+                            if (val == 'smart') {
+                                return self.map.save(null, true).then(() => {
+                                    return ui.changes.apply(true);
+                                });
+                            }
+
                             ui.addTimeLimitedNotification(null,
                                 E('p', _('Switched to %s').format(val)), 4000, 'info');
+
+                            uci.unload('nikki');
+                            uci.load('nikki');
+                            return self.map.load().then(() => {
+                                return self.map.reset();
+                            });
                         })
                         .catch(function (err) {
                             ui.addNotification(null,

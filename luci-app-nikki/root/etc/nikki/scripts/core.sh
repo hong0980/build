@@ -1,42 +1,12 @@
 #!/bin/sh
 
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
-
 CACHE_DIR="$RUN_DIR/core"
-
 ACTION="$1"
-
-github_api() {
-	local api_path="$1"
-	local api_url="https://api.github.com/${api_path}"
-	local api_out
-
-	if [ -n "$GITHUB_TOKEN" ]; then
-		api_out=$(curl -sL --max-time 15 \
-			-H "Authorization: Bearer $GITHUB_TOKEN" \
-			-A "$UA" "$api_url" 2>/dev/null)
-	else
-		api_out=$(curl -sL --max-time 15 -A "$UA" "$api_url" 2>/dev/null)
-	fi
-
-	if [ -z "$api_out" ]; then
-		echo '{"status":"error","message":"github api empty response"}'
-		return 1
-	fi
-
-	local msg
-	msg=$(echo "$api_out" | jsonfilter -qe '@.message' 2>/dev/null)
-	if [ -n "$msg" ]; then
-		echo '{"status":"error","message":"github api error: '$msg'"}'
-		return 1
-	fi
-
-	echo "$api_out"
-}
+auth_header="${GITHUB_TOKEN:+Authorization: Bearer $GITHUB_TOKEN}"
 
 get_ui_url() {
-	local repo="$1"
-	local asset_pattern="$2"
+	local repo="$1" asset_pattern="$2"
 	local api_out status tag asset_count i name url
 
 	api_out=$(github_api "repos/${repo}/releases/latest")
@@ -64,10 +34,31 @@ get_ui_url() {
 	return 1
 }
 
+github_api() {
+	local api_path="$1" api_out msg
+
+	api_out=$(curl -sL --max-time 15 \
+		${auth_header:+-H "$auth_header"} \
+		-A "${UA:-Mozilla/5.0}" "https://api.github.com/${api_path}" 2>/dev/null)
+
+	if [ -z "$api_out" ]; then
+		echo '{"status":"error","message":"github api empty response"}'
+		return 1
+	fi
+
+	msg=$(echo "$api_out" | jsonfilter -qe '@.message' 2>/dev/null)
+	if [ -n "$msg" ]; then
+		printf '{"status":"error","message":"github api error: %s"}\n' "$msg"
+		return 1
+	fi
+
+	echo "$api_out"
+}
+
 get_core_url() {
 	local api_out status tag filename url asset_count prefix found_url i name
 
-	if [ -z "$CORE_TYPE" ] || [ -z "$ARCH" ]; then
+	if [ -z "$CORE_TYPE" -a -z "$ARCH" ]; then
 		echo '{"status":"error","message":"missing params"}'
 		return 1
 	fi
@@ -121,7 +112,7 @@ get_core_url() {
 	i=0
 	while [ "$i" -lt "$asset_count" ]; do
 		name=$(echo "$api_out" | jsonfilter -qe "@.assets[$i].name" 2>/dev/null)
-		url=$(echo "$api_out" | jsonfilter -qe "@.assets[$i].browser_download_url" 2>/dev/null)
+		url=$(echo "$api_out"  | jsonfilter -qe "@.assets[$i].browser_download_url" 2>/dev/null)
 
 		case "$name" in
 			*"${prefix}"*".gz"*)
@@ -148,100 +139,74 @@ get_core_url() {
 }
 
 do_cache() {
-	local out_name final_out status_file log_file lock_file url_json url_status msg url
-	local archive_name archive_path tmp_file tmpdir found curl_ret
+	local CORE_TYPE="$1"
+	[ -z "$CORE_TYPE" -a -z "$ARCH" ] && { log "error" "cache_core missing params"; echo '{"status":"error","message":"missing params"}'; return 1; }
 
-	if [ -z "$CORE_TYPE" ] || [ -z "$ARCH" ]; then
-		log "error" "cache_core missing params"
-		echo '{"status":"error","message":"missing params"}'
-		return 1
-	fi
+	local out_name="${CORE_TYPE}-mihomo"
+	local final_out="${CACHE_DIR}/${out_name}"
+	local status_file="/tmp/nikki_dl_${CORE_TYPE}.status"
+	local log_file="/tmp/nikki_dl_${CORE_TYPE}.log"
+	local lock_file="/tmp/nikki_dl_${CORE_TYPE}.lock"
 
-	out_name="${CORE_TYPE}-mihomo"
-	final_out="${CACHE_DIR}/${out_name}"
-	status_file="/tmp/nikki_dl_${CORE_TYPE}.status"
-	log_file="/tmp/nikki_dl_${CORE_TYPE}.log"
-	lock_file="/tmp/nikki_dl_${CORE_TYPE}.lock"
-
+	local url_json url_status msg url
 	url_json=$(get_core_url)
-	url_status=$(echo "$url_json" | jsonfilter -qe '@.status' 2>/dev/null)
+	eval "$(echo "$url_json" | jsonfilter -e 'url_status=@.status' -e 'msg=@.message' -e 'url=@.url' 2>/dev/null)"
 
 	if [ "$url_status" != "ok" ]; then
-		msg=$(echo "$url_json" | jsonfilter -qe '@.message' 2>/dev/null)
 		log "error" "cache_core get url failed"
 		echo "error: get url failed: ${msg:-unknown}" > "$status_file"
 		return 1
 	fi
 
-	url=$(echo "$url_json" | jsonfilter -qe '@.url' 2>/dev/null)
-
 	exec 200>"$lock_file"
-	if ! flock -n 200 >/dev/null 2>&1; then
+	if ! flock -n 200; then
 		log "info" "cache_core already running"
 		echo "downloading" > "$status_file"
 		return 0
 	fi
 
-	archive_name="$([ "$CORE_TYPE" = "smart" ] && echo "mihomo.tar.gz" || echo "mihomo.gz")"
-	archive_path="${CACHE_DIR}/${CORE_TYPE}-${archive_name}"
-	tmp_file="${CACHE_DIR}/${out_name}.tmp"
+	local archive_name="$([ "$CORE_TYPE" = "smart" ] && echo "mihomo.tar.gz" || echo "mihomo.gz")"
+	local archive_path="/tmp/${CORE_TYPE}-${archive_name}"
+	local tmp_file="/tmp/${out_name}.tmp"
 
-	rm -f "$status_file" "$log_file" "$archive_path" "$tmp_file"
-	mkdir -p "$CACHE_DIR"
-
+	rm -f "$log_file" "$archive_path" "$tmp_file"
 	echo "downloading" > "$status_file"
 	log "info" "cache_core start"
 
-	if [ -n "$GITHUB_TOKEN" ]; then
-		curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 \
-			-H "Authorization: Bearer $GITHUB_TOKEN" \
-			-A "$UA" -o "$archive_path" "$url" 2>>"$log_file"
-	else
-		curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 \
-			-A "$UA" -o "$archive_path" "$url" 2>>"$log_file"
-	fi
+	curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 \
+		${auth_header:+-H "$auth_header"} \
+		-A "$UA" -o "$archive_path" "$url" 2>>"$log_file"
 
-	curl_ret=$?
-	if [ $curl_ret -ne 0 ] || [ ! -s "$archive_path" ]; then
+	if [ $? -ne 0 ] || [ ! -s "$archive_path" ]; then
 		log "error" "cache_core download failed"
 		echo "error: download failed" > "$status_file"
+		flock -u 200 2>/dev/null
 		return 1
 	fi
 
-	rm -f "$tmp_file"
-
 	if [ "$CORE_TYPE" = "smart" ]; then
-		tmpdir="/tmp/mihomo_extract_$$"
-		rm -rf "$tmpdir" && mkdir -p "$tmpdir"
-		if tar -xzf "$archive_path" -C "$tmpdir" 2>>"$log_file"; then
-			found=$(ls -1 "$tmpdir" 2>/dev/null | head -1)
-			if [ -n "$found" ] && [ -r "$tmpdir/$found" ]; then
-				cp -f "$tmpdir/$found" "$tmp_file"
-			fi
-		fi
-		rm -rf "$tmpdir"
+		tar -xzf "$archive_path" -O > "$tmp_file" 2>>"$log_file"
 	else
-		gunzip -c "$archive_path" > "$tmp_file" 2>>"$log_file"
+		gzip -dc "$archive_path" > "$tmp_file" 2>>"$log_file"
 	fi
 
-	if [ -r "$tmp_file" ]; then
-		chmod 755 "$tmp_file"
+	if [ -s "$tmp_file" ]; then
 		mv -f "$tmp_file" "$final_out"
+		chmod 755 "$final_out"
 		rm -f "$archive_path"
 		echo "done" > "$status_file"
 		log "info" "cache_core done"
+		flock -u 200 2>/dev/null
 	else
-		log "error" "cache_core tmp file missing"
+		log "error" "cache_core tmp file missing or empty"
 		echo "error: tmp file missing" > "$status_file"
+		flock -u 200 2>/dev/null
 		return 1
 	fi
 }
 
 update_ui() {
-	local url="$1"
-	local name="$2"
-	local ui_path="${3:-ui}"
-
+	local url="$1" name="$2" ui_path="${3:-ui}"
 	local target_dir="${RUN_DIR}/${ui_path}/${name}"
 	local status_file="/tmp/nikki_dl_ui_${name}.status"
 	local log_file="/tmp/nikki_dl_ui_${name}.log"
@@ -296,13 +261,10 @@ update_ui() {
 case "$ACTION" in
 	get_url)
 		CORE_TYPE="$2"
-		ARCH="$3"
-		get_core_url
+		get_core_url "$2"
 		;;
 	cache)
-		CORE_TYPE="$2"
-		ARCH="$3"
-		do_cache
+		do_cache "$2"
 		;;
 	update_ui)
 		update_ui "$2" "$3" "$4"

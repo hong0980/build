@@ -275,7 +275,7 @@ return baseclass.extend({
                     if (res.status === 'error')
                         throw new Error(res.message || _('Download failed'));
                     if (res.status === 'pending' && res.task_id)
-                        return waitForDownload(res.task_id, path).then(attempt);  // ← 复用
+                        return waitForDownload(res.task_id, path).then(attempt);
                     throw new Error(res.message || _('Download failed'));
                 });
         };

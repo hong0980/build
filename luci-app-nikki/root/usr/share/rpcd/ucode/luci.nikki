@@ -2,7 +2,7 @@
 // https://ucode.mein.io/module-fs.html
 'use strict';
 import { cursor } from 'uci';
-import { access, popen, writefile, chmod, mkdir, readfile, unlink } from 'fs';
+import { access, popen, writefile, chmod, mkdir, readfile, unlink, lsdir } from 'fs';
 import {
 	get_users, get_groups, get_cgroups, load_profile, shellQuote, run
 } from '/etc/nikki/ucode/include.uc';
@@ -76,7 +76,7 @@ function get_core_url_call(req) {
 	if (!core_type || !arch)
 		return { status: 'error', message: 'missing params' };
 
-	const out = run(`${shellQuote(CORE_SCRIPT)} get_url ${shellQuote(core_type)} ${shellQuote(arch)}`);
+	const out = run(`${shellQuote(CORE_SCRIPT)} get_url ${shellQuote(core_type)}`);
 	if (!out)
 		return { status: 'error', message: 'script returned empty' };
 
@@ -105,7 +105,7 @@ function cache_core_call(req) {
 
 	writefile(status_file, 'downloading');
 
-	const cmd = `${shellQuote(CORE_SCRIPT)} cache ${shellQuote(core_type)} ${shellQuote(arch)} > /dev/null 2>&1 &`;
+	const cmd = `${shellQuote(CORE_SCRIPT)} cache ${shellQuote(core_type)} > /dev/null 2>&1 &`;
 	system(['sh', '-c', cmd]);
 
 	return { status: 'pending', message: 'download started in background' };
@@ -194,8 +194,8 @@ const methods = {
 
 			const ui_path     = trim(uci.get('nikki', 'mixin', 'ui_path') || 'ui');
 			const target_dir  = `${RUN_DIR}/${ui_path}/${name}`;
-			const status_file = `/tmp/nikki_dl_ui_${name}.status`;
 			const task_id     = `ui_${name}`;
+			const status_file = `/tmp/nikki_dl_${task_id}.status`;
 
 			if (access(status_file)) {
 				const st = trim(readfile(status_file) || '');
@@ -311,8 +311,12 @@ fi \
 			if (access(status_file)) {
 				const st = trim(readfile(status_file) || '');
 
-				if (st == 'done')
+				if (st == 'done') {
+					for (let name in lsdir('/tmp', 'nikki*')) {
+					    unlink(`/tmp/${name}`);
+					}
 					return { status: 'ok', path: final_out, message: 'complete' };
+				}
 				else if (st == 'downloading')
 					return { status: 'pending', message: 'in progress' };
 				else if (substr(st, 0, 6) == 'error:')
