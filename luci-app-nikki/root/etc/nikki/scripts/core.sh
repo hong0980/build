@@ -1,8 +1,6 @@
 #!/bin/sh
 
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
-CACHE_DIR="$RUN_DIR/core"
-ACTION="$1"
 auth_header="${GITHUB_TOKEN:+Authorization: Bearer $GITHUB_TOKEN}"
 
 get_ui_url() {
@@ -56,7 +54,8 @@ github_api() {
 }
 
 get_core_url() {
-	local api_out status tag filename url asset_count prefix found_url i name
+	local api_out status tag filename name found_url found_idx i=0 names urls
+	local CORE_TYPE="$1"
 
 	if [ -z "$CORE_TYPE" -a -z "$ARCH" ]; then
 		echo '{"status":"error","message":"missing params"}'
@@ -83,7 +82,7 @@ get_core_url() {
 
 	status=$(echo "$api_out" | jsonfilter -qe '@.status' 2>/dev/null)
 	if [ "$status" = "error" ]; then
-		echo "$api_out"
+		echo '{"status":"error","message":"no api out '${api_out}'"}'
 		return 1
 	fi
 
@@ -100,35 +99,40 @@ get_core_url() {
 		return 0
 	fi
 
-	asset_count=$(echo "$api_out" | jsonfilter -qe '@.assets[*].name' 2>/dev/null | wc -l)
-	if [ "$asset_count" -eq 0 ]; then
+	names=$(echo "$api_out" | jsonfilter -qe '@.assets[*].name')
+	urls=$(echo "$api_out" | jsonfilter -qe '@.assets[*].browser_download_url')
+
+	if [ -z "$names" ]; then
 		echo '{"status":"error","message":"no assets found"}'
 		return 1
 	fi
 
-	prefix="mihomo-${ARCH}"
-	found_url=""
-
-	i=0
-	while [ "$i" -lt "$asset_count" ]; do
-		name=$(echo "$api_out" | jsonfilter -qe "@.assets[$i].name" 2>/dev/null)
-		url=$(echo "$api_out"  | jsonfilter -qe "@.assets[$i].browser_download_url" 2>/dev/null)
-
+	found_idx=-1
+	while IFS= read -r name; do
 		case "$name" in
-			*"${prefix}"*".gz"*)
-				if [ -z "$found_url" ]; then
-					found_url="$url"
+			*"${ARCH}"*".gz"*)
+				if [ "$found_idx" -lt 0 ]; then
+					found_idx=$i
 				fi
 				case "$name" in
 					*"compatible"*)
-						found_url="$url"
+						found_idx=$i
 						break
 						;;
 				esac
 				;;
 		esac
 		i=$((i + 1))
-	done
+	done <<EOF
+$names
+EOF
+
+	if [ "$found_idx" -lt 0 ]; then
+		echo '{"status":"error","message":"no matching asset for '${ARCH}'"}'
+		return 1
+	fi
+
+	found_url=$(echo "$urls" | sed -n "$((found_idx + 1))p")
 
 	if [ -z "$found_url" ]; then
 		echo '{"status":"error","message":"no matching asset for '${ARCH}'"}'
@@ -140,27 +144,31 @@ get_core_url() {
 
 do_cache() {
 	local CORE_TYPE="$1"
-	[ -z "$CORE_TYPE" -a -z "$ARCH" ] && { log "error" "cache_core missing params"; echo '{"status":"error","message":"missing params"}'; return 1; }
+	CACHE_DIR="$RUN_DIR/core"
+	mkdir -p "$CACHE_DIR"
+	[ -z "$CORE_TYPE" -a -z "$ARCH" ] && {
+		log "error" "cache_core missing params"
+		echo '{"status":"error","message":"missing params"}'
+		return 1
+	}
 
 	local out_name="${CORE_TYPE}-mihomo"
 	local final_out="${CACHE_DIR}/${out_name}"
-	local status_file="/tmp/nikki_dl_${CORE_TYPE}.status"
 	local log_file="/tmp/nikki_dl_${CORE_TYPE}.log"
 	local lock_file="/tmp/nikki_dl_${CORE_TYPE}.lock"
+	local status_file="/tmp/nikki_dl_${CORE_TYPE}.status"
 
 	local url_json url_status msg url
-	url_json=$(get_core_url)
+	url_json=$(get_core_url "$CORE_TYPE")
 	eval "$(echo "$url_json" | jsonfilter -e 'url_status=@.status' -e 'msg=@.message' -e 'url=@.url' 2>/dev/null)"
 
 	if [ "$url_status" != "ok" ]; then
-		log "error" "cache_core get url failed"
 		echo "error: get url failed: ${msg:-unknown}" > "$status_file"
 		return 1
 	fi
 
 	exec 200>"$lock_file"
 	if ! flock -n 200; then
-		log "info" "cache_core already running"
 		echo "downloading" > "$status_file"
 		return 0
 	fi
@@ -171,14 +179,11 @@ do_cache() {
 
 	rm -f "$log_file" "$archive_path" "$tmp_file"
 	echo "downloading" > "$status_file"
-	log "info" "cache_core start"
 
 	curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 \
-		${auth_header:+-H "$auth_header"} \
 		-A "$UA" -o "$archive_path" "$url" 2>>"$log_file"
 
-	if [ $? -ne 0 ] || [ ! -s "$archive_path" ]; then
-		log "error" "cache_core download failed"
+	if [ $? -ne 0 -o ! -s "$archive_path" ]; then
 		echo "error: download failed" > "$status_file"
 		flock -u 200 2>/dev/null
 		return 1
@@ -195,10 +200,8 @@ do_cache() {
 		chmod 755 "$final_out"
 		rm -f "$archive_path"
 		echo "done" > "$status_file"
-		log "info" "cache_core done"
 		flock -u 200 2>/dev/null
 	else
-		log "error" "cache_core tmp file missing or empty"
 		echo "error: tmp file missing" > "$status_file"
 		flock -u 200 2>/dev/null
 		return 1
@@ -207,67 +210,59 @@ do_cache() {
 
 update_ui() {
 	local url="$1" name="$2" ui_path="${3:-ui}"
-	local target_dir="${RUN_DIR}/${ui_path}/${name}"
-	local status_file="/tmp/nikki_dl_ui_${name}.status"
-	local log_file="/tmp/nikki_dl_ui_${name}.log"
-	local tmp_zip="/tmp/ui_${name}_$$.zip"
-	local curl_ret file_count dir_count subdir tmp
+	local top_dir temp_dir target_dir status_file log_file tmp_zip
+	target_dir="${RUN_DIR}/${ui_path}/${name}"
+	log_file="/tmp/nikki_dl_ui_${name}.log"
+	tmp_zip="/tmp/nikki_ui_${name}_$$.zip"
+	status_file="/tmp/nikki_dl_ui_${name}.status"
 
-	rm -f "$status_file" "$log_file" "$tmp_zip"
-	mkdir -p "$target_dir"
-
+	temp_dir=$(mktemp -d)
 	echo "downloading" > "$status_file"
-	log "info" "update_ui start"
 
 	curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 \
 		-A "$UA" -o "$tmp_zip" "$url" 2>>"$log_file"
 
-	curl_ret=$?
-	if [ $curl_ret -ne 0 ] || [ ! -s "$tmp_zip" ]; then
-		log "error" "update_ui download failed"
+	if [ $? -ne 0 -o ! -s "$tmp_zip" ]; then
 		echo "error: download failed" > "$status_file"
 		rm -f "$tmp_zip"
 		return 1
 	fi
 
-	if ! unzip -o "$tmp_zip" -d "$target_dir" 2>>"$log_file"; then
-		log "error" "update_ui unzip failed"
+	if ! unzip -o "$tmp_zip" -d "$temp_dir" 2>>"$log_file"; then
 		echo "error: unzip failed" > "$status_file"
 		rm -f "$tmp_zip"
 		return 1
 	fi
 
-	file_count=$(find "$target_dir" -maxdepth 1 -type f 2>/dev/null | wc -l)
-	dir_count=$(find "$target_dir" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l)
+	rm -rf "${target_dir:?}"
+	mkdir -p "$target_dir"
+	top_dir=$(find "$temp_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 
-	if [ "$file_count" -eq 0 ] && [ "$dir_count" -eq 1 ]; then
-		subdir=$(find "$target_dir" -maxdepth 1 -mindepth 1 -type d 2>/dev/null)
-		tmp="/tmp/ui_flatten_$$"
-		mkdir -p "$tmp"
-		mv "$subdir"/* "$tmp/" 2>/dev/null
-		mv "$subdir"/.* "$tmp/" 2>/dev/null
-		rm -rf "$subdir"
-		mv "$tmp"/* "$target_dir/" 2>/dev/null
-		mv "$tmp"/.* "$target_dir/" 2>/dev/null
-		rmdir "$tmp" 2>/dev/null
-		log "info" "update_ui flattened"
+	if [ -n "$top_dir" ]; then
+		mv "$top_dir"/*      "$target_dir"/ 2>/dev/null || true
+		mv "$top_dir"/..?*   "$target_dir"/ 2>/dev/null || true
+		mv "$top_dir"/.[!.]* "$target_dir"/ 2>/dev/null || true
+	else
+		mv "$temp_dir"/*      "$target_dir"/ 2>/dev/null || true
+		mv "$temp_dir"/..?*   "$target_dir"/ 2>/dev/null || true
+		mv "$temp_dir"/.[!.]* "$target_dir"/ 2>/dev/null || true
 	fi
 
-	rm -f "$tmp_zip"
+	rm -rf "$tmp_zip" "$temp_dir"
 	echo "done" > "$status_file"
-	log "info" "update_ui done"
 }
 
+ACTION="$1"
+shift
 case "$ACTION" in
 	get_url)
-		CORE_TYPE="$2"
-		get_core_url "$2"
+		get_core_url "$1"
 		;;
 	cache)
-		do_cache "$2"
+		do_cache "$1"
 		;;
 	update_ui)
-		update_ui "$2" "$3" "$4"
+		update_ui "$1" "$2" "$3"
 		;;
 	*)
 		echo '{"status":"error","message":"invalid action: '$ACTION'"}'

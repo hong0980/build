@@ -4,16 +4,16 @@
 import { cursor } from 'uci';
 import { access, popen, writefile, chmod, mkdir, readfile, unlink, lsdir } from 'fs';
 import {
-	get_users, get_groups, get_cgroups, load_profile, shellQuote, run
+	get_users, get_groups, get_cgroups, load_profile, shellQuote, run, wGET
 } from '/etc/nikki/ucode/include.uc';
 
-const CACHE_DIR    = '/etc/nikki/run/core';
+const uci          = cursor();
 const RUN_DIR      = '/etc/nikki/run';
-const CONFIG_PATH  = '/etc/nikki/run/config.yaml';
-const DEFAULT_UA   = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+const CACHE_DIR    = `${RUN_DIR}/core`;
+const CONFIG_PATH  = `${RUN_DIR}/config.yaml`;
 const CORE_SCRIPT  = '/etc/nikki/scripts/core.sh';
+const DEFAULT_UA   = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/125.0.0.0 Safari/537.36';
 
-const uci = cursor();
 
 function call_controller(method, path, query, body) {
 	let result = { success: false, status: 0, data: null, message: null };
@@ -313,7 +313,7 @@ fi \
 
 				if (st == 'done') {
 					for (let name in lsdir('/tmp', 'nikki*')) {
-					    unlink(`/tmp/${name}`);
+						unlink(`/tmp/${name}`);
 					}
 					return { status: 'ok', path: final_out, message: 'complete' };
 				}
@@ -335,14 +335,20 @@ fi \
 	profile: {
 		args: { defaults: {} },
 		call: function (req) {
-			const defaults    = req.args?.defaults ?? {};
-			const tmpFilepath = '/var/run/nikki/profile.json';
+			let defaults = req.args?.defaults ?? {};
+			// if (length(defaults) == 0) {
+			// 	defaults = {
+			// 		'secret':                  null,
+			// 		'external-ui-name':        null,
+			// 		'external-controller':     null,
+			// 		'external-controller-tls': null
+			// 	};
+			// }
+			if (!access(CONFIG_PATH)) return {};
 
-			if (access(CONFIG_PATH)) {
-				writefile(tmpFilepath, defaults);
-				const process = run(`yq -Mpy -o json eval-all 'select(fi == 0) *? select(fi == 1)' ${tmpFilepath} ${CONFIG_PATH}`);
-				if (process) return json(process);
-			}
+			const expr = `pick(${sprintf('%J', keys(defaults))})`;
+			const process = run(`yq -o json '${expr}' ${CONFIG_PATH}`);
+			if (process) return json(process);
 			return {};
 		}
 	},
