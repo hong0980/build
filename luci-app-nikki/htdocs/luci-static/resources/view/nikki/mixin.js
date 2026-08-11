@@ -469,7 +469,7 @@ return view.extend({
         o = s.taboption('dns', form.Flag, 'hosts', _('Overwrite Hosts'));
         o.rmempty = false;
 
-        o = s.taboption('dns', form.SectionValue, '_hosts', form.TableSection, 'hosts', _('Edit Hosts'));
+        o = s.taboption('dns', form.SectionValue, '_hosts', form.GridSection, 'hosts', _('Edit Hosts'));
         o.retain = true;
         o.depends('hosts', '1');
 
@@ -479,6 +479,7 @@ return view.extend({
 
         so = o.subsection.option(form.Flag, 'enabled', _('Enable'));
         so.rmempty = false;
+        so.editable = true;
 
         so = o.subsection.option(form.Value, 'domain_name', _('Domain Name'));
         so.rmempty = false;
@@ -488,7 +489,7 @@ return view.extend({
         o = s.taboption('dns', form.Flag, 'dns_nameserver', _('Overwrite Nameserver'));
         o.rmempty = false;
 
-        o = s.taboption('dns', form.SectionValue, '_dns_nameservers', form.TableSection, 'nameserver', _('Edit Nameservers'));
+        o = s.taboption('dns', form.SectionValue, '_dns_nameservers', form.GridSection, 'nameserver', _('Edit Nameservers'));
         o.retain = true;
         o.depends('dns_nameserver', '1');
 
@@ -498,6 +499,7 @@ return view.extend({
 
         so = o.subsection.option(form.Flag, 'enabled', _('Enable'));
         so.rmempty = false;
+        so.editable = true;
 
         so = o.subsection.option(form.RichListValue, 'type', _('Type'));
         so.value('nameserver', _('nameserver'), _('主要 DNS 配置，影响所有直连，确保使用对大陆解析精准的 DNS'));
@@ -532,7 +534,7 @@ return view.extend({
         o = s.taboption('dns', form.Flag, 'dns_proxy_server_nameserver_policy', _('Overwrite Proxy Server Nameserver Policy'));
         o.rmempty = false;
 
-        o = s.taboption('dns', form.SectionValue, '_dns_proxy_server_nameserver_policies', form.TableSection, 'proxy_server_nameserver_policy', _('Edit Proxy Server Nameserver Policies'));
+        o = s.taboption('dns', form.SectionValue, '_dns_proxy_server_nameserver_policies', form.GridSection, 'proxy_server_nameserver_policy', _('Edit Proxy Server Nameserver Policies'));
         o.retain = true;
         o.depends('dns_proxy_server_nameserver_policy', '1');
 
@@ -542,6 +544,7 @@ return view.extend({
 
         so = o.subsection.option(form.Flag, 'enabled', _('Enable'));
         so.rmempty = false;
+        so.editable = true;
 
         so = o.subsection.option(form.RichListValue, 'type', _('Type'));
         so.value('fallback-filter', _('fallback-filter'), _('配置 fallback 的触发条件，如 geoip、ipcidr、domain'));
@@ -555,7 +558,7 @@ return view.extend({
         o = s.taboption('dns', form.Flag, 'dns_nameserver_policy', _('Overwrite Nameserver Policy'));
         o.rmempty = false;
 
-        o = s.taboption('dns', form.SectionValue, '_dns_nameserver_policies', form.TableSection, 'nameserver_policy', _('Edit Nameserver Policies'));
+        o = s.taboption('dns', form.SectionValue, '_dns_nameserver_policies', form.GridSection, 'nameserver_policy', _('Edit Nameserver Policies'));
         o.retain = true;
         o.depends('dns_nameserver_policy', '1');
 
@@ -565,6 +568,7 @@ return view.extend({
 
         so = o.subsection.option(form.Flag, 'enabled', _('Enable'));
         so.rmempty = false;
+        so.editable = true;
 
         so = o.subsection.option(form.Value, 'matcher', _('Matcher'));
         so.rmempty = false;
@@ -640,7 +644,7 @@ return view.extend({
         o = s.taboption('rule', form.Flag, 'rule', _('Append Rule'));
         o.rmempty = false;
 
-        o = s.taboption('rule', form.SectionValue, '_rules', form.TableSection, 'rule', _('Edit Rules'));
+        o = s.taboption('rule', form.SectionValue, '_rules', form.GridSection, 'rule', _('Edit Rules'));
         o.retain = true;
         o.depends('rule', '1');
 
@@ -727,7 +731,7 @@ return view.extend({
         };
 
         o.subsection.renderSectionAdd = function (/* ... */) {
-            let el = form.TableSection.prototype.renderSectionAdd.apply(this, arguments);
+            let el = form.GridSection.prototype.renderSectionAdd.apply(this, arguments);
 
             el.appendChild(E('button', {
                 'class': 'btn cbi-button-add',
@@ -742,6 +746,7 @@ return view.extend({
         so = o.subsection.option(form.Flag, 'enabled', _('Enable'));
         so.default = 1;
         so.rmempty = false;
+        so.editable = true;
 
         so = o.subsection.option(form.RichListValue, 'type', _('Type'));
         so.rmempty = false;
