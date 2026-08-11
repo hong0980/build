@@ -263,7 +263,7 @@ return view.extend({
                     const openOrDownload = self.install_status[current_url]
                         ? Promise.resolve()
                         : (() => {
-                            btn.textContent = _('Please wait, downloading %s...').format(ui_entry[1]);
+                            uibtn.textContent = _('Please wait, downloading %s...').format(ui_entry[1]);
                             return nikki.update_ui(current_url, ui_entry[1])
                                 .then(result => {
                                     if (result?.status === 'ok') {
@@ -274,7 +274,7 @@ return view.extend({
                                     }
                                     throw new Error(result?.message);
                                 })
-                                .finally(() => btn.textContent = default_label);
+                                .finally(() => uibtn.textContent = default_label);
                         })();
 
                     return openOrDownload
