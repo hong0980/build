@@ -62,17 +62,16 @@ get_core_url() {
 		return 1
 	fi
 
-	if [ "$CORE_TYPE" = "smart" ]; then
-		echo '{"status":"ok","url":"https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart/clash-'${ARCH}'-compatible.tar.gz"}'
-		return 0
-	fi
-
 	case "$CORE_TYPE" in
 		meta)
 			api_out=$(github_api "repos/MetaCubeX/mihomo/releases/latest")
 			;;
 		alpha)
 			api_out=$(github_api "repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha")
+			;;
+		smart)
+			echo '{"status":"ok","url":"https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart/clash-'${ARCH}'-compatible.tar.gz"}'
+			return 0
 			;;
 		*)
 			echo '{"status":"error","message":"invalid core type"}'
@@ -100,7 +99,7 @@ get_core_url() {
 	fi
 
 	names=$(echo "$api_out" | jsonfilter -qe '@.assets[*].name')
-	urls=$(echo "$api_out" | jsonfilter -qe '@.assets[*].browser_download_url')
+	urls=$(echo "$api_out"  | jsonfilter -qe '@.assets[*].browser_download_url')
 
 	if [ -z "$names" ]; then
 		echo '{"status":"error","message":"no assets found"}'
@@ -174,8 +173,8 @@ do_cache() {
 	fi
 
 	local archive_name="$([ "$CORE_TYPE" = "smart" ] && echo "mihomo.tar.gz" || echo "mihomo.gz")"
-	local archive_path="/tmp/${CORE_TYPE}-${archive_name}"
 	local tmp_file="/tmp/${out_name}.tmp"
+	local archive_path="/tmp/${CORE_TYPE}-${archive_name}"
 
 	rm -f "$log_file" "$archive_path" "$tmp_file"
 	echo "downloading" > "$status_file"
@@ -192,7 +191,7 @@ do_cache() {
 	if [ "$CORE_TYPE" = "smart" ]; then
 		tar -xzf "$archive_path" -O > "$tmp_file" 2>>"$log_file"
 	else
-		gzip -dc "$archive_path" > "$tmp_file" 2>>"$log_file"
+		gzip -dc "$archive_path"    > "$tmp_file" 2>>"$log_file"
 	fi
 
 	if [ -s "$tmp_file" ]; then

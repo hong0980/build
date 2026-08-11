@@ -136,7 +136,7 @@ return view.extend({
         ]);
     },
     render: function ([v, running, mixinfiles, profiles, subfiles, list]) {
-        let m, s, o, coreBtn, lgbmBtn;
+        let m, s, o, coreBtn, lgbmBtn, uibtn;
         preloadAce().catch(() => {});
 
         m = new form.Map('nikki', _('Nikki'), _("Transparent Proxy with <a href='%s' target='_blank'>Mihomo</a> on OpenWrt.").format('https://wiki.metacubex.one/') +
@@ -186,6 +186,8 @@ return view.extend({
         L.Poll.add(function () {
             return L.resolveDefault(nikki.status(), false).then(function (r) {
                 setStatus(document.getElementById('core_status'), r);
+                if (uibtn)
+                    uibtn.style.display = r ? '' : 'none';
             });
         });
 
@@ -228,6 +230,8 @@ return view.extend({
         o.load = function (section_id) {
             const ui_path = uci.get('nikki', 'mixin', 'ui_path');
             this.install_status = {};
+            if (uibtn)
+                uibtn.style.display = running ? '' : 'none';
             return Promise.all(nikki.ui_array.map(([url, name]) =>
                 fs.stat(`${nikki.runDir}/${ui_path}/${name}/index.html`)
                     .then(() => {
@@ -249,8 +253,9 @@ return view.extend({
             el.classList.add('control-group');
             const default_label = _('Open Dashboard');
             const self = this;
-            const btn = E('button', {
+            uibtn = E('button', {
                 'class': 'btn cbi-button-positive',
+                'style': running ? '' : 'display:none',
                 'click': ui.createHandlerFn(this, function () {
                     const select = el.firstChild;
                     const current_url = select.value;
@@ -277,7 +282,7 @@ return view.extend({
                         .catch(e => ui.addNotification(null, E('p', _('Update failed: ') + e), 'error'));
                 })
             }, default_label);
-            el.appendChild(btn);
+            el.appendChild(uibtn);
             return el;
         };
 

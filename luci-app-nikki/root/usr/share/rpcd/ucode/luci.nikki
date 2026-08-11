@@ -4,7 +4,7 @@
 import { cursor } from 'uci';
 import { access, popen, writefile, chmod, mkdir, readfile, unlink, lsdir } from 'fs';
 import {
-	get_users, get_groups, get_cgroups, load_profile, shellQuote, run, wGET
+	get_users, get_groups, get_cgroups, load_profile, shellQuote, run
 } from '/etc/nikki/ucode/include.uc';
 
 const uci          = cursor();
