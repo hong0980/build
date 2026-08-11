@@ -178,6 +178,7 @@ proxy-groups:
 rules:
   - "GEOSITE,private,国内"                                              # Private
   - "GEOIP,private,国内,no-resolve"                                     # Private
+  - AND,((NETWORK,TCP),(DST-PORT,22),(DOMAIN-SUFFIX,github.com)),国内
   - "GEOSITE,category-pt,国内"                                          # PT
   - "GEOSITE,category-cdn-cn,国内"                                      # cdn
   - "GEOSITE,anthropic,日本-自动"                                        # claude

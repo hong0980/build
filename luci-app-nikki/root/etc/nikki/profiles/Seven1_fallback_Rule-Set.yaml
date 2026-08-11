@@ -169,6 +169,7 @@ proxy-groups:
 rules:
   - RULE-SET,private_domain,国内                                        # Private
   - RULE-SET,private_ip,国内,no-resolve                                 # Private
+  - AND,((NETWORK,TCP),(DST-PORT,22),(DOMAIN-SUFFIX,github.com)),国内
   - RULE-SET,pt_domain,国内                                             # PT
   - RULE-SET,claude_domain,日本-自动                                    # claude
   - RULE-SET,cdn_cn,国内                                                # cnc
