@@ -110,18 +110,15 @@ start_service() {
 		[ "$dns_nameserver_policy" = 1 ] && yq -Mi 'del(.dns.nameserver-policy)' "$TEMP_CONFIG"
 		[ "$dns_nameserver"        = 1 ] && yq -Mi 'del(.dns.default-nameserver) | del(.dns.fallback) | del(.dns.proxy-server-nameserver) | del(.dns.direct-nameserver) | del(.dns.nameserver)' "$TEMP_CONFIG"
 
-		local mixin_file file_url github_mod urltest_url interval tolerance \
-			  timeout lazy max_failed_times unified_delay mixin_extra_file=""
-		config_get file_url          config file_url
+		local mixin_file urltest_url interval tolerance \
+			  timeout lazy max_failed_times mixin_extra_file=""
 		config_get mixin_file        config mixin_file
-		config_get github_mod        mixin  github_mod
 		config_get urltest_url       mixin  urltest_url
 		config_get interval          mixin  interval
 		config_get tolerance         mixin  tolerance
 		config_get timeout           mixin  timeout
 		config_get lazy              mixin  lazy
 		config_get max_failed_times  mixin  max_failed_times
-		config_get unified_delay     mixin  unified_delay
 
 		[ -n "$mixin_file" ] && {
 			mixin_extra_file="/etc/nikki/mixin/$mixin_file"
@@ -133,13 +130,13 @@ start_service() {
 			.rules =   ((.rules // []) + (.nikki-rules // [])) |
 			.proxies = ((.node  // []) + (.proxies     // []) + (.nikki-proxies // [])) |
 			.proxy-groups = ((.proxy-groups // []) + (.nikki-proxy-groups // [])) |
-			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups) |
+			.proxy-providers = (.nikki-proxy-providers // .proxy-providers) |
+			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups, .nikki-proxy-providers) |
 			.proxies |= (reverse | unique_by(.name) | reverse) |
 			.rule-providers? |= with_entries(.key as $k | ((.value.path | select(. != "")) // ("./rule_provider/" + $k)) as $base | .value.path = (($base | select(test("/$")) | . + $k) // $base))
-			' "$TEMP_CONFIG" $mixin_extra_file - >/dev/null 2>&1
+		' "$TEMP_CONFIG" $mixin_extra_file - >/dev/null 2>&1
 
-		[ -z "$profile_name" ] && file_url=""
-		export file_url urltest_url interval tolerance timeout lazy max_failed_times unified_delay
+		export urltest_url interval tolerance timeout lazy max_failed_times
 		yq -Mi '
 			(strenv(urltest_url)      // "") as $u  |
 			(strenv(interval)         // "") as $i  |
@@ -147,9 +144,6 @@ start_service() {
 			(strenv(timeout)          // "") as $to |
 			(strenv(lazy)             // "") as $lz |
 			(strenv(max_failed_times) // "") as $mf |
-			(strenv(unified_delay)    // "") as $ud |
-			(strenv(file_url)         // "") as $fu |
-			($fu | split(" ") | map(select(length > 0))) as $urls |
 			(.proxy-groups // []) |= map(
 				((select($u  != "") | .url = $u) // .) |
 				((select($i  != "" and (.type == "url-test" or .type == "fallback")) | .interval = ($i | tonumber)) // .) |
@@ -157,20 +151,7 @@ start_service() {
 				((select($to != "" and (.type == "url-test" or .type == "fallback")) | .timeout = ($to | tonumber)) // .) |
 				((select($lz != "" and  .type == "url-test") | .lazy = ($lz | (. == "true"))) // .) |
 				((select($mf != "" and (.type == "url-test" or .type == "fallback")) | .["max-failed-times"] = ($mf | tonumber)) // .)
-			) |
-			((select($ud != "") | .["unified-delay"] = ($ud | (. == "true"))) // .) |
-			((select(($urls | length) > 0) | .proxy-providers = ($urls | to_entries | map({
-				"key": ("provider" + ((.key + 1) | tostring)),
-				"value": ({
-					"type": "http", "url": .value, "interval": 86400, "proxy": "DIRECT"
-				} + ((select($u != "") | {
-					"health-check": {
-						"url": $u, "enable": true, "interval": (((select($i != "") | ($i | tonumber)) // 600))
-					}
-				}) // {}))
-			}) | from_entries)) // .) |
-			with(select(.dns."respect-rules" == true and ((.dns."proxy-server-nameserver" // []) | length == 0));
-			.dns."proxy-server-nameserver" = ["https://dns.alidns.com/dns-query", "https://doh.pub/dns-query"])
+			)
 		' "$TEMP_CONFIG" >/dev/null 2>&1
 
 		if [ "$proxy_enabled" = 1 ]; then

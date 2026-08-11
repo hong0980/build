@@ -71,15 +71,10 @@ dns:
   fake-ip-filter-mode: blacklist
   fake-ip-filter:
     - '*.lan'
-    - "rule-set:fakeipfilter_domain,direct_domain,cn_domain"
+    - "rule-set:cn_domain"
 
   nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
   default-nameserver: [223.5.5.5, 119.29.29.29]
-  proxy-server-nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
-  nameserver-policy:
-    "rule-set:ww_reject": rcode://success
-    "rule-set:private_domain": [223.5.5.5, 119.29.29.29]
-    "rule-set:apple_domain,cn_domain": [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
 
 # ================= 入站 Tun =================
 tun:
@@ -125,7 +120,6 @@ rules:
   #- IP-CIDR,192.168.6.0/24,DIRECT
   #- AND,((DOMAIN-SUFFIX,netflix.com),(NETWORK,UDP)),REJECT
   - RULE-SET,ww_reject,REJECT
-  - AND,((NETWORK,TCP),(DST-PORT,22),(DOMAIN-SUFFIX,github.com)),🎯 国内
   - RULE-SET,private_domain,🎯 国内     # 局域网/内网保留域名国内
   - RULE-SET,cn_domain,🎯 国内          # 国内域名国内
   - RULE-SET,cn_ip,🎯 国内,no-resolve   # 国内 IP 段国内，不为此规则单独触发解析
@@ -144,7 +138,6 @@ rules:
   - RULE-SET,paypal_domain,自动选择
   - RULE-SET,gfw_domain,自动选择
   - RULE-SET,geolocation-!cn,自动选择
-  - RULE-SET,direct_domain,🎯 国内
   - GEOIP,CN,🎯 国内                    # 兜底：目标 IP 属地中国大陆国内
   - GEOIP,PRIVATE,🎯 国内               # 私有/内网 IP 段国内
   - MATCH,自动选择                       # 兜底规则，需放最后
@@ -170,7 +163,6 @@ geox-url:
 
 rule-providers:
   # 远程规则集，指向 meta-rules-dat 仓库的预编译 .mrs 文件
-  direct_domain:   {<<: *domain, url: "https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/rules/Seven1_Direct_Domain.mrs"}
   ai_domain:       {<<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-ai-!cn.mrs"}
   pt_classical:    {<<: *class_yaml, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/classical/category-pt.yaml"}
   ww_reject:       {<<: *domain, url: "https://testingcf.jsdelivr.net/gh/wwqgtxx/clash-rules@release/reject.mrs"}
@@ -190,5 +182,4 @@ rule-providers:
   cn_domain:     { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/cn.mrs"}
   cdn_cn:        {<<: *domain,  url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-cdn-cn.mrs"}
   cn_ip:         { <<: *ip,     url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/cn.mrs"}
-  fakeipfilter_domain: {<<: *domain, url: "https://testingcf.jsdelivr.net/gh/wwqgtxx/clash-rules@release/fakeip-filter.mrs"}
   # 均为 24 小时自动更新一次，第三方仓库（ww_proxy/ww_reject）失效会导致对应规则失效
