@@ -191,17 +191,17 @@ return view.extend({
             });
         });
 
-        o = s.option(form.Button, 'reload');
+        o = s.option(form.Button);
         o.inputstyle = 'action';
         o.inputtitle = _('Reload Service');
-        o.onclick = function () { return nikki.service('reload'); };
+        o.onclick = function () { return nikki.service('nikki', 'reload'); };
 
         o = s.option(form.Button, 'restart');
         o.inputstyle = 'negative';
         o.inputtitle = _('Restart Service');
-        o.onclick = function () { return nikki.service('restart'); };
+        o.onclick = function () { return nikki.service('nikki', 'restart'); };
 
-        // o = s.option(form.Button, '_fakeip');
+        // o = s.option(form.Button);
         // o.inputstyle = 'negative';
         // o.inputtitle = _('Clear FakeIP Cache');
         // o.onclick = function () {
@@ -212,7 +212,7 @@ return view.extend({
         //     });
         // };
 
-        // o = s.option(form.Button, '_dns');
+        // o = s.option(form.Button);
         // o.inputstyle = 'negative';
         // o.inputtitle = _('Clear DNS Cache');
         // o.onclick = function () {
@@ -223,6 +223,11 @@ return view.extend({
         //         );
         //     });
         // };
+
+        // o = s.option(form.Button);
+        // o.inputstyle = 'negative';
+        // o.inputtitle = _('restart rpcd');
+        // o.onclick = function () { return nikki.service('rpcd', 'restart'); };
 
         o = s.option(form.ListValue, 'ui_url');
         o.ucisection = 'mixin';
@@ -421,7 +426,7 @@ return view.extend({
                             lgbmBtn.style.display = 'none';
                         }, 3000);
                         nikki.uciSetAndCommit('nikki', 'config', 'lgbm', mode);
-                        return nikki.service('reload');
+                        return nikki.service('nikki', 'reload');
                     }).catch(function (err) {
                         ui.addNotification(null,
                             E('p', _('Update failed: %s').format(err.message || err)), 'error');

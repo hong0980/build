@@ -149,7 +149,7 @@ return view.extend({
         return this.handleSave(ev)
             .then(() => {
                 ui.addTimeLimitedNotification(null, E('p', mode === '0' ? _('Saved, reloading...') : _('Saved, restarting...')), 5000, 'info');
-                return nikki.service(mode === '0' ? 'reload' : 'restart');
+                return nikki.service('nikki', mode === '0' ? 'reload' : 'restart');
             })
             .catch((e) => ui.addTimeLimitedNotification(null, E('p', e.message), 8000, 'error'));
     },

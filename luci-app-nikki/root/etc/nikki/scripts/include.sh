@@ -97,3 +97,103 @@ log() {
 	msg="$(translate "$tpl" "$@")"
 	echo "[$(date "+%Y-%m-%d %H:%M:%S")] [$level] $msg" >> "$APP_LOG_PATH"
 }
+
+strip_proxy_prefix() {
+    echo "$1" | sed -E \
+        -e 's|^https?://gh-proxy\.com/https?://|https://|' \
+        -e 's|^https?://gh-proxy\.com/|https://|' \
+        -e 's|^https?://ghproxy\.com/https?://|https://|' \
+        -e 's|^https?://ghproxy\.com/|https://|' \
+        -e 's|^https?://mirror\.ghproxy\.com/https?://|https://|' \
+        -e 's|^https?://mirror\.ghproxy\.com/|https://|' \
+        -e 's|^https?://ghps\.cc/https?://|https://|' \
+        -e 's|^https?://ghps\.cc/|https://|' \
+        -e 's|^https?://ghfast\.top/https?://|https://|' \
+        -e 's|^https?://ghfast\.top/|https://|' \
+        -e 's|^https?://gh\.api\.99988866\.xyz/https?://|https://|' \
+        -e 's|^https?://gh\.api\.99988866\.xyz/|https://|' \
+        -e 's|^https?://gh\.con\.sh/https?://|https://|' \
+        -e 's|^https?://gh\.con\.sh/|https://|' \
+        -e 's|^https?://gh\.liuzhijin\.cn/https?://|https://|' \
+        -e 's|^https?://gh\.liuzhijin\.cn/|https://|' \
+        -e 's|^https?://gh\.moeyy\.cn/https?://|https://|' \
+        -e 's|^https?://gh\.moeyy\.cn/|https://|' \
+        -e 's|^https?://ghproxy\.net/https?://|https://|' \
+        -e 's|^https?://ghproxy\.net/|https://|' \
+        -e 's|^https?://github\.moeyy\.xyz/https?://|https://|' \
+        -e 's|^https?://github\.moeyy\.xyz/|https://|' \
+        -e 's|^https?://hub\.gitmirror\.com/https?://|https://|' \
+        -e 's|^https?://hub\.gitmirror\.com/|https://|' \
+        -e 's|^https?://kkgithub\.com/https?://|https://|' \
+        -e 's|^https?://kkgithub\.com/|https://|' \
+        -e 's|^https?://raw\.ghproxy\.cc/https?://|https://|' \
+        -e 's|^https?://raw\.ghproxy\.cc/|https://|'
+}
+
+parse_github_url() {
+    _url="$1"
+    _tmp=$(echo "$_url" | sed -E -n \
+        -e 's|^https://raw\.githubusercontent\.com/([^/]+)/([^/]+)/refs/heads/([^/]+)/(.+)|\1 \2 \3 \4|p' \
+        -e 's|^https://raw\.githubusercontent\.com/([^/]+)/([^/]+)/refs/tags/([^/]+)/(.+)|\1 \2 \3 \4|p' \
+        -e 's|^https://raw\.githubusercontent\.com/([^/]+)/([^/]+)/([^/]+)/(.+)|\1 \2 \3 \4|p')
+    [ -n "$_tmp" ] && { echo "$_tmp"; return; }
+
+    # github.com
+    _tmp=$(echo "$_url" | sed -E -n \
+        -e 's|^https://github\.com/([^/]+)/([^/]+)/raw/refs/heads/([^/]+)/(.+)|\1 \2 \3 \4|p' \
+        -e 's|^https://github\.com/([^/]+)/([^/]+)/raw/refs/tags/([^/]+)/(.+)|\1 \2 \3 \4|p' \
+        -e 's|^https://github\.com/([^/]+)/([^/]+)/raw/([^/]+)/(.+)|\1 \2 \3 \4|p' \
+        -e 's|^https://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)|\1 \2 \3 \4|p' \
+        -e 's|^https://github\.com/([^/]+)/([^/]+)/releases/download/([^/]+)/(.+)|\1 \2 \3 \4|p')
+    [ -n "$_tmp" ] && { echo "$_tmp"; return; }
+
+    echo ""
+}
+
+mirror_github_url() {
+    _url="$1" _target="$2"
+    [ -z "$_url" ] && { echo ""; return; }
+
+    _url=$(strip_proxy_prefix "$_url")
+
+    if [ -z "$_target" ] || [ "$_target" = "raw" ] || [ "$_target" = "github" ]; then
+        echo "$_url"
+        return
+    fi
+
+    case "$_target" in
+        jsdelivr|cdn|fastly|testingcf|gcore)
+            _parsed=$(parse_github_url "$_url")
+            [ -z "$_parsed" ] && { echo "$_url"; return; }
+
+            set -- $_parsed
+            [ $# -lt 4 ] && { echo "$_url"; return; }
+
+            _domain="cdn.jsdelivr.net"
+            [ "$_target" = "fastly" ]    && _domain="fastly.jsdelivr.net"
+            [ "$_target" = "testingcf" ] && _domain="testingcf.jsdelivr.net"
+            [ "$_target" = "gcore" ]     && _domain="gcore.jsdelivr.net"
+
+            echo "https://$_domain/gh/$1/$2@$3/$4"
+            return
+            ;;
+    esac
+
+    case "$_target" in
+        ghproxy)         echo "https://ghproxy.com/$_url" ;;
+        ghfast)          echo "https://ghfast.top/$_url" ;;
+        gitmirror)       echo "https://hub.gitmirror.com/$_url" ;;
+        moeyy)           echo "https://github.moeyy.xyz/$_url" ;;
+        kkgithub)        echo "https://kkgithub.com/$_url" ;;
+        ghps)            echo "https://ghps.cc/$_url" ;;
+        ghproxy_net)     echo "https://ghproxy.net/$_url" ;;
+        ghproxy_cc)      echo "https://raw.ghproxy.cc/$_url" ;;
+        gh_con_sh)       echo "https://gh.con.sh/$_url" ;;
+        gh_liuzhijin)    echo "https://gh.liuzhijin.cn/$_url" ;;
+        gh_moeyy_cn)     echo "https://gh.moeyy.cn/$_url" ;;
+        gh_skactor)      echo "https://gh.skactor.top/$_url" ;;
+        gh_tryxd)        echo "https://gh.tryxd.cn/$_url" ;;
+        gh_api_99988866) echo "https://gh.api.99988866.xyz/$_url" ;;
+        *)               echo "$_url" ;;
+    esac
+}

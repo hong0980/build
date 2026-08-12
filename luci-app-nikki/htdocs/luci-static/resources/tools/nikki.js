@@ -191,8 +191,8 @@ return baseclass.extend({
         return callNikkiAPI(method, path, query || '', body || '');
     },
 
-    service: function (command) {
-        return callRCInit('nikki', command);
+    service: function (name, command) {
+        return callRCInit(name || 'nikki', command);
     },
 
     uciSetAndCommit(config, section, option, value) {
@@ -292,10 +292,6 @@ return baseclass.extend({
 
     updateSubscription: function (section_id) {
         return callNikkiUpdateSubscription(section_id);
-    },
-
-    updateDashboard: function () {
-        return callNikkiAPI('POST', '/upgrade/ui');
     },
 
     openDashboard: async function (overrideUiName) {
