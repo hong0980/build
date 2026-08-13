@@ -2176,5 +2176,50 @@ msgstr "成功"
 msgid "failed"
 msgstr "失败"
 
+msgid "GitHub Mirror"
+msgstr "GitHub 镜像"
+
+msgid "Select a mirror to replace GitHub URLs in config (geox-url, rule-providers, proxy-providers, external-ui, icons)."
+msgstr "选择镜像以替换配置中的 GitHub URL（geox-url、rule-providers、proxy-providers、external-ui、图标）。"
+
+msgid "Original (No Mirror)"
+msgstr "原始地址（不加速）"
+
+msgid "jsDelivr (cdn.jsdelivr.net)"
+msgstr "jsDelivr 官方 (cdn.jsdelivr.net)"
+
+msgid "jsDelivr Fastly (fastly.jsdelivr.net)"
+msgstr "jsDelivr Fastly (fastly.jsdelivr.net)"
+
+msgid "jsDelivr China (testingcf.jsdelivr.net)"
+msgstr "jsDelivr 国内 (testingcf.jsdelivr.net)"
+
+msgid "jsDelivr Gcore (gcore.jsdelivr.net)"
+msgstr "jsDelivr Gcore (gcore.jsdelivr.net)"
+
+msgid "gh-proxy.org (Stable)"
+msgstr "gh-proxy.org ★稳定"
+
+msgid "ghproxy.net (Stable)"
+msgstr "ghproxy.net ★稳定"
+
+msgid "cdn.akaere.online (All-in-one)"
+msgstr "cdn.akaere.online ★全能"
+
+msgid "ghproxy.monkeyray.net (All-in-one)"
+msgstr "ghproxy.monkeyray.net ★全能"
+
+msgid "down.mxw.xx.kg (All-in-one)"
+msgstr "down.mxw.xx.kg ★全能"
+
+msgid "github.tbap.top (All-in-one)"
+msgstr "github.tbap.top ★全能"
+
+msgid "ghm.078465.xyz (All-in-one)"
+msgstr "ghm.078465.xyz ★全能"
+
+msgid "gh.zwy.one (High Speed)"
+msgstr "gh.zwy.one ★高速"
+
 msgid ""
 msgstr ""

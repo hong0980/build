@@ -110,7 +110,7 @@ start_service() {
 		[ "$dns_nameserver_policy" = 1 ] && yq -Mi 'del(.dns.nameserver-policy)' "$TEMP_CONFIG"
 		[ "$dns_nameserver"        = 1 ] && yq -Mi 'del(.dns.default-nameserver) | del(.dns.fallback) | del(.dns.proxy-server-nameserver) | del(.dns.direct-nameserver) | del(.dns.nameserver)' "$TEMP_CONFIG"
 
-		local mixin_file urltest_url interval tolerance \
+		local mixin_file urltest_url interval tolerance github_mirror \
 			  timeout lazy max_failed_times mixin_extra_file=""
 		config_get mixin_file        config mixin_file
 		config_get urltest_url       mixin  urltest_url
@@ -118,6 +118,7 @@ start_service() {
 		config_get tolerance         mixin  tolerance
 		config_get timeout           mixin  timeout
 		config_get lazy              mixin  lazy
+		config_get github_mirror     mixin  github_mirror
 		config_get max_failed_times  mixin  max_failed_times
 
 		[ -n "$mixin_file" ] && {
@@ -254,6 +255,12 @@ start_service() {
 			)
 		' "$TEMP_CONFIG"
 	}
+
+	[ -n "$github_mirror" ] && {
+		export github_mirror profile_path="$TEMP_CONFIG"
+		ucode -S "/etc/nikki/ucode/mirror.uc" | yq -MPoy | yq -Mi eval-all '. as $item ireduce ({}; . * $item )' "$TEMP_CONFIG" - >/dev/null 2>&1
+	}
+
 	mv -f "$TEMP_CONFIG" "$RUN_PROFILE_PATH"
 
 	if [ "$test_profile" = 1 ]; then

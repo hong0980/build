@@ -141,7 +141,7 @@ const coreLogPath       = `${logDir}/core.log`;
 const debugLogPath      = `${logDir}/debug.log`;
 const nftDir            = `${homeDir}/nftables`;
 const ui_array          = [
-    ["https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip", "Zashboard"],
+    ["https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages-no-fonts.zip", "Zashboard"],
     ["https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip", "MetaCubeXD"],
     ["https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip", "YACD"],
     ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]

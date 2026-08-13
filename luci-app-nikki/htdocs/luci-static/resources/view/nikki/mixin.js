@@ -142,6 +142,38 @@ return view.extend({
         o.value('rule', _('rule'), _('Rule Mode'));
         o.value('direct', _('direct'), _('Direct Mode'));
 
+        o = s.taboption('general', form.Value, 'github_mirror', _('GitHub Mirror'),
+            _('Select a mirror to replace GitHub URLs in config (geox-url, rule-providers, proxy-providers, external-ui, icons).'));
+        o.placeholder = _('Unmodified');
+
+        o.value('jsdelivr', _('jsDelivr (cdn.jsdelivr.net)'));
+        o.value('fastly', _('jsDelivr Fastly (fastly.jsdelivr.net)'));
+        o.value('testingcf', _('jsDelivr China (testingcf.jsdelivr.net)'));
+        o.value('gcore', _('jsDelivr Gcore (gcore.jsdelivr.net)'));
+
+        o.value('gh_proxy_org', _('gh-proxy.org (Stable)'));
+        o.value('ghproxy_net', _('ghproxy.net (Stable)'));
+        o.value('cdn_akaere', _('cdn.akaere.online (All-in-one)'));
+        o.value('ghproxy_monkeyray', _('ghproxy.monkeyray.net (All-in-one)'));
+        o.value('down_mxw', _('down.mxw.xx.kg (All-in-one)'));
+        o.value('github_tbap', _('github.tbap.top (All-in-one)'));
+        o.value('ghm_078465', _('ghm.078465.xyz (All-in-one)'));
+        o.value('gh_zwy', _('gh.zwy.one (High Speed)'));
+        o.value('gh_xxooo', _('gh.xxooo.cf'));
+        o.value('git_yylx', _('git.yylx.win'));
+        o.value('gh_monlor', _('gh.monlor.com'));
+        o.value('gh_jasonzeng', _('gh.jasonzeng.dev'));
+        o.value('ghfile_geekertao', _('ghfile.geekertao.top'));
+        o.value('ghproxy_cxkpro', _('ghproxy.cxkpro.top'));
+        o.value('cdn_crashmc', _('cdn.crashmc.com'));
+        o.value('cors_isteed', _('cors.isteed.cc'));
+        o.value('fastgit', _('fastgit.cc'));
+        o.value('gh_con_sh', _('gh.con.sh'));
+        o.value('gh_tryxd', _('gh.tryxd.cn'));
+
+        o.default = 'testingcf';
+        o.rmempty = false;
+
         o = s.taboption('general', form.ListValue, 'match_process', _('Match Process'), _('find-process-mode'));
         o.optional = true;
         o.placeholder = _('Unmodified');
