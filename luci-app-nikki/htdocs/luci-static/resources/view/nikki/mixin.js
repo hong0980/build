@@ -144,6 +144,7 @@ return view.extend({
 
         o = s.taboption('general', form.Value, 'github_mirror', _('GitHub Mirror'),
             _('Select a mirror to replace GitHub URLs in config (geox-url, rule-providers, proxy-providers, external-ui, icons).'));
+        o.optional = true;
         o.placeholder = _('Unmodified');
 
         o.value('jsdelivr', _('jsDelivr (cdn.jsdelivr.net)'));
@@ -170,9 +171,6 @@ return view.extend({
         o.value('fastgit', _('fastgit.cc'));
         o.value('gh_con_sh', _('gh.con.sh'));
         o.value('gh_tryxd', _('gh.tryxd.cn'));
-
-        o.default = 'testingcf';
-        o.rmempty = false;
 
         o = s.taboption('general', form.ListValue, 'match_process', _('Match Process'), _('find-process-mode'));
         o.optional = true;

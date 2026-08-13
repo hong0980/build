@@ -3,6 +3,17 @@
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
 auth_header="${GITHUB_TOKEN:+Authorization: Bearer $GITHUB_TOKEN}"
 
+mirror_url() {
+	local url="$1"
+	local target="$(uci -q get nikki.mixin.github_mirror)"
+	[ -z "$target" ] && target='raw'
+
+	ucode -e "
+		import { mirrorGithubUrl } from '/etc/nikki/ucode/include.uc';
+		print(mirrorGithubUrl('${url//\'/\\\'}', '${target//\'/\\\'}'));
+	"
+}
+
 get_ui_url() {
 	local repo="$1" asset_pattern="$2"
 	local api_out status tag asset_count i name url
@@ -17,7 +28,7 @@ get_ui_url() {
 	i=0
 	while [ "$i" -lt "$asset_count" ]; do
 		name=$(echo "$api_out" | jsonfilter -qe "@.assets[$i].name" 2>/dev/null)
-		url=$(echo "$api_out" | jsonfilter -qe "@.assets[$i].browser_download_url" 2>/dev/null)
+		url=$(echo "$api_out"  | jsonfilter -qe "@.assets[$i].browser_download_url" 2>/dev/null)
 
 		case "$name" in
 			*"$asset_pattern"*)
@@ -70,7 +81,8 @@ get_core_url() {
 			api_out=$(github_api "repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha")
 			;;
 		smart)
-			echo '{"status":"ok","url":"https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart/clash-'${ARCH}'-compatible.tar.gz"}'
+			local raw_url="https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart/clash-${ARCH}-compatible.tar.gz"
+			echo '{"status":"ok","url":"'$(mirror_url "$raw_url")'"}'
 			return 0
 			;;
 		*)
@@ -178,6 +190,7 @@ do_cache() {
 
 	rm -f "$log_file" "$archive_path" "$tmp_file"
 	echo "downloading" > "$status_file"
+	url=$(mirror_url "$url")
 
 	curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 \
 		-A "$UA" -o "$archive_path" "$url" 2>>"$log_file"
@@ -217,6 +230,7 @@ update_ui() {
 
 	temp_dir=$(mktemp -d)
 	echo "downloading" > "$status_file"
+	url=$(mirror_url "$url")
 
 	curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 \
 		-A "$UA" -o "$tmp_zip" "$url" 2>>"$log_file"

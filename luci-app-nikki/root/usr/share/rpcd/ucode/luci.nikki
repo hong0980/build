@@ -4,7 +4,7 @@
 import { cursor } from 'uci';
 import { access, popen, writefile, chmod, mkdir, readfile, unlink, lsdir } from 'fs';
 import {
-	get_users, get_groups, get_cgroups, load_profile, shellQuote, run
+	get_users, get_groups, get_cgroups, load_profile, shellQuote, run, mirrorGithubUrl
 } from '/etc/nikki/ucode/include.uc';
 
 const uci          = cursor();
@@ -13,7 +13,6 @@ const CACHE_DIR    = `${RUN_DIR}/core`;
 const CONFIG_PATH  = `${RUN_DIR}/config.yaml`;
 const CORE_SCRIPT  = '/etc/nikki/scripts/core.sh';
 const DEFAULT_UA   = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/125.0.0.0 Safari/537.36';
-
 
 function call_controller(method, path, query, body) {
 	let result = { success: false, status: 0, data: null, message: null };

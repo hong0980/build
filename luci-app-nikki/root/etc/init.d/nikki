@@ -258,7 +258,7 @@ start_service() {
 
 	[ -n "$github_mirror" ] && {
 		export github_mirror profile_path="$TEMP_CONFIG"
-		ucode -S "/etc/nikki/ucode/mirror.uc" | yq -MPoy | yq -Mi eval-all '. as $item ireduce ({}; . * $item )' "$TEMP_CONFIG" - >/dev/null 2>&1
+		ucode -S "/etc/nikki/ucode/mirror.uc"
 	}
 
 	mv -f "$TEMP_CONFIG" "$RUN_PROFILE_PATH"

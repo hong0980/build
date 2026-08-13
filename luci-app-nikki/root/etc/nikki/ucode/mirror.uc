@@ -1,190 +1,68 @@
-#!/usr/bin/ucode
-'use strict';
-import { cursor } from 'uci';
-import { shellQuote, run, trim_all } from '/etc/nikki/ucode/include.uc';
-const uci    = cursor();
-
-const PROXY_PREFIXES = [
-    /^https?:\/\/gh-proxy\.com\/https?:\/\//,
-    /^https?:\/\/gh-proxy\.com\//,
-    /^https?:\/\/gh-proxy\.org\/https?:\/\//,
-    /^https?:\/\/gh-proxy\.org\//,
-    /^https?:\/\/ghproxy\.net\/https?:\/\//,
-    /^https?:\/\/ghproxy\.net\//,
-
-    /^https?:\/\/gh\.zwy\.one\/https?:\/\//,
-    /^https?:\/\/gh\.zwy\.one\//,
-    /^https?:\/\/gh\.xxooo\.cf\/https?:\/\//,
-    /^https?:\/\/gh\.xxooo\.cf\//,
-    /^https?:\/\/git\.yylx\.win\/https?:\/\//,
-    /^https?:\/\/git\.yylx\.win\//,
-    /^https?:\/\/gh\.monlor\.com\/https?:\/\//,
-    /^https?:\/\/gh\.monlor\.com\//,
-    /^https?:\/\/cdn\.akaere\.online\/https?:\/\//,
-    /^https?:\/\/cdn\.akaere\.online\//,
-    /^https?:\/\/gh\.jasonzeng\.dev\/https?:\/\//,
-    /^https?:\/\/gh\.jasonzeng\.dev\//,
-    /^https?:\/\/ghproxy\.monkeyray\.net\/https?:\/\//,
-    /^https?:\/\/ghproxy\.monkeyray\.net\//,
-    /^https?:\/\/down\.mxw\.xx\.kg\/https?:\/\//,
-    /^https?:\/\/down\.mxw\.xx\.kg\//,
-    /^https?:\/\/github\.tbap\.top\/https?:\/\//,
-    /^https?:\/\/github\.tbap\.top\//,
-    /^https?:\/\/ghm\.078465\.xyz\/https?:\/\//,
-    /^https?:\/\/ghm\.078465\.xyz\//,
-    /^https?:\/\/ghfile\.geekertao\.top\/https?:\/\//,
-    /^https?:\/\/ghfile\.geekertao\.top\//,
-    /^https?:\/\/ghproxy\.cxkpro\.top\/https?:\/\//,
-    /^https?:\/\/ghproxy\.cxkpro\.top\//,
-    /^https?:\/\/cdn\.crashmc\.com\/https?:\/\//,
-    /^https?:\/\/cdn\.crashmc\.com\//,
-    /^https?:\/\/cors\.isteed\.cc\/https?:\/\//,
-    /^https?:\/\/cors\.isteed\.cc\//,
-    /^https?:\/\/fastgit\.cc\/https?:\/\//,
-    /^https?:\/\/fastgit\.cc\//,
-    /^https?:\/\/gh\.con\.sh\/https?:\/\//,
-    /^https?:\/\/gh\.con\.sh\//,
-    /^https?:\/\/gh\.tryxd\.cn\/https?:\/\//,
-    /^https?:\/\/gh\.tryxd\.cn\//,
-];
-
-function stripProxyPrefix(url) {
-    for (let i = 0; i < length(PROXY_PREFIXES); i++) {
-        let newUrl = replace(url, PROXY_PREFIXES[i], 'https://');
-        if (newUrl != url) {
-            url = newUrl;
-        }
-    }
-    return url;
-}
-
-function restoreFromJsdelivr(url) {
-    let m = match(url, /^https:\/\/(cdn|fastly|testingcf|gcore)\.jsdelivr\.net\/gh\/([^\/]+)\/([^\/]+)@([^\/]+)\/(.+)$/);
-    if (m) {
-        return 'https://raw.githubusercontent.com/' + m[2] + '/' + m[3] + '/' + m[4] + '/' + m[5];
-    }
-    return url;
-}
-
-const GITHUB_PATTERNS = [
-    /^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/refs\/heads\/([^\/]+)\/(.+)$/,
-    /^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/refs\/tags\/([^\/]+)\/(.+)$/,
-    /^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)$/,
-    /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/refs\/heads\/([^\/]+)\/(.+)$/,
-    /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/refs\/tags\/([^\/]+)\/(.+)$/,
-    /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/([^\/]+)\/(.+)$/,
-    /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)$/,
-    /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/releases\/download\/([^\/]+)\/(.+)$/,
-];
-
-function toJsdelivr(m, domain) {
-    domain = domain || 'cdn.jsdelivr.net';
-    return 'https://' + domain + '/gh/' + m[1] + '/' + m[2] + '@' + m[3] + '/' + m[4];
-}
-
-function convertToJsdelivr(url, domain) {
-    for (let i = 0; i < length(GITHUB_PATTERNS); i++) {
-        let m = match(url, GITHUB_PATTERNS[i]);
-        if (m) return toJsdelivr(m, domain);
-    }
-    return url;
-}
-
-function mirrorGithubUrl(url, target) {
-    if (!url) return url;
-
-    url = stripProxyPrefix(url);
-    url = restoreFromJsdelivr(url);
-
-    if (!target || target === 'raw' || target === 'github') {
-        return url;
-    }
-
-    if (target === 'jsdelivr' || target === 'cdn') {
-        return convertToJsdelivr(url);
-    }
-    if (target === 'fastly') {
-        return convertToJsdelivr(url, 'fastly.jsdelivr.net');
-    }
-    if (target === 'testingcf') {
-        return convertToJsdelivr(url, 'testingcf.jsdelivr.net');
-    }
-    if (target === 'gcore') {
-        return convertToJsdelivr(url, 'gcore.jsdelivr.net');
-    }
-
-    if (target === 'gh_proxy_org')      return 'https://gh-proxy.org/' + url;
-    if (target === 'ghproxy_net')       return 'https://ghproxy.net/' + url;
-    if (target === 'gh_zwy')            return 'https://gh.zwy.one/' + url;
-    if (target === 'gh_xxooo')          return 'https://gh.xxooo.cf/' + url;
-    if (target === 'git_yylx')          return 'https://git.yylx.win/' + url;
-    if (target === 'gh_monlor')         return 'https://gh.monlor.com/' + url;
-    if (target === 'cdn_akaere')        return 'https://cdn.akaere.online/' + url;
-    if (target === 'gh_jasonzeng')      return 'https://gh.jasonzeng.dev/' + url;
-    if (target === 'ghproxy_monkeyray') return 'https://ghproxy.monkeyray.net/' + url;
-    if (target === 'down_mxw')          return 'https://down.mxw.xx.kg/' + url;
-    if (target === 'github_tbap')       return 'https://github.tbap.top/' + url;
-    if (target === 'ghm_078465')        return 'https://ghm.078465.xyz/' + url;
-    if (target === 'ghfile_geekertao')  return 'https://ghfile.geekertao.top/' + url;
-    if (target === 'ghproxy_cxkpro')    return 'https://ghproxy.cxkpro.top/' + url;
-    if (target === 'cdn_crashmc')       return 'https://cdn.crashmc.com/' + url;
-    if (target === 'cors_isteed')       return 'https://cors.isteed.cc/' + url;
-    if (target === 'fastgit')           return 'https://fastgit.cc/' + url;
-    if (target === 'gh_con_sh')         return 'https://gh.con.sh/' + url;
-    if (target === 'gh_tryxd')          return 'https://gh.tryxd.cn/' + url;
-
-    return url;
-}
+import { access, popen, writefile, readfile, rename } from 'fs';
+import { shellQuote, run, mirrorGithubUrl } from '/etc/nikki/ucode/include.uc';
 
 let target = getenv('github_mirror');
 let file   = getenv('profile_path');
 
 if (!file || length(file) == 0) {
-    print('Error: CONFIG_FILE not set\n');
-    exit(1);
+	print('Error: profile_path not set\n');
+	exit(1);
 }
 
 let json_str = run(`yq -Mo json '${file}'`);
 if (!json_str || length(json_str) == 0) {
-    print('Error: failed to read ', file, '\n');
-    exit(1);
+	print('Error: failed to read ', file, '\n');
+	exit(1);
 }
 
 let config = json(json_str);
 if (!config) {
-    print('Error: failed to parse JSON\n');
-    exit(1);
+	print('Error: failed to parse JSON\n');
+	exit(1);
 }
 
+let exprs = [];
 if (config['geox-url']) {
-    for (let k in keys(config['geox-url'])) {
-        let v = config['geox-url'][k];
-        if (v && type(v) == 'string') {
-            config['geox-url'][k] = mirrorGithubUrl(v, target);
-        }
-    }
+	for (let k in keys(config['geox-url'])) {
+		let v = config['geox-url'][k];
+		if (v && type(v) == 'string') {
+			let newUrl = mirrorGithubUrl(v, target);
+			push(exprs, `.geox-url["${k}"] = "${shellQuote(newUrl)}"`);
+		}
+	}
 }
 
 if (config['external-ui-url'] && type(config['external-ui-url']) == 'string') {
-    config['external-ui-url'] = mirrorGithubUrl(config['external-ui-url'], target);
+	let newUrl = mirrorGithubUrl(config['external-ui-url'], target);
+	push(exprs, `.external-ui-url = "${shellQuote(newUrl)}"`);
 }
 
 if (config['proxy-groups'] && type(config['proxy-groups']) == 'array') {
-    for (let i = 0; i < length(config['proxy-groups']); i++) {
-        let g = config['proxy-groups'][i];
-        if (g && g.icon && type(g.icon) == 'string') {
-            g.icon = mirrorGithubUrl(g.icon, target);
-        }
-    }
+	for (let i = 0; i < length(config['proxy-groups']); i++) {
+		let g = config['proxy-groups'][i];
+		if (g && g.icon && type(g.icon) == 'string') {
+			let newUrl = mirrorGithubUrl(g.icon, target);
+			push(exprs, `.proxy-groups[${i}].icon = "${shellQuote(newUrl)}"`);
+		}
+	}
 }
 
 if (config['rule-providers']) {
-    for (let k in keys(config['rule-providers'])) {
-        let p = config['rule-providers'][k];
-        if (p && p.url && type(p.url) == 'string') {
-            p.url = mirrorGithubUrl(p.url, target);
-        }
-    }
+	for (let k in keys(config['rule-providers'])) {
+		let p = config['rule-providers'][k];
+		if (p && p.url && type(p.url) == 'string') {
+			let newUrl = mirrorGithubUrl(p.url, target);
+			push(exprs, `.rule-providers["${k}"].url = "${shellQuote(newUrl)}"`);
+		}
+	}
 }
 
-print(sprintf('%J', config));
+if (length(exprs) > 0) {
+	let yqExpr = join(' | ', exprs);
+	let cmd = `yq -i '${yqExpr}' '${file}'`;
+	let rc = run(cmd);
+	if (rc == null) {
+		print('Error: yq command failed\n');
+		exit(1);
+	}
+}
