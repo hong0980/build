@@ -1,5 +1,5 @@
 # 名称： Seven1_fallback_Geo
-# 版本： V2026.8.7
+# 版本： V2026.8.12
 # 频道： https://t.me/Seven1gogogo
 # 地址： https://github.com/Seven1echo/Yaml
 # 说明： ①使用前需补充完整 “订阅链接” 与 “机场名”，可将 “nameserver” 修改为运营商提供的 DNS 地址; ②已隐藏“区域-故转”、“区域-自动”这两个策略组，使用时按需手动选取对应地区策略组即可。
@@ -10,10 +10,10 @@
 # ══ 订阅锚点 ══
 Anchor_PR: &Anchor_PR {type: http, interval: 86400, proxy: DIRECT, health-check: {enable: true, url: 'https://www.gstatic.com/generate_204', interval: 300}, filter: "^(?!.*(到期|过期|剩余|网址|官网|邮箱|订阅|套餐|流量|说明|重置)).*$"}
 # ══ 出站锚点 ══
-Anchor_PG: &Anchor_PG {type: select, proxies: [香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 韩国-故转, 美国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 韩国-自动, 美国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动, 国内]}
-Anchor_OP: &Anchor_OP {type: select, proxies: [一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 韩国-故转, 美国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 韩国-自动, 美国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动, 国内]}
 Anchor_AI: &Anchor_AI {type: select, proxies: [日本-自动, 新加坡-自动, 台湾-自动, 韩国-自动, 美国-自动]}
-Anchor_LD: &Anchor_LD {type: select, proxies: [国内, 一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 韩国-故转, 美国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 韩国-自动, 美国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动]}
+Anchor_PG: &Anchor_PG {type: select, proxies: [香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 韩国-故转, 美国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 韩国-自动, 美国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动, 国内直连]}
+Anchor_OP: &Anchor_OP {type: select, proxies: [一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 韩国-故转, 美国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 韩国-自动, 美国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动, 国内直连]}
+Anchor_LD: &Anchor_LD {type: select, proxies: [国内直连, 一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 韩国-故转, 美国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 韩国-自动, 美国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动]}
 Anchor_DR: &Anchor_DR {type: select, proxies: [DIRECT], hidden: true}
 # ══ 策略锚点 ══
 Anchor_HS: &Anchor_HS {type: select, empty-fallback: REJECT, include-all: true}
@@ -136,6 +136,7 @@ proxy-groups:
   - {name: OneDrive,     <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/OneDrive.png}
   - {name: Microsoft,    <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Microsoft.png}
   - {name: Apple,        <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Apple.png}
+  - {name: Steam,        <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Steam.png}
   - {name: TikTok,       <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/TikTok.png}
   - {name: Twitter(X),   <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Twitter.png}
   - {name: Telegram,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Telegram.png}
@@ -145,7 +146,7 @@ proxy-groups:
   - {name: PayPal,       <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/PayPal.png}
   - {name: Speedtest,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Speedtest.png}
   - {name: 漏网之鱼,      <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/MATCH.png}
-  - {name: 国内,          <<: *Anchor_DR, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/China.png}
+  - {name: 国内直连,      <<: *Anchor_DR, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/China.png}
 # ══ 故转组 ══
   - {name: 香港-故转,     <<: *Anchor_FB, proxies: [香港-手动, 香港-自动], icon: https://github.com/Seven1echo/Yaml/raw/main/icons/HK.png}
   - {name: 台湾-故转,     <<: *Anchor_FB, proxies: [台湾-手动, 台湾-自动], icon: https://github.com/Seven1echo/Yaml/raw/main/icons/TW.png}
@@ -176,19 +177,19 @@ proxy-groups:
 
 # ███████████████████████████ 规则匹配 ███████████████████████████
 rules:
-  - "GEOSITE,private,国内"                                              # Private
-  - "GEOIP,private,国内,no-resolve"                                     # Private
-  - AND,((NETWORK,TCP),(DST-PORT,22),(DOMAIN-SUFFIX,github.com)),国内
-  - "GEOSITE,category-pt,国内"                                          # PT
-  - "GEOSITE,category-cdn-cn,国内"                                      # cdn
+  - "GEOSITE,private,国内直连"                                           # Private
+  - "GEOIP,private,国内直连,no-resolve"                                  # Private
+  - "GEOSITE,category-pt,国内直连"                                       # PT
+  - "GEOSITE,category-cdn-cn,国内直连"                                   # cdn
   - "GEOSITE,anthropic,日本-自动"                                        # claude
-  - "GEOSITE,category-ai-!cn,AI"                                        # AI
+  - "GEOSITE,category-ai-!cn,AI"                                        # AI(国际)
   - "GEOSITE,youtube,YouTube"                                           # YouTube
   - "GEOSITE,google,Google"                                             # Google
   - "GEOSITE,github,GitHub"                                             # GitHub
   - "GEOSITE,onedrive,OneDrive"                                         # OneDrive
   - "GEOSITE,microsoft,Microsoft"                                       # 微软服务
   - "GEOSITE,apple,Apple"                                               # 苹果服务
+  - "GEOSITE,steam,Steam"                                               # Steam
   - "GEOSITE,tiktok,TikTok"                                             # TikTok
   - "GEOSITE,twitter,Twitter(X)"                                        # Twitter(X)
   - "GEOSITE,telegram,Telegram"                                         # Telegram
@@ -202,14 +203,14 @@ rules:
   - "GEOIP,twitter,Twitter(X),no-resolve"                               # Twitter
   - "GEOIP,netflix,Netflix,no-resolve"                                  # Netflix
   - "GEOSITE,geolocation-!cn,一键代理"                                   # 排除国内
-  - "RULE-SET,add_direct_domain,国内"                                 # 直连域名
-  - "GEOSITE,cn,国内"                                                 # 中国域名
-  - "GEOIP,cn,国内,no-resolve"                                        # 中国IP
+  - "RULE-SET,add_direct_domain,国内直连"                                # 直连域名
+  - "GEOSITE,cn,国内直连"                                                # 中国域名
+  - "GEOIP,cn,国内直连,no-resolve"                                       # 中国IP
   - "MATCH,漏网之鱼"                                                     # 兜底规则
 # ══ 规则补充 ══
 rule-providers:
   add_direct_domain:    { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/Seven1echo/Yaml/refs/heads/main/rules/Seven1_Direct_Domain.mrs"}
-  cn_ip:                { <<: *Anchor_IP, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/cn.mrs"}
+  cn_ip:                { <<: *Anchor_IP, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"}
 
 
 

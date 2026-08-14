@@ -1,5 +1,5 @@
 # 名称： Seven1_fallback_Rule-Set _Clashmi_Overwrite
-# 版本： V2026.8.7
+# 版本： V2026.8.12
 # 频道： https://t.me/Seven1gogogo
 # 地址： https://github.com/Seven1echo/Yaml
 # 说明： ①本文件适用于Clashmi覆写； ②已隐藏“区域-故转”、“区域-自动”这两个策略组，使用时手动选取对应地区策略组即可。
@@ -10,6 +10,7 @@
 # ══ 订阅锚点 ══
 Anchor_PR: &Anchor_PR {type: http, interval: 86400, proxy: DIRECT, health-check: {enable: true, url: 'https://www.gstatic.com/generate_204', interval: 300}, filter: "^(?!.*(到期|过期|剩余|网址|官网|邮箱|订阅|套餐|流量|说明|重置)).*$"}
 # ══ 出站锚点 ══
+Anchor_AI: &Anchor_AI {type: select, proxies: [日本-自动, 新加坡-自动, 台湾-自动, 韩国-自动, 美国-自动]}
 Anchor_PG: &Anchor_PG {type: select, proxies: [香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 韩国-故转, 美国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 韩国-自动, 美国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动, 国内直连]}
 Anchor_OP: &Anchor_OP {type: select, proxies: [一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 韩国-故转, 美国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 韩国-自动, 美国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动, 国内直连]}
 Anchor_LD: &Anchor_LD {type: select, proxies: [国内直连, 一键代理, 香港-故转, 台湾-故转, 日本-故转, 新加坡-故转, 韩国-故转, 美国-故转, 欧洲-故转, 香港-自动, 台湾-自动, 日本-自动, 新加坡-自动, 韩国-自动, 美国-自动, 欧洲-自动, 香港-手动, 台湾-手动, 日本-手动, 新加坡-手动, 韩国-手动, 美国-手动, 欧洲-手动, 其他-手动]}
@@ -54,7 +55,7 @@ external-ui: ui                                                         # 面板
 secret: ""                                                              # 面板密码
 # ══ TUN配置 ══
 tun:
-  enable: true                                                          # 网卡模式  是否启用 TUN 虚拟网卡模式  
+  enable: true                                                          # 网卡模式  是否启用 TUN 虚拟网卡模式
   stack: mixed                                                          # 协议类型  网络栈：system（系统栈）/ gvisor（内置用户态栈）/ mixed（混合）
   dns-hijack: [udp://any:53, tcp://any:53]                              # 劫持请求  劫持所有 UDP/TCP 53 端口的 DNS 请求
   auto-detect-interface: true                                           # 自动出口  自动识别默认出口网络接口 （仅内核模式有效）
@@ -62,7 +63,7 @@ tun:
   auto-redirect: true                                                   # 自动定向  自动将流量重定向至 TUN  （仅内核模式有效）
   strict-route: false                                                   # 路由模式  严格路由模式
   endpoint-independent-nat: true                                        # 端点无关  NAT（提高 NAT 类型兼容性，适用于 P2P 和游戏）
-  route-exclude-address-set: [cn_ip]                                    # 绕过大陆  匹配大陆IP-CIDR（流量不进入代理） 
+  route-exclude-address-set: [cn_ip]                                    # 绕过大陆  匹配大陆IP-CIDR（流量不进入代理）
 # ══ 嗅探功能 ══
 sniffer:
   enable: true                                                          # 启用嗅探  提升分流准确性
@@ -111,19 +112,20 @@ dns:
 # ══ 服务组 ══
 proxy-groups:
   - {name: 一键代理,      <<: *Anchor_PG, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Rocket.png}
-  - {name: AI(国外),     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Ai.png}
+  - {name: AI,           <<: *Anchor_AI, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Ai.png}
   - {name: YouTube,      <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/YouTube.png}
   - {name: Google,       <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Google.png}
   - {name: GitHub,       <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/GitHub.png}
   - {name: OneDrive,     <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/OneDrive.png}
   - {name: Microsoft,    <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Microsoft.png}
   - {name: Apple,        <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Apple.png}
+  - {name: Steam,        <<: *Anchor_LD, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Steam.png}
   - {name: TikTok,       <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/TikTok.png}
   - {name: Twitter(X),   <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Twitter.png}
   - {name: Telegram,     <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Telegram.png}
   - {name: Netflix,      <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Netflix.png}
   - {name: Disney,       <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Disney.png}
-  - {name: Spotify,      <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Spotify.png} 
+  - {name: Spotify,      <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Spotify.png}
   - {name: PayPal,       <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/PayPal.png}
   - {name: Speedtest,    <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/Speedtest.png}
   - {name: 漏网之鱼,      <<: *Anchor_OP, icon: https://github.com/Seven1echo/Yaml/raw/main/icons/MATCH.png}
@@ -160,13 +162,17 @@ proxy-groups:
 rules:
   - RULE-SET,private_domain,国内直连                                    # Private
   - RULE-SET,private_ip,国内直连,no-resolve                             # Private
-  - RULE-SET,ai-!cn_domain,AI(国外)                                     # AI(国外)
+  - RULE-SET,pt_domain,国内直连                                         # PT
+  - RULE-SET,claude_domain,日本-自动                                    # claude
+  - RULE-SET,cdn_cn,国内直连                                            # cnc
+  - RULE-SET,ai-!cn_domain,AI                                           # AI(国际)
   - RULE-SET,youtube_domain,YouTube                                     # YouTube
   - RULE-SET,google_domain,Google                                       # Google
   - RULE-SET,github_domain,GitHub                                       # GitHub
   - RULE-SET,onedrive_domain,OneDrive                                   # OneDrive
   - RULE-SET,microsoft_domain,Microsoft                                 # 微软服务
   - RULE-SET,apple_domain,Apple                                         # 苹果服务
+  - RULE-SET,steam_domain,Steam                                         # Steam
   - RULE-SET,tiktok_domain,TikTok                                       # TikTok
   - RULE-SET,twitter_domain,Twitter(X)                                  # Twitter(X)
   - RULE-SET,telegram_domain,Telegram                                   # Telegram
@@ -188,8 +194,11 @@ rules:
 
 
 # ███████████████████████████ 规则来源 ███████████████████████████
-rule-providers: 
+rule-providers:
 # ══ 域名规则 ══
+  claude_domain:         {<<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/anthropic.mrs"}
+  pt_domain:             {<<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-pt.mrs"}
+  cdn_cn:                {<<: *Anchor_DN,  url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-cdn-cn.mrs"}
   private_domain:        { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
   ai-!cn_domain:         { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs" }
   youtube_domain:        { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs"}
@@ -198,6 +207,7 @@ rule-providers:
   onedrive_domain:       { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/onedrive.mrs"}
   microsoft_domain:      { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/microsoft.mrs"}
   apple_domain:          { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/apple.mrs"}
+  steam_domain:          { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/steam.mrs"}
   tiktok_domain:         { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tiktok.mrs"}
   twitter_domain:        { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/twitter.mrs"}
   telegram_domain:       { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"}
