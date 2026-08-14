@@ -8,6 +8,13 @@
 'require tools.widgets as widgets';
 'require tools.nikki as nikki';
 
+const callTestMirror = L.rpc.declare({
+    object: 'luci.nikki',
+    method: 'test_mirror',
+    params: ['url', 'target'],
+    expect: { '': {} }
+});
+
 const RULE_TYPES = /^(RULE-SET|DOMAIN|DOMAIN-SUFFIX|DOMAIN-WILDCARD|DOMAIN-KEYWORD|DOMAIN-REGEX|IP-CIDR|DST-PORT|PROCESS-NAME|GEOSITE|GEOIP|MATCH)$/i;
 
 function normalizePath(path) {
@@ -172,6 +179,101 @@ return view.extend({
         o.value('gh_con_sh', _('gh.con.sh'));
         o.value('gh_tryxd', _('gh.tryxd.cn'));
 
+        o.renderWidget = function (section_id, option_index, cfgvalue) {
+            const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            const testBtn = E('button', {
+                'class': 'btn cbi-button-positive',
+                'click': ui.createHandlerFn(this, function (ev) {
+                    ev.preventDefault();
+
+                    const select = node.querySelector('select');
+                    const testUrl = 'https://raw.githubusercontent.com/MetaCubeX/mihomo/HEAD/README.md';
+
+                    const options = [];
+                    for (let i = 0; i < select.options.length; i++) {
+                        const opt = select.options[i];
+                        if (opt.value) options.push(opt);
+                    }
+
+                    const resultBox = E('div', {
+                        'style': 'width:100%;height:320px;overflow-y:auto;font-family:monospace;font-size:12px;line-height:1.5;border:1px solid #ddd;border-radius:4px;padding:8px;background:#fafafa;'
+                    });
+
+                    const progressBar = E('div', {
+                        'style': 'margin-bottom:8px;font-size:13px;color:#666;'
+                    }, _('Testing...'));
+
+                    ui.showModal(_('GitHub Mirror Test'), [
+                        E('div', {}, [progressBar, resultBox]),
+                        E('div', { class: "right" }, [
+                            E('button', { 'class': 'btn cbi-button-negative right', 'click': ui.hideModal }, _('Dismiss'))
+                        ]),
+                    ], 'cbi-modal');
+                    let idx = 0, fastestVal = null, bestMs = Infinity;
+
+                    function updateProgress() {
+                        progressBar.textContent = _('Testing ') + idx + ' / ' + options.length;
+                    }
+
+                    function appendResult(html) {
+                        const line = E('div', { 'style': 'margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #eee;' });
+                        line.innerHTML = html;
+                        resultBox.appendChild(line);
+                        resultBox.scrollTop = resultBox.scrollHeight;
+                    }
+
+                    function testNext() {
+                        if (idx >= options.length) {
+                            progressBar.innerHTML = '<span style="color:#28a745;font-weight:600;">✓ ' + _('Done') + '</span>';
+                            if (fastestVal) {
+                                select.value = fastestVal;
+                                select.dispatchEvent(new Event('change'));
+                            }
+                            return;
+                        }
+
+                        updateProgress();
+                        const opt = options[idx++];
+
+                        callTestMirror(testUrl, opt.value).then(function (res) {
+                            if (res.status === 'ok') {
+                                appendResult(
+                                    `<span style="color:#28a745;font-weight:600;">✓ ${opt.text}</span> ` +
+                                    `<span style="color:#28a745;">HTTP ${res.httpcode}  ${res.elapsed_ms}ms</span><br>` +
+                                    `<span style="color:#888;font-size:11px;">${res.url}</span>`
+                                );
+                                if (res.elapsed_ms < bestMs) {
+                                    bestMs = res.elapsed_ms;
+                                    fastestVal = opt.value;
+                                }
+                            } else if (res.status === 'skip') {
+                                appendResult(
+                                    `<span style="color:#888;">- ${opt.text}  (skip)</span>`
+                                );
+                            } else {
+                                appendResult(
+                                    `<span style="color:#dc3545;font-weight:600;">✗ ${opt.text}</span><br>` +
+                                    `<span style="color:#dc3545;">${res.message || _('failed')}</span>`
+                                );
+                            }
+                        }).catch(function (err) {
+                            appendResult(
+                                `<span style="color:#dc3545;font-weight:600;">✗ ${opt.text}</span><br>` +
+                                `<span style="color:#dc3545;">${err.message || _('timeout')}</span>`
+                            );
+                        }).finally(function () {
+                            testNext();
+                        });
+                    }
+
+                    testNext();
+                })
+            }, _('测试'));
+            node.classList.add('control-group');
+            node.appendChild(testBtn);
+            return node;
+        };
+
         o = s.taboption('general', form.ListValue, 'match_process', _('Match Process'), _('find-process-mode'));
         o.optional = true;
         o.placeholder = _('Unmodified');
@@ -275,11 +377,6 @@ return view.extend({
         o.value("", _('Unmodified'));
         o.value("true", _('Enable'));
         o.value("false", _('Disable'));
-
-        // o = s.taboption("general", form.Value, "github_mod", _("Github Address Modify"));
-        // o.value("https://testingcf.jsdelivr.net/");
-        // o.value("https://cdn.jsdelivr.net/");
-        // o.value("https://fastly.jsdelivr.net/");
 
         o = s.taboption('external_control', form.Value, 'ui_path', _('UI Path'));
         o.placeholder = _('Unmodified');

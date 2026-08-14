@@ -149,6 +149,39 @@ const methods = {
 		}
 	},
 
+	test_mirror: {
+		args: { url: 'url', target: 'target' },
+		call: function(req) {
+			try {
+				const url    = req.args?.url;
+				const target = req.args?.target;
+				if (!url) return { status: 'error', message: 'missing url' };
+
+				const mirror_url = mirrorGithubUrl(url, target);
+				const cmd = `curl -sI -o /dev/null -L -w '%{http_code} %{time_total}' --max-time 10 --connect-timeout 5 ${shellQuote(mirror_url)}`;
+				const out = run(cmd);
+
+				if (!out)
+					return { status: 'error', message: 'curl returned empty (timeout or failed)', mirror_url, cmd };
+
+				const parts = split(trim(out), ' ');
+				if (length(parts) < 2)
+					return { status: 'error', message: 'curl output invalid: [' + out + ']', mirror_url };
+
+				const code = parts[0];
+				const ms   = int(+parts[1] * 1000);
+
+				if (code != '200')
+					return { status: 'error', message: 'HTTP ' + code, mirror_url, elapsed_ms: ms };
+
+				return { status: 'ok', httpcode: code, elapsed_ms: ms, url: mirror_url };
+
+			} catch (e) {
+				return { status: 'error', message: 'exception: ' + e.message };
+			}
+		}
+	},
+
 	version: {
 		call: function () {
 			let app  = null, core = null;
