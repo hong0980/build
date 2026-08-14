@@ -180,54 +180,90 @@ return view.extend({
         o.value('gh_tryxd', _('gh.tryxd.cn'));
 
         o.renderWidget = function (section_id, option_index, cfgvalue) {
-            const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            const self = this;
+            const node = form.Value.prototype.renderWidget.apply(this, arguments);
             const testBtn = E('button', {
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function (ev) {
                     ev.preventDefault();
+                    ev.stopPropagation();
 
-                    const select = node.querySelector('select');
                     const testUrl = 'https://raw.githubusercontent.com/MetaCubeX/mihomo/HEAD/README.md';
-
-                    const options = [];
-                    for (let i = 0; i < select.options.length; i++) {
-                        const opt = select.options[i];
-                        if (opt.value) options.push(opt);
-                    }
-
+                    const style = 'margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #eee;';
                     const resultBox = E('div', {
-                        'style': 'width:100%;height:320px;overflow-y:auto;font-family:monospace;font-size:12px;line-height:1.5;border:1px solid #ddd;border-radius:4px;padding:8px;background:#fafafa;'
+                        'style': 'width:100%;height:320px;overflow-y:auto;font-family:Consolas, monospace;font-size:12px;line-height:1.5;border:1px solid #ddd;border-radius:4px;padding:8px;background:#fafafa;'
                     });
-
-                    const progressBar = E('div', {
-                        'style': 'margin-bottom:8px;font-size:13px;color:#666;'
-                    }, _('Testing...'));
+                    const progressBar = E('div', { 'style': 'margin-bottom:8px;font-size:13px;color:#666;' }, _('Testing...'));
 
                     ui.showModal(_('GitHub Mirror Test'), [
                         E('div', {}, [progressBar, resultBox]),
-                        E('div', { class: "right" }, [
-                            E('button', { 'class': 'btn cbi-button-negative right', 'click': ui.hideModal }, _('Dismiss'))
+                        E('div', { 'class': 'right' }, [
+                            E('button', { 'class': 'btn cbi-button-negative', 'click': ui.hideModal }, _('Dismiss'))
                         ]),
                     ], 'cbi-modal');
-                    let idx = 0, fastestVal = null, bestMs = Infinity;
 
-                    function updateProgress() {
-                        progressBar.textContent = _('Testing ') + idx + ' / ' + options.length;
+                    const options = [];
+                    if (self.keylist && self.vallist) {
+                        for (let i = 0; i < self.keylist.length; i++) {
+                            const val = self.keylist[i];
+                            if (!val || val === '' || val === '-') continue;
+                            options.push({ value: val, text: self.vallist[i] || val });
+                        }
                     }
 
-                    function appendResult(html) {
-                        const line = E('div', { 'style': 'margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #eee;' });
-                        line.innerHTML = html;
-                        resultBox.appendChild(line);
+                    const customInput = node.querySelector('.create-item-input');
+                    if (customInput && customInput.value.trim()) {
+                        options.push({
+                            value: customInput.value.trim(),
+                            text: _('Custom') + ': ' + customInput.value.trim()
+                        });
+                    }
+
+                    if (!options.length) return;
+
+                    let idx = 0, fastestVal = null, bestMs = Infinity;
+                    function updateProgress() {
+                        progressBar.textContent = `${_('Testing ')}${idx} / ${options.length}`;
+                    }
+
+                    function appendResult(node) {
+                        resultBox.appendChild(node);
                         resultBox.scrollTop = resultBox.scrollHeight;
+                    }
+
+                    function okResult(opt, res) {
+                        return E('div', { 'style': style }, [
+                            E('span', { 'style': 'color:#28a745;font-weight:600;' }, `✓ ${opt.text}`), ' ',
+                            E('span', { 'style': 'color:#28a745;' }, `HTTP ${res.httpcode}  ${res.elapsed_ms}ms`), E('br'),
+                            E('span', { 'style': 'color:#1e1e1e;font-size:11px;' }, res.url)
+                        ]);
+                    }
+
+                    function skipResult(opt) {
+                        return E('div', { 'style': style }, [
+                            E('span', { 'style': 'color:#888;' }, `- ${opt.text}  (skip)`)
+                        ]);
+                    }
+
+                    function errResult(opt, msg) {
+                        return E('div', { 'style': style }, [
+                            E('span', { 'style': 'color:#dc3545;font-weight:600;' }, '✗ ' + opt.text), E('br'),
+                            E('span', { 'style': 'color:#dc3545;' }, msg || _('failed'))
+                        ]);
                     }
 
                     function testNext() {
                         if (idx >= options.length) {
-                            progressBar.innerHTML = '<span style="color:#28a745;font-weight:600;">✓ ' + _('Done') + '</span>';
+                            progressBar.innerHTML = '';
+                            progressBar.appendChild(
+                                E('span', { 'style': 'color:#28a745;font-weight:600;' }, '✓ ' + _('Done'))
+                            );
                             if (fastestVal) {
-                                select.value = fastestVal;
-                                select.dispatchEvent(new Event('change'));
+                                const hidden = node.querySelector('input[type="hidden"]');
+                                if (hidden) {
+                                    hidden.value = fastestVal;
+                                    hidden.dispatchEvent(new Event('change'));
+                                }
                             }
                             return;
                         }
@@ -237,35 +273,22 @@ return view.extend({
 
                         callTestMirror(testUrl, opt.value).then(function (res) {
                             if (res.status === 'ok') {
-                                appendResult(
-                                    `<span style="color:#28a745;font-weight:600;">✓ ${opt.text}</span> ` +
-                                    `<span style="color:#28a745;">HTTP ${res.httpcode}  ${res.elapsed_ms}ms</span><br>` +
-                                    `<span style="color:#888;font-size:11px;">${res.url}</span>`
-                                );
+                                appendResult(okResult(opt, res));
                                 if (res.elapsed_ms < bestMs) {
                                     bestMs = res.elapsed_ms;
                                     fastestVal = opt.value;
                                 }
                             } else if (res.status === 'skip') {
-                                appendResult(
-                                    `<span style="color:#888;">- ${opt.text}  (skip)</span>`
-                                );
+                                appendResult(skipResult(opt));
                             } else {
-                                appendResult(
-                                    `<span style="color:#dc3545;font-weight:600;">✗ ${opt.text}</span><br>` +
-                                    `<span style="color:#dc3545;">${res.message || _('failed')}</span>`
-                                );
+                                appendResult(errResult(opt, res.message));
                             }
                         }).catch(function (err) {
-                            appendResult(
-                                `<span style="color:#dc3545;font-weight:600;">✗ ${opt.text}</span><br>` +
-                                `<span style="color:#dc3545;">${err.message || _('timeout')}</span>`
-                            );
+                            appendResult(errResult(opt, err.message || _('timeout')));
                         }).finally(function () {
                             testNext();
                         });
                     }
-
                     testNext();
                 })
             }, _('测试'));

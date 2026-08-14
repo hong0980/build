@@ -257,10 +257,11 @@ if (length(urls) > 0) {
 			url:            url,
 			interval:       86400,
 			proxy:          'DIRECT',
+			filter:         "^(?!.*(到期|过期|剩余|网址|官网|邮箱|订阅|套餐|流量|说明|重置|域名)).*$",
 			'health-check': {
-				url:      hc_url,
 				enable:   true,
-				interval: hc_int
+				interval: hc_int,
+				url:      hc_url
 			}
 		};
 	});

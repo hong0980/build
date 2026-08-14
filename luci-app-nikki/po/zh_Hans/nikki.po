@@ -2180,7 +2180,7 @@ msgid "GitHub Mirror"
 msgstr "GitHub 镜像"
 
 msgid "Select a mirror to replace GitHub URLs in config (geox-url, rule-providers, proxy-providers, external-ui, icons)."
-msgstr "选择镜像以替换配置中的 GitHub URL（geox-url、rule-providers、proxy-providers、external-ui、图标）。"
+msgstr "选择镜像以替换配置中的 GitHub URL（geox-url、rule-providers、proxy-providers、external-ui）。"
 
 msgid "Original (No Mirror)"
 msgstr "原始地址（不加速）"
