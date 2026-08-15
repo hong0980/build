@@ -1,11 +1,9 @@
 #!/usr/bin/ucode
 'use strict';
-
 import { cursor }  from 'uci';
 import { connect } from 'ubus';
 import { build_proxies } from '/etc/nikki/ucode/node.uc';
 import { uci_bool, uci_int, uci_array, trim_all } from '/etc/nikki/ucode/include.uc';
-
 const uci    = cursor();
 const ubus   = connect();
 
@@ -21,28 +19,28 @@ const outbound_interface        = uci_get({o:'outbound_interface'});
 const outbound_interface_status = ubus.call('network.interface', 'status', { 'interface': outbound_interface });
 const outbound_device           = outbound_interface_status?.l3_device ?? outbound_interface_status?.device ?? '';
 
-config['interface-name']        = outbound_device;
-config['mode']                  = uci_get({o:'mode'});
-config['log-level']             = uci_get({o:'log_level'});
-config['find-process-mode']     = uci_get({o:'match_process'});
-config['external-ui']           = uci_get({o:'ui_path'});
-config['external-ui-url']       = uci_get({o:'ui_url'});
-config['external-ui-name']      = uci_get({o:'ui_name'});
-config['external-controller']   = uci_get({o:'api_listen'});
+config['interface-name']          = outbound_device;
+config['mode']                    = uci_get({o:'mode'});
+config['external-ui']             = uci_get({o:'ui_path'});
+config['external-ui-url']         = uci_get({o:'ui_url'});
+config['external-ui-name']        = uci_get({o:'ui_name'});
+config['log-level']               = uci_get({o:'log_level'});
+config['external-controller']     = uci_get({o:'api_listen'});
+config['secret']                  = uci_get({o:'api_secret'});
 config['external-controller-tls'] = uci_get({o:'api_tls_listen'});
-config['secret']                = uci_get({o:'api_secret'});
-config['ipv6']                  = uci_bool(uci_get({o:'ipv6'}));
-config['allow-lan']             = uci_bool(uci_get({o:'allow_lan'}));
-config['unified-delay']         = uci_bool(uci_get({o:'unify_delay'}));
-config['tcp-concurrent']        = uci_bool(uci_get({o:'tcp_concurrent'}));
-config['disable-keep-alive']    = uci_bool(uci_get({o:'disable_tcp_keep_alive'}));
-config['port']                  = uci_int(uci_get({o:'http_port'}));
-config['socks-port']            = uci_int(uci_get({o:'socks_port'}));
-config['mixed-port']            = uci_int(uci_get({o:'mixed_port'}));
-config['redir-port']            = uci_int(uci_get({o:'redir_port'}));
-config['tproxy-port']           = uci_int(uci_get({o:'tproxy_port'}));
-config['keep-alive-idle']       = uci_int(uci_get({o:'tcp_keep_alive_idle'}));
-config['keep-alive-interval']   = uci_int(uci_get({o:'tcp_keep_alive_interval'}));
+config['find-process-mode']       = uci_get({o:'match_process'});
+config['port']                    = uci_int(uci_get({o:'http_port'}));
+config['socks-port']              = uci_int(uci_get({o:'socks_port'}));
+config['mixed-port']              = uci_int(uci_get({o:'mixed_port'}));
+config['redir-port']              = uci_int(uci_get({o:'redir_port'}));
+config['tproxy-port']             = uci_int(uci_get({o:'tproxy_port'}));
+config['keep-alive-idle']         = uci_int(uci_get({o:'tcp_keep_alive_idle'}));
+config['keep-alive-interval']     = uci_int(uci_get({o:'tcp_keep_alive_interval'}));
+config['ipv6']                    = uci_bool(uci_get({o:'ipv6'}));
+config['allow-lan']               = uci_bool(uci_get({o:'allow_lan'}));
+config['unified-delay']           = uci_bool(uci_get({o:'unify_delay'}));
+config['tcp-concurrent']          = uci_bool(uci_get({o:'tcp_concurrent'}));
+config['disable-keep-alive']      = uci_bool(uci_get({o:'disable_tcp_keep_alive'}));
 
 config.tls = {
 	"certificate":      uci_get({o:'api_tls_cert'}),
@@ -65,24 +63,21 @@ if (uci_bool(uci_get({o:'tun_dns_hijack'}))) {
 
 config.sniffer = {
 	"enable":            uci_bool(uci_get({o:'sniffer'})),
-	"parse-pure-ip":     uci_bool(uci_get({o:'sniffer_sniff_pure_ip'})),
-	"force-dns-mapping": uci_bool(uci_get({o:'sniffer_sniff_dns_mapping'})),
-	"sniff":             {}
+	"skip-src-address":  uci_array(uci_get({o:'skip_src_address'})),
+	"skip-dst-address":  uci_array(uci_get({o:'skip_dst_address'})),
+	"force-domain":      uci_array(uci_get({o:'sniffer_force_domain_names'})),
+	"skip-domain":       uci_array(uci_get({o:'sniffer_ignore_domain_names'})),
+	"parse-pure-ip":     uci_bool( uci_get({o:'sniffer_sniff_pure_ip'})),
+	"force-dns-mapping": uci_bool( uci_get({o:'sniffer_sniff_dns_mapping'})),
+	"sniff":             {},
 };
-
-if (uci_bool(uci_get({o:'sniffer_force_domain_name'}))) {
-	config.sniffer['force-domain'] = uci_array(uci_get({o:'sniffer_force_domain_names'}));
-}
-if (uci_bool(uci_get({o:'sniffer_ignore_domain_name'}))) {
-	config.sniffer['skip-domain'] = uci_array(uci_get({o:'sniffer_ignore_domain_names'}));
-}
 
 if (uci_bool(uci_get({o:'sniffer_sniff'}))) {
 	uci.foreach('nikki', 'sniff', (section) => {
 		if (!uci_bool(section.enabled)) return;
 		config.sniffer.sniff[section.protocol] = {
 			"port":                 uci_array(section.port),
-			"override-destination": uci_bool(section.overwrite_destination)
+			"override-destination": uci_bool(section.overwrite_destination) ? true : ''
 		};
 	});
 }
@@ -182,6 +177,10 @@ if (uci_bool(uci_get({o:'hosts'}))) {
 	});
 }
 
+config['lan-allowed-ips']    = uci_array(uci_get({o:'lan_allowed_ips'}));
+config['lan-disallowed-ips'] = uci_array(uci_get({o:'lan_disallowed_ips'}));
+config['skip-auth-prefixes'] = uci_array(uci_get({o:'skip_auth_prefixes'}));
+
 config.profile = {
 	"store-fake-ip":  uci_bool(uci_get({o:'fake_ip_cache'})),
 	"store-selected": uci_bool(uci_get({o:'selection_cache'}))
@@ -240,31 +239,27 @@ config['geo-auto-update']     = uci_bool(uci_get({o:'geox_auto_update'}));
 config['geo-update-interval'] = uci_int(uci_get({o:'geox_update_interval'}));
 config['node']                = build_proxies();
 
-const profile_name = uci_get({ s:'config', o:'profile'});
-const raw = (profile_name && index(profile_name, 'file:') == 0) ? uci_get({ s:'config', o:'file_url'}) : null;
-const urls = filter(
-	type(raw) == 'string' ? split(raw, ' ') : uci_array(raw),
-	(u) => length(trim(u)) > 0
-);
-
-if (length(urls) > 0) {
-	const hc_url = uci_get({o:'urltest_url'}) || 'https://cp.cloudflare.com/generate_204';
-	const hc_int = uci_int(uci_get({o:'interval'}) || 600);
-	config['nikki-proxy-providers'] = {};
-	map(urls, (url, idx) => {
-		config['nikki-proxy-providers'][`provider${idx + 1}`] = {
-			type:           'http',
-			url:            url,
-			interval:       86400,
-			proxy:          'DIRECT',
-			filter:         "^(?!.*(到期|过期|剩余|网址|官网|邮箱|订阅|套餐|流量|说明|重置|域名)).*$",
-			'health-check': {
-				enable:   true,
-				interval: hc_int,
-				url:      hc_url
-			}
-		};
-	});
-}
+if (index(uci_get({s:'config', o:'profile'}), 'file:') == 0) {
+	const urls = uci_array(uci_get({s:'config', o:'file_url'}));
+	if (urls && length(urls) > 0) {
+		const hc_url = uci_get({o:'urltest_url'}) || 'https://cp.cloudflare.com/generate_204';
+		const hc_int = uci_int(uci_get({o:'interval'}) || 600);
+		config['nikki-proxy-providers'] = {};
+		map(urls, (url, idx) => {
+			config['nikki-proxy-providers'][`provider${idx + 1}`] = {
+				type:           'http',
+				url:            url,
+				interval:       86400,
+				proxy:          'DIRECT',
+				filter:         '^(?!.*(到期|过期|剩余|网址|官网|邮箱|订阅|套餐|流量|说明|重置|域名)).*$',
+				'health-check': {
+					enable:   true,
+					interval: hc_int,
+					url:      hc_url
+				}
+			};
+		});
+	}
+};
 
 print(trim_all(config));

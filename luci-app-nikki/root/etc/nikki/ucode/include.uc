@@ -138,13 +138,13 @@ function stripProxyPrefix(url) {
 		if (newUrl != url) url = newUrl;
 	}
 	return url;
-}
+};
 
 function restoreFromJsdelivr(url) {
 	let m = match(url, /^https:\/\/(cdn|fastly|testingcf|gcore)\.jsdelivr\.net\/gh\/([^\/]+)\/([^\/]+)@([^\/]+)\/(.+)$/);
 	if (m) return `https://raw.githubusercontent.com/${m[2]}/${m[3]}/${m[4]}/${m[5]}`;
 	return url;
-}
+};
 
 const GITHUB_PATTERNS = [
 	/^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/refs\/heads\/([^\/]+)\/(.+)$/,
@@ -175,6 +175,10 @@ export function mirrorGithubUrl(url, target) {
 	url = stripProxyPrefix(url);
 	url = restoreFromJsdelivr(url);
 
+	if (target && match(target, /^https?:\/\//)) {
+		if (!match(target, /\/$/)) target = target + '/';
+		return target + url;
+	};
 	if (!target || target === 'raw' || target === 'github') return url;
 	if (target === 'jsdelivr' || target === 'cdn')          return convertToJsdelivr(url);
 	if (target === 'fastly')            return convertToJsdelivr(url, 'fastly.jsdelivr.net');

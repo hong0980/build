@@ -183,22 +183,22 @@ return view.extend({
             const self = this;
             const node = form.Value.prototype.renderWidget.apply(this, arguments);
             const testBtn = E('button', {
-                'class': 'btn cbi-button-positive',
-                'click': ui.createHandlerFn(this, function (ev) {
+                class: 'btn cbi-button-positive',
+                click: ui.createHandlerFn(this, function (ev) {
                     ev.preventDefault();
                     ev.stopPropagation();
 
                     const testUrl = 'https://raw.githubusercontent.com/MetaCubeX/mihomo/HEAD/README.md';
                     const style = 'margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #eee;';
                     const resultBox = E('div', {
-                        'style': 'width:100%;height:320px;overflow-y:auto;font-family:Consolas, monospace;font-size:12px;line-height:1.5;border:1px solid #ddd;border-radius:4px;padding:8px;background:#fafafa;'
+                        style: 'width:100%;height:320px;overflow-y:auto;font-family:Consolas, monospace;font-size:12px;line-height:1.5;border:1px solid #ddd;border-radius:4px;padding:8px;background:#fafafa;'
                     });
-                    const progressBar = E('div', { 'style': 'margin-bottom:8px;font-size:13px;color:#666;' }, _('Testing...'));
+                    const progressBar = E('div', { style: 'margin-bottom:8px;font-size:13px;color:#666;' }, _('Testing...'));
 
                     ui.showModal(_('GitHub Mirror Test'), [
                         E('div', {}, [progressBar, resultBox]),
-                        E('div', { 'class': 'right' }, [
-                            E('button', { 'class': 'btn cbi-button-negative', 'click': ui.hideModal }, _('Dismiss'))
+                        E('div', { class: 'right' }, [
+                            E('button', { class: 'btn cbi-button-negative', click: ui.hideModal }, _('Dismiss'))
                         ]),
                     ], 'cbi-modal');
 
@@ -223,7 +223,7 @@ return view.extend({
 
                     let idx = 0, fastestVal = null, bestMs = Infinity;
                     function updateProgress() {
-                        progressBar.textContent = `${_('Testing ')}${idx} / ${options.length}`;
+                        progressBar.textContent = `${_('Testing ')} ${idx} / ${options.length}`;
                     }
 
                     function appendResult(node) {
@@ -232,23 +232,23 @@ return view.extend({
                     }
 
                     function okResult(opt, res) {
-                        return E('div', { 'style': style }, [
-                            E('span', { 'style': 'color:#28a745;font-weight:600;' }, `✓ ${opt.text}`), ' ',
-                            E('span', { 'style': 'color:#28a745;' }, `HTTP ${res.httpcode}  ${res.elapsed_ms}ms`), E('br'),
-                            E('span', { 'style': 'color:#1e1e1e;font-size:11px;' }, res.url)
+                        return E('div', { style: style }, [
+                            E('span', { style: 'color:#28a745;font-weight:600;' }, `${idx} ✓ ${opt.text}`), ' ',
+                            E('span', { style: 'color:#28a745;' }, `HTTP ${res.httpcode}  ${res.elapsed_ms}ms`), E('br'),
+                            E('span', { style: 'color:#1e1e1e;font-size:11px;' }, res.url)
                         ]);
                     }
 
                     function skipResult(opt) {
-                        return E('div', { 'style': style }, [
-                            E('span', { 'style': 'color:#888;' }, `- ${opt.text}  (skip)`)
+                        return E('div', { style: style }, [
+                            E('span', { style: 'color:#888;' }, `- ${opt.text}  (skip)`)
                         ]);
                     }
 
                     function errResult(opt, msg) {
-                        return E('div', { 'style': style }, [
-                            E('span', { 'style': 'color:#dc3545;font-weight:600;' }, '✗ ' + opt.text), E('br'),
-                            E('span', { 'style': 'color:#dc3545;' }, msg || _('failed'))
+                        return E('div', { style: style }, [
+                            E('span', { style: 'color:#dc3545;font-weight:600;' }, `${idx} ✗ ${opt.text}`), E('br'),
+                            E('span', { style: 'color:#dc3545;' }, msg || _('failed'))
                         ]);
                     }
 
@@ -256,7 +256,7 @@ return view.extend({
                         if (idx >= options.length) {
                             progressBar.innerHTML = '';
                             progressBar.appendChild(
-                                E('span', { 'style': 'color:#28a745;font-weight:600;' }, '✓ ' + _('Done'))
+                                E('span', { style: 'color:#28a745;font-weight:600;' }, `✓ ${_('Done')}`)
                             );
                             if (fastestVal) {
                                 const hidden = node.querySelector('input[type="hidden"]');
@@ -452,24 +452,42 @@ return view.extend({
         o.value('1', _('Enable'));
 
         o = s.taboption('inbound', form.Value, 'http_port', _('HTTP Port'));
+        o.description = _('HTTP(S) 代理服务器端口');
         o.datatype = 'port';
         o.placeholder = _('Unmodified');
 
         o = s.taboption('inbound', form.Value, 'socks_port', _('SOCKS Port'));
+        o.description = _('SOCKS5 代理端口');
         o.datatype = 'port';
         o.placeholder = _('Unmodified');
 
         o = s.taboption('inbound', form.Value, 'mixed_port', _('Mixed Port'));
+        o.description = _('HTTP(S) 和 SOCKS 代理混合端口');
         o.datatype = 'port';
         o.placeholder = _('Unmodified');
 
         o = s.taboption('inbound', form.Value, 'redir_port', _('Redirect Port'));
+        o.description = _('透明代理端口');
         o.datatype = 'port';
         o.placeholder = _('Unmodified');
 
         o = s.taboption('inbound', form.Value, 'tproxy_port', _('TPROXY Port'));
         o.datatype = 'port';
         o.placeholder = _('Unmodified');
+
+        o = s.taboption('inbound', form.DynamicList, 'skip_auth_prefixes', _('跳过验证的 IP 段'));
+        o.datatype = 'cidr';
+        o.placeholder = '127.0.0.1/8';
+
+        o = s.taboption('inbound', form.DynamicList, 'lan_allowed_ips', _('允许连接的 IP 地址段')
+        );
+        o.description = _('仅作用于 allow-lan 为 true, 默认值为 0.0.0.0/0 和::/0');
+        o.datatype = 'cidr';
+
+        o = s.taboption('inbound', form.DynamicList, 'lan_disallowed_ips', _('禁止连接的 IP 地址段')
+        );
+        o.description = _('黑名单优先级高于白名单，默认值为空');
+        o.datatype = 'cidr';
 
         o = s.taboption('inbound', form.Flag, 'authentication', _('Overwrite Authentication'));
         o.rmempty = false;
@@ -749,19 +767,19 @@ return view.extend({
         o.value('0', _('Disable'));
         o.value('1', _('Enable'));
 
-        o = s.taboption('sniffer', form.Flag, 'sniffer_force_domain_name', _('Overwrite Force Sniff Domain Name'));
-        o.rmempty = false;
-
         o = s.taboption('sniffer', form.DynamicList, 'sniffer_force_domain_names', _('Force Sniff Domain Name'));
         o.retain = true;
-        o.depends('sniffer_force_domain_name', '1');
-
-        o = s.taboption('sniffer', form.Flag, 'sniffer_ignore_domain_name', _('Overwrite Ignore Sniff Domain Name'));
-        o.rmempty = false;
 
         o = s.taboption('sniffer', form.DynamicList, 'sniffer_ignore_domain_names', _('Ignore Sniff Domain Name'));
         o.retain = true;
-        o.depends('sniffer_ignore_domain_name', '1');
+
+        o = s.taboption('sniffer', form.DynamicList, 'skip_src_address', _('跳过嗅探来源ip地址'));
+        o.retain = true;
+        o.datatype = 'cidr';
+
+        o = s.taboption('sniffer', form.DynamicList, 'skip_dst_address', _('跳过嗅探目标ip地址'));
+        o.retain = true;
+        o.datatype = 'cidr';
 
         o = s.taboption('sniffer', form.Flag, 'sniffer_sniff', _('Overwrite Sniff By Protocol'));
         o.rmempty = false;
@@ -806,7 +824,7 @@ return view.extend({
         o.subsection.handleRuleImport = function () {
             const section = this;
             const textarea = E('textarea', {
-                'style': 'width:100%; height:260px; font-family: Consolas;',
+                style: 'width:100%; height:260px; font-family: Consolas;',
                 'placeholder':
                     'rules:\n' +
                     '  - RULE-SET,netflix_domain,流媒体\n' +
@@ -817,10 +835,10 @@ return view.extend({
             ui.showModal(_('Import mihomo config'), [
                 E('p', {}, _('Please paste the %s field of a mihomo config, one rule per line.').format('<code>rules</code>')),
                 textarea,
-                E('div', { 'class': 'button-row' }, [
+                E('div', { class: 'button-row' }, [
                     E('button', {
-                        'class': 'btn cbi-button-action important',
-                        'click': ui.createHandlerFn(section, function () {
+                        class: 'btn cbi-button-action important',
+                        click: ui.createHandlerFn(section, function () {
                             const raw_lines = textarea.value.split('\n');
                             let count = 0, total = 0;
                             const errors = [];
@@ -875,7 +893,7 @@ return view.extend({
                                 .catch(() => {});
                         })
                     }, _('Import')),
-                    E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Dismiss'))
+                    E('button', { class: 'btn', click: ui.hideModal }, _('Dismiss'))
                 ])
             ], 'cbi-modal');
         };
@@ -884,9 +902,9 @@ return view.extend({
             let el = form.GridSection.prototype.renderSectionAdd.apply(this, arguments);
 
             el.appendChild(E('button', {
-                'class': 'btn cbi-button-add',
-                'title': _('Import mihomo config'),
-                'click': ui.createHandlerFn(this, 'handleRuleImport')
+                class: 'btn cbi-button-add',
+                title: _('Import mihomo config'),
+                click: ui.createHandlerFn(this, 'handleRuleImport')
             }, _('Import mihomo config')));
 
             return el;
@@ -947,7 +965,7 @@ return view.extend({
         o.subsection.handleRuleImport = function () {
             const section = this;
             const textarea = E('textarea', {
-                'style': 'width:100%; height:260px; font-family: Consolas;',
+                style: 'width:100%; height:260px; font-family: Consolas;',
                 'placeholder':
                     'rule-providers:\n' +
                     '  cn_domain:\n' +
@@ -969,13 +987,13 @@ return view.extend({
 
             ui.showModal(_('Import mihomo config'), [
                 E('p', {}, _('Please paste the %s field of a mihomo config.').format('<code>rule-providers</code>')),
-                E('p', { 'class': 'alert-message warning' },
+                E('p', { class: 'alert-message warning' },
                     _('Only %s type entries can be imported this way; %s entries will be skipped (please add them manually).').format('http', 'file')),
                 textarea,
-                E('div', { 'class': 'button-row' }, [
+                E('div', { class: 'button-row' }, [
                     E('button', {
-                        'class': 'btn cbi-button-action important',
-                        'click': ui.createHandlerFn(section, function () {
+                        class: 'btn cbi-button-action important',
+                        click: ui.createHandlerFn(section, function () {
                             const parsed = parseRuleProviderYaml(textarea.value);
                             let count = 0;
                             const errors = [];
@@ -1026,7 +1044,7 @@ return view.extend({
                                 .catch(() => {});
                         })
                     }, _('Import')),
-                    E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Dismiss'))
+                    E('button', { class: 'btn', click: ui.hideModal }, _('Dismiss'))
                 ])
             ], 'cbi-modal');
         };
@@ -1035,9 +1053,9 @@ return view.extend({
             let el = form.GridSection.prototype.renderSectionAdd.apply(this, arguments);
 
             el.appendChild(E('button', {
-                'class': 'btn cbi-button-add',
-                'title': _('Import mihomo config'),
-                'click': ui.createHandlerFn(this, 'handleRuleImport')
+                class: 'btn cbi-button-add',
+                title: _('Import mihomo config'),
+                click: ui.createHandlerFn(this, 'handleRuleImport')
             }, _('Import mihomo config')));
 
             return el;
@@ -1146,6 +1164,7 @@ return view.extend({
         o = s.taboption('geox', form.Value, 'geox_update_interval', _('GeoX Update Interval'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
+        o.depends('geox_auto_update', '1');
 
         return m.render();
     }
