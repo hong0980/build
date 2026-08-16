@@ -149,6 +149,9 @@ return view.extend({
         o.value('rule', _('rule'), _('Rule Mode'));
         o.value('direct', _('direct'), _('Direct Mode'));
 
+        o = s.taboption('general', form.Flag, 'comments', _('配置注释'));
+        o.description = _('选中保留配置注释');
+
         o = s.taboption('general', form.Value, 'github_mirror', _('GitHub Mirror'),
             _('Select a mirror to replace GitHub URLs in config (geox-url, rule-providers, proxy-providers, external-ui, icons).'));
         o.optional = true;
@@ -179,122 +182,106 @@ return view.extend({
         o.value('gh_con_sh', _('gh.con.sh'));
         o.value('gh_tryxd', _('gh.tryxd.cn'));
 
-        o.renderWidget = function (section_id, option_index, cfgvalue) {
-            const self = this;
-            const node = form.Value.prototype.renderWidget.apply(this, arguments);
-            const testBtn = E('button', {
-                class: 'btn cbi-button-positive',
-                click: ui.createHandlerFn(this, function (ev) {
-                    ev.preventDefault();
-                    ev.stopPropagation();
+        o = s.taboption('general', form.Button, '_button', _('测试镜像网址'));
+        o.inputstyle = 'action';
+        o.inputtitle = _('测试');
+        o.onclick = function (ev, section_id) {
+            const testUrl = 'https://raw.githubusercontent.com/MetaCubeX/mihomo/HEAD/README.md';
+            const style = 'margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #eee;';
+            const resultBox = E('div', {
+                style: 'width:100%;height:320px;overflow-y:auto;font-family:Consolas, monospace;font-size:12px;line-height:1.5;border:1px solid #ddd;border-radius:4px;padding:8px;background:#fafafa;'
+            });
+            const progressBar = E('div', { style: 'margin-bottom:8px;font-size:13px;color:#666;' }, _('Testing...'));
 
-                    const testUrl = 'https://raw.githubusercontent.com/MetaCubeX/mihomo/HEAD/README.md';
-                    const style = 'margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #eee;';
-                    const resultBox = E('div', {
-                        style: 'width:100%;height:320px;overflow-y:auto;font-family:Consolas, monospace;font-size:12px;line-height:1.5;border:1px solid #ddd;border-radius:4px;padding:8px;background:#fafafa;'
-                    });
-                    const progressBar = E('div', { style: 'margin-bottom:8px;font-size:13px;color:#666;' }, _('Testing...'));
+            ui.showModal(_('GitHub Mirror Test'), [
+                E('div', {}, [progressBar, resultBox]),
+                E('div', { class: 'right' }, [
+                    E('button', { class: 'btn cbi-button-negative', click: ui.hideModal }, _('Dismiss'))
+                ]),
+            ], 'cbi-modal');
 
-                    ui.showModal(_('GitHub Mirror Test'), [
-                        E('div', {}, [progressBar, resultBox]),
-                        E('div', { class: 'right' }, [
-                            E('button', { class: 'btn cbi-button-negative', click: ui.hideModal }, _('Dismiss'))
-                        ]),
-                    ], 'cbi-modal');
+            const options = [];
+            const mirrorOpt = this.map.lookupOption('github_mirror', section_id)[0];
+            var mirrorel = s.getUIElement(section_id, 'github_mirror');
+            if (mirrorel) {
+                options.push({
+                    value: mirrorel.getValue().trim(),
+                    text: _('Custom') + ': ' + mirrorel.getValue().trim()
+                });
+            }
 
-                    const options = [];
-                    if (self.keylist && self.vallist) {
-                        for (let i = 0; i < self.keylist.length; i++) {
-                            const val = self.keylist[i];
-                            if (!val || val === '' || val === '-') continue;
-                            options.push({ value: val, text: self.vallist[i] || val });
-                        }
+            if (mirrorOpt && mirrorOpt.keylist && mirrorOpt.vallist) {
+                for (let i = 0; i < mirrorOpt.keylist.length; i++) {
+                    const val = mirrorOpt.keylist[i];
+                    if (!val || val === '' || val === '-') continue;
+                    options.push({ value: val, text: mirrorOpt.vallist[i] || val });
+                }
+            }
+
+            if (!options.length) {
+                progressBar.textContent = _('No mirrors to test');
+                return;
+            }
+
+            let idx = 0;
+
+            function updateProgress() {
+                progressBar.textContent = `${_('Testing ')} ${idx} / ${options.length}`;
+            }
+
+            function appendResult(node) {
+                resultBox.appendChild(node);
+                resultBox.scrollTop = resultBox.scrollHeight;
+            }
+
+            function okResult(opt, res) {
+                return E('div', { style: style }, [
+                    E('span', { style: 'color:#28a745;font-weight:600;' }, `${idx} ✓ ${opt.text}`), ' ',
+                    E('span', { style: 'color:#28a745;' }, `HTTP ${res.httpcode}  ${res.elapsed_ms}ms`), E('br'),
+                    E('span', { style: 'color:#1e1e1e;font-size:11px;' }, res.url)
+                ]);
+            }
+
+            function skipResult(opt) {
+                return E('div', { style: style }, [
+                    E('span', { style: 'color:#888;' }, `- ${opt.text}  (skip)`)
+                ]);
+            }
+
+            function errResult(opt, msg) {
+                return E('div', { style: style }, [
+                    E('span', { style: 'color:#dc3545;font-weight:600;' }, `${idx} ✗ ${opt.text}`), E('br'),
+                    E('span', { style: 'color:#dc3545;' }, msg || _('failed'))
+                ]);
+            }
+
+            function testNext() {
+                if (idx >= options.length) {
+                    progressBar.innerHTML = '';
+                    progressBar.appendChild(
+                        E('span', { style: 'color:#28a745;font-weight:600;' }, `✓ ${_('Done')}`)
+                    );
+                    return;
+                }
+
+                updateProgress();
+                const opt = options[idx++];
+
+                callTestMirror(testUrl, opt.value).then(function (res) {
+                    if (res.status === 'ok') {
+                        appendResult(okResult(opt, res));
+                    } else if (res.status === 'skip') {
+                        appendResult(skipResult(opt));
+                    } else {
+                        appendResult(errResult(opt, res.message));
                     }
-
-                    const customInput = node.querySelector('.create-item-input');
-                    if (customInput && customInput.value.trim()) {
-                        options.push({
-                            value: customInput.value.trim(),
-                            text: _('Custom') + ': ' + customInput.value.trim()
-                        });
-                    }
-
-                    if (!options.length) return;
-
-                    let idx = 0, fastestVal = null, bestMs = Infinity;
-                    function updateProgress() {
-                        progressBar.textContent = `${_('Testing ')} ${idx} / ${options.length}`;
-                    }
-
-                    function appendResult(node) {
-                        resultBox.appendChild(node);
-                        resultBox.scrollTop = resultBox.scrollHeight;
-                    }
-
-                    function okResult(opt, res) {
-                        return E('div', { style: style }, [
-                            E('span', { style: 'color:#28a745;font-weight:600;' }, `${idx} ✓ ${opt.text}`), ' ',
-                            E('span', { style: 'color:#28a745;' }, `HTTP ${res.httpcode}  ${res.elapsed_ms}ms`), E('br'),
-                            E('span', { style: 'color:#1e1e1e;font-size:11px;' }, res.url)
-                        ]);
-                    }
-
-                    function skipResult(opt) {
-                        return E('div', { style: style }, [
-                            E('span', { style: 'color:#888;' }, `- ${opt.text}  (skip)`)
-                        ]);
-                    }
-
-                    function errResult(opt, msg) {
-                        return E('div', { style: style }, [
-                            E('span', { style: 'color:#dc3545;font-weight:600;' }, `${idx} ✗ ${opt.text}`), E('br'),
-                            E('span', { style: 'color:#dc3545;' }, msg || _('failed'))
-                        ]);
-                    }
-
-                    function testNext() {
-                        if (idx >= options.length) {
-                            progressBar.innerHTML = '';
-                            progressBar.appendChild(
-                                E('span', { style: 'color:#28a745;font-weight:600;' }, `✓ ${_('Done')}`)
-                            );
-                            if (fastestVal) {
-                                const hidden = node.querySelector('input[type="hidden"]');
-                                if (hidden) {
-                                    hidden.value = fastestVal;
-                                    hidden.dispatchEvent(new Event('change'));
-                                }
-                            }
-                            return;
-                        }
-
-                        updateProgress();
-                        const opt = options[idx++];
-
-                        callTestMirror(testUrl, opt.value).then(function (res) {
-                            if (res.status === 'ok') {
-                                appendResult(okResult(opt, res));
-                                if (res.elapsed_ms < bestMs) {
-                                    bestMs = res.elapsed_ms;
-                                    fastestVal = opt.value;
-                                }
-                            } else if (res.status === 'skip') {
-                                appendResult(skipResult(opt));
-                            } else {
-                                appendResult(errResult(opt, res.message));
-                            }
-                        }).catch(function (err) {
-                            appendResult(errResult(opt, err.message || _('timeout')));
-                        }).finally(function () {
-                            testNext();
-                        });
-                    }
+                }).catch(function (err) {
+                    appendResult(errResult(opt, err.message || _('timeout')));
+                }).finally(function () {
                     testNext();
-                })
-            }, _('测试'));
-            node.classList.add('control-group');
-            node.appendChild(testBtn);
-            return node;
+                });
+            }
+            testNext();
         };
 
         o = s.taboption('general', form.ListValue, 'match_process', _('Match Process'), _('find-process-mode'));
@@ -767,8 +754,16 @@ return view.extend({
         o.value('0', _('Disable'));
         o.value('1', _('Enable'));
 
+        o = s.taboption('sniffer', form.Flag, 'sniffer_force_domain_name', _('Overwrite Force Sniff Domain Name'));
+        o.rmempty = false;
+
         o = s.taboption('sniffer', form.DynamicList, 'sniffer_force_domain_names', _('Force Sniff Domain Name'));
         o.retain = true;
+        o.depends('sniffer_force_domain_name', '1');
+
+        o = s.taboption('sniffer', form.Flag, 'sniffer_ignore_domain_name', _('Overwrite Ignore Sniff Domain Name'));
+        o.rmempty = false;
+        o.depends('sniffer_ignore_domain_name', '1');
 
         o = s.taboption('sniffer', form.DynamicList, 'sniffer_ignore_domain_names', _('Ignore Sniff Domain Name'));
         o.retain = true;

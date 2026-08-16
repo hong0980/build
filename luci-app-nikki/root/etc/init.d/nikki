@@ -39,17 +39,16 @@ start_service() {
 	log "App" "Enabled."
 	log "App" "Start."
 
-	local hosts sniffer_sniff authentication tun_dns_hijack fake_ip_filter dns_nameserver \
-		  force_domain_name ignore_domain_name dns_nameserver_policy
-	config_get_bool hosts                 "mixin" "hosts"                      0
-	config_get_bool sniffer_sniff         "mixin" "sniffer_sniff"              0
-	config_get_bool authentication        "mixin" "authentication"             0
-	config_get_bool tun_dns_hijack        "mixin" "tun_dns_hijack"             0
-	config_get_bool fake_ip_filter        "mixin" "fake_ip_filter"             0
-	config_get_bool dns_nameserver        "mixin" "dns_nameserver"             0
-	config_get_bool force_domain_name     "mixin" "sniffer_force_domain_name"  0
-	config_get_bool ignore_domain_name    "mixin" "sniffer_ignore_domain_name" 0
-	config_get_bool dns_nameserver_policy "mixin" "dns_nameserver_policy"      0
+	local hosts sniffer_sniff authentication tun_dns_hijack fake_ip_filter \
+		  dns_nameserver dns_nameserver_policy comments
+	config_get_bool hosts                 "mixin" "hosts"                 0
+	config_get_bool comments              "mixin" "comments"              0
+	config_get_bool sniffer_sniff         "mixin" "sniffer_sniff"         0
+	config_get_bool authentication        "mixin" "authentication"        0
+	config_get_bool tun_dns_hijack        "mixin" "tun_dns_hijack"        0
+	config_get_bool fake_ip_filter        "mixin" "fake_ip_filter"        0
+	config_get_bool dns_nameserver        "mixin" "dns_nameserver"        0
+	config_get_bool dns_nameserver_policy "mixin" "dns_nameserver_policy" 0
 
 	local tun_listener_name tproxy_listener_name redirect_listener_name
 	config_get tun_listener_name      "core" "tun_listener_name"
@@ -67,6 +66,7 @@ start_service() {
 	config_get      profile      "config" "profile"
 	config_get_bool core_only    "config" "core_only"         0
 	config_get_bool test_profile "config" "test_profile"      0
+	export comments
 
 	if [ "${profile%%:*}" = "file" ]; then
 		profile_name="${profile#*:}"
@@ -100,60 +100,57 @@ start_service() {
 	fi
 
 	if [ "$core_only" = 0 ]; then
-		[ "$hosts"                 = 1 ] && yq -Mi 'del(.hosts)'                 "$TEMP_CONFIG"
-		[ "$sniffer_sniff"         = 1 ] && yq -Mi 'del(.sniffer.sniff)'         "$TEMP_CONFIG"
-		[ "$authentication"        = 1 ] && yq -Mi 'del(.authentication)'        "$TEMP_CONFIG"
-		[ "$tun_dns_hijack"        = 1 ] && yq -Mi 'del(.tun.dns-hijack)'        "$TEMP_CONFIG"
-		[ "$fake_ip_filter"        = 1 ] && yq -Mi 'del(.dns.fake-ip-filter)'    "$TEMP_CONFIG"
-		[ "$force_domain_name"     = 1 ] && yq -Mi 'del(.sniffer.force-domain)'  "$TEMP_CONFIG"
-		[ "$ignore_domain_name"    = 1 ] && yq -Mi 'del(.sniffer.skip-domain)'   "$TEMP_CONFIG"
-		[ "$dns_nameserver_policy" = 1 ] && yq -Mi 'del(.dns.nameserver-policy)' "$TEMP_CONFIG"
-		[ "$dns_nameserver"        = 1 ] && yq -Mi 'del(.dns.default-nameserver) | del(.dns.fallback) | del(.dns.proxy-server-nameserver) | del(.dns.direct-nameserver) | del(.dns.nameserver)' "$TEMP_CONFIG"
+		local del_expr=""
+		[ "$hosts"                 = 1 ] && del_expr="$del_expr|del(.hosts)"
+		[ "$sniffer_sniff"         = 1 ] && del_expr="$del_expr|del(.sniffer.sniff)"
+		[ "$authentication"        = 1 ] && del_expr="$del_expr|del(.authentication)"
+		[ "$tun_dns_hijack"        = 1 ] && del_expr="$del_expr|del(.tun.dns-hijack)"
+		[ "$fake_ip_filter"        = 1 ] && del_expr="$del_expr|del(.dns.fake-ip-filter)"
+		[ "$dns_nameserver_policy" = 1 ] && del_expr="$del_expr|del(.dns.nameserver-policy)"
+		[ "$dns_nameserver"        = 1 ] && del_expr="$del_expr|del(.dns.default-nameserver,.dns.fallback,.dns.proxy-server-nameserver,.dns.direct-nameserver,.dns.nameserver)"
+		[ -n "$del_expr" ] && yq -Mi "${del_expr#|}" "$TEMP_CONFIG"
 
-		local mixin_file urltest_url interval tolerance github_mirror \
-			  timeout lazy max_failed_times mixin_extra_file=""
-		config_get mixin_file        config mixin_file
-		config_get urltest_url       mixin  urltest_url
-		config_get interval          mixin  interval
-		config_get tolerance         mixin  tolerance
-		config_get timeout           mixin  timeout
-		config_get lazy              mixin  lazy
-		config_get github_mirror     mixin  github_mirror
-		config_get max_failed_times  mixin  max_failed_times
+		local mixin_file lazy timeout interval tolerance urltest_url \
+			  github_mirror mft mixin_extra_file=""
+		config_get mixin_file    config mixin_file
+		config_get lazy          mixin  lazy
+		config_get timeout       mixin  timeout
+		config_get interval      mixin  interval
+		config_get tolerance     mixin  tolerance
+		config_get urltest_url   mixin  urltest_url
+		config_get github_mirror mixin  github_mirror
+		config_get mft           mixin  max_failed_times
 
 		[ -n "$mixin_file" ] && {
-			mixin_extra_file="/etc/nikki/mixin/$mixin_file"
 			log "Mixin" "%s Mixin config." "$mixin_file"
+			mixin_extra_file="/etc/nikki/mixin/$mixin_file"
 		}
 
-		ucode -S "/etc/nikki/ucode/mixin.uc" | yq -MPoy | yq -Mi eval-all '
-			... comments="" | . as $item ireduce ({}; . * $item ) | explode(.) |
-			.rules =   ((.rules // []) + (.nikki-rules // [])) |
-			.proxies = ((.node  // []) + (.proxies     // []) + (.nikki-proxies // [])) |
-			.proxy-groups = ((.proxy-groups // []) + (.nikki-proxy-groups // [])) |
-			.proxy-providers = (.nikki-proxy-providers // .proxy-providers) |
-			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups, .nikki-proxy-providers) |
-			.proxies |= (reverse | unique_by(.name) | reverse) |
-			.rule-providers? |= with_entries(.key as $k | ((.value.path | select(. != "")) // ("./rule_provider/" + $k)) as $base | .value.path = (($base | select(test("/$")) | . + $k) // $base))
+		export urltest_url interval tolerance timeout lazy mft
+		ucode -S "/etc/nikki/ucode/mixin.uc" | yq -MPoy | yq -Mi ea '
+			. as $item ireduce ({}; . * $item ) | explode(.) |
+			((select(strenv(comments) == "0") | ... comments = "") // .) |
+			.proxy-providers = (.nikki-proxy-providers // .proxy-providers)          |
+			.rules =           ((.rules        // []) + (.nikki-rules        // [])) |
+			.proxies = (((.proxies // []) + (.nikki-proxies // []) + (.node // []))  | reverse | unique_by(.name) | reverse) |
+			(strenv(mft)     // "") as $m | (strenv(interval)    // "") as $i |
+			(strenv(lazy)    // "") as $l | (strenv(tolerance)   // "") as $t |
+			(strenv(timeout) // "") as $o | (strenv(urltest_url) // "") as $u |
+			.proxy-groups = (((.proxy-groups // []) + (.nikki-proxy-groups // [])) | map(
+				(.type | test("url-test|fallback")) as $is_urltest |
+				((select($u) | .url = $u) // .) |
+				((select($i and $is_urltest) | .interval = ($i | tonumber)) // .) |
+				((select($o and $is_urltest) | .timeout  = ($o | tonumber)) // .) |
+				((select($t and .type == "url-test") | .tolerance = ($t | tonumber)) // .) |
+				((select($l and .type == "url-test") | .lazy = ($l | (. == "true"))) // .) |
+				((select($m and $is_urltest) | .["max-failed-times"] = ($m | tonumber)) // .)
+			)) |
+			.rule-providers? |= map_values(
+				((.path | select(. != "")) // ("./rule_provider/" + key)) as $b |
+				.path = (($b | select(test("/$")) | . + key) // $b)
+			) |
+			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups, .nikki-proxy-providers)
 		' "$TEMP_CONFIG" $mixin_extra_file - >/dev/null 2>&1
-
-		export urltest_url interval tolerance timeout lazy max_failed_times
-		yq -Mi '
-			(strenv(urltest_url)      // "") as $u  |
-			(strenv(interval)         // "") as $i  |
-			(strenv(tolerance)        // "") as $t  |
-			(strenv(timeout)          // "") as $to |
-			(strenv(lazy)             // "") as $lz |
-			(strenv(max_failed_times) // "") as $mf |
-			(.proxy-groups // []) |= map(
-				((select($u  != "") | .url = $u) // .) |
-				((select($i  != "" and (.type == "url-test" or .type == "fallback")) | .interval = ($i | tonumber)) // .) |
-				((select($t  != "" and  .type == "url-test") | .tolerance = ($t | tonumber)) // .) |
-				((select($to != "" and (.type == "url-test" or .type == "fallback")) | .timeout = ($to | tonumber)) // .) |
-				((select($lz != "" and  .type == "url-test") | .lazy = ($lz | (. == "true"))) // .) |
-				((select($mf != "" and (.type == "url-test" or .type == "fallback")) | .["max-failed-times"] = ($mf | tonumber)) // .)
-			)
-		' "$TEMP_CONFIG" >/dev/null 2>&1
 
 		if [ "$proxy_enabled" = 1 ]; then
 			if yq 'has("tun")' "$TEMP_CONFIG" >/dev/null 2>&1; then

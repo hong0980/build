@@ -24,7 +24,7 @@ CORE_LOG_PATH="$LOG_DIR/core.log"
 # temp
 TEMP_DIR="/var/run/nikki"
 PID_FILE_PATH="$TEMP_DIR/nikki.pid"
-TEMP_CONFIG="$TEMP_DIR/config.temp"
+TEMP_CONFIG=$(mktemp "$TEMP_DIR/XXXXXX")
 STARTED_FLAG_PATH="$TEMP_DIR/started.flag"
 BRIDGE_NF_CALL_IPTABLES_FLAG_PATH="$TEMP_DIR/bridge_nf_call_iptables.flag"
 BRIDGE_NF_CALL_IP6TABLES_FLAG_PATH="$TEMP_DIR/bridge_nf_call_ip6tables.flag"
