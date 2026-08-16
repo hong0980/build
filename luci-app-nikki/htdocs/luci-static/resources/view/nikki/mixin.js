@@ -201,16 +201,9 @@ return view.extend({
             ], 'cbi-modal');
 
             const options = [];
-            const mirrorOpt = this.map.lookupOption('github_mirror', section_id)[0];
-            var mirrorel = s.getUIElement(section_id, 'github_mirror');
-            if (mirrorel) {
-                options.push({
-                    value: mirrorel.getValue().trim(),
-                    text: _('Custom') + ': ' + mirrorel.getValue().trim()
-                });
-            }
+            const mirrorOpt = this.section.getOption('github_mirror');
 
-            if (mirrorOpt && mirrorOpt.keylist && mirrorOpt.vallist) {
+            if (mirrorOpt.keylist && mirrorOpt.vallist) {
                 for (let i = 0; i < mirrorOpt.keylist.length; i++) {
                     const val = mirrorOpt.keylist[i];
                     if (!val || val === '' || val === '-') continue;
@@ -218,13 +211,16 @@ return view.extend({
                 }
             }
 
-            if (!options.length) {
-                progressBar.textContent = _('No mirrors to test');
-                return;
+            const currentVal = mirrorOpt.formvalue(section_id);
+            if (currentVal && currentVal !== '' && currentVal !== '-') {
+                if (!options.some(opt => opt.value === currentVal))
+                    options.unshift({ value: currentVal, text: `${_('Custom')}: ${currentVal}` });
             }
 
-            let idx = 0;
+            if (!options.length)
+                return progressBar.textContent = _('No mirrors to test');
 
+            let idx = 0;
             function updateProgress() {
                 progressBar.textContent = `${_('Testing ')} ${idx} / ${options.length}`;
             }
@@ -236,8 +232,8 @@ return view.extend({
 
             function okResult(opt, res) {
                 return E('div', { style: style }, [
-                    E('span', { style: 'color:#28a745;font-weight:600;' }, `${idx} ✓ ${opt.text}`), ' ',
-                    E('span', { style: 'color:#28a745;' }, `HTTP ${res.httpcode}  ${res.elapsed_ms}ms`), E('br'),
+                    E('span', { style: 'color:green;font-weight:600;' }, `${idx} ✓ ${opt.text}`), ' ',
+                    E('span', { style: 'color:green;' }, `HTTP ${res.httpcode}  ${res.elapsed_ms}ms`), E('br'),
                     E('span', { style: 'color:#1e1e1e;font-size:11px;' }, res.url)
                 ]);
             }
@@ -250,17 +246,15 @@ return view.extend({
 
             function errResult(opt, msg) {
                 return E('div', { style: style }, [
-                    E('span', { style: 'color:#dc3545;font-weight:600;' }, `${idx} ✗ ${opt.text}`), E('br'),
-                    E('span', { style: 'color:#dc3545;' }, msg || _('failed'))
+                    E('span', { style: 'color:red;font-weight:600;' }, `${idx} ✗ ${opt.text}`), E('br'),
+                    E('span', { style: 'color:red;' }, msg || _('failed'))
                 ]);
             }
 
             function testNext() {
                 if (idx >= options.length) {
                     progressBar.innerHTML = '';
-                    progressBar.appendChild(
-                        E('span', { style: 'color:#28a745;font-weight:600;' }, `✓ ${_('Done')}`)
-                    );
+                    progressBar.appendChild(E('span', { style: 'color:#28a745;font-weight:600;' }, `✓ ${_('Done')}`));
                     return;
                 }
 
@@ -277,9 +271,7 @@ return view.extend({
                     }
                 }).catch(function (err) {
                     appendResult(errResult(opt, err.message || _('timeout')));
-                }).finally(function () {
-                    testNext();
-                });
+                }).finally(function () { testNext(); });
             }
             testNext();
         };
