@@ -130,12 +130,12 @@ start_service() {
 		ucode -S "/etc/nikki/ucode/mixin.uc" | yq -MPoy | yq -Mi ea '
 			. as $item ireduce ({}; . * $item ) | explode(.) |
 			((select(env(comments) == 0) | ... comments = "") // .) |
-			.rules   = ((.rules //    []) + (.nikki-rules   // [])) |
+			.rules   = ((.rules    // []) + (.nikki-rules   // [])) |
 			.proxies = (((.proxies // []) + (.nikki-proxies // []) + (.node // [])) | reverse | unique_by(.name) | reverse) |
-			.proxy-providers = (.nikki-proxy-providers // .proxy-providers) |
-			(env(mft)     // "") as $m | (env(interval)    // "") as $i |
-			(env(lazy)    // "") as $l | (env(tolerance)   // "") as $t |
-			(env(timeout) // "") as $o | (env(urltest_url) // "") as $u |
+			.proxy-providers = (.nikki-proxy-providers // .proxy-providers)   |
+			(strenv(mft)     // "") as $m | (strenv(interval)    // "") as $i |
+			(strenv(lazy)    // "") as $l | (strenv(tolerance)   // "") as $t |
+			(strenv(timeout) // "") as $o | (strenv(urltest_url) // "") as $u |
 			.proxy-groups = ((.proxy-groups // []) + (.nikki-proxy-groups // [])) |
 			.proxy-groups |= map(
 				((select($u != "") | .url = $u) // .) |
@@ -151,7 +151,7 @@ start_service() {
 				.path = (($p | select(test("/$")) | . + key) // $p)
 			)) |
 			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups, .nikki-proxy-providers)
-		' "$TEMP_CONFIG" $mixin_extra_file -
+		' "$TEMP_CONFIG" $mixin_extra_file - >/dev/null 2>&1
 
 		if [ "$proxy_enabled" = 1 ]; then
 			if yq 'has("tun")' "$TEMP_CONFIG" >/dev/null 2>&1; then
@@ -325,6 +325,8 @@ start_service() {
 	config_get      scheduled_restart_cron "config" "scheduled_restart_cron"
 	config_get_bool scheduled_restart      "config" "scheduled_restart" 0
 
+	grep -q "#nikki" "/etc/crontabs/root" && \
+		sed -i '/#nikki/d' "/etc/crontabs/root"
 	if [ "$scheduled_restart" = 1 -a -n "$scheduled_restart_cron" ]; then
 		log "App" "Set scheduled restart."
 		echo "$scheduled_restart_cron /etc/init.d/nikki restart #nikki scheduled restart" >> "/etc/crontabs/root"
@@ -522,8 +524,10 @@ cleanup() {
 		sysctl -q -w net.bridge.bridge-nf-call-ip6tables=1
 	fi
 
-	sed -i "/#nikki/d" "/etc/crontabs/root" > /dev/null 2>&1
-	/etc/init.d/cron restart
+	grep -q "#nikki" "/etc/crontabs/root" && {
+		sed -i "/#nikki/d" "/etc/crontabs/root" > /dev/null 2>&1
+		/etc/init.d/cron restart
+	}
 }
 
 clear_logs() {
