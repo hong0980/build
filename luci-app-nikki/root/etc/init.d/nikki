@@ -132,25 +132,26 @@ start_service() {
 			((select(env(comments) == 0) | ... comments = "") // .) |
 			.rules   = ((.rules //    []) + (.nikki-rules   // [])) |
 			.proxies = (((.proxies // []) + (.nikki-proxies // []) + (.node // [])) | reverse | unique_by(.name) | reverse) |
-			.proxy-providers = (.nikki-proxy-providers // .proxy-providers)   |
-			(strenv(mft)     // "") as $m | (strenv(interval)    // "") as $i |
-			(strenv(lazy)    // "") as $l | (strenv(tolerance)   // "") as $t |
-			(strenv(timeout) // "") as $o | (strenv(urltest_url) // "") as $u |
-			.proxy-groups = (((.proxy-groups // []) + (.nikki-proxy-groups // [])) | map(
+			.proxy-providers = (.nikki-proxy-providers // .proxy-providers) |
+			(env(mft)     // "") as $m | (env(interval)    // "") as $i |
+			(env(lazy)    // "") as $l | (env(tolerance)   // "") as $t |
+			(env(timeout) // "") as $o | (env(urltest_url) // "") as $u |
+			.proxy-groups = ((.proxy-groups // []) + (.nikki-proxy-groups // [])) |
+			.proxy-groups |= map(
 				((select($u != "") | .url = $u) // .) |
 				((select($l != "" and .type == "url-test") | .lazy = ($l | (. == "true"))) // .) |
 				((select($t != "" and .type == "url-test") | .tolerance = ($t | tonumber)) // .) |
 				(.type | test("url-test|fallback")) as $is_urltest |
-				((select($i != "" and $is_urltest) | .interval = ($i | tonumber)) // .) |
 				((select($o != "" and $is_urltest) | .timeout  = ($o | tonumber)) // .) |
+				((select($i != "" and $is_urltest) | .interval = ($i | tonumber)) // .) |
 				((select($m != "" and $is_urltest) | .["max-failed-times"] = ($m | tonumber)) // .)
-			)) |
-			.rule-providers? |= map_values(
-				((.path | select(. != "")) // ("./rule_provider/" + key)) as $b |
-				.path = (($b | select(test("/$")) | . + key) // $b)
 			) |
+			.rule-providers? |= (sort_by(key | downcase) | map_values(
+				((.path | select(. != "")) // ("./rule_provider/" + key)) as $p |
+				.path = (($p | select(test("/$")) | . + key) // $p)
+			)) |
 			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups, .nikki-proxy-providers)
-		' "$TEMP_CONFIG" $mixin_extra_file - >/dev/null 2>&1
+		' "$TEMP_CONFIG" $mixin_extra_file -
 
 		if [ "$proxy_enabled" = 1 ]; then
 			if yq 'has("tun")' "$TEMP_CONFIG" >/dev/null 2>&1; then
@@ -254,7 +255,7 @@ start_service() {
 	}
 
 	[ -n "$github_mirror" ] && {
-		export github_mirror profile_path="$TEMP_CONFIG"
+		profile_path="$TEMP_CONFIG" github_mirror="$github_mirror" \
 		ucode -S "/etc/nikki/ucode/mirror.uc"
 	}
 

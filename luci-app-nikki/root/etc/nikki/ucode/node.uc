@@ -409,7 +409,7 @@ export function build_proxies() {
 	const proxies = [];
 
 	uci.foreach('nikki', 'node', (section) => {
-		if (uci_bool(section.enabled) === false) return;
+		if (!uci_bool(section.enabled)) return;
 
 		const base = {
 			name: section.label ?? `${section.address}:${section.port}`,

@@ -62,36 +62,6 @@ function decodeBase64Str(str) {
     }
 }
 
-function getRandom() {
-    return Math.random().toString(36).slice(2, 12);
-}
-
-function loadDefaultLabel(uciconfig, section_id) {
-    let label = uci.get(uciconfig, section_id, 'label');
-    if (label) return label;
-
-    let address = uci.get(uciconfig, section_id, 'address');
-    let port = uci.get(uciconfig, section_id, 'port');
-    if (address && port) return address + ':' + port;
-
-    return section_id;
-}
-
-function loadModalTitle(defaultTitle, addTitle, uciconfig, section_id) {
-    let label = uci.get(uciconfig, section_id, 'label');
-    return label ? '%s: %s'.format(defaultTitle, label) : addTitle;
-}
-
-function validateUniqueValue(uciconfig, ucisection_type, ucifield, section_id, value) {
-    if (!section_id || !value) return true;
-    let found = false;
-    uci.sections(uciconfig, ucisection_type, s => {
-        if (s['.name'] !== section_id && s[ucifield] === value)
-            found = true;
-    });
-    return found ? _('Expecting: %s').format(_('unique value')) : true;
-}
-
 function validateUUID(section_id, value) {
     if (!value) return true;
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
@@ -159,32 +129,19 @@ const CBIStaticList = form.Value.extend({
     },
 });
 
-function allowInsecureConfirm(ev, _section_id, value) {
-    if (value === '1' && !confirm(_('Are you sure to allow insecure?')))
-        ev.target.firstElementChild.checked = null;
-}
-
 function renderNodeSettings(section) {
     let s = section, o;
     s.rowcolors = true;
     s.sortable = true;
     s.nodescriptions = true;
 
-    s.modaltitle = function (section_id) {
-        return loadModalTitle(_('Node'), _('Add a node'), 'nikki', section_id);
-    };
-    s.sectiontitle = function (section_id) {
-        return loadDefaultLabel('nikki', section_id);
-    };
+    o = s.option(form.Flag, 'enabled', _('Enable'));
+    o.editable = true;
+    o.rmempty = true;
 
-    o = s.option(form.Value, 'label', _('Label'));
-    o.load = function (section_id) {
-        return loadDefaultLabel('nikki', section_id);
-    };
-    o.validate = function (section_id, value) {
-        return validateUniqueValue('nikki', 'node', 'label', section_id, value);
-    };
-    o.modalonly = true;
+    o = s.option(form.Value, 'label', _('Name'));
+    o.editable = true;
+    o.width = '25%';
 
     o = s.option(form.ListValue, 'type', _('Type'));
     o.value('direct', _('Direct'));
@@ -767,7 +724,10 @@ function renderNodeSettings(section) {
         '<br/>' +
         _('This is <strong>DANGEROUS</strong>, your traffic is almost like <strong>PLAIN TEXT</strong>! Use at your own risk!'));
     o.depends('tls', '1');
-    o.onchange = allowInsecureConfirm;
+    o.onchange = function (ev, _section_id, value) {
+        if (value === '1' && !confirm(_('Are you sure to allow insecure?')))
+            ev.target.firstElementChild.checked = null;
+    };
     o.modalonly = true;
 
     o = s.option(form.ListValue, 'tls_min_version', _('Minimum TLS version'),
@@ -1291,6 +1251,7 @@ function parseNode(input) {
         let node = parseFlowYAML(line);
         if (!node || !node.type || !node.server || !node.port) return null;
         return {
+            enabled: node.enabled || '0',
             type: node.type,
             label: node.name || (node.server + ':' + node.port),
             address: node.server,
@@ -1530,7 +1491,8 @@ return view.extend({
 
         s = m.section(form.GridSection, 'node', _('Nodes'));
         s.addremove = true;
-        s.anonymous = false;
+        s.anonymous = true;
+        s.sortable = true;
         so = renderNodeSettings(s);
         so.handleLinkImport = function () {
             const textarea = E('textarea', {
@@ -1559,7 +1521,7 @@ return view.extend({
                             input_links.forEach(l => {
                                 let config = parseNode(l);
                                 if (config) {
-                                    let sid = uci.add('nikki', 'node', getRandom());
+                                    let sid = uci.add('nikki', 'node');
                                     Object.keys(config).forEach(k => {
                                         uci.set('nikki', sid, k, config[k]);
                                     });
