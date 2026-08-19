@@ -157,10 +157,6 @@ if (uci_bool(uci_get({o:'wanDns'}))) {
 	}
 }
 
-if (config.dns["respect-rules"] == true && (!config.dns["proxy-server-nameserver"] || length(config.dns["proxy-server-nameserver"]) == 0)) {
-	config.dns["proxy-server-nameserver"] = ["https://dns.alidns.com/dns-query", "https://doh.pub/dns-query"];
-}
-
 if (uci_bool(uci_get({o:'authentication'}))) {
 	config['authentication'] = [];
 	uci.foreach('nikki', 'authentication', (section) => {

@@ -73,8 +73,13 @@ dns:
     - '*.lan'
     - "rule-set:cn_domain"
 
-  nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
+  nameserver: [https://dns.google/dns-query, https://dns.cloudflare.com/dns-query]
   default-nameserver: [223.5.5.5, 119.29.29.29]
+  proxy-server-nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
+  nameserver-policy:
+    "rule-set:ww_reject": rcode://success
+    "rule-set:private_domain": [223.5.5.5, 119.29.29.29]
+    "rule-set:apple_domain,cn_domain": [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
 
 # ================= 入站 Tun =================
 tun:
@@ -138,8 +143,6 @@ rules:
   - RULE-SET,paypal_domain,自动选择
   - RULE-SET,gfw_domain,自动选择
   - RULE-SET,geolocation-!cn,自动选择
-  - GEOIP,CN,🎯 国内                    # 兜底：目标 IP 属地中国大陆国内
-  - GEOIP,PRIVATE,🎯 国内               # 私有/内网 IP 段国内
   - MATCH,自动选择                       # 兜底规则，需放最后
 
 # 配置文件持久化设置

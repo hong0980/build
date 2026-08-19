@@ -259,6 +259,11 @@ start_service() {
 		ucode -S "/etc/nikki/ucode/mirror.uc"
 	}
 
+	yq -Mi '.dns |= (
+		select(.["respect-rules"] == true and ((.proxy-server-nameserver // []) | length == 0)) |
+		.proxy-server-nameserver = ["https://dns.alidns.com/dns-query", "https://doh.pub/dns-query"]
+	)' "$TEMP_CONFIG"
+
 	mv -f "$TEMP_CONFIG" "$RUN_PROFILE_PATH"
 
 	if [ "$test_profile" = 1 ]; then
