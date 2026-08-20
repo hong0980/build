@@ -6,9 +6,7 @@ Anchor_PR: &Anchor_PR {type: http, interval: 86400, proxy: DIRECT, health-check:
 # ================= 机场订阅 =================
 proxy-providers:
 #  机场名: {<<: *Anchor_PR, url: '订阅链接', override: {additional-prefix: '[机场名] '}}
-  cloud: {<<: *Anchor_PR, url: '', override: {additional-prefix: '[cloud] '}}
 
-# ================= 全局设置 =================
 
 port: 7080
 socks-port: 1080
@@ -59,7 +57,6 @@ sniffer:
     - "+.wql.us"
     - "+.keywordsstudios.cn"
 
-# ================= DNS模块 =================
 dns:
   enable: true
   ipv6: false
@@ -73,8 +70,8 @@ dns:
     - '*.lan'
     - "rule-set:cn_domain"
 
-  nameserver: [https://dns.google/dns-query, https://dns.cloudflare.com/dns-query]
   default-nameserver: [223.5.5.5, 119.29.29.29]
+  nameserver: [https://dns.google/dns-query, https://dns.cloudflare.com/dns-query]
   proxy-server-nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
   nameserver-policy:
     "rule-set:ww_reject": rcode://success
@@ -97,23 +94,20 @@ class:       &class       {type: http, interval: 86400, behavior: classical, for
 domain_text: &domain_text {type: http, interval: 86400, behavior: domain,    format: yaml}
 class_yaml:  &class_yaml  {type: http, interval: 86400, behavior: classical, format: yaml}
 groups:      &groups      {type: url-test, include-all: true, tolerance: 50, interval: 300, url: https://cp.cloudflare.com/generate_204}
-# 策略组公共锚点：url-test 自动选延迟最低节点；use 引用订阅；include-all 纳入全部已知节点；
-# tolerance 为同档延迟容差（ms）；url 为测速探测地址
 
 proxies:
-  - {name: 🎯 国内, type: direct, udp: true, proxies: [DIRECT]} # 手写国内节点，供订阅拉取出口及规则引用
+  - {name: 🎯国内, type: direct, udp: true, proxies: [DIRECT]}
 
 proxy-groups:
-  - {name: 自动选择,  <<: *groups, filter: "(?i)^(?!.*(国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
-  - {name: 🚀 AI,    <<: *groups, filter: "(?i)(台|日|美|新|韩)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Claude.png}
-  - {name: 香港自动,   <<: *groups, filter: "(?i)(香港|HK)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
-  - {name: 日本自动,   <<: *groups, filter: "(?i)(日本|jp)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
-  - {name: 台湾自动,   <<: *groups, filter: "(?i)(台湾|tw)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
-  - {name: 美国自动,   <<: *groups, filter: "(?i)(美国|us)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
-  - {name: 新加坡自动, <<: *groups, filter: "(?i)(新加坡|sg)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/SG.png}
-  - {name: 韩国自动,  <<: *groups, filter: "(?i)(韩国|🇰🇷)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
-  - {name: 其他,     <<: *groups, filter: "(?i)^(?!.*(港|HK|台|日|美|新|国内|韩)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OT.png}
-  # 各分组按节点命名关键字筛选，依赖机场命名规范一致
+  - {name: 自动选择, <<: *groups, filter: "(?i)^(?!.*(国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
+  - {name: 🚀AI,   <<: *groups, filter: "(?i)(台|日|美|新|韩)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Claude.png}
+  - {name: 香港自动, <<: *groups, filter: "(?i)(香港|HK)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
+  - {name: 日本自动, <<: *groups, filter: "(?i)(日本|jp)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
+  - {name: 台湾自动, <<: *groups, filter: "(?i)(台湾|tw)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
+  - {name: 美国自动, <<: *groups, filter: "(?i)(美国|us)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
+  - {name: 狮城自动, <<: *groups, filter: "(?i)(新加坡|sg)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/SG.png}
+  - {name: 韩国自动, <<: *groups, filter: "(?i)(韩国|🇰🇷)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
+  - {name: 其他,    <<: *groups, filter: "(?i)^(?!.*(港|HK|台|日|美|新|国内|韩)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OT.png}
 
 rules:
   #- AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,goofish.com)),DIRECT
@@ -125,30 +119,30 @@ rules:
   #- IP-CIDR,192.168.6.0/24,DIRECT
   #- AND,((DOMAIN-SUFFIX,netflix.com),(NETWORK,UDP)),REJECT
   - RULE-SET,ww_reject,REJECT
-  - RULE-SET,private_domain,🎯 国内     # 局域网/内网保留域名国内
-  - RULE-SET,cn_domain,🎯 国内          # 国内域名国内
-  - RULE-SET,cn_ip,🎯 国内,no-resolve   # 国内 IP 段国内，不为此规则单独触发解析
-  - RULE-SET,apple_domain,🎯 国内       # 苹果服务国内
-  - RULE-SET,cdn_cn,🎯 国内
-  - RULE-SET,pt_classical,🎯 国内
-  - RULE-SET,ai_domain,🚀 AI
+  - RULE-SET,private_domain,🎯国内     # 局域网/内网保留域名国内
+  - RULE-SET,cn_domain,🎯国内          # 国内域名国内
+  - RULE-SET,cdn_cn,🎯国内
+  - RULE-SET,pt_domain,🎯国内
+  - RULE-SET,apple_domain,🎯国内
+  - RULE-SET,claude_domain,日本自动
+  - RULE-SET,ai_domain,🚀AI
   - RULE-SET,bybit_domain,日本自动
   - RULE-SET,github_domain,自动选择
   - RULE-SET,youtube_domain,自动选择
   - RULE-SET,tiktok_domain,自动选择
-  - RULE-SET,netflix_domain,新加坡自动
-  - RULE-SET,disney_domain,新加坡自动
+  - RULE-SET,netflix_domain,狮城自动
+  - RULE-SET,disney_domain,狮城自动
   - RULE-SET,speedtest_domain,自动选择
   - RULE-SET,telegram_domain,自动选择
   - RULE-SET,paypal_domain,自动选择
   - RULE-SET,gfw_domain,自动选择
   - RULE-SET,geolocation-!cn,自动选择
-  - MATCH,自动选择                       # 兜底规则，需放最后
+  - RULE-SET,cn_ip,🎯国内,no-resolve   # 国内 IP 段国内，不为此规则单独触发解析
+  - MATCH,自动选择                      # 兜底规则，需放最后
 
-# 配置文件持久化设置
 profile:
-  store-selected: true                # 记住策略组手动选择的节点
   store-fake-ip: true                 # 持久化 fake-ip 映射表
+  store-selected: true                # 记住策略组手动选择的节点
 
 external-ui: ui                       # WebUI 目录
 external-ui-name: Zashboard           # WebUI 名称
@@ -158,31 +152,29 @@ secret: "709777"                      # RESTful API 鉴权密钥
 geodata-mode: false                   # false 使用 .dat 格式；true 需改用 .metadb（与 geox-url 对应）
 geodata-loader: standard
 geox-url:
-  mmdb: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb
-  geosite: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat
-  geoip: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat
   asn: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb
-  # geo 数据文件下载地址，如访问不畅可换 raw.githubusercontent.com 等镜像
+  mmdb: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb
+  geoip: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat
+  geosite: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat
 
 rule-providers:
-  # 远程规则集，指向 meta-rules-dat 仓库的预编译 .mrs 文件
-  ai_domain:       {<<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-ai-!cn.mrs"}
-  pt_classical:    {<<: *class_yaml, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/classical/category-pt.yaml"}
-  ww_reject:       {<<: *domain, url: "https://testingcf.jsdelivr.net/gh/wwqgtxx/clash-rules@release/reject.mrs"}
-  private_domain:  { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/private.mrs"}
-  bybit_domain:    { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/bybit.mrs"}
-  youtube_domain:  { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/youtube.mrs"}
-  github_domain:   { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/github.mrs"}
-  telegram_domain: { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/telegram.mrs"}
-  netflix_domain:  { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/netflix.mrs"}
-  disney_domain:   { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/disney.mrs"}
-  paypal_domain:   { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/paypal.mrs"}
-  apple_domain:    { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/apple.mrs"}
-  speedtest_domain: { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/ookla-speedtest.mrs"}
-  tiktok_domain:   { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/tiktok.mrs"}
-  gfw_domain:     { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/gfw.mrs"}
-  geolocation-!cn: { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/geolocation-!cn.mrs"}
-  cn_domain:     { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/cn.mrs"}
-  cdn_cn:        {<<: *domain,  url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-cdn-cn.mrs"}
-  cn_ip:         { <<: *ip,     url: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/cn.mrs"}
-  # 均为 24 小时自动更新一次，第三方仓库（ww_proxy/ww_reject）失效会导致对应规则失效
+  ww_reject:        { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/wwqgtxx/clash-rules@release/reject.mrs"}
+  cn_domain:        { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/cn.mrs"}
+  gfw_domain:       { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/gfw.mrs"}
+  apple_domain:     { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/apple.mrs"}
+  bybit_domain:     { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/bybit.mrs"}
+  disney_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/disney.mrs"}
+  paypal_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/paypal.mrs"}
+  tiktok_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/tiktok.mrs"}
+  github_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/github.mrs"}
+  private_domain:   { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/private.mrs"}
+  youtube_domain:   { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/youtube.mrs"}
+  netflix_domain:   { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/netflix.mrs"}
+  telegram_domain:  { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/telegram.mrs"}
+  claude_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/anthropic.mrs"}
+  pt_domain:        { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-pt.mrs"}
+  ai_domain:        { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/category-ai-!cn.mrs"}
+  speedtest_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/ookla-speedtest.mrs"}
+  geolocation-!cn:  { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/geolocation-!cn.mrs"}
+  cdn_cn:           { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/category-cdn-cn.mrs"}
+  cn_ip:            { <<: *ip,     url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geoip/cn.mrs"}
