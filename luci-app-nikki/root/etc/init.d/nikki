@@ -150,6 +150,7 @@ start_service() {
 				((.path | select(. != "")) // ("./rule_provider/" + key)) as $p |
 				.path = (($p | select(test("/$")) | . + key) // $p)
 			)) |
+			# (.proxy-providers |= ((. // {}) | .. | select(tag == "!!str")) style="double") |
 			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups, .nikki-proxy-providers)
 		' "$TEMP_CONFIG" $mixin_extra_file - >/dev/null 2>&1
 

@@ -159,22 +159,22 @@ geox-url:
 
 rule-providers:
   ww_reject:        { <<: *domain, url: "https://testingcf.jsdelivr.net/gh/wwqgtxx/clash-rules@release/reject.mrs"}
-  cn_domain:        { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/cn.mrs"}
-  gfw_domain:       { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/gfw.mrs"}
-  apple_domain:     { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/apple.mrs"}
-  bybit_domain:     { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/bybit.mrs"}
-  disney_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/disney.mrs"}
-  paypal_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/paypal.mrs"}
-  tiktok_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/tiktok.mrs"}
-  github_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/github.mrs"}
-  private_domain:   { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/private.mrs"}
-  youtube_domain:   { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/youtube.mrs"}
-  netflix_domain:   { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/netflix.mrs"}
-  telegram_domain:  { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/telegram.mrs"}
+  cn_domain:        { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"}
+  gfw_domain:       { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/gfw.mrs"}
+  apple_domain:     { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/apple.mrs"}
+  bybit_domain:     { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/bybit.mrs"}
+  disney_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/disney.mrs"}
+  paypal_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/paypal.mrs"}
+  tiktok_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tiktok.mrs"}
+  github_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/github.mrs"}
+  private_domain:   { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
+  youtube_domain:   { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs"}
+  netflix_domain:   { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.mrs"}
+  telegram_domain:  { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"}
   claude_domain:    { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/anthropic.mrs"}
   pt_domain:        { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-pt.mrs"}
-  ai_domain:        { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/category-ai-!cn.mrs"}
-  speedtest_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/ookla-speedtest.mrs"}
-  geolocation-!cn:  { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/geolocation-!cn.mrs"}
-  cdn_cn:           { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geosite/category-cdn-cn.mrs"}
-  cn_ip:            { <<: *ip,     url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/metageo/geoip/cn.mrs"}
+  ai_domain:        { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs"}
+  speedtest_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/ookla-speedtest.mrs"}
+  geolocation-!cn:  { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"}
+  cdn_cn:           { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-cdn-cn.mrs"}
+  cn_ip:            { <<: *ip,     url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"}

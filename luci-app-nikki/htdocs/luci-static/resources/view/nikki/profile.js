@@ -1417,6 +1417,10 @@ return view.extend({
         o.optional = true;
         o.readonly = true;
 
+        o = s.option(form.Value, 'url', _('Subscription Url'));
+        o.modalonly = true;
+        o.rmempty = false;
+
         o = s.option(form.Flag, 'enabled', _('配置中使用'), _('在启动的配置文件中自动添加这个订阅URL'));
         o.editable = true;
         o.rmempty = true;
@@ -1447,10 +1451,6 @@ return view.extend({
                 })
                 .catch((err) => ui.addTimeLimitedNotification(null, E('p', _('Subscription update failed %s.').format(err.message || err)), 8000, 'error'));
         };
-
-        o = s.option(form.Value, 'url', _('Subscription Url'));
-        o.modalonly = true;
-        o.rmempty = false;
 
         o = s.option(form.Value, 'user_agent', _('User Agent'));
         o.default = 'auto';
