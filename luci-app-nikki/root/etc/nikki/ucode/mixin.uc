@@ -235,17 +235,18 @@ config['geo-auto-update']     = uci_bool(uci_get({o:'geox_auto_update'}));
 config['geo-update-interval'] = uci_int(uci_get({o:'geox_update_interval'}));
 config['node']                = build_proxies();
 
-const urls = uci_array(uci_get({s:'config', o:'file_url'}));
-if (match(uci_get({s:'config', o:'profile'}), /^file:/) && urls && length(urls) > 0) {
+if (uci_bool(uci_get({s:'config', o:'url_enabled'}))) {
+	let idx = 0;
 	const hc_int = uci_int(uci_get({o:'interval'}) || 600);
 	const hc_url = uci_get({o:'urltest_url'}) || 'https://cp.cloudflare.com/generate_204';
 	config['nikki-proxy-providers'] = {};
-	map(urls, (url, idx) => {
+	uci.foreach('nikki', 'subscription', (section) => {
+		if (!uci_bool(section.enabled)) return;
 		config['nikki-proxy-providers'][`provider${idx + 1}`] = {
 			type:     'http',
 			proxy:    'DIRECT',
 			interval: 86400,
-			url:      url,
+			url:      section.url,
 			filter:   '^(?!.*(到期|过期|剩余|网址|官网|邮箱|订阅|套餐|流量|说明|重置|域名)).*$',
 			'health-check': {
 				enable:   true,
@@ -253,6 +254,7 @@ if (match(uci_get({s:'config', o:'profile'}), /^file:/) && urls && length(urls) 
 				url:      hc_url
 			}
 		};
+		idx++;
 	});
 };
 

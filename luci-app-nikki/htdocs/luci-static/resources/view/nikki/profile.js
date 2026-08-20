@@ -1371,6 +1371,8 @@ return view.extend({
         s.addremove = true;
         s.anonymous = true;
         s.sortable = true;
+        s.rowcolors = true;
+        s.nodescriptions = true;
         s.modaltitle = _('Edit Subscription');
         s.handleRemove = function (section_id, ev) {
             const name = uci.get('nikki', section_id, 'name');
@@ -1393,6 +1395,7 @@ return view.extend({
         o.modalonly = false;
         o.optional = true;
         o.readonly = true;
+        o.width = '7%';
 
         o = s.option(form.Value, 'used', _('Used'));
         o.modalonly = false;
@@ -1413,6 +1416,11 @@ return view.extend({
         o.modalonly = false;
         o.optional = true;
         o.readonly = true;
+
+        o = s.option(form.Flag, 'enabled', _('配置中使用'), _('在启动的配置文件中自动添加这个订阅URL'));
+        o.editable = true;
+        o.rmempty = true;
+        o.width = '9%';
 
         o = s.option(form.Button, 'update_subscription');
         o.editable = true;
