@@ -138,21 +138,22 @@ start_service() {
 			(strenv(timeout) // "") as $o | (strenv(urltest_url) // "") as $u |
 			.proxy-groups = ((.proxy-groups // []) + (.nikki-proxy-groups // [])) |
 			.proxy-groups |= map(
-				((select($u != "") | .url = $u) // .) |
-				((select($l != "" and .type == "url-test") | .lazy = ($l | (. == "true"))) // .) |
-				((select($t != "" and .type == "url-test") | .tolerance = ($t | tonumber)) // .) |
-				(.type | test("url-test|fallback")) as $is_urltest |
-				((select($o != "" and $is_urltest) | .timeout  = ($o | tonumber)) // .) |
-				((select($i != "" and $is_urltest) | .interval = ($i | tonumber)) // .) |
-				((select($m != "" and $is_urltest) | .["max-failed-times"] = ($m | tonumber)) // .)
+				(.type | test("^(select|fallback|load-balance|url-test)$")) as $k |
+				((select($u != "" and $k) | .url  = $u)                   // .) |
+				((select($l != "" and $k) | .lazy = ($l | (. == "true"))) // .) |
+				((select($o != "" and $k) | .timeout   = ($o | tonumber)) // .) |
+				((select($i != "" and $k) | .interval  = ($i | tonumber)) // .) |
+				((select($t != "" and $k) | .tolerance = ($t | tonumber)) // .) |
+				((select($m != "" and $k) | .["max-failed-times"] = ($m | tonumber)) // .)
 			) |
-			(.. | select(tag == "!!map") | select(.type | test("^(select|fallback|load-balance|url-test)$"))) |= (
-				((select($u != "" and has("url"))       | .url  = $u)                   // .) |
-				((select($l != "" and has("lazy"))      | .lazy = ($l | (. == "true"))) // .) |
-				((select($o != "" and has("timeout"))   | .timeout   = ($o | tonumber)) // .) |
-				((select($i != "" and has("interval"))  | .interval  = ($i | tonumber)) // .) |
-				((select($t != "" and has("tolerance")) | .tolerance = ($t | tonumber)) // .) |
-				((select($m != "" and has("max-failed-times")) | .["max-failed-times"] = ($m | tonumber)) // .)
+			(.. | select(tag == "!!map")) |= (
+				(.type | test("^(select|fallback|load-balance|url-test)$")) as $v |
+				((select($u != "" and $v) | .url  = $u)                   // .) |
+				((select($l != "" and $v) | .lazy = ($l | (. == "true"))) // .) |
+				((select($o != "" and $v) | .timeout   = ($o | tonumber)) // .) |
+				((select($i != "" and $v) | .interval  = ($i | tonumber)) // .) |
+				((select($t != "" and $v) | .tolerance = ($t | tonumber)) // .) |
+				((select($m != "" and $v) | .["max-failed-times"] = ($m | tonumber)) // .)
 			) |
 			.rule-providers |= ((. // {}) | sort_keys(.) | map_values(
 				((.path | select(. != "")) // ("./rule_provider/" + key)) as $p |
