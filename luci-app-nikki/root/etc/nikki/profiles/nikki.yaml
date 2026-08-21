@@ -41,6 +41,7 @@ sniffer:
 #     - "+.v2ex.com"                    # 强制嗅探该域名
   skip-domain:                        # 跳过嗅探，改用连接真实 IP/端口判断规则
     - "rule-set:private_domain,cn_domain"
+    - "Mijia Cloud"
     - "+.goofish.com"
     - "dlg.io.mi.com"
     - "+.push.apple.com"
@@ -67,17 +68,25 @@ dns:
   fake-ip-range: 198.18.0.0/16
   fake-ip-filter-mode: blacklist
   fake-ip-filter:
-    - '*.lan'
-    - "rule-set:cn_domain"
+    - "rule-set:private_domain,cn_domain"
+    - "*.lan"
+    - "*.local"
+    - "*.localhost"
+    - "time.windows.com"
+    - "time.nist.gov"
+    - "time.apple.com"
+    - "+.stun.*.*"
+    - "+.stun.*.*.*"
+    - "+.xboxlive.com"
+    - "+.nintendo.net"
 
   default-nameserver: [223.5.5.5, 119.29.29.29]
-  nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
-  proxy-server-nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
+  nameserver: [https://223.5.5.5/dns-query, https://doh.pub/dns-query]
+  proxy-server-nameserver: [https://223.5.5.5/dns-query, https://doh.pub/dns-query]
   nameserver-policy:
     "rule-set:ww_reject": rcode://success
     "rule-set:geolocation-!cn": ['https://1.1.1.1/dns-query', https://8.8.8.8/dns-query]
     "rule-set:apple_domain,cn_domain,private_domain,pt_domain": [https://223.5.5.5/dns-query, https://223.6.6.6/dns-query]
-
 
 # ================= 入站 Tun =================
 tun:
@@ -89,36 +98,30 @@ tun:
   auto-redirect: true                 # 自动配置 iptables/nftables 重定向 TCP（仅 Linux，依赖 auto-route）
   auto-detect-interface: true         # 自动识别出口物理网卡，避免流量递归进 Tun
 
-ip:          &ip          {type: http, interval: 86400, behavior: ipcidr,    format: mrs}
-domain:      &domain      {type: http, interval: 86400, behavior: domain,    format: mrs}
-class:       &class       {type: http, interval: 86400, behavior: classical, format: text}
-domain_text: &domain_text {type: http, interval: 86400, behavior: domain,    format: yaml}
-class_yaml:  &class_yaml  {type: http, interval: 86400, behavior: classical, format: yaml}
-groups:      &groups      {type: url-test, include-all: true, tolerance: 50, interval: 300, url: https://cp.cloudflare.com/generate_204}
+ip:     &ip     {type: http, interval: 86400, behavior: ipcidr, format: mrs}
+domain: &domain {type: http, interval: 86400, behavior: domain, format: mrs}
+
+g_select:   &g_select   {type: select,       url: "https://www.gstatic.com/generate_204", include-all: true}
+g_fallback: &g_fallback {type: fallback,     url: "https://www.gstatic.com/generate_204", include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, max-failed-times: 3}
+g_balance:  &g_balance  {type: load-balance, url: "https://www.gstatic.com/generate_204", include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, strategy: consistent-hashing}
+g_urltest:  &g_urltest  {type: url-test,     url: "https://www.gstatic.com/generate_204", include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, tolerance: 50, max-failed-times: 3}
 
 proxies:
   - {name: 🎯国内, type: direct, udp: true, proxies: [DIRECT]}
 
 proxy-groups:
-  - {name: 自动选择, <<: *groups, filter: "(?i)^(?!.*(国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
-  - {name: 🚀AI,   <<: *groups, filter: "(?i)(台|日|美|新|韩)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Claude.png}
-  - {name: 香港自动, <<: *groups, filter: "(?i)(香港|HK)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
-  - {name: 日本自动, <<: *groups, filter: "(?i)(日本|jp)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
-  - {name: 台湾自动, <<: *groups, filter: "(?i)(台湾|tw)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
-  - {name: 美国自动, <<: *groups, filter: "(?i)(美国|us)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
-  - {name: 狮城自动, <<: *groups, filter: "(?i)(新加坡|sg)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/SG.png}
-  - {name: 韩国自动, <<: *groups, filter: "(?i)(韩国|🇰🇷)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
-  - {name: 其他,    <<: *groups, filter: "(?i)^(?!.*(港|HK|台|日|美|新|国内|韩)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OT.png}
+  - {name: 自动选择, <<: *g_urltest, filter: "(?i)^(?!.*(国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
+  - {name: 🚀AI,    <<: *g_urltest, filter: "(?i)(台|日|美|新|韩)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Claude.png}
+  - {name: 香港自动, <<: *g_urltest, filter: "(?i)(香港|HK)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}
+  - {name: 日本自动, <<: *g_urltest, filter: "(?i)(日本|jp)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/JP.png}
+  - {name: 台湾自动, <<: *g_urltest, filter: "(?i)(台湾|tw)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/TW.png}
+  - {name: 美国自动, <<: *g_urltest, filter: "(?i)(美国|us)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/US.png}
+  - {name: 狮城自动, <<: *g_urltest, filter: "(?i)(新加坡|sg)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/SG.png}
+  - {name: 韩国自动, <<: *g_urltest, filter: "(?i)(韩国|🇰🇷)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
+  - {name: 其他,     <<: *g_urltest, filter: "(?i)^(?!.*(港|HK|台|日|美|新|国内|韩)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OT.png}
 
 rules:
-  #- AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,goofish.com)),DIRECT
-  #- AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,taobao.com)),DIRECT
-  #- AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,alicdn.com)),DIRECT
-  #- AND,((NETWORK,UDP),(DST-PORT,443),(GEOSITE,cn)),DIRECT
-  #- AND,((NETWORK,UDP),(DST-PORT,443)),REJECT # 拦截 QUIC，强制回退 TCP
-  #- IP-CIDR,10.0.0.0/24,DIRECT
-  #- IP-CIDR,192.168.6.0/24,DIRECT
-  #- AND,((DOMAIN-SUFFIX,netflix.com),(NETWORK,UDP)),REJECT
+  # - DOMAIN-REGEX,.*\.(com|net|org|cn)\.lan,REJECT
   - RULE-SET,ww_reject,REJECT
   - RULE-SET,private_domain,🎯国内     # 局域网/内网保留域名国内
   - RULE-SET,cn_domain,🎯国内          # 国内域名国内
