@@ -5,20 +5,21 @@ Anchor_PR: &Anchor_PR {type: http, interval: 86400, proxy: DIRECT, health-check:
 proxy-providers:
 #  机场名: {<<: *Anchor_PR, url: '订阅链接', override: {additional-prefix: '[机场名] '}}
 
-port: 7080
+mode: "rule"
+log-level: "warning"
+find-process-mode: "off"
+port: 7893
 socks-port: 1080
 mixed-port: 7890
 redir-port: 7891
 tproxy-port: 7892
-allow-lan: true                      # 允许局域网设备接入代理端口/Tun
-bind-address: "*"                    # 配合 allow-lan，监听所有网卡
-mode: rule                           # 代理模式：rule / global / direct
-ipv6: false                          # 全局 IPv6 开关，同时控制 DNS 是否解析 AAAA
-unified-delay: true                  # 统一延迟计算方式，测速更准确
-tcp-concurrent: true                 # 多个解析 IP 并发握手，取最快
-log-level: warning                   # 日志等级：silent/error/warning/info/debug
-keep-alive-idle: 600                 # TCP keepalive 空闲探测时间（秒）
-keep-alive-interval: 15              # TCP keepalive 探测间隔（秒）
+allow-lan: true
+bind-address: "*"
+ipv6: false
+unified-delay: true
+tcp-concurrent: true
+keep-alive-idle: 600
+keep-alive-interval: 15
 
 dns:
   enable: true
@@ -28,20 +29,31 @@ dns:
   respect-rules: true
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.0/16
-  fake-ip-filter-mode: blacklist
-  fake-ip-filter: ["rule-set:private_dm,cn_dm,fakeipfilter"]
+  fake-ip-filter: ["rule-set:private_domain,cn_domain,fakeipfilter"]
 
-  default-nameserver: [223.5.5.5, 119.29.29.29]
-  nameserver: [https://223.5.5.5/dns-query, https://doh.pub/dns-query]
-  proxy-server-nameserver: [https://223.5.5.5/dns-query, https://doh.pub/dns-query]
+  default-nameserver: ["223.5.5.5", "119.29.29.29"]
+  nameserver: ["https://223.5.5.5/dns-query", "https://223.6.6.6/dns-query"]
+  proxy-server-nameserver: ["https://223.5.5.5/dns-query", "https://223.6.6.6/dns-query"]
   nameserver-policy:
-    'rule-set:ww_reject': rcode://success
-    'rule-set:gfw_dm,geolocation-!cn': ['https://1.1.1.1/dns-query', https://8.8.8.8/dns-query]
-    'rule-set:apple_dm,cn_dm,private_dm,pt_dm': [https://223.5.5.5/dns-query, https://223.6.6.6/dns-query]
+    'rule-set:ww_reject': "rcode://success"
+    'rule-set:gfw_domain,geolocation-!cn': ["https://1.1.1.1/dns-query", "https://8.8.8.8/dns-query"]
+    'rule-set:apple_domain,cn_domain,private_domain,pt_domain': ["https://223.5.5.5/dns-query", "https://223.6.6.6/dns-query"]
+  # fallback: ["https://1.1.1.1/dns-query", "https://8.8.8.8/dns-query"]
+  # fallback-filter:
+  #   geoip: true
+  #   geoip-code: "CN"
 
-# ================= 嗅探 =================
+hosts:
+  'cloudflare-dns.com': ['1.1.1.1', '1.0.0.1']
+  'dns.google': ['8.8.8.8', '8.8.4.4']
+  'services.googleapis.cn': ['services.googleapis.com']
+  '+.mcdn.bilivideo.com': ['0.0.0.0']
+  '+.mcdn.bilivideo.cn': ['0.0.0.0']
+  '+.edge.mountaintoys.cn': ['0.0.0.0']
+  '+.h2.smtcdns.net': ['0.0.0.0']
+
 sniffer:
-  enable: true                        # 启用流量嗅探（从 SNI/Host/QUIC 提取真实域名）
+  enable: true
   sniff:
     HTTP:
       ports: [80, 8080-8880]          # 嗅探 HTTP Host 的端口范围
@@ -56,7 +68,7 @@ sniffer:
 #   force-domain:
 #     - "+.v2ex.com"                    # 强制嗅探该域名
   skip-domain:                        # 跳过嗅探，改用连接真实 IP/端口判断规则
-    ["rule-set:private_dm,cn_dm,fakeipfilter","Mijia Cloud","+.goofish.com","dlg.io.mi.com","+.push.apple.com","+.apple.com","+.wechat.com","+.qpic.cn","+.qq.com","+.wechatapp.com","+.vivox.com","+.oray.com","+.sunlogin.net","+.msftconnecttest.com","+.msftncsi.com","+.wql.us","+.keywordsstudios.cn"]
+    ["rule-set:private_domain,cn_domain,fakeipfilter","Mijia Cloud","+.goofish.com","dlg.io.mi.com","+.push.apple.com","+.apple.com","+.wechat.com","+.qpic.cn","+.qq.com","+.wechatapp.com","+.vivox.com","+.oray.com","+.sunlogin.net","+.msftconnecttest.com","+.msftncsi.com","+.wql.us","+.keywordsstudios.cn"]
 
 # ================= 入站 Tun =================
 tun:
@@ -67,6 +79,13 @@ tun:
   auto-route: true                    # 自动配置路由表，将流量导入 Tun
   auto-redirect: true                 # 自动配置 iptables/nftables 重定向 TCP（仅 Linux，依赖 auto-route）
   auto-detect-interface: true         # 自动识别出口物理网卡，避免流量递归进 Tun
+
+ntp:
+  enable: true
+  write-to-system: false
+  server: time.apple.com
+  port: 123
+  interval: 30
 
 profile:
   store-fake-ip: true                 # 持久化 fake-ip 映射表
@@ -88,22 +107,22 @@ geox-url:
 rules:
   # - DOMAIN-REGEX,.*\.(com|net|org|cn)\.lan,REJECT
   - RULE-SET,ww_reject,REJECT
-  - RULE-SET,private_dm,🎯国内     # 局域网/内网保留域名国内
-  - RULE-SET,cn_dm,🎯国内          # 国内域名国内
+  - RULE-SET,private_domain,🎯国内     # 局域网/内网保留域名国内
+  - RULE-SET,cn_domain,🎯国内          # 国内域名国内
   - RULE-SET,cdn_cn,🎯国内
-  - RULE-SET,pt_dm,🎯国内
-  - RULE-SET,apple_dm,🎯国内
-  - RULE-SET,claude_dm,🚀AI
-  - RULE-SET,ai_dm,🚀AI
-  - RULE-SET,bybit_dm,自动选择
-  - RULE-SET,github_dm,自动选择
-  - RULE-SET,youtube_dm,自动选择
-  - RULE-SET,tiktok_dm,自动选择
-  - RULE-SET,netflix_dm,自动选择
-  - RULE-SET,disney_dm,自动选择
-  - RULE-SET,telegram_dm,自动选择
-  - RULE-SET,paypal_dm,自动选择
-  - RULE-SET,gfw_dm,自动选择
+  - RULE-SET,pt_domain,🎯国内
+  - RULE-SET,apple_domain,🎯国内
+  - RULE-SET,claude_domain,🚀AI
+  - RULE-SET,ai_domain,🚀AI
+  - RULE-SET,bybit_domain,自动选择
+  - RULE-SET,github_domain,自动选择
+  - RULE-SET,youtube_domain,自动选择
+  - RULE-SET,tiktok_domain,自动选择
+  - RULE-SET,netflix_domain,自动选择
+  - RULE-SET,disney_domain,自动选择
+  - RULE-SET,telegram_domain,自动选择
+  - RULE-SET,paypal_domain,自动选择
+  - RULE-SET,gfw_domain,自动选择
   - RULE-SET,geolocation-!cn,自动选择
   - RULE-SET,cn_ip,🎯国内,no-resolve   # 国内 IP 段国内，不为此规则单独触发解析
   - MATCH,自动选择                      # 兜底规则，需放最后
@@ -111,10 +130,10 @@ rules:
 proxies:
   - {name: 🎯国内, type: direct, udp: true, proxies: [DIRECT]}
 
-.f: &select   {include-all: true, url: "https://www.gstatic.com/generate_204", type: select}
-.g: &fallback {include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, url: "https://www.gstatic.com/generate_204", type: fallback, max-failed-times: 3}
-.h: &balance  {include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, url: "https://www.gstatic.com/generate_204", type: load-balance, strategy: consistent-hashing}
-.i: &urltest  {include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, url: "https://www.gstatic.com/generate_204", type: url-test, tolerance: 50, max-failed-times: 3}
+.a: &select   {include-all: true, url: "https://www.gstatic.com/generate_204", type: select}
+.b: &fallback {include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, url: "https://www.gstatic.com/generate_204", type: fallback, max-failed-times: 3}
+.c: &balance  {include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, url: "https://www.gstatic.com/generate_204", type: load-balance, strategy: consistent-hashing}
+.d: &urltest  {include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, url: "https://www.gstatic.com/generate_204", type: url-test, tolerance: 50, max-failed-times: 3}
 
 proxy-groups:
   - {name: 自动选择, <<: *urltest, filter: "(?i)^(?!.*(国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
@@ -127,30 +146,31 @@ proxy-groups:
   - {name: 韩国自动, <<: *urltest, filter: "(?i)(韩国|🇰🇷)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/KR.png}
   - {name: 其他,     <<: *urltest, filter: "(?i)^(?!.*(港|HK|台|日|美|新|国内|韩)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/OT.png}
 
-.a: &base        {type: http, interval: 86400}
-.c: &domain      {<<: *base, behavior: domain,    format: mrs}
-.b: &domain_ip   {<<: *base, behavior: ipcidr,    format: mrs}
-.d: &domain_yaml {<<: *base, behavior: domain,    format: yaml}
-.e: &class       {<<: *base, behavior: classical, format: yaml}
+.e: &base        {type: http, interval: 86400}
+.g: &domain_ip   {<<: *base, behavior: ipcidr,    format: mrs}
+.f: &domain_mrs  {<<: *base, behavior: domain,    format: mrs}
+.h: &domain_yaml {<<: *base, behavior: domain,    format: yaml}
+.i: &domain_text {<<: *base, behavior: domain,    format: text}
+.j: &class       {<<: *base, behavior: classical, format: yaml}
 
 rule-providers:
-  cn_dm:       {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"}
-  gfw_dm:      {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/gfw.mrs"}
-  apple_dm:    {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/apple.mrs"}
-  bybit_dm:    {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/bybit.mrs"}
-  disney_dm:   {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/disney.mrs"}
-  paypal_dm:   {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/paypal.mrs"}
-  tiktok_dm:   {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tiktok.mrs"}
-  github_dm:   {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/github.mrs"}
-  private_dm:  {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
-  youtube_dm:  {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs"}
-  netflix_dm:  {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.mrs"}
-  telegram_dm: {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"}
-  claude_dm:   {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/anthropic.mrs"}
-  pt_dm:       {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-pt.mrs"}
-  ai_dm:       {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs"}
-  cdn_cn:      {<<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-cdn-cn.mrs"}
-  ww_reject:   {<<: *domain, url: "https://testingcf.jsdelivr.net/gh/wwqgtxx/clash-rules@release/reject.mrs"}
-  fakeipfilter:    {<<: *domain_yaml, url: "https://raw.githubusercontent.com/juewuy/ShellCrash/refs/heads/dev/public/fake_ip_filter.list"}
+  cn_domain:       {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"}
+  gfw_domain:      {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/gfw.mrs"}
+  apple_domain:    {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/apple.mrs"}
+  bybit_domain:    {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/bybit.mrs"}
+  disney_domain:   {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/disney.mrs"}
+  paypal_domain:   {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/paypal.mrs"}
+  tiktok_domain:   {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tiktok.mrs"}
+  github_domain:   {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/github.mrs"}
+  private_domain:  {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
+  youtube_domain:  {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs"}
+  netflix_domain:  {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.mrs"}
+  telegram_domain: {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"}
+  claude_domain:   {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/anthropic.mrs"}
+  pt_domain:       {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-pt.mrs"}
+  ai_domain:       {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs"}
+  cdn_cn:      {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-cdn-cn.mrs"}
+  ww_reject:   {<<: *domain_mrs, url: "https://testingcf.jsdelivr.net/gh/wwqgtxx/clash-rules@release/reject.mrs"}
+  fakeipfilter:    {<<: *domain_text, url: "https://raw.githubusercontent.com/juewuy/ShellCrash/refs/heads/dev/public/fake_ip_filter.list"}
   cn_ip:           {<<: *domain_ip,   url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"}
-  geolocation-!cn: {<<: *domain,      url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"}
+  geolocation-!cn: {<<: *domain_mrs,      url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"}

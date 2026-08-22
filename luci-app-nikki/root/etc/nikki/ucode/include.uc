@@ -1,7 +1,7 @@
 import { readfile, popen } from 'fs';
 
 export function uci_bool(obj) {
-	return obj == null ? null : obj == '1' || obj == 'true' || obj == 'yes';
+	return (obj == '1' || obj == 'true') || null;
 };
 
 export function uci_int(obj) {
@@ -10,34 +10,21 @@ export function uci_int(obj) {
 
 export function uci_array(obj) {
 	if (obj == null) return [];
-	if (type(obj) == 'array') {
-		return uniq(obj);
-	}
+	if (type(obj) == 'array') return uniq(obj);
 	return [obj];
 };
 
 export function trim_all(obj) {
 	if (obj == null) return null;
-	if (type(obj) == 'string') {
-		if (length(obj) == 0) return null;
-		return obj;
+	let t = type(obj);
+	if (t == 'string' || t == 'array')
+		return length(obj) == 0 ? null : obj;
+	if (t != 'object') return obj;
+	for (let key in obj) {
+		obj[key] = trim_all(obj[key]);
+		if (obj[key] == null) delete obj[key];
 	}
-	if (type(obj) == 'array') {
-		if (length(obj) == 0) return null;
-		return obj;
-	}
-	if (type(obj) == 'object') {
-		const obj_keys = keys(obj);
-		for (let key in obj_keys) {
-			obj[key] = trim_all(obj[key]);
-			if (obj[key] == null) {
-				delete obj[key];
-			}
-		}
-		if (length(keys(obj)) == 0) return null;
-		return obj;
-	}
-	return obj;
+	return length(keys(obj)) == 0 ? null : obj;
 };
 
 export function get_cgroups_version() {
@@ -80,8 +67,7 @@ export function get_cgroups() {
 
 export function load_profile() {
 	const out = run('yq -o json /etc/nikki/run/config.yaml');
-	if (!out) return {};
-	return json(out);
+	return out ? json(out) : {};
 };
 
 export function shellQuote(s) {
