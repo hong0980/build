@@ -156,8 +156,9 @@ start_service() {
 				((select($m != "" and $v) | .["max-failed-times"] = ($m | tonumber)) // .)
 			) |
 			.rule-providers |= ((. // {}) | sort_keys(.) | map_values(
-				((.path | select(. != "")) // ("./rule_provider/" + key)) as $p |
-				.path = (($p | select(test("/$")) | . + key) // $p)
+				(.url | capture("(?P<ext>\\.[^.]+)$").ext // "") as $q |
+				((.path | select(. != "")) // ("./rule_provider/" + key + $q)) as $p |
+				.path = (($p | select(test("/$")) | . + key + $q) // $p)
 			)) |
 			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups, .nikki-proxy-providers)
 		' "$TEMP_CONFIG" $mixin_extra_file - >/dev/null 2>&1
