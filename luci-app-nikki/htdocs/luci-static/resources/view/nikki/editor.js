@@ -54,8 +54,8 @@ return view.extend({
                 ...build(sp, _('Subscription:'), '/etc/nikki/subscriptions'),
                 ...build(pf, _('File:'), '/etc/nikki/profiles'),
                 ...build(mp, _('Mixin:'), '/etc/nikki/mixin'),
-                ...build(rp, _('Rule Provider:'), '/etc/nikki/run/providers/rule'),
-                ...build(pp, _('Proxy Provider:'), '/etc/nikki/run/providers/proxy'),
+                // ...build(rp, _('Rule Provider:'), '/etc/nikki/run/providers/rule'),
+                // ...build(pp, _('Proxy Provider:'), '/etc/nikki/run/providers/proxy'),
             ];
 
             return allFiles.filter(item => item.path).map(item => {

@@ -1055,14 +1055,14 @@ return view.extend({
         so.modalonly = false;
         so.rmempty = false;
 
-        so = o.subsection.option(form.Value, 'name', _('Name'));
-        so.rmempty = false;
-
         so = o.subsection.option(form.ListValue, 'type', _('Type'));
-        so.default = 'http';
+        so.default = 'file';
         so.rmempty = false;
         so.value('http');
         so.value('file');
+
+        so = o.subsection.option(form.Value, 'name', _('Name'));
+        so.rmempty = false;
 
         so = o.subsection.option(form.Value, 'url', _('Url'));
         so.modalonly = true;
@@ -1088,6 +1088,15 @@ return view.extend({
         so.root_directory = nikki.ruleProvidersDir;
         so.depends('type', 'file');
 
+        so = o.subsection.option(form.Value, 'path', _('Path'));
+        so.write = function (section_id, value) {
+            return form.Value.prototype.write.call(
+                this, section_id, normalizePath(value)
+            );
+        };
+        so.modalonly = true;
+        so.depends('type', 'http');
+
         so = o.subsection.option(form.ListValue, 'file_format', _('File Format'));
         so.default = 'yaml';
         so.value('mrs');
@@ -1100,13 +1109,6 @@ return view.extend({
         so.value('classical');
         so.value('domain');
         so.value('ipcidr');
-
-        so = o.subsection.option(form.Value, 'path', _('Path'));
-        so.write = function (section_id, value) {
-            return form.Value.prototype.write.call(
-                this, section_id, normalizePath(value)
-            );
-        };
 
         so = o.subsection.option(form.Value, 'update_interval', _('Update Interval'), _('In seconds.'));
         so.datatype = 'uinteger';

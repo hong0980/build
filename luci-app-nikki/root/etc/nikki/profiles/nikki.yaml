@@ -171,6 +171,6 @@ rule-providers:
   ai_domain:       {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs"}
   cdn_cn:      {<<: *domain_mrs, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-cdn-cn.mrs"}
   ww_reject:   {<<: *domain_mrs, url: "https://testingcf.jsdelivr.net/gh/wwqgtxx/clash-rules@release/reject.mrs"}
-  fakeipfilter:    {<<: *domain_text, url: "https://raw.githubusercontent.com/juewuy/ShellCrash/refs/heads/dev/public/fake_ip_filter.list"}
+  fakeipfilter:    {<<: *domain_text, url: "https://raw.githubusercontent.com/DustinWin/ShellCrash/refs/heads/dev/public/fake_ip_filter.list"}
   cn_ip:           {<<: *domain_ip,   url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"}
   geolocation-!cn: {<<: *domain_mrs,      url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"}
