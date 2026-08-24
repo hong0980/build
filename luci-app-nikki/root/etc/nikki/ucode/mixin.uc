@@ -6,65 +6,99 @@ import { build_proxies } from '/etc/nikki/ucode/node.uc';
 import { uci_bool as ub, uci_int as ui, uci_array as ua, trim_all } from '/etc/nikki/ucode/include.uc';
 const uci  = cursor();
 const ubus = connect();
-const cfg  = {};
 
 function ug(o) {return uci.get('nikki', 'mixin', o)}
 
 const ifname = ug('outbound_interface');
 const st     = ubus.call('network.interface', 'status', {'interface': ifname});
-const dev    = st?.l3_device ?? st?.device ?? '';
 
-cfg['interface-name']          = dev;
-cfg['mode']                    = ug('mode');
-cfg['external-ui']             = ug('ui_path');
-cfg['external-ui-url']         = ug('ui_url');
-cfg['external-ui-name']        = ug('ui_name');
-cfg['log-level']               = ug('log_level');
-cfg['external-controller']     = ug('api_listen');
-cfg['secret']                  = ug('api_secret');
-cfg['find-process-mode']       = ug('match_process');
-cfg['external-controller-tls'] = ug('api_tls_listen');
-cfg['port']                    = ui(ug('http_port'));
-cfg['socks-port']              = ui(ug('socks_port'));
-cfg['mixed-port']              = ui(ug('mixed_port'));
-cfg['redir-port']              = ui(ug('redir_port'));
-cfg['tproxy-port']             = ui(ug('tproxy_port'));
-cfg['keep-alive-idle']         = ui(ug('tcp_keep_alive_idle'));
-cfg['keep-alive-interval']     = ui(ug('tcp_keep_alive_interval'));
-cfg['ipv6']                    = ub(ug('ipv6'));
-cfg['allow-lan']               = ub(ug('allow_lan'));
-cfg['unified-delay']           = ub(ug('unify_delay'));
-cfg['tcp-concurrent']          = ub(ug('tcp_concurrent'));
-cfg['disable-keep-alive']      = ub(ug('disable_tcp_keep_alive'));
-
-cfg.tls = {
-	"certificate":  ug('api_tls_cert'),
-	"private-key":  ug('api_tls_key'),
-	"ech-key":      ug('api_tls_ech_key')
-};
-
-cfg.tun = {
-	"enable":       ub(ug('tun_enabled')),
-	"gso":          ub(ug('tun_gso')),
-	"mtu":          ui(ug('tun_mtu')),
-	"gso-max-size": ui(ug('tun_gso_max_size')),
-	"stack":        ug('tun_stack'),
-	"device":       ug('tun_device')
-};
-
-if (ub(ug('tun_dns_hijack'))) {
-	cfg.tun['dns-hijack'] = ua(ug('tun_dns_hijacks'));
-};
-
-cfg.sniffer = {
-	"enable":            ub(ug('sniffer')),
-	"skip-src-address":  ua(ug('skip_src_address')),
-	"skip-dst-address":  ua(ug('skip_dst_address')),
-	"force-domain":      ua(ug('sniffer_force_domain_names')),
-	"skip-domain":       ua(ug('sniffer_ignore_domain_names')),
-	"parse-pure-ip":     ub(ug('sniffer_sniff_pure_ip')),
-	"force-dns-mapping": ub(ug('sniffer_sniff_dns_mapping')),
-	"sniff":             {},
+const cfg  = {
+	'interface-name':          st?.l3_device ?? st?.device ?? '',
+	'node':                    build_proxies(),
+	'mode':                    ug('mode'),
+	'external-ui':             ug('ui_path'),
+	'external-ui-url':         ug('ui_url'),
+	'external-ui-name':        ug('ui_name'),
+	'log-level':               ug('log_level'),
+	'external-controller':     ug('api_listen'),
+	'secret':                  ug('api_secret'),
+	'find-process-mode':       ug('match_process'),
+	'external-controller-tls': ug('api_tls_listen'),
+	'geodata-mode':            ug('geoip_format') == 'dat',
+	'geodata-loader':          ug('geodata_loader'),
+	'port':                    ui(ug('http_port')),
+	'socks-port':              ui(ug('socks_port')),
+	'mixed-port':              ui(ug('mixed_port')),
+	'redir-port':              ui(ug('redir_port')),
+	'tproxy-port':             ui(ug('tproxy_port')),
+	'keep-alive-idle':         ui(ug('tcp_keep_alive_idle')),
+	'keep-alive-interval':     ui(ug('tcp_keep_alive_interval')),
+	'geo-update-interval':     ui(ug('geox_update_interval')),
+	'ipv6':                    ub(ug('ipv6')),
+	'allow-lan':               ub(ug('allow_lan')),
+	'unified-delay':           ub(ug('unify_delay')),
+	'tcp-concurrent':          ub(ug('tcp_concurrent')),
+	'disable-keep-alive':      ub(ug('disable_tcp_keep_alive')),
+	'lan-allowed-ips':         ua(ug('lan_allowed_ips')),
+	'lan-disallowed-ips':      ua(ug('lan_disallowed_ips')),
+	'skip-auth-prefixes':      ua(ug('skip_auth_prefixes')),
+	'unified-delay':           ub(ug('unified_delay')),
+	'geo-auto-update':         ub(ug('geox_auto_update')),
+	'profile': {
+		"store-fake-ip":       ub(ug('fake_ip_cache')),
+		"store-selected":      ub(ug('selection_cache'))
+	},
+	'geox-url': {
+		'asn':                 ug('geoip_asn_url'),
+		'mmdb':                ug('geoip_mmdb_url'),
+		'geoip':               ug('geoip_dat_url'),
+		'geosite':             ug('geosite_url'),
+	},
+	'tls': {
+		"certificate":         ug('api_tls_cert'),
+		"private-key":         ug('api_tls_key'),
+		"ech-key":             ug('api_tls_ech_key')
+	},
+	'tun': {
+		"enable":              ub(ug('tun_enabled')),
+		"stack":               ug('tun_stack'),
+		"device":              ug('tun_device'),
+		"gso":                 ub(ug('tun_gso')),
+		"mtu":                 ui(ug('tun_mtu')),
+		"gso-max-size":        ui(ug('tun_gso_max_size')),
+		"dns-hijack":          ub(ug('tun_dns_hijack')) ? ua(ug('tun_dns_hijacks')) : '',
+	},
+	'sniffer': {
+		"sniff":               {},
+		"enable":              ub(ug('sniffer')),
+		"skip-src-address":    ua(ug('skip_src_address')),
+		"skip-dst-address":    ua(ug('skip_dst_address')),
+		"parse-pure-ip":       ub(ug('sniffer_sniff_pure_ip')),
+		"force-dns-mapping":   ub(ug('sniffer_sniff_dns_mapping')),
+		"skip-domain":         ub(ug('sidm')) ? ua(ug('sidms')) : '',
+		"force-domain":        ub(ug('sfdm')) ? ua(ug('sfdms')) : '',
+	},
+	'dns': {
+		"enable":              ub(ug('dns_enabled')),
+		"ipv6":                ub(ug('dns_ipv6')),
+		"use-hosts":           ub(ug('dns_hosts')),
+		"fake-ip-ttl":         ui(ug('fake_ip_ttl')),
+		"use-system-hosts":    ub(ug('dns_system_hosts')),
+		"respect-rules":       ub(ug('dns_respect_rules')),
+		"prefer-h3":           ub(ug('dns_doh_prefer_http3')),
+		"enhanced-mode":       ug('dns_mode'),
+		"listen":              ug('dns_listen'),
+		"fake-ip-range":       ug('fake_ip_range'),
+		"fake-ip-range6":      ug('fake_ip6_range'),
+		"cache-algorithm":     ug('dns_cache_algorithm'),
+		"fake-ip-filter-mode": ug('fake_ip_filter_mode'),
+		"fake-ip-filter":      ub(ug('fake_ip_filter')) ? ua(ug('fake_ip_filters')) : '',
+		"direct-nameserver-follow-policy": ub(ug('dns_direct_nameserver_follow_policy')),
+		'proxy-server-nameserver-policy': {},
+		'fallback':            {},
+		'fallback-filter':     {},
+		'nameserver-policy':   {},
+	},
 };
 
 if (ub(ug('sniffer_sniff'))) {
@@ -77,22 +111,6 @@ if (ub(ug('sniffer_sniff'))) {
 	});
 };
 
-cfg.dns = {
-	"enable":              ub(ug('dns_enabled')),
-	"ipv6":                ub(ug('dns_ipv6')),
-	"respect-rules":       ub(ug('dns_respect_rules')),
-	"prefer-h3":           ub(ug('dns_doh_prefer_http3')),
-	"use-system-hosts":    ub(ug('dns_system_hosts')),
-	"use-hosts":           ub(ug('dns_hosts')),
-	"fake-ip-ttl":         ui(ug('fake_ip_ttl')),
-	"listen":              ug('dns_listen'),
-	"enhanced-mode":       ug('dns_mode'),
-	"fake-ip-range":       ug('fake_ip_range'),
-	"fake-ip-range6":      ug('fake_ip6_range'),
-	"cache-algorithm":     ug('dns_cache_algorithm'),
-	"fake-ip-filter-mode": ug('fake_ip_filter_mode')
-};
-
 if (ub(ug('dns_nameserver'))) {
 	map(['default-nameserver', 'proxy-server-nameserver', 'direct-nameserver', 'nameserver', 'fallback'], (k) => cfg.dns[k] = []);
 	uci.foreach('nikki', 'nameserver', (s) => {
@@ -101,16 +119,9 @@ if (ub(ug('dns_nameserver'))) {
 	});
 };
 
-if (ub(ug('fake_ip_filter'))) {
-	cfg.dns['fake-ip-filter'] = ua(ug('fake_ip_filters'));
-};
-
 if (ub(ug('dns_proxy_server_nameserver_policy'))) {
-	cfg.dns['fallback-filter']                = {};
-	cfg.dns['proxy-server-nameserver-policy'] = {};
 	uci.foreach('nikki', 'proxy_server_nameserver_policy', (s) => {
 		if (!ub(s.enabled)) return;
-
 		if (s.type == 'fallback-filter') {
 			if (s.nameserver) {
 				cfg.dns['fallback-filter'][s.matcher] = ua(s.nameserver);
@@ -134,10 +145,7 @@ if (ub(ug('dns_proxy_server_nameserver_policy'))) {
 	});
 };
 
-cfg.dns['direct-nameserver-follow-policy'] = ub(ug('dns_direct_nameserver_follow_policy'));
-
 if (ub(ug('dns_nameserver_policy'))) {
-	cfg.dns['nameserver-policy'] = {};
 	uci.foreach('nikki', 'nameserver_policy', (s) => {
 		if (!ub(s.enabled)) return;
 		let ns = ua(s.nameserver);
@@ -168,15 +176,6 @@ if (ub(ug('hosts'))) {
 	});
 };
 
-cfg['lan-allowed-ips']    = ua(ug('lan_allowed_ips'));
-cfg['lan-disallowed-ips'] = ua(ug('lan_disallowed_ips'));
-cfg['skip-auth-prefixes'] = ua(ug('skip_auth_prefixes'));
-
-cfg.profile = {
-	"store-fake-ip":  ub(ug('fake_ip_cache')),
-	"store-selected": ub(ug('selection_cache'))
-};
-
 if (ub(ug('rule_provider'))) {
 	cfg['rule-providers'] = {};
 	uci.foreach('nikki', 'rule_provider', (s) => {
@@ -202,20 +201,6 @@ if (ub(ug('rule'))) {
 		push(cfg['nikki-rules'], join(',', rule));
 	});
 };
-
-const geoip_format         = ug('geoip_format');
-cfg['geodata-mode']        = geoip_format == null ? null : geoip_format == 'dat';
-cfg['geodata-loader']      = ug('geodata_loader');
-cfg['geox-url']            = {
-	'asn':     ug('geoip_asn_url'),
-	'mmdb':    ug('geoip_mmdb_url'),
-	'geoip':   ug('geoip_dat_url'),
-	'geosite': ug('geosite_url')
-};
-cfg['unified-delay']       = ub(ug('unified_delay'));
-cfg['geo-auto-update']     = ub(ug('geox_auto_update'));
-cfg['geo-update-interval'] = ui(ug('geox_update_interval'));
-cfg['node']                = build_proxies();
 
 if (ub(uci.get('nikki', 'config', 'url_enabled'))) {
 	let idx = 0;

@@ -746,20 +746,6 @@ return view.extend({
         o.value('0', _('Disable'));
         o.value('1', _('Enable'));
 
-        o = s.taboption('sniffer', form.Flag, 'sniffer_force_domain_name', _('Overwrite Force Sniff Domain Name'));
-        o.rmempty = false;
-
-        o = s.taboption('sniffer', form.DynamicList, 'sniffer_force_domain_names', _('Force Sniff Domain Name'));
-        o.retain = true;
-        o.depends('sniffer_force_domain_name', '1');
-
-        o = s.taboption('sniffer', form.Flag, 'sniffer_ignore_domain_name', _('Overwrite Ignore Sniff Domain Name'));
-        o.rmempty = false;
-        o.depends('sniffer_ignore_domain_name', '1');
-
-        o = s.taboption('sniffer', form.DynamicList, 'sniffer_ignore_domain_names', _('Ignore Sniff Domain Name'));
-        o.retain = true;
-
         o = s.taboption('sniffer', form.DynamicList, 'skip_src_address', _('跳过嗅探来源ip地址'));
         o.retain = true;
         o.datatype = 'cidr';
@@ -767,6 +753,20 @@ return view.extend({
         o = s.taboption('sniffer', form.DynamicList, 'skip_dst_address', _('跳过嗅探目标ip地址'));
         o.retain = true;
         o.datatype = 'cidr';
+
+        o = s.taboption('sniffer', form.Flag, 'sfdm', _('Overwrite Force Sniff Domain Name'));
+        o.rmempty = false;
+
+        o = s.taboption('sniffer', form.DynamicList, 'sfdms', _('Force Sniff Domain Name'));
+        o.retain = true;
+        o.depends('sfdm', '1');
+
+        o = s.taboption('sniffer', form.Flag, 'sidm', _('Overwrite Ignore Sniff Domain Name'));
+        o.rmempty = false;
+
+        o = s.taboption('sniffer', form.DynamicList, 'sidms', _('Ignore Sniff Domain Name'));
+        o.retain = true;
+        o.depends('sidm', '1');
 
         o = s.taboption('sniffer', form.Flag, 'sniffer_sniff', _('Overwrite Sniff By Protocol'));
         o.rmempty = false;
@@ -1131,18 +1131,22 @@ return view.extend({
         o = s.taboption('geox', form.Value, 'geosite_url', _('GeoSite Url'));
         o.placeholder = _('Unmodified');
         o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat', _('MetaCubeX-Version'));
+        o.value('https://testingcf.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat', _('Loyalsoldier'));
 
         o = s.taboption('geox', form.Value, 'geoip_mmdb_url', _('GeoIP(MMDB) Url'));
         o.placeholder = _('Unmodified');
         o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb', _('MetaCubeX-Version'));
+        o.value('https://testingcf.jsdelivr.net/gh/Loyalsoldier/geoip@release/Country-without-asn.mmdb', _('Loyalsoldier'));
 
         o = s.taboption('geox', form.Value, 'geoip_dat_url', _('GeoIP(DAT) Url'));
         o.placeholder = _('Unmodified');
         o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat', _('MetaCubeX-Version'));
+        o.value('https://testingcf.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geoip.dat', _('Loyalsoldier'));
 
         o = s.taboption('geox', form.Value, 'geoip_asn_url', _('GeoIP(ASN) Url'));
         o.placeholder = _('Unmodified');
         o.value('https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb', _('MetaCubeX-Version'));
+        o.value('https://testingcf.jsdelivr.net/gh/Loyalsoldier/geoip@release/GeoLite2-ASN.mmdb', _('Loyalsoldier'));;
 
         o = s.taboption('geox', form.ListValue, 'geox_auto_update', _('GeoX Auto Update'));
         o.optional = true;
