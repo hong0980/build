@@ -1,7 +1,9 @@
 import { readfile, popen } from 'fs';
 
 export function uci_bool(obj) {
-	return (obj == '1' || obj == 'true') || null;
+	if (obj == '1' || obj == 'true')  return true;
+	if (obj == '0' || obj == 'false') return false;
+	return obj;
 };
 
 export function uci_int(obj) {
