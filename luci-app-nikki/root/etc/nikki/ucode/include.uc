@@ -67,8 +67,8 @@ export function get_cgroups() {
 	return result;
 };
 
-export function load_profile() {
-	const out = run('yq -o json /etc/nikki/run/config.yaml');
+export function load_profile(o) {
+	const out = run('yq -o json ' + (o || '/etc/nikki/run/config.yaml'));
 	return out ? json(out) : {};
 };
 

@@ -81,9 +81,7 @@ get_core_url() {
 			api_out=$(github_api "repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha")
 			;;
 		smart)
-			local raw_url="https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart/clash-${ARCH}-compatible.tar.gz"
-			echo '{"status":"ok","url":"'$(mirror_url "$raw_url")'"}'
-			return 0
+			api_out=$(github_api "repos/vernesong/mihomo/releases/tags/Prerelease-Alpha")
 			;;
 		*)
 			echo '{"status":"error","message":"invalid core type"}'
@@ -184,16 +182,14 @@ do_cache() {
 		return 0
 	fi
 
-	local archive_name="$([ "$CORE_TYPE" = "smart" ] && echo "mihomo.tar.gz" || echo "mihomo.gz")"
 	local tmp_file="/tmp/${out_name}.tmp"
-	local archive_path="/tmp/${CORE_TYPE}-${archive_name}"
+	local archive_path="/tmp/${CORE_TYPE}-mihomo.gz"
 
 	rm -f "$log_file" "$archive_path" "$tmp_file"
 	echo "downloading" > "$status_file"
-	url=$(mirror_url "$url")
 
-	curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 \
-		-A "$UA" -o "$archive_path" "$url" 2>>"$log_file"
+	curl -SsL -C - --connect-timeout 15 --max-time 300 --retry 3 --retry-delay 2 \
+		-A "$UA" -o "$archive_path" "$(mirror_url "$url")" 2>>"$log_file"
 
 	if [ $? -ne 0 -o ! -s "$archive_path" ]; then
 		echo "error: download failed" > "$status_file"
@@ -201,20 +197,16 @@ do_cache() {
 		return 1
 	fi
 
-	if [ "$CORE_TYPE" = "smart" ]; then
-		tar -xzf "$archive_path" -O > "$tmp_file" 2>>"$log_file"
-	else
-		gzip -dc "$archive_path"    > "$tmp_file" 2>>"$log_file"
-	fi
-
-	if [ -s "$tmp_file" ]; then
+	gzip -dc "$archive_path" > "$tmp_file" 2>>"$log_file"
+	if [ $? -eq 0 -o -s "$tmp_file" ]; then
 		mv -f "$tmp_file" "$final_out"
 		chmod 755 "$final_out"
 		rm -f "$archive_path"
 		echo "done" > "$status_file"
 		flock -u 200 2>/dev/null
 	else
-		echo "error: tmp file missing" > "$status_file"
+		echo "error: extract failed" > "$status_file"
+		rm -f "$tmp_file"
 		flock -u 200 2>/dev/null
 		return 1
 	fi
@@ -230,10 +222,9 @@ update_ui() {
 
 	temp_dir=$(mktemp -d)
 	echo "downloading" > "$status_file"
-	url=$(mirror_url "$url")
 
-	curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 \
-		-A "$UA" -o "$tmp_zip" "$url" 2>>"$log_file"
+	curl -SsL -C - --connect-timeout 15 --max-time 300 --retry 3 --retry-delay 2 \
+		-A "$UA" -o "$tmp_zip" "$(mirror_url "$url")" 2>>"$log_file"
 
 	if [ $? -ne 0 -o ! -s "$tmp_zip" ]; then
 		echo "error: download failed" > "$status_file"

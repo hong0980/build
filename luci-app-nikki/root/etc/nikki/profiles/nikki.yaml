@@ -106,9 +106,9 @@ rules:
   - RULE-SET,claude_domain,🚀AI
   - RULE-SET,ai_domain,🚀AI
   - RULE-SET,bybit_domain,自动选择
-  - RULE-SET,github_domain,故障转移
-  - RULE-SET,youtube_domain,故障转移
-  - RULE-SET,tiktok_domain,故障转移
+  - RULE-SET,github_domain,自动选择
+  - RULE-SET,youtube_domain,自动选择
+  - RULE-SET,tiktok_domain,自动选择
   - RULE-SET,netflix_domain,自动选择
   - RULE-SET,disney_domain,自动选择
   - RULE-SET,telegram_domain,自动选择
@@ -128,7 +128,7 @@ proxies:
 .d: &urltest  {include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, url: "https://www.gstatic.com/generate_204", type: url-test, tolerance: 50, max-failed-times: 3}
 
 proxy-groups:
-  - {name: 故障转移, <<: *fallback, filter: "(?i)^(?!.*(国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
+  # - {name: 故障转移, <<: *fallback, filter: "(?i)^(?!.*(国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
   - {name: 自动选择, <<: *urltest, filter: "(?i)^(?!.*(国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
   - {name: 🚀AI,    <<: *urltest, filter: "(?i)(台|日|美|新|韩)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Claude.png}
   - {name: 香港自动, <<: *urltest, filter: "(?i)(香港|HK)", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/HK.png}

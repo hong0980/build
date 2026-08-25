@@ -126,35 +126,13 @@ start_service() {
 			mixin_extra_file="/etc/nikki/mixin/$mixin_file"
 		}
 
-		export urltest_url interval tolerance timeout lazy mft
 		ucode -S "/etc/nikki/ucode/mixin.uc" | yq -MPoy | yq -Mi ea '
 			. as $item ireduce ({}; . * $item ) | explode(.) |
 			((select(env(comments) == 0) | ... comments = "") // .) |
 			.rules   = ((.rules    // []) + (.nikki-rules   // [])) |
 			.proxies = (((.proxies // []) + (.nikki-proxies // []) + (.node // [])) | reverse | unique_by(.name) | reverse) |
 			.proxy-providers = (.nikki-proxy-providers // .proxy-providers // {}) |
-			(strenv(mft)     // "") as $m | (strenv(interval)    // "") as $i |
-			(strenv(lazy)    // "") as $l | (strenv(tolerance)   // "") as $t |
-			(strenv(timeout) // "") as $o | (strenv(urltest_url) // "") as $u |
 			.proxy-groups = ((.proxy-groups // []) + (.nikki-proxy-groups // [])) |
-			.proxy-groups |= map(
-				(.type | test("^(select|fallback|load-balance|url-test)$")) as $k |
-				((select($u != "" and $k) | .url  = $u)                   // .) |
-				((select($l != "" and $k) | .lazy = ($l | (. == "true"))) // .) |
-				((select($o != "" and $k) | .timeout   = ($o | tonumber)) // .) |
-				((select($i != "" and $k) | .interval  = ($i | tonumber)) // .) |
-				((select($t != "" and $k) | .tolerance = ($t | tonumber)) // .) |
-				((select($m != "" and $k) | .["max-failed-times"] = ($m | tonumber)) // .)
-			) |
-			(.. | select(tag == "!!map")) |= (
-				(.type | test("^(select|fallback|load-balance|url-test)$")) as $v |
-				((select($u != "" and $v) | .url  = $u)                   // .) |
-				((select($l != "" and $v) | .lazy = ($l | (. == "true"))) // .) |
-				((select($o != "" and $v) | .timeout   = ($o | tonumber)) // .) |
-				((select($i != "" and $v) | .interval  = ($i | tonumber)) // .) |
-				((select($t != "" and $v) | .tolerance = ($t | tonumber)) // .) |
-				((select($m != "" and $v) | .["max-failed-times"] = ($m | tonumber)) // .)
-			) |
 			.rule-providers |= ((. // {}) | sort_keys(.) | map_values(
 				(.url | capture("(?P<ext>\\.[^.]+)$").ext // "") as $q |
 				((.path | select(. != "")) // ("./rule_provider/" + key + $q)) as $p |
@@ -262,18 +240,8 @@ start_service() {
 		' "$TEMP_CONFIG"
 	}
 
-	[ -n "$github_mirror" ] && {
-		profile_path="$TEMP_CONFIG" github_mirror="$github_mirror" \
-		ucode -S "/etc/nikki/ucode/mirror.uc"
-	}
-
-	yq -Mi '
-		(..  | select(tag == "!!str")) style="double" |
-		.dns |= (
-			select(.["respect-rules"] == true and ((.["proxy-server-nameserver"] // []) | length == 0)) |
-			.["proxy-server-nameserver"] = ["https://dns.alidns.com/dns-query", "https://doh.pub/dns-query"]
-		)
-	' "$TEMP_CONFIG"
+	export urltest_url interval tolerance timeout lazy mft profile_path="$TEMP_CONFIG" github_mirror
+	ucode -S "/etc/nikki/ucode/mirror.uc"
 
 	mv -f "$TEMP_CONFIG" "$RUN_PROFILE_PATH"
 
@@ -487,7 +455,7 @@ service_stopped() {
 
 reload_service() {
 	cleanup
-	start
+	restart
 }
 
 service_triggers() {
