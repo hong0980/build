@@ -36,7 +36,7 @@ if (target) {
 function pgs(k) {
 	return `(.type | test("^(select|fallback|load-balance|url-test)$")) as ${k} |
 			((select($u != "" and ${k}) | .url  = $u)                   // .) |
-			((select($l != "" and ${k}) | .lazy = ($l | (. == "true"))) // .) |
+			((select($l != "" and ${k}) | .lazy =    ($l | (. == "1"))) // .) |
 			((select($o != "" and ${k}) | .timeout   = ($o | tonumber)) // .) |
 			((select($i != "" and ${k}) | .interval  = ($i | tonumber)) // .) |
 			((select($t != "" and ${k}) | .tolerance = ($t | tonumber)) // .) |

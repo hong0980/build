@@ -40,8 +40,9 @@ start_service() {
 	log "App" "Start."
 
 	local hosts sniffer_sniff authentication tun_dns_hijack fake_ip_filter \
-		  dns_nameserver dns_nameserver_policy comments
+		  dns_nameserver dns_nameserver_policy comments explode
 	config_get_bool hosts                 mixin "hosts"                 0
+	config_get_bool explode               mixin "explode"               0
 	config_get_bool comments              mixin "comments"              0
 	config_get_bool sniffer_sniff         mixin "sniffer_sniff"         0
 	config_get_bool authentication        mixin "authentication"        0
@@ -66,7 +67,6 @@ start_service() {
 	config_get      profile      config "profile"
 	config_get_bool core_only    config "core_only"         0
 	config_get_bool test_profile config "test_profile"      0
-	export comments
 
 	if [ "${profile%%:*}" = "file" ]; then
 		profile_name="${profile#*:}"
@@ -115,8 +115,10 @@ start_service() {
 			mixin_extra_file="/etc/nikki/mixin/$mixin_file"
 		}
 
+		export comments explode
 		ucode -S "/etc/nikki/ucode/mixin.uc" | yq -MPoy | yq -Mi ea '
-			. as $item ireduce ({}; . * $item ) | explode(.) |
+			. as $item ireduce ({}; . * $item ) |
+			((select(env(explode)  == 0) | explode(.))        // .) |
 			((select(env(comments) == 0) | ... comments = "") // .) |
 			.rules   = ((.rules    // []) + (.nikki-rules   // [])) |
 			.proxies = (((.proxies // []) + (.nikki-proxies // []) + (.node // [])) | reverse | unique_by(.name) | reverse) |

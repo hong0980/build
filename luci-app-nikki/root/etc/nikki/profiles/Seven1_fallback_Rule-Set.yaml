@@ -76,25 +76,14 @@ tun:
 # ══ 嗅探功能 ══
 sniffer:
   enable: true                                                          # 启用嗅探  提升分流准确性
-  override-destination: true                                            # 成功解析  使用嗅探到的域名覆盖原始目标地址
   parse-pure-ip: true                                                   # 反向解析  解析纯 IP 连接（尝试反向解析获得域名）
   force-dns-mapping: true                                               # 强制映射  DNS 映射（对纯 IP 连接尝试 DNS 映射）
   sniff:
     QUIC: { ports: [443] }                                              # 嗅探参数  QUIC 协议流量（HTTP/3 常用端口）
     TLS:  { ports: [443, 8443] }                                        # 嗅探参数  HTTPS（TLS）常用及备用端口
-    HTTP: { ports: [80, 8080-8880] }                                    # 嗅探参数  HTTP 及常见 Web / 代理端口段
-  force-domain:
-    - "+.netflix.com"                                                   # 强制嗅探  Netflix 主域名
-    - "+.nflxvideo.net"                                                 # 强制嗅探  Netflix CDN
-    - "+.amazonaws.com"                                                 # 强制嗅探  AWS 云服务
-    - "+.media.dssott.com"                                              # 强制嗅探  Disney+ 流媒体
-    - "+.tiktok.com"                                                    # 强制嗅探  TikTok 流媒体
-  skip-domain:
-    - Mijia Cloud                                                       # 跳过嗅探  米家云服务
-    - dlg.io.mi.com                                                     # 跳过嗅探  小米设备通信
-    - "+.oray.com"                                                      # 跳过嗅探  花生壳服务
-    - "+.sunlogin.net"                                                  # 跳过嗅探  向日葵远程控制
-    - "+.push.apple.com"                                                # 跳过嗅探  苹果推送服务
+    HTTP: { ports: [80, 8080-8880], override-destination: true}         # 嗅探参数  HTTP 及常见 Web / 代理端口段
+  force-domain: ["+.netflix.com", "+.nflxvideo.net","+.amazonaws.com","+.media.dssott.com","+.tiktok.com"]
+  skip-domain: [Mijia Cloud, dlg.io.mi.com, "+.oray.com", "+.sunlogin.net", "+.push.apple.com"]
 # ══ hosts配置 ══
 hosts:
   'services.googleapis.cn': ['services.googleapis.com']                 # 谷歌商店  解决无法下载的问题
@@ -107,10 +96,7 @@ dns:
   fake-ip-range: 198.18.0.1/16                                          # 虚拟地址  Fake-IP 虚拟地址池范围
   fake-ip-filter-mode: blacklist                                        # 过滤模式  Fake-IP 过滤模式（命中规则则返回真实 IP）
   respect-rules: true                                                   # 遵循规则  不强制遵循规则顺序
-  fake-ip-filter:
-    - "rule-set:fakeipfilter"                                           # 真实解析  大陆域名数据
-    - "rule-set:add_direct_domain"                                      # 真实解析  大陆冷门域名
-    - "rule-set:cn_domain,apple_domain"                                 # 真实解析  大陆域名数据
+  fake-ip-filter: ["rule-set:fakeipfilter,add_direct_domain,cn_domain,apple_domain"]
   default-nameserver: ["223.5.5.5", "119.29.29.29"]
   nameserver: ["https://223.5.5.5/dns-query", "https://223.6.6.6/dns-query"]
   proxy-server-nameserver: ["https://223.5.5.5/dns-query", "https://223.6.6.6/dns-query"]

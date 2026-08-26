@@ -149,8 +149,11 @@ return view.extend({
         o.value('rule', _('rule'), _('Rule Mode'));
         o.value('direct', _('direct'), _('Direct Mode'));
 
-        o = s.taboption('general', form.Flag, 'comments', _('配置注释'));
+        o = s.taboption('general', form.Flag, 'comments', _('注释'));
         o.description = _('选中保留配置注释');
+
+        o = s.taboption('general', form.Flag, 'explode', _('锚点'));
+        o.description = _('选中不展开配置锚点');
 
         o = s.taboption('general', form.Value, 'github_mirror', _('GitHub Mirror'),
             _('Select a mirror to replace GitHub URLs in config (geox-url, rule-providers, proxy-providers, external-ui, icons).'));
@@ -364,8 +367,8 @@ return view.extend({
 
         o = s.taboption("general", form.ListValue, "lazy", _("URL-Test Lazy Mode"), _("When enabled, groups only test when there is active traffic instead of testing on a fixed interval, saving resources."));
         o.value("", _('Unmodified'));
-        o.value("true", _('Enable'));
-        o.value("false", _('Disable'));
+        o.value('1', _('Enable'));
+        o.value('0', _('Disable'));
 
         o = s.taboption("general", form.Value, "max_failed_times", _("URL-Test Max Failed Times"), _("Consecutive failed tests before a node is marked unavailable."));
         o.placeholder = _('Unmodified');
@@ -374,10 +377,10 @@ return view.extend({
         o.value("5", _("5 (tolerant)"));
         o.value("10", _("10 (very tolerant)"));
 
-        o = s.taboption("general", form.ListValue, "unified_delay", _("Unified Delay"), _("Calculate latency using a consistent method across protocols, excluding connection setup time. Recommended together with Tolerance for more accurate comparisons."));
-        o.value("", _('Unmodified'));
-        o.value("true", _('Enable'));
-        o.value("false", _('Disable'));
+        // o = s.taboption("general", form.ListValue, "unified_delay", _("Unified Delay"), _("Calculate latency using a consistent method across protocols, excluding connection setup time. Recommended together with Tolerance for more accurate comparisons."));
+        // o.value("", _('Unmodified'));
+        // o.value('1', _('Enable'));
+        // o.value('0', _('Disable'));
 
         o = s.taboption('external_control', form.Value, 'ui_path', _('UI Path'));
         o.placeholder = _('Unmodified');
