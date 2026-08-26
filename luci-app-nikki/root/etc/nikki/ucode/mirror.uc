@@ -1,23 +1,40 @@
-import { access, popen, writefile, readfile, rename } from 'fs';
-import { shellQuote, run, load_profile, trim_all, mirrorGithubUrl } from '/etc/nikki/ucode/include.uc';
+import { access } from 'fs';
+import { cursor } from 'uci';
+import { load_profile, trim_all, mirrorGithubUrl, qs } from '/etc/nikki/ucode/include.uc';
+function ug(o) { return cursor().get('nikki', 'mixin', o); };
 
-let target = getenv('github_mirror');
-let file   = getenv('profile_path');
-
-if (!file || length(file) == 0) {
-	print('Error: profile_path not set\n');
-	exit(1);
+let exprs = [], target = ug('github_mirror');
+function addMirror(path, val) {
+	if (val && type(val) == 'string')
+		push(exprs, `${path} = "${mirrorGithubUrl(val, target)}"`);
 };
 
+let file = getenv('profile_path');
+if (!access(file)) exit(1);
 let config = load_profile(file);
-if (!config) {
-	print('Error: failed to parse JSON\n');
-	exit(1);
+if (!config) exit(1);
+
+if (target) {
+	addMirror('.external-ui-url', config['external-ui-url']);
+	let geox = config['geox-url'];
+	for (let k in keys(geox))
+		addMirror(`.geox-url["${k}"]`, geox[k]);
+
+	let groups = config['proxy-groups'];
+	for (let i = 0; i < length(groups); i++) {
+		let g = groups[i];
+		if (g) addMirror(`.proxy-groups[${i}].icon`, g.icon);
+	}
+
+	let providers = config['rule-providers'];
+	for (let k in keys(providers)) {
+		let p = providers[k];
+		if (p) addMirror(`.rule-providers["${k}"].url`, p.url);
+	}
 };
 
-let exprs = [];
 function pgs(k) {
-    return `(.type | test("^(select|fallback|load-balance|url-test)$")) as ${k} |
+	return `(.type | test("^(select|fallback|load-balance|url-test)$")) as ${k} |
 			((select($u != "" and ${k}) | .url  = $u)                   // .) |
 			((select($l != "" and ${k}) | .lazy = ($l | (. == "true"))) // .) |
 			((select($o != "" and ${k}) | .timeout   = ($o | tonumber)) // .) |
@@ -28,54 +45,18 @@ function pgs(k) {
 
 push(exprs, `
 	.dns |= (
-		select(.["respect-rules"] == true and ((.["proxy-server-nameserver"] // []) | length == 0)) |
+		(select(.respect-rules == true and (has("proxy-server-nameserver") | not)) |
 		.["proxy-server-nameserver"] = ["https://dns.alidns.com/dns-query", "https://doh.pub/dns-query"]
-	) |
-    (..  | select(tag == "!!str")) style="double" |
-	(strenv(mft)     // "") as $m | (strenv(interval)    // "") as $i |
-    (strenv(lazy)    // "") as $l | (strenv(tolerance)   // "") as $t |
-    (strenv(timeout) // "") as $o | (strenv(urltest_url) // "") as $u |
-    (.. | select(tag == "!!map")) |= (${pgs('$x')}) | .["proxy-groups"] |= map(${pgs('$y')})
+	) // .) |
+	(${ug('lazy')}     // "") as $l | (${ug('tolerance')}        // "") as $t |
+	(${ug('timeout')}  // "") as $o | (${qs(ug('urltest_url'))}  // "") as $u |
+	(${ug('interval')} // "") as $i | (${ug('max_failed_times')} // "") as $m |
+	(.. | select(tag == "!!str")) style="double" |
+	(.. | select(tag == "!!map")) |= (${pgs('$x')}) | .["proxy-groups"] |= map(${pgs('$y')}) |
+	 .. |= map_values(key |= (select(tag == "!!str" and test("[.,:]")) | . style="double") // .)
 `);
-
-if (target) {
-	if (config['geox-url']) {
-		for (let k in keys(config['geox-url'])) {
-			let v = config['geox-url'][k];
-			if (v && type(v) == 'string') {
-				let newUrl = mirrorGithubUrl(v, target);
-				push(exprs, `.geox-url["${k}"] = "${shellQuote(newUrl)}"`);
-			}
-		}
-	};
-
-	if (config['external-ui-url'] && type(config['external-ui-url']) == 'string') {
-		let newUrl = mirrorGithubUrl(config['external-ui-url'], target);
-		push(exprs, `.external-ui-url = "${shellQuote(newUrl)}"`);
-	};
-
-	if (config['proxy-groups'] && type(config['proxy-groups']) == 'array') {
-		for (let i = 0; i < length(config['proxy-groups']); i++) {
-			let g = config['proxy-groups'][i];
-			if (g && g.icon && type(g.icon) == 'string') {
-				let newUrl = mirrorGithubUrl(g.icon, target);
-				push(exprs, `.proxy-groups[${i}].icon = "${shellQuote(newUrl)}"`);
-			}
-		}
-	};
-
-	if (config['rule-providers']) {
-		for (let k in keys(config['rule-providers'])) {
-			let p = config['rule-providers'][k];
-			if (p && p.url && type(p.url) == 'string') {
-				let newUrl = mirrorGithubUrl(p.url, target);
-				push(exprs, `.rule-providers["${k}"].url = "${shellQuote(newUrl)}"`);
-			}
-		}
-	};
-};
 
 if (length(trim_all(exprs)) > 0) {
 	let yqExpr = join(' | ', exprs);
-	let rc = run(`yq -Mi '${yqExpr}' '${file}'`);
+	system(['yq', '-Mi', yqExpr, file]);
 };

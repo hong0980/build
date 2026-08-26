@@ -214,7 +214,8 @@ do_cache() {
 
 update_ui() {
 	local url="$1" name="$2" ui_path="${3:-ui}"
-	local top_dir temp_dir target_dir status_file log_file tmp_zip
+	local target_dir temp_dir status_file log_file tmp_zip \
+		  src_dir count only_entry entry
 	target_dir="${RUN_DIR}/${ui_path}/${name}"
 	log_file="/tmp/nikki_dl_ui_${name}.log"
 	tmp_zip="/tmp/nikki_ui_${name}_$$.zip"
@@ -223,34 +224,36 @@ update_ui() {
 	temp_dir=$(mktemp -d)
 	echo "downloading" > "$status_file"
 
-	curl -SsL -C - --connect-timeout 15 --max-time 300 --retry 3 --retry-delay 2 \
-		-A "$UA" -o "$tmp_zip" "$(mirror_url "$url")" 2>>"$log_file"
-
-	if [ $? -ne 0 -o ! -s "$tmp_zip" ]; then
+	if ! curl -SsL -C - --connect-timeout 15 --max-time 300 --retry 3 --retry-delay 2 \
+		-A "$UA" -o "$tmp_zip" "$(mirror_url "$url")" 2>>"$log_file"; then
 		echo "error: download failed" > "$status_file"
-		rm -f "$tmp_zip"
+		rm -rf "$tmp_zip" "$temp_dir"
 		return 1
 	fi
 
 	if ! unzip -o "$tmp_zip" -d "$temp_dir" 2>>"$log_file"; then
 		echo "error: unzip failed" > "$status_file"
-		rm -f "$tmp_zip"
+		rm -rf "$tmp_zip" "$temp_dir"
 		return 1
 	fi
 
 	rm -rf "${target_dir:?}"
 	mkdir -p "$target_dir"
-	top_dir=$(find "$temp_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 
-	if [ -n "$top_dir" ]; then
-		mv "$top_dir"/*      "$target_dir"/ 2>/dev/null || true
-		mv "$top_dir"/..?*   "$target_dir"/ 2>/dev/null || true
-		mv "$top_dir"/.[!.]* "$target_dir"/ 2>/dev/null || true
-	else
-		mv "$temp_dir"/*      "$target_dir"/ 2>/dev/null || true
-		mv "$temp_dir"/..?*   "$target_dir"/ 2>/dev/null || true
-		mv "$temp_dir"/.[!.]* "$target_dir"/ 2>/dev/null || true
+	src_dir="$temp_dir"
+	count=$(find "$temp_dir" -mindepth 1 -maxdepth 1 | wc -l)
+
+	if [ "$count" -eq 1 ]; then
+		only_entry=$(find "$temp_dir" -mindepth 1 -maxdepth 1)
+		if [ -d "$only_entry" ]; then
+			src_dir="$only_entry"
+		fi
 	fi
+
+	for entry in "$src_dir"/* "$src_dir"/.[!.]* "$src_dir"/..?*; do
+		[ -e "$entry" ] || continue
+		mv "$entry" "$target_dir"/ 2>/dev/null || true
+	done
 
 	rm -rf "$tmp_zip" "$temp_dir"
 	echo "done" > "$status_file"

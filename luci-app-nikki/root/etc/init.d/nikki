@@ -100,7 +100,8 @@ start_service() {
 	fi
 
 	if [ "$core_only" = 0 ]; then
-		local del_expr=""
+		local mixin_file mixin_extra_file="" del_expr=""
+		config_get mixin_file config mixin_file
 		[ "$hosts"                 = 1 ] && del_expr="$del_expr|del(.hosts)"
 		[ "$sniffer_sniff"         = 1 ] && del_expr="$del_expr|del(.sniffer.sniff)"
 		[ "$authentication"        = 1 ] && del_expr="$del_expr|del(.authentication)"
@@ -109,18 +110,6 @@ start_service() {
 		[ "$dns_nameserver_policy" = 1 ] && del_expr="$del_expr|del(.dns.nameserver-policy)"
 		[ "$dns_nameserver"        = 1 ] && del_expr="$del_expr|del(.dns.default-nameserver,.dns.fallback,.dns.proxy-server-nameserver,.dns.direct-nameserver,.dns.nameserver)"
 		[ -n "$del_expr" ] && yq -Mi "${del_expr#|}" "$TEMP_CONFIG"
-
-		local mixin_file lazy timeout interval tolerance urltest_url \
-			  github_mirror mft mixin_extra_file=""
-		config_get mixin_file    config mixin_file
-		config_get lazy          mixin  lazy
-		config_get timeout       mixin  timeout
-		config_get interval      mixin  interval
-		config_get tolerance     mixin  tolerance
-		config_get urltest_url   mixin  urltest_url
-		config_get github_mirror mixin  github_mirror
-		config_get mft           mixin  max_failed_times
-
 		[ -n "$mixin_file" ] && {
 			log "Mixin" "%s Mixin config." "$mixin_file"
 			mixin_extra_file="/etc/nikki/mixin/$mixin_file"
@@ -240,9 +229,7 @@ start_service() {
 		' "$TEMP_CONFIG"
 	}
 
-	export urltest_url interval tolerance timeout lazy mft profile_path="$TEMP_CONFIG" github_mirror
-	ucode -S "/etc/nikki/ucode/mirror.uc"
-
+	profile_path="$TEMP_CONFIG" ucode -S "/etc/nikki/ucode/mirror.uc"
 	mv -f "$TEMP_CONFIG" "$RUN_PROFILE_PATH"
 
 	if [ "$test_profile" = 1 ]; then
@@ -304,8 +291,8 @@ start_service() {
 	procd_close_instance
 
 	local log_scheduled_clear log_scheduled_clear_cron scheduled_restart scheduled_restart_cron  reload_cron=0
-	config_get      log_scheduled_clear_cron "log" "scheduled_clear_cron"
-	config_get_bool log_scheduled_clear      "log" "scheduled_clear" 0
+	config_get      log_scheduled_clear_cron log "scheduled_clear_cron"
+	config_get_bool log_scheduled_clear      log "scheduled_clear" 0
 	config_get      scheduled_restart_cron config "scheduled_restart_cron"
 	config_get_bool scheduled_restart      config "scheduled_restart" 0
 
@@ -341,12 +328,12 @@ service_started() {
 	config_get tun_listener_name core "tun_listener_name"
 
 	local tcp_mode udp_mode tun_timeout tun_interval ipv4_proxy ipv6_proxy
-	config_get tcp_mode     proxy "tcp_mode"
-	config_get udp_mode     proxy "udp_mode"
-	config_get tun_timeout  proxy "tun_timeout"   30
-	config_get tun_interval proxy "tun_interval"  1
-	config_get_bool ipv4_proxy proxy "ipv4_proxy" 0
-	config_get_bool ipv6_proxy proxy "ipv6_proxy" 0
+	config_get tcp_mode        proxy "tcp_mode"
+	config_get udp_mode        proxy "udp_mode"
+	config_get tun_timeout     proxy "tun_timeout"  30
+	config_get tun_interval    proxy "tun_interval" 1
+	config_get_bool ipv4_proxy proxy "ipv4_proxy"   0
+	config_get_bool ipv6_proxy proxy "ipv6_proxy"   0
 
 	local tproxy_fw_mark tproxy_fw_mask tun_fw_mark tun_fw_mask tproxy_rule_pref tun_rule_pref \
 		  tproxy_route_table tun_route_table cgroup_id cgroup_name dummy_device
@@ -390,7 +377,7 @@ service_started() {
 
 		if mount | grep -q -w "^cgroup"; then
 			mkdir -p "/sys/fs/cgroup/net_cls/$cgroup_name"
-			echo "$cgroup_id" > "/sys/fs/cgroup/net_cls/$cgroup_name/net_cls.classid"
+			echo "$cgroup_id"    > "/sys/fs/cgroup/net_cls/$cgroup_name/net_cls.classid"
 			cat "$PID_FILE_PATH" > "/sys/fs/cgroup/net_cls/$cgroup_name/cgroup.procs"
 		fi
 
@@ -438,8 +425,7 @@ service_started() {
 			ip -6 route add "$fake_ip6_range" dev "$dummy_device"
 		fi
 
-		utpl -S "$HIJACK_UT" | nft -f -
-
+		utpl -S "/etc/nikki/ucode/hijack.ut" | nft -f -
 		if nft list tables | grep -q nikki; then
 			log "Proxy" "Hijack successful."
 		else
@@ -465,7 +451,7 @@ service_triggers() {
 cleanup() {
 	config_load nikki
 	local log_clear_at_stop dummy_device tun_route_table tproxy_route_table
-	config_get_bool log_clear_at_stop "log" "clear_at_stop" 0
+	config_get_bool log_clear_at_stop log "clear_at_stop" 0
 	config_get dummy_device       routing "dummy_device"       "nikki-dummy"
 	config_get tun_route_table    routing "tun_route_table"    "81"
 	config_get tproxy_route_table routing "tproxy_route_table" "80"
@@ -517,8 +503,8 @@ cleanup() {
 clear_logs() {
 	config_load nikki
 	local limit limit_unit limit_bytes=0
-	config_get limit      "log" "limit" 1
-	config_get limit_unit "log" "limit_unit" "MB"
+	config_get limit      log "limit" 1
+	config_get limit_unit log "limit_unit" "MB"
 
 	case "$limit_unit" in
 		KB) limit_bytes=$((limit * 1024)) ;;

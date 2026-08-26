@@ -72,6 +72,10 @@ export function load_profile(o) {
 	return out ? json(out) : {};
 };
 
+export function qs(v) {
+	return v ? '"' + replace(replace(v, /\\/g, '\\\\'), /"/g, '\\"') + '"' : '""';
+};
+
 export function shellQuote(s) {
 	return `'${replace(s, "'", "'\\''")}'`;
 };
