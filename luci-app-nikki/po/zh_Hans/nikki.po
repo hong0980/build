@@ -2221,5 +2221,83 @@ msgstr "ghm.078465.xyz ★全能"
 msgid "gh.zwy.one (High Speed)"
 msgstr "gh.zwy.one ★高速"
 
+msgid "Core Version Management"
+msgstr "核心版本管理"
+
+msgid "Fetching..."
+msgstr "获取中..."
+
+msgid "Get Version"
+msgstr "获取版本"
+
+msgid "Not Installed"
+msgstr "未安装"
+
+msgid "Fetch Failed"
+msgstr "获取失败"
+
+msgid "Up to Date"
+msgstr "已是最新"
+
+msgid "Update Available"
+msgstr "可更新"
+
+msgid "Downloading..."
+msgstr "下载中..."
+
+msgid "Redownload"
+msgstr "重新下载"
+
+msgid "Update"
+msgstr "更新"
+
+msgid "Download"
+msgstr "下载"
+
+msgid " download successful"
+msgstr " 下载成功"
+
+msgid " download failed: "
+msgstr " 下载失败："
+
+msgid "Switching..."
+msgstr "切换中..."
+
+msgid "Switch"
+msgstr "切换"
+
+msgid " is downloading, please refresh later"
+msgstr " 正在下载，请稍后手动刷新"
+
+msgid " switch successful, service restarted"
+msgstr " 切换成功，服务已重启"
+
+msgid " switch failed: "
+msgstr " 切换失败："
+
+msgid "Request exception: "
+msgstr "请求异常："
+
+msgid "Click the button above to get version info"
+msgstr "点击上方按钮获取版本信息"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Type"
+msgstr "类型"
+
+msgid "Local Version"
+msgstr "本地版本"
+
+msgid "Remote Version"
+msgstr "远程版本"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Action"
+msgstr "操作"
+
 msgid ""
 msgstr ""

@@ -100,7 +100,7 @@ const callGetCoreUrl = rpc.declare({
 const callCacheCore = rpc.declare({
     object: 'luci.nikki',
     method: 'cache_core',
-    params: ['core_type', 'arch'],
+    params: ['core_type', 'arch', 'url'],
     expect: { '': {} }
 });
 
@@ -122,6 +122,13 @@ const callCheckDownload = rpc.declare({
     object: 'luci.nikki',
     method: 'check_download',
     params: ['core_type', 'path'],
+    expect: { '': {} }
+});
+
+const callversion = rpc.declare({
+    object: 'luci.nikki',
+    method: 'core_version',
+    params: ['mode'],
     expect: { '': {} }
 });
 
@@ -183,6 +190,10 @@ return baseclass.extend({
     ruleProvidersDir:  ruleProvidersDir,
     proxyProvidersDir: proxyProvidersDir,
 
+    get_core_version: function (mode) {
+        return callversion(mode);
+    },
+
     status: function () {
         return callServiceList('nikki', ['instances', 'nikki', 'running']).then(Boolean);
     },
@@ -221,8 +232,8 @@ return baseclass.extend({
         return promise;
     },
 
-    cache_core: function (core_type, arch) {
-        return callCacheCore(core_type, arch).then(function (res) {
+    cache_core: function (core_type, arch, url) {
+        return callCacheCore(core_type, arch, url).then(function (res) {
             if (res.status === 'ok') return;
             if (res.status === 'error')
                 throw new Error(res.message || _('Update failed'));
@@ -275,7 +286,7 @@ return baseclass.extend({
                     if (res.status === 'error')
                         throw new Error(res.message || _('Download failed'));
                     if (res.status === 'pending' && res.task_id)
-                        return waitForDownload(res.task_id, path).then(attempt);
+                        return waitForDownload(res.task_id, path);
                     throw new Error(res.message || _('Download failed'));
                 });
         };
@@ -302,45 +313,28 @@ return baseclass.extend({
             'external-controller-tls': null
         });
 
-        let uiName         = (overrideUiName ?? profile['external-ui-name'] ?? '').trim();
+        const uiName       = overrideUiName ?? profile['external-ui-name'] ?? '';
         const apiSecret    = profile['secret'] ?? '';
         const apiListen    = profile['external-controller'];
         const apiTLSListen = profile['external-controller-tls'];
 
-        if (!apiListen && !apiTLSListen) {
+        if (!apiListen && !apiTLSListen)
             return Promise.reject('API has not been configured');
-        }
 
-        let protocol = 'http', port = '', hash = '';
-        const host = window.location.hostname;
-        const uiLower = uiName.toLowerCase();
-
-        if (apiTLSListen) {
-            protocol = 'https';
-            port = apiTLSListen.substring(apiTLSListen.lastIndexOf(':') + 1);
-        } else {
-            port = apiListen.substring(apiListen.lastIndexOf(':') + 1);
-        }
-
-        if (uiLower.includes('metacubexd') || uiLower === 'metacube') {
-            hash = '#/setup';
-        } else if (uiLower.includes('zashboard')) {
-            hash = '#/setup';
-        } else if (uiLower.includes('yacd')) {
-            hash = '';
-        } else if (uiLower.includes('dashboard') || uiLower.includes('razord')) {
-            hash = '#/';
-        }
-
-        const params  = { hostname: host, host: host, port: port, secret: apiSecret };
-        const query   = new URLSearchParams(params).toString();
-        const baseUrl = uiName
-            ? `${protocol}://${host}:${port}/ui/${uiName}`
-            : `${protocol}://${host}:${port}/ui`;
-
-        const finalUrl = hash
-            ? `${baseUrl}/${hash}?${query}`
-            : `${baseUrl}/?${query}`;
+        const protocol = apiTLSListen ? 'https' : 'http';
+        const endpoint = apiTLSListen ?? apiListen;
+        const port     = endpoint.substring(endpoint.lastIndexOf(':') + 1);
+        const host     = window.location.hostname;
+        const uiMap    = {
+            'Razord':     { hash: '#/',      hostKey: 'host' },
+            'YACD':       { hash: '',        hostKey: 'hostname' },
+            'Zashboard':  { hash: '#/setup', hostKey: 'hostname' },
+            'MetaCubeXD': { hash: '#/setup', hostKey: 'hostname' },
+        };
+        const cfg      = uiMap[uiName] ?? { hash: '', hostKey: 'host' };
+        const query    = new URLSearchParams({ [cfg.hostKey]: host, port, secret: apiSecret }).toString();
+        const base     = `${protocol}://${host}:${port}/ui${uiName ? '/' + uiName : ''}/`;
+        const finalUrl = cfg.hash ? `${base}${cfg.hash}?${query}` : `${base}?${query}`;
 
         setTimeout(() => window.open(finalUrl, '_blank'), 0);
         return Promise.resolve();

@@ -22,6 +22,42 @@ function setStatus(element, running) {
     return element;
 }
 
+function modalnotify(title, children, timeout, ...classes) {
+    function fadeOut(element) {
+        element?.classList.replace('fade-in', 'fade-out');
+        setTimeout(() => element?.remove());
+    };
+
+    const modalContainer = document.querySelector('#modal_overlay .modal');
+    if (!modalContainer) return;
+    const msg = E('div', {
+        class: 'alert-message fade-in',
+        style: 'display:flex; margin: 10px 0;',
+        transitionend: function (ev) {
+            const node = ev.currentTarget;
+            if (node.parentNode && node.classList.contains('fade-out')) {
+                node.parentNode.removeChild(node);
+            };
+        }
+    }, [
+        E('div', { style: 'flex:10' }),
+        E('div', { style: 'flex:1 1 auto; display:flex' }, [
+            E('button', {
+                class: 'btn', style: 'margin-left:auto; margin-top:auto',
+                click: () => fadeOut(msg)
+            }, _('Dismiss'))
+        ])
+    ]);
+
+    L.dom.append(msg.firstElementChild, children);
+    msg.classList.add(...classes);
+    modalContainer.insertBefore(msg, modalContainer.firstChild);
+    if (typeof timeout === 'number' && timeout > 0) {
+        setTimeout(() => fadeOut(msg), timeout);
+    };
+    return msg;
+};
+
 function preloadAce() {
     if (window.ace?.edit) return Promise.resolve(true);
     if (window._acePromise) return window._acePromise;
@@ -136,7 +172,7 @@ return view.extend({
         ]);
     },
     render: function ([v, running, mixinfiles, profiles, subfiles, list]) {
-        let m, s, o, coreBtn, lgbmBtn, uibtn;
+        let m, s, o, coreBtn, switchBtn, lgbmBtn, uibtn;
         preloadAce().catch(() => {});
 
         m = new form.Map('nikki', _('Nikki'), _("Transparent Proxy with <a href='%s' target='_blank'>Mihomo</a> on OpenWrt.").format('https://wiki.metacubex.one/') +
@@ -302,8 +338,8 @@ return view.extend({
         o.value('smart', _('Smart'));
         o.rmempty = false;
         o.onchange = function (ev, section_id, value) {
-            if (!coreBtn) return;
-            coreBtn.style.display = coreDownload(list, value) ? '' : 'none';
+            if (!switchBtn) return;
+            switchBtn.style.display = this.cfgvalue(section_id) !== value ? '' : 'none';
         };
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const self = this;
@@ -312,37 +348,136 @@ return view.extend({
             const default_label = _('Update Core');
             coreBtn = E('button', {
                 'class': 'btn cbi-button-action',
-                'style': coreDownload(list, cfgvalue) ? '' : 'display:none',
                 'click': ui.createHandlerFn(this, function (ev) {
-                    ev.preventDefault();
-                    if (core_version == '0')
-                        return ui.addNotification(null,
-                            E('p', _('Unknown device architecture, cannot download core.')), 'error');
+                    const coreOpt = self.section.getOption('core');
+                    const options = [];
+                    if (coreOpt.keylist && coreOpt.vallist) {
+                        for (let i = 0; i < coreOpt.keylist.length; i++) {
+                            const val = coreOpt.keylist[i];
+                            if (!val) continue;
+                            options.push({ value: val, text: coreOpt.vallist[i] || val });
+                        }
+                    }
 
-                    const val = self.formvalue(section_id).trim();
-                    if (!val)
-                        return ui.addNotification(null,
-                            E('p', _('Please select a core first.')), 'error');
+                    const content = E('div', { 'class': 'cbi-section' },
+                        E('p', { 'style': 'text-align: center; color: #999; padding: 2rem 0;' }, _('Loading...'))
+                    );
 
-                    coreBtn.textContent = _('Please wait, downloading %s...').format(val);
-                    return nikki.cache_core(val, core_version)
-                        .then(function () {
-                            coreBtn.style.display = 'none';
-                            ui.addTimeLimitedNotification(null,
-                                E('p', _('Core %s updated successfully').format(val)), 4000, 'info');
-                        })
-                        .catch(function (err) {
-                            ui.addNotification(null,
-                                E('p', _('Update failed: %s').format(err.message || err)), 'error');
-                        })
-                        .finally(() => coreBtn.textContent = default_label);
+                    ui.showModal(_('Core Version Management'), [
+                        content,
+                        E('div', { 'class': 'right' }, [
+                            E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Close'))
+                        ])
+                    ], 'cbi-modal');
+
+                    Promise.all(options.map(function (opt) {
+                        return Promise.all([
+                            nikki.get_core_version(opt.value).then(function (res) {
+                                return { version: res.version || _('Not Installed') };
+                            }).catch(function () {
+                                return { version: _('Not Installed') };
+                            }),
+                            nikki.get_core_url(opt.value, core_version).then(function (res) {
+                                const version = opt.value === 'meta'
+                                    ? (res.url.match(/\/download\/([^/]+)\//) || [, '-'])[1]
+                                    : (res.url.match(/compatible-([^/]+)\.gz$/) || [, '-'])[1];
+                                return { version: version, url: res.url };
+                            }).catch(function () {
+                                return { version: '-', url: null };
+                            })
+                        ]).then(function (results) {
+                            return { type: opt.value, name: opt.text, local: results[0], remote: results[1] };
+                        });
+                    })).then(function (results) {
+                        const rows = [];
+                        results.forEach(function (item) {
+                            const localVer = item.local.version;
+                            const remoteVer = item.remote.version;
+                            const hasUrl = item.remote.url;
+                            const isInstalled = localVer !== _('Not Installed') && localVer !== '-';
+                            const isLatest = isInstalled && localVer === remoteVer;
+                            const status = !hasUrl ? E('span', { 'class': 'label warning' }, _('Fetch Failed'))
+                                : isLatest ? E('span', { 'class': 'label success' }, _('Up to Date'))
+                                    : !isInstalled ? E('span', { 'class': 'label' }, _('Not Installed'))
+                                        : E('span', { 'class': 'label notice' }, _('Update Available'));
+
+                            const btnWidth = 'width: 90px; display: inline-block;';
+                            const dlLabel = isLatest ? _('Redownload') : isInstalled ? _('Update') : _('Download');
+                            const dlBtn = hasUrl ? E('button', {
+                                'class': 'btn cbi-button-positive',
+                                'style': btnWidth,
+                                'click': ui.createHandlerFn(this, function (ev) {
+                                    const b = ev.target;
+                                    b.disabled = true;
+                                    b.textContent = _('Downloading...');
+                                    return nikki.cache_core(item.type, core_version, item.remote.url)
+                                        .then(function () {
+                                            b.disabled = false;
+                                            b.textContent = dlLabel;
+                                            modalnotify(null, E('p', item.name + _(' download successful')), 'success');
+                                        })
+                                        .catch(function (err) {
+                                            b.disabled = false;
+                                            b.textContent = dlLabel;
+                                            modalnotify(null, E('p', item.name + _(' download failed: ') + String(err)), 'error');
+                                        });
+                                })
+                            }, dlLabel)
+                                : E('button', { 'class': 'btn', 'style': btnWidth + ' visibility: hidden;', 'disabled': 'disabled' }, _('Download'));
+
+                            rows.push(E('tr', { 'style': 'line-height: 2.5em;' }, [
+                                E('td', item.name),
+                                E('td', [E('code', localVer)]),
+                                E('td', [E('code', remoteVer)]),
+                                E('td', [status]),
+                                E('td', { 'style': 'white-space: nowrap; vertical-align: middle;' }, [E('button', {
+                                    'class': 'btn cbi-button-action',
+                                    'style': btnWidth + ' margin-right: 0.8rem;',
+                                    'click': ui.createHandlerFn(this, function (ev) {
+                                        const b = ev.target;
+                                        while (b && b.tagName !== 'BUTTON') b = b.parentNode;
+                                        b.disabled = true;
+                                        b.textContent = _('Switching...');
+                                        return nikki.switch_core(item.type, core_version, item.remote.url)
+                                            .then(function (res) {
+                                                b.disabled = false;
+                                                b.textContent = _('Switch Core');
+                                                const pending = res && res.status === 'pending';
+                                                modalnotify(null, E('p', item.name + (pending ? _(' is downloading, please refresh later') : _(' switch successful, service restarted'))), pending ? 'info' : 'success');
+                                            })
+                                            .catch(function (err) {
+                                                b.disabled = false;
+                                                b.textContent = _('Switch Core');
+                                                modalnotify(null, E('p', item.name + _(' switch failed: ') + String(err)), 'error');
+                                            });
+                                    })
+                                }, _('Switch Core')), dlBtn])
+                            ]));
+                        });
+
+                        content.innerHTML = '';
+                        content.appendChild(E('table', { 'class': 'table cbi-section-table' }, [
+                            E('tr', { 'class': 'tr cbi-section-table-titles' }, [
+                                E('th', { 'class': 'th', 'style': 'width: 18%;' }, _('Type')),
+                                E('th', { 'class': 'th', 'style': 'width: 22%;' }, _('Local Version')),
+                                E('th', { 'class': 'th', 'style': 'width: 22%;' }, _('Remote Version')),
+                                E('th', { 'class': 'th', 'style': 'width: 15%;' }, _('Status')),
+                                E('th', { 'class': 'th' }, _('Action'))
+                            ])
+                        ].concat(rows)));
+
+                    }).catch(function (err) {
+                        content.innerHTML = '';
+                        content.appendChild(E('p', { 'style': 'text-align: center; color: #f44336; padding: 2rem 0;' }, _('Request exception: ') + String(err)));
+                    });
                 })
             }, default_label);
-            const switchBtn = E('button', {
+            switchBtn = E('button', {
+                'style': 'display:none',
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function (ev) {
                     ev.preventDefault();
-                    if (core_version == '0')
+                    if (!core_version)
                         return ui.addNotification(null,
                             E('p', _('Unknown device architecture, cannot download core.')), 'error');
 
@@ -356,19 +491,8 @@ return view.extend({
                         .then(function (res) {
                             if (res?.status !== 'ok')
                                 throw new Error(res.message || _('Switch failed'));
-                            if (val == 'smart') {
-                                return self.map.save(null, true).then(() => {
-                                    return ui.changes.apply(true);
-                                });
-                            }
-
-                            ui.addTimeLimitedNotification(null,
-                                E('p', _('Switched to %s').format(val)), 4000, 'info');
-
-                            uci.unload('nikki');
-                            uci.load('nikki');
-                            return self.map.load().then(() => {
-                                return self.map.reset();
+                            return self.map.save(null, true).then(() => {
+                                ui.changes.apply(true);
                             });
                         })
                         .catch(function (err) {

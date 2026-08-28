@@ -73,7 +73,7 @@ case "${DISTRIB_ARCH}" in
         core_arch="linux-loong64-abi1"
         ;;
     *)
-        core_arch="0"
+        :
         ;;
 esac
 uci -q set nikki.config.core_version="$core_arch"

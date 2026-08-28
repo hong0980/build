@@ -89,6 +89,7 @@ function get_core_url_call(req) {
 }
 
 function cache_core_call(req) {
+	const url         = req.args?.url;
 	const arch        = req.args?.arch;
 	const core_type   = req.args?.core_type;
 	const status_file = `/tmp/nikki_dl_${core_type}.status`;
@@ -104,20 +105,21 @@ function cache_core_call(req) {
 
 	writefile(status_file, 'downloading');
 
-	const cmd = `${shellQuote(CORE_SCRIPT)} cache ${shellQuote(core_type)} > /dev/null 2>&1 &`;
+	const cmd = `${shellQuote(CORE_SCRIPT)} cache ${shellQuote(core_type)} ${url} > /dev/null 2>&1 &`;
 	system(['sh', '-c', cmd]);
 
 	return { status: 'pending', message: 'download started in background' };
 }
 
 function switch_core_call(req) {
+	const url       = req.args?.url;
 	const arch      = req.args?.arch;
 	const core_type = req.args?.core_type;
 	if (!core_type) return { status: 'error', message: 'missing core_type' };
 	const final_out = `${CACHE_DIR}/${core_type}-mihomo`;
 
 	if (!access(final_out)) {
-		const cache = cache_core_call({ args: { core_type, arch } });
+		const cache = cache_core_call({ args: { core_type, arch, url } });
 		if (!cache || cache.status == 'error')
 			return { status: 'error', message: cache?.message || `cached binary not found: ${final_out}` };
 
@@ -194,6 +196,19 @@ const methods = {
 
 			core = run(`/etc/nikki/run/mihomo -v | grep Mihomo | cut -d " " -f 3`);
 			return { app, core };
+		}
+	},
+
+	core_version: {
+		args: { mode: 'mode' },
+		call: function (req) {
+			let version = null;
+			const mode  = req.args?.mode;
+			const core  = `/etc/nikki/run/core/${mode}-mihomo`;
+			if (access(core))
+				version = trim(run(`${core} -v | grep Mihomo | cut -d " " -f 3`));
+
+			return { version };
 		}
 	},
 
@@ -430,12 +445,12 @@ fi \
 	},
 
 	cache_core: {
-		args: { core_type: 'core_type', arch: 'arch' },
+		args: { core_type: 'core_type', arch: 'arch', url: 'url' },
 		call: cache_core_call
 	},
 
 	switch_core: {
-		args: { core_type: 'core_type', arch: 'arch' },
+		args: { core_type: 'core_type', arch: 'arch', url: 'url' },
 		call: switch_core_call
 	}
 };

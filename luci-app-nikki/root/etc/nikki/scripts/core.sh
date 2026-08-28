@@ -152,7 +152,7 @@ EOF
 }
 
 do_cache() {
-	local CORE_TYPE="$1"
+	local CORE_TYPE="$1" url="$2"
 	CACHE_DIR="$RUN_DIR/core"
 	mkdir -p "$CACHE_DIR"
 	[ -z "$CORE_TYPE" -a -z "$ARCH" ] && {
@@ -167,13 +167,15 @@ do_cache() {
 	local lock_file="/tmp/nikki_dl_${CORE_TYPE}.lock"
 	local status_file="/tmp/nikki_dl_${CORE_TYPE}.status"
 
-	local url_json url_status msg url
-	url_json=$(get_core_url "$CORE_TYPE")
-	eval "$(echo "$url_json" | jsonfilter -e 'url_status=@.status' -e 'msg=@.message' -e 'url=@.url' 2>/dev/null)"
+	if [ -z "$url" ]; then
+		local url_json url_status msg
+		url_json=$(get_core_url "$CORE_TYPE")
+		eval "$(echo "$url_json" | jsonfilter -e 'url_status=@.status' -e 'msg=@.message' -e 'url=@.url' 2>/dev/null)"
 
-	if [ "$url_status" != "ok" ]; then
-		echo "error: get url failed: ${msg:-unknown}" > "$status_file"
-		return 1
+		if [ "$url_status" != "ok" ]; then
+			echo "error: get url failed: ${msg:-unknown}" > "$status_file"
+			return 1
+		fi
 	fi
 
 	exec 200>"$lock_file"
@@ -266,7 +268,7 @@ case "$ACTION" in
 		get_core_url "$1"
 		;;
 	cache)
-		do_cache "$1"
+		do_cache "$1" "$2"
 		;;
 	update_ui)
 		update_ui "$1" "$2" "$3"
