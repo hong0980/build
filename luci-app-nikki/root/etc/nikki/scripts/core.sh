@@ -152,7 +152,8 @@ EOF
 }
 
 do_cache() {
-	local CORE_TYPE="$1" url="$2"
+	local CORE_TYPE="$1"
+	local url; url="$2"
 	CACHE_DIR="$RUN_DIR/core"
 	mkdir -p "$CACHE_DIR"
 	[ -z "$CORE_TYPE" -a -z "$ARCH" ] && {
@@ -167,7 +168,7 @@ do_cache() {
 	local lock_file="/tmp/nikki_dl_${CORE_TYPE}.lock"
 	local status_file="/tmp/nikki_dl_${CORE_TYPE}.status"
 
-	if [ -z "$url" ]; then
+	if [ "$url" = 'null' ] || [ -z "$url" ]; then
 		local url_json url_status msg
 		url_json=$(get_core_url "$CORE_TYPE")
 		eval "$(echo "$url_json" | jsonfilter -e 'url_status=@.status' -e 'msg=@.message' -e 'url=@.url' 2>/dev/null)"
@@ -193,7 +194,7 @@ do_cache() {
 	curl -SsL -C - --connect-timeout 15 --max-time 300 --retry 3 --retry-delay 2 \
 		-A "$UA" -o "$archive_path" "$(mirror_url "$url")" 2>>"$log_file"
 
-	if [ $? -ne 0 -o ! -s "$archive_path" ]; then
+	if [ $? -ne 0 ] || [ ! -s "$archive_path" ]; then
 		echo "error: download failed" > "$status_file"
 		flock -u 200 2>/dev/null
 		return 1

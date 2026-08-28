@@ -2254,11 +2254,11 @@ msgstr "更新"
 msgid "Download"
 msgstr "下载"
 
-msgid " download successful"
-msgstr " 下载成功"
+msgid "%s download successful"
+msgstr "%s 下载成功"
 
-msgid " download failed: "
-msgstr " 下载失败："
+msgid "%s download failed: %s"
+msgstr "%s 下载失败：%s"
 
 msgid "Switching..."
 msgstr "切换中..."
@@ -2266,17 +2266,17 @@ msgstr "切换中..."
 msgid "Switch"
 msgstr "切换"
 
-msgid " is downloading, please refresh later"
-msgstr " 正在下载，请稍后手动刷新"
+msgid "%s is downloading, please refresh later"
+msgstr "%s 正在下载，请稍后刷新"
 
-msgid " switch successful, service restarted"
-msgstr " 切换成功，服务已重启"
+msgid "%s switch successful, service restarted"
+msgstr "%s 切换成功，服务已重启"
 
-msgid " switch failed: "
-msgstr " 切换失败："
+msgid "%s switch failed: %s"
+msgstr "%s 切换失败：%s"
 
-msgid "Request exception: "
-msgstr "请求异常："
+msgid "Request exception: %s"
+msgstr "请求异常：%s"
 
 msgid "Click the button above to get version info"
 msgstr "点击上方按钮获取版本信息"

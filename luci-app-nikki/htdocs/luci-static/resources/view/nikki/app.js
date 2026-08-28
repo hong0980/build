@@ -414,12 +414,12 @@ return view.extend({
                                         .then(function () {
                                             b.disabled = false;
                                             b.textContent = dlLabel;
-                                            modalnotify(null, E('p', item.name + _(' download successful')), 'success');
+                                            modalnotify(null, E('p', _('%s download successful').format(item.name)), 'success');
                                         })
                                         .catch(function (err) {
                                             b.disabled = false;
                                             b.textContent = dlLabel;
-                                            modalnotify(null, E('p', item.name + _(' download failed: ') + String(err)), 'error');
+                                            modalnotify(null, E('p', _('%s download failed: %s').format(item.name, String(err))), 'error');
                                         });
                                 })
                             }, dlLabel)
@@ -443,12 +443,12 @@ return view.extend({
                                                 b.disabled = false;
                                                 b.textContent = _('Switch Core');
                                                 const pending = res && res.status === 'pending';
-                                                modalnotify(null, E('p', item.name + (pending ? _(' is downloading, please refresh later') : _(' switch successful, service restarted'))), pending ? 'info' : 'success');
+                                                modalnotify(null, E('p', (pending ? _('%s is downloading, please refresh later').format(item.name) : _('%s switch successful, service restarted').format(item.name))), pending ? 'info' : 'success');
                                             })
                                             .catch(function (err) {
                                                 b.disabled = false;
                                                 b.textContent = _('Switch Core');
-                                                modalnotify(null, E('p', item.name + _(' switch failed: ') + String(err)), 'error');
+                                                modalnotify(null, E('p', _('%s switch failed: %s').format(item.name, String(err))), 'error');
                                             });
                                     })
                                 }, _('Switch Core')), dlBtn])
@@ -468,7 +468,7 @@ return view.extend({
 
                     }).catch(function (err) {
                         content.innerHTML = '';
-                        content.appendChild(E('p', { 'style': 'text-align: center; color: #f44336; padding: 2rem 0;' }, _('Request exception: ') + String(err)));
+                        content.appendChild(E('p', { 'style': 'text-align: center; color: #f44336; padding: 2rem 0;' }, _('Request exception: %s').format(String(err))));
                     });
                 })
             }, default_label);

@@ -107,7 +107,7 @@ const callCacheCore = rpc.declare({
 const callSwitchCore = rpc.declare({
     object: 'luci.nikki',
     method: 'switch_core',
-    params: ['core_type', 'arch'],
+    params: ['core_type', 'arch', 'url'],
     expect: { '': {} }
 });
 
@@ -241,9 +241,9 @@ return baseclass.extend({
         });
     },
 
-    switch_core: function (core_type, arch) {
+    switch_core: function (core_type, arch, url) {
         const attempt = function () {
-            return callSwitchCore(core_type, arch).then(function (res) {
+            return callSwitchCore(core_type, arch, url).then(function (res) {
                 if (res.status === 'ok') return res;
                 if (res.status === 'pending')
                     return waitForDownload(core_type).then(attempt);
