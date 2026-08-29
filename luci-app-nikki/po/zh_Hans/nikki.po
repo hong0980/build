@@ -2263,9 +2263,6 @@ msgstr "%s 下载失败：%s"
 msgid "Switching..."
 msgstr "切换中..."
 
-msgid "Switch"
-msgstr "切换"
-
 msgid "%s is downloading, please refresh later"
 msgstr "%s 正在下载，请稍后刷新"
 
@@ -2278,8 +2275,11 @@ msgstr "%s 切换失败：%s"
 msgid "Request exception: %s"
 msgstr "请求异常：%s"
 
-msgid "Click the button above to get version info"
-msgstr "点击上方按钮获取版本信息"
+msgid "In use"
+msgstr "使用中"
+
+msgid "Click to download locally\n%s"
+msgstr "点击下载本地\n%s"
 
 msgid "Close"
 msgstr "关闭"

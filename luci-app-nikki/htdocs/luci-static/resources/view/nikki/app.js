@@ -359,9 +359,19 @@ return view.extend({
                         }
                     }
 
-                    const content = E('div', { 'class': 'cbi-section' },
-                        E('em', { 'class': 'spinning' }, _('Loading...'))
-                    );
+                    const tableEl = E('table', { 'class': 'table cbi-section-table' }, [
+                        E('tr', { 'class': 'tr table-titles' }, [
+                            E('th', { 'class': 'th' }, _('Type')),
+                            E('th', { 'class': 'th' }, _('Local Version')),
+                            E('th', { 'class': 'th' }, _('Remote Version')),
+                            E('th', { 'class': 'th' }, _('Status')),
+                            E('th', { 'class': 'th cbi-section-actions' })
+                        ])
+                    ]);
+
+                    const content = E('div', { 'class': 'cbi-section' }, [
+                        tableEl, E('em', { 'class': 'spinning' }, _('Loading...'))
+                    ]);
 
                     ui.showModal(_('Core Version Management'), [
                         content,
@@ -385,20 +395,23 @@ return view.extend({
                                 .catch(() => ({ version: '-', url: null }))
                         ]).then(res => ({ type: opt.value, name: opt.text, local: res[0], remote: res[1] }));
                     })).then((res) => {
+                        content.querySelector('em.spinning')?.remove();
                         const rows = [];
                         res.forEach((item) => {
                             const hasUrl = item.remote.url || null;
                             const localVer = item.local.version;
                             const remoteVer = item.remote.version;
                             const isInstalled = localVer !== '-';
+                            const iscore = v.core && v.core === localVer;
                             const isLatest = isInstalled && localVer === remoteVer;
-                            const status = !hasUrl ? E('span', { 'class': 'label warning' }, _('Fetch Failed'))
-                                : isLatest ? E('span', { 'class': 'label success' }, _('Up to Date'))
-                                    : !isInstalled ? E('span', { 'class': 'label warning' }, _('Not Installed'))
-                                        : E('span', { 'class': 'label notice' }, _('Update Available'));
+                            const dlLabel = isLatest
+                                ? _('Redownload')
+                                : isInstalled
+                                    ? _('Update')
+                                    : _('Download');
 
-                            const dlLabel = isLatest ? _('Redownload') : isInstalled ? _('Update') : _('Download');
                             const dlBtn = E('button', {
+                                'disabled': hasUrl ? null : true,
                                 'class': isLatest ? 'btn cbi-button-negative' : 'btn cbi-button-positive',
                                 'click': ui.createHandlerFn(this, function (ev) {
                                     const b = ev.target;
@@ -406,20 +419,14 @@ return view.extend({
                                     b.textContent = _('Downloading...');
                                     return nikki.cache_core(item.type, core_version, hasUrl)
                                         .then(() => {
-                                            const row = b.closest('tr.cbi-section-table-row');
+                                            const row = findParent(b, '.tr');
                                             if (row) {
-                                                const localCode = row.querySelector('td[data-title="' + _('Local Version') + '"] code');
-                                                const statusTd = row.querySelector('td[data-title="' + _('Status') + '"]');
-
-                                                if (localCode) localCode.textContent = remoteVer;
-                                                if (statusTd) L.dom.content(statusTd, E('span', { 'class': 'label success' }, _('Up to Date')));
+                                                row.cells[1].textContent = E('code', remoteVer);
+                                                L.dom.content(row.cells[3], E('span', { 'class': 'label success' }, _('Up to Date')));
                                                 b.textContent = _('Redownload');
                                                 b.className = 'btn cbi-button-negative';
-                                                const switchBtn = row.querySelector('button.cbi-button-action');
-                                                if (switchBtn && v.core === item.type) {
-                                                    switchBtn.textContent = _('使用中');
-                                                    switchBtn.disabled = true;
-                                                }
+                                                const sw = row.cells[4].querySelectorAll('button')[1];
+                                                if (sw && iscore) { sw.textContent = _('In use'); sw.disabled = true; }
                                             }
                                             modalnotify(null, E('p', _('%s download successful').format(item.name)), 3000, 'success');
                                         })
@@ -430,10 +437,11 @@ return view.extend({
                                         });
                                 })
                             }, dlLabel);
-                            const switchLabel = v.core && v.core === localVer ? _('使用中') : _('Switch Core');
+
+                            const switchLabel = iscore ? _('In use') : _('Switch Core');
                             const switchBtn = E('button', {
-                                'class': 'btn cbi-button-action',
-                                'disabled': v.core && v.core === localVer ? true : null,
+                                'class': `btn cbi-button-action ${iscore ? '' : 'important'}`,
+                                'disabled': iscore ? true : null,
                                 'click': ui.createHandlerFn(this, function (ev) {
                                     const b = ev.target;
                                     while (b && b.tagName !== 'BUTTON') b = b.parentNode;
@@ -456,45 +464,25 @@ return view.extend({
                                         });
                                 })
                             }, switchLabel);
-                            rows.push(
-                                E('tbody', { 'class': 'tbody cbi-section-tbody' }, [
-                                    E('tr', { 'class': 'tr cbi-section-table-row' }, [
-                                        E('td', {
-                                            'class': 'td cbi-value-field', 'data-title': _('Type'),
-                                            'data-widget': "CBI.DummyValue"
-                                        }, item.name),
-                                        E('td', {
-                                            'class': 'td cbi-value-field', 'data-title': _('Local Version'),
-                                            'data-widget': "CBI.DummyValue"
-                                        }, [E('code', localVer)]),
-                                        E('td', {
-                                            'class': 'td cbi-value-field', 'data-title': _('Remote Version'),
-                                            'data-widget': "CBI.DummyValue"
-                                        }, [E('code', remoteVer)]),
-                                        E('td', {
-                                            'class': 'td cbi-value-field', 'data-title': _('Status'),
-                                            'data-widget': "CBI.DummyValue"
-                                        }, status),
-                                        E('td', { 'class': 'td cbi-section-table-cell nowrap cbi-section-actions' }, [
-                                            E('div', [hasUrl ? dlBtn : [], switchBtn])
-                                        ])
-                                    ])
-                                ]));
+
+                            const remoteCell = hasUrl
+                                ? E('a', { 'href': hasUrl, 'target': '_blank', 'rel': 'noreferrer', 'title': ('Click to download locally\n%s').format(hasUrl) }, remoteVer)
+                                : remoteVer;
+                            const status = !hasUrl
+                                ? E('span', { 'class': 'label warning' }, _('Fetch Failed'))
+                                : isLatest
+                                    ? E('span', { 'class': 'label success' }, _('Up to Date'))
+                                    : isInstalled
+                                        ? E('span', { 'class': 'label notice' }, _('Update Available'))
+                                        : E('span', { 'class': 'label warning' }, _('Not Installed'));
+
+                            rows.push([
+                                item.name, E('code', localVer), remoteCell, status,
+                                E('div', [dlBtn, switchBtn])
+                            ]);
                         });
 
-                        content.innerHTML = '';
-                        content.appendChild(
-                            E('table', { 'class': 'table cbi-section-table' }, [
-                                E('thead', { 'class': 'thead cbi-section-thead' }, [
-                                    E('tr', { 'class': 'tr cbi-section-table-titles anonymous' }, [
-                                        E('th', { 'class': 'th cbi-section-table-cell' }, [_('Type')]),
-                                        E('th', { 'class': 'th cbi-section-table-cell' }, [_('Local Version')]),
-                                        E('th', { 'class': 'th cbi-section-table-cell' }, [_('Remote Version')]),
-                                        E('th', { 'class': 'th cbi-section-table-cell' }, [_('Status')]),
-                                        E('th', { 'class': 'th cbi-section-table-cell cbi-section-actions' })
-                                    ])
-                                ])
-                            ].concat(rows)));
+                        cbi_update_table(tableEl, rows, _('No data available'));
                     }).catch((err) => {
                         content.innerHTML = '';
                         content.appendChild(E('p', { 'style': 'text-align: center; color: #f44336; padding: 2rem 0;' }, _('Request exception: %s').format(String(err))));
