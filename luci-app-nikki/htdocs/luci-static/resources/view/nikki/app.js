@@ -31,8 +31,8 @@ function modalnotify(title, children, timeout, ...classes) {
     const modalContainer = document.querySelector('#modal_overlay .modal');
     if (!modalContainer) return;
     const msg = E('div', {
-        class: 'alert-message fade-in',
-        style: 'display:flex; margin: 10px 0;',
+        'class': 'alert-message fade-in',
+        'style': 'display:flex; margin: 10px 0;',
         transitionend: function (ev) {
             const node = ev.currentTarget;
             if (node.parentNode && node.classList.contains('fade-out')) {
@@ -40,11 +40,11 @@ function modalnotify(title, children, timeout, ...classes) {
             };
         }
     }, [
-        E('div', { style: 'flex:10' }),
-        E('div', { style: 'flex:1 1 auto; display:flex' }, [
+        E('div', { 'style': 'flex:10' }),
+        E('div', { 'style': 'flex:1 1 auto; display:flex' }, [
             E('button', {
-                class: 'btn', style: 'margin-left:auto; margin-top:auto',
-                click: () => fadeOut(msg)
+                'class': 'btn', 'style': 'margin-left:auto; margin-top:auto',
+                'click': () => fadeOut(msg)
             }, _('Dismiss'))
         ])
     ]);
@@ -90,9 +90,9 @@ function attachFileEditorButton(o, resolveTarget) {
                 if (!target) return;
                 const { title, path } = target;
                 const textarea = E('textarea', {
-                    style: 'width:100%;height:400px;box-sizing:border-box;font-family:Consolas,monospace;white-space:pre-wrap;word-break:break-all;'
+                    'style': 'width:100%;height:400px;box-sizing:border-box;font-family:Consolas,monospace;white-space:pre-wrap;word-break:break-all;'
                 });
-                const aceDiv = E('div', { style: 'width:100%;height:400px;display:none;' });
+                const aceDiv = E('div', { 'style': 'width:100%;height:400px;display:none;' });
 
                 return L.resolveDefault(fs.read_direct(path), '').then((content) => {
                     textarea.value = content;
@@ -200,7 +200,7 @@ return view.extend({
                     })
                 }, _('Connection check')),
                 E('strong', { id: '_connection_check_results' }, [
-                    E('span', { style: 'color:gray' }, ' ' + _('unchecked'))
+                    E('span', { 'style': 'color:gray' }, ' ' + _('unchecked'))
                 ])
             ])
         };
@@ -360,7 +360,7 @@ return view.extend({
                     }
 
                     const content = E('div', { 'class': 'cbi-section' },
-                        E('p', { 'style': 'text-align: center; color: #999; padding: 2rem 0;' }, _('Loading...'))
+                        E('em', { 'class': 'spinning' }, _('Loading...'))
                     );
 
                     ui.showModal(_('Core Version Management'), [
@@ -370,103 +370,119 @@ return view.extend({
                         ])
                     ], 'cbi-modal');
 
-                    Promise.all(options.map(function (opt) {
+                    Promise.all(options.map((opt) => {
                         return Promise.all([
-                            nikki.get_core_version(opt.value).then(function (res) {
-                                return { version: res.version || _('Not Installed') };
-                            }).catch(function () {
-                                return { version: _('Not Installed') };
-                            }),
-                            nikki.get_core_url(opt.value, core_version).then(function (res) {
-                                const version = opt.value === 'meta'
-                                    ? (res.url.match(/\/download\/([^/]+)\//) || [, '-'])[1]
-                                    : (res.url.match(/compatible-([^/]+)\.gz$/) || [, '-'])[1];
-                                return { version: version, url: res.url };
-                            }).catch(function () {
-                                return { version: '-', url: null };
-                            })
-                        ]).then(function (results) {
-                            return { type: opt.value, name: opt.text, local: results[0], remote: results[1] };
-                        });
-                    })).then(function (results) {
+                            nikki.get_core_version(opt.value)
+                                .then(res => ({ version: res.version || '-' }))
+                                .catch(() => ({ version: '-' })),
+                            nikki.get_core_url(opt.value, core_version)
+                                .then(res => {
+                                    const version = opt.value === 'meta'
+                                        ? (res.url.match(/\/download\/([^/]+)\//) || [, '-'])[1]
+                                        : (res.url.match(/compatible-([^/]+)\.gz$/) || [, '-'])[1];
+                                    return { version, url: res.url };
+                                })
+                                .catch(() => ({ version: '-', url: null }))
+                        ]).then(res => ({ type: opt.value, name: opt.text, local: res[0], remote: res[1] }));
+                    })).then((res) => {
                         const rows = [];
-                        results.forEach(function (item) {
+                        res.forEach((item) => {
+                            const hasUrl = item.remote.url || null;
                             const localVer = item.local.version;
                             const remoteVer = item.remote.version;
-                            const hasUrl = item.remote.url;
-                            const isInstalled = localVer !== _('Not Installed') && localVer !== '-';
+                            const isInstalled = localVer !== '-';
                             const isLatest = isInstalled && localVer === remoteVer;
                             const status = !hasUrl ? E('span', { 'class': 'label warning' }, _('Fetch Failed'))
                                 : isLatest ? E('span', { 'class': 'label success' }, _('Up to Date'))
-                                    : !isInstalled ? E('span', { 'class': 'label' }, _('Not Installed'))
+                                    : !isInstalled ? E('span', { 'class': 'label warning' }, _('Not Installed'))
                                         : E('span', { 'class': 'label notice' }, _('Update Available'));
 
-                            const btnWidth = 'width: 90px; display: inline-block;';
                             const dlLabel = isLatest ? _('Redownload') : isInstalled ? _('Update') : _('Download');
-                            const dlBtn = hasUrl ? E('button', {
-                                'class': 'btn cbi-button-positive',
-                                'style': btnWidth,
+                            const dlBtn = E('button', {
+                                'class': isLatest ? 'btn cbi-button-negative' : 'btn cbi-button-positive',
                                 'click': ui.createHandlerFn(this, function (ev) {
                                     const b = ev.target;
                                     b.disabled = true;
                                     b.textContent = _('Downloading...');
-                                    return nikki.cache_core(item.type, core_version, item.remote.url)
-                                        .then(function () {
+                                    return nikki.cache_core(item.type, core_version, hasUrl)
+                                        .then(() => {
                                             b.disabled = false;
                                             b.textContent = dlLabel;
-                                            modalnotify(null, E('p', _('%s download successful').format(item.name)), 'success');
+                                            modalnotify(null, E('p', _('%s download successful').format(item.name)), 3000, 'success');
                                         })
-                                        .catch(function (err) {
+                                        .catch((err) => {
                                             b.disabled = false;
                                             b.textContent = dlLabel;
                                             modalnotify(null, E('p', _('%s download failed: %s').format(item.name, String(err))), 'error');
                                         });
                                 })
-                            }, dlLabel)
-                                : E('button', { 'class': 'btn', 'style': btnWidth + ' visibility: hidden;', 'disabled': 'disabled' }, _('Download'));
-
-                            rows.push(E('tr', { 'style': 'line-height: 2.5em;' }, [
-                                E('td', item.name),
-                                E('td', [E('code', localVer)]),
-                                E('td', [E('code', remoteVer)]),
-                                E('td', [status]),
-                                E('td', { 'style': 'white-space: nowrap; vertical-align: middle;' }, [E('button', {
-                                    'class': 'btn cbi-button-action',
-                                    'style': btnWidth + ' margin-right: 0.8rem;',
-                                    'click': ui.createHandlerFn(this, function (ev) {
-                                        const b = ev.target;
-                                        while (b && b.tagName !== 'BUTTON') b = b.parentNode;
-                                        b.disabled = true;
-                                        b.textContent = _('Switching...');
-                                        return nikki.switch_core(item.type, core_version, item.remote.url)
-                                            .then(function (res) {
-                                                b.disabled = false;
-                                                b.textContent = _('Switch Core');
-                                                const pending = res && res.status === 'pending';
-                                                modalnotify(null, E('p', (pending ? _('%s is downloading, please refresh later').format(item.name) : _('%s switch successful, service restarted').format(item.name))), pending ? 'info' : 'success');
-                                            })
-                                            .catch(function (err) {
-                                                b.disabled = false;
-                                                b.textContent = _('Switch Core');
-                                                modalnotify(null, E('p', _('%s switch failed: %s').format(item.name, String(err))), 'error');
-                                            });
-                                    })
-                                }, _('Switch Core')), dlBtn])
-                            ]));
+                            }, dlLabel);
+                            const switchLabel = v.core && v.core === localVer ? _('使用中') : _('Switch Core');
+                            const switchBtn = E('button', {
+                                'class': 'btn cbi-button-action',
+                                'disabled': v.core && v.core === localVer ? true : null,
+                                'click': ui.createHandlerFn(this, function (ev) {
+                                    const b = ev.target;
+                                    while (b && b.tagName !== 'BUTTON') b = b.parentNode;
+                                    b.disabled = true;
+                                    b.textContent = _('Switching...');
+                                    return nikki.switch_core(item.type, core_version, hasUrl)
+                                        .then((res) => {
+                                            b.disabled = false;
+                                            b.textContent = switchLabel;
+                                            const pending = res && res.status === 'pending';
+                                            modalnotify(null, E('p', (pending
+                                                ? _('%s is downloading, please refresh later')
+                                                : _('%s switch successful, service restarted')
+                                            ).format(item.name)), 3000, pending ? 'info' : 'success');
+                                        })
+                                        .catch((err) => {
+                                            b.disabled = false;
+                                            b.textContent = switchLabel;
+                                            modalnotify(null, E('p', _('%s switch failed: %s').format(item.name, String(err))), 'error');
+                                        });
+                                })
+                            }, switchLabel);
+                            rows.push(
+                                E('tbody', { 'class': 'tbody cbi-section-tbody' }, [
+                                    E('tr', { 'class': 'tr cbi-section-table-row' }, [
+                                        E('td', {
+                                            'class': 'td cbi-value-field', 'data-title': _('Type'),
+                                            'data-widget': "CBI.DummyValue"
+                                        }, item.name),
+                                        E('td', {
+                                            'class': 'td cbi-value-field', 'data-title': _('Local Version'),
+                                            'data-widget': "CBI.DummyValue"
+                                        }, [E('code', localVer)]),
+                                        E('td', {
+                                            'class': 'td cbi-value-field', 'data-title': _('Remote Version'),
+                                            'data-widget': "CBI.DummyValue"
+                                        }, [E('code', remoteVer)]),
+                                        E('td', {
+                                            'class': 'td cbi-value-field', 'data-title': _('Status'),
+                                            'data-widget': "CBI.DummyValue"
+                                        }, status),
+                                        E('td', { 'class': 'td cbi-section-table-cell nowrap cbi-section-actions' }, [
+                                            E('div', [hasUrl ? dlBtn : [], switchBtn])
+                                        ])
+                                    ])
+                                ]));
                         });
 
                         content.innerHTML = '';
-                        content.appendChild(E('table', { 'class': 'table cbi-section-table' }, [
-                            E('tr', { 'class': 'tr cbi-section-table-titles' }, [
-                                E('th', { 'class': 'th', 'style': 'width: 18%;' }, _('Type')),
-                                E('th', { 'class': 'th', 'style': 'width: 22%;' }, _('Local Version')),
-                                E('th', { 'class': 'th', 'style': 'width: 22%;' }, _('Remote Version')),
-                                E('th', { 'class': 'th', 'style': 'width: 15%;' }, _('Status')),
-                                E('th', { 'class': 'th' }, _('Action'))
-                            ])
-                        ].concat(rows)));
-
-                    }).catch(function (err) {
+                        content.appendChild(
+                            E('table', { 'class': 'table cbi-section-table' }, [
+                                E('thead', { 'class': 'thead cbi-section-thead' }, [
+                                    E('tr', { 'class': 'tr cbi-section-table-titles anonymous' }, [
+                                        E('th', { 'class': 'th cbi-section-table-cell' }, [_('Type')]),
+                                        E('th', { 'class': 'th cbi-section-table-cell' }, [_('Local Version')]),
+                                        E('th', { 'class': 'th cbi-section-table-cell' }, [_('Remote Version')]),
+                                        E('th', { 'class': 'th cbi-section-table-cell' }, [_('Status')]),
+                                        E('th', { 'class': 'th cbi-section-table-cell cbi-section-actions' })
+                                    ])
+                                ])
+                            ].concat(rows)));
+                    }).catch((err) => {
                         content.innerHTML = '';
                         content.appendChild(E('p', { 'style': 'text-align: center; color: #f44336; padding: 2rem 0;' }, _('Request exception: %s').format(String(err))));
                     });
