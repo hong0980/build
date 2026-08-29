@@ -370,7 +370,7 @@ return view.extend({
                         ])
                     ], 'cbi-modal');
 
-                    Promise.all(options.map((opt) => {
+                    return Promise.all(options.map((opt) => {
                         return Promise.all([
                             nikki.get_core_version(opt.value)
                                 .then(res => ({ version: res.version || '-' }))
@@ -406,8 +406,21 @@ return view.extend({
                                     b.textContent = _('Downloading...');
                                     return nikki.cache_core(item.type, core_version, hasUrl)
                                         .then(() => {
-                                            b.disabled = false;
-                                            b.textContent = dlLabel;
+                                            const row = b.closest('tr.cbi-section-table-row');
+                                            if (row) {
+                                                const localCode = row.querySelector('td[data-title="' + _('Local Version') + '"] code');
+                                                const statusTd = row.querySelector('td[data-title="' + _('Status') + '"]');
+
+                                                if (localCode) localCode.textContent = remoteVer;
+                                                if (statusTd) L.dom.content(statusTd, E('span', { 'class': 'label success' }, _('Up to Date')));
+                                                b.textContent = _('Redownload');
+                                                b.className = 'btn cbi-button-negative';
+                                                const switchBtn = row.querySelector('button.cbi-button-action');
+                                                if (switchBtn && v.core === item.type) {
+                                                    switchBtn.textContent = _('使用中');
+                                                    switchBtn.disabled = true;
+                                                }
+                                            }
                                             modalnotify(null, E('p', _('%s download successful').format(item.name)), 3000, 'success');
                                         })
                                         .catch((err) => {
