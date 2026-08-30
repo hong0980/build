@@ -447,6 +447,26 @@ fi \
 		}
 	},
 
+	json2yaml: {
+		args: { content: 'content' },
+		call: function(req) {
+			if (!req.args?.content)
+				return { result: '' };
+			const out = run(`echo ${shellQuote(req.args.content)} | yq -MPoy`);
+			return { result: out ? trim(out) : '' };
+		}
+	},
+
+	yaml2json: {
+		args: { content: 'content' },
+		call: function(req) {
+			if (!req.args?.content)
+				return { result: {} };
+			const out = run(`echo ${shellQuote(req.args.content)} | yq -MPoj`);
+			return { result: out ? json(trim(out)) : {} };
+		}
+	},
+
 	get_core_url: {
 		args: { core_type: 'core_type', arch: 'arch' },
 		call: get_core_url_call

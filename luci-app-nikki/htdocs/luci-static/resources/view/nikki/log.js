@@ -16,7 +16,6 @@ const parseCoreLogLine = (line, dateObj) => {
     return { level, display: `[${t}] [${level.toUpperCase()}]: ${msg}` };
 };
 
-
 function preloadAce() {
     if (window.ace?.edit) return Promise.resolve(true);
     if (window._acePromise) return window._acePromise;
@@ -208,131 +207,105 @@ return view.extend({
                 });
         };
 
-        o = s.taboption('mihomoapi', form.ListValue, '_api', _('Mihomo API'));
-        o.write = function () {};
         const mihomoAPIs = [
-            { key: 'version',          label: _('Version'),                method: 'GET',  path: '/version' },
-            { key: 'configs',          label: _('Running Config'),         method: 'GET',  path: '/configs' },
-            { key: 'proxies',          label: _('Proxies'),                method: 'GET',  path: '/proxies' },
-            { key: 'group',            label: _('Proxy Groups'),           method: 'GET',  path: '/group' },
-            { key: 'rules',            label: _('Rules'),                  method: 'GET',  path: '/rules' },
-            { key: 'rule_providers',   label: _('Rule Providers'),         method: 'GET',  path: '/providers/rules' },
-            { key: 'providers',        label: _('Proxy Providers'),        method: 'GET',  path: '/providers/proxies' },
-            { key: 'connections_once', label: _('Connections (Snapshot)'), method: 'GET',  path: '/connections' },
-            { key: 'dns_query',        label: _('DNS Query'),              method: 'GET',  path: '/dns/query', query: 'name=google.com&type=A' },
-            { key: 'flush_fakeip',     label: _('Flush FakeIP Cache'),     method: 'POST', path: '/cache/fakeip/flush' },
-            { key: 'flush_dns',        label: _('Flush DNS Cache'),        method: 'POST', path: '/cache/dns/flush' },
-            { key: 'reload',           label: _('Reload Config'),          method: 'PUT',  path: '/configs', query: 'force=true', body: '{"path":"","payload":""}' },
-            { key: 'geo',              label: _('Update Geo'),             method: 'POST', path: '/configs/geo', body: '{"path":"","payload":""}' },
-            { key: 'upgrade_geo',      label: _('Update Geo (Upgrade)'),   method: 'POST', path: '/upgrade/geo', body: '{"path":"","payload":""}' },
-            { key: 'upgrade',          label: _('Upgrade Core'),           method: 'POST', path: '/upgrade', query: 'force=true', body: '{"path":"","payload":""}' },
-            { key: 'upgrade_ui',       label: _('Upgrade UI'),             method: 'POST', path: '/upgrade/ui' },
-            { key: 'restart',          label: _('Restart Core'),           method: 'POST', path: '/restart', body: '{"path":"","payload":""}' },
+            { k: 'a', label: _('Version'),                method: 'GET',  path: '/version' },
+            { k: 'b', label: _('Running Config'),         method: 'GET',  path: '/configs' },
+            { k: 'c', label: _('Proxies'),                method: 'GET',  path: '/proxies' },
+            { k: 'd', label: _('Proxy Groups'),           method: 'GET',  path: '/group' },
+            { k: 'e', label: _('Rules'),                  method: 'GET',  path: '/rules' },
+            { k: 'f', label: _('Rule Providers'),         method: 'GET',  path: '/providers/rules' },
+            { k: 'g', label: _('Proxy Providers'),        method: 'GET',  path: '/providers/proxies' },
+            { k: 'h', label: _('Connections (Snapshot)'), method: 'GET',  path: '/connections' },
+            { k: 'i', label: _('DNS Query'),              method: 'GET',  path: '/dns/query', query: 'name=google.com&type=A' },
+            { k: 'j', label: _('Flush FakeIP Cache'),     method: 'POST', path: '/cache/fakeip/flush' },
+            { k: 'k', label: _('Flush DNS Cache'),        method: 'POST', path: '/cache/dns/flush' },
+            { k: 'l', label: _('Reload Config'),          method: 'PUT',  path: '/configs', query: 'force=true', body: '{"path":"","payload":""}' },
+            { k: 'p', label: _('Upgrade UI'),             method: 'POST', path: '/upgrade/ui' },
+            { k: 'm', label: _('Update Geo'),             method: 'POST', path: '/configs/geo', body: '{"path":"","payload":""}' },
+            { k: 'n', label: _('Update Geo (Upgrade)'),   method: 'POST', path: '/upgrade/geo', body: '{"path":"","payload":""}' },
+            { k: 'o', label: _('Upgrade Core'),           method: 'POST', path: '/upgrade', query: 'force=true', body: '{"path":"","payload":""}' },
+            { k: 'q', label: _('Restart Core'),           method: 'POST', path: '/restart', body: '{"path":"","payload":""}' },
         ];
-
         const mihomoAPIMap = {};
-        mihomoAPIs.forEach(function (api) {
-            mihomoAPIMap[api.key] = api;
-        });
+        mihomoAPIs.forEach((api) => mihomoAPIMap[api.k] = api);
 
-        mihomoAPIs.forEach(function (api) { o.value(api.key, api.label); });
+        o = s.taboption('mihomoapi', form.ListValue, '_api', _('Mihomo API'));
+        o.write = () => {};
+        mihomoAPIs.forEach((api) => { o.value(api.k, api.label) });
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
             const btn = E('button', {
                 'class': 'btn cbi-button-action',
                 'click': ui.createHandlerFn(this, function () {
-                    const selected = s.formvalue(section_id, '_api');
-                    const api = mihomoAPIMap[selected];
+                    const api = mihomoAPIMap[s.formvalue(section_id, '_api')];
+                    if (!api) return ui.addNotification(null, E('p', _('Unknown API')), 'error');
 
-                    if (!api) {
-                        ui.addNotification(null, E('p', _('Unknown API: %s').format(selected)), 'error');
-                        return;
-                    }
-
-                    const textarea = E('textarea', {
-                        'style': 'width:100%;height:300px;box-sizing:border-box;' +
-                                 'font-family:Consolas,monospace;white-space:pre;' +
-                                 'word-break:break-all;background:#1e1e1e;color:#d4d4d4;' +
-                                 'border:none;padding:10px;font-size:14px;'
-                    });
-                    const aceDiv = E('div', { 'style': 'width:100%;height:300px;display:none;' });
+                    const content = E('div', { class: 'cbi-section', style: 'padding:10px;' }, [
+                        E('div', { style: 'margin-bottom:10px;' }, [
+                            E('strong', {}, _('Method: ')), E('span', {}, api.method), E('span', {}, ' | '),
+                            E('strong', {}, _('Path: ')), E('span', {}, api.path)
+                        ]),
+                        E('p'),
+                        E('div', { class: 'spinning', style: 'text-align:center;padding:60px 0;' }, _('Loading...'))
+                    ]);
 
                     ui.showModal(_('API Response: %s').format(api.label), [
-                        E('div', { class: 'cbi-section', style: 'padding:10px;' }, [
-                            E('div', { style: 'margin-bottom:10px;' }, [
-                                E('strong', {}, _('Method: ')), E('span', {}, api.method),
-                                E('span', {}, ' | '),
-                                E('strong', {}, _('Path: ')), E('span', {}, api.path)
-                            ]),
-                            E('p'), aceDiv, textarea
-                        ]),
+                        content,
                         E('div', { class: 'right' }, [
-                            E('button', { 'class': 'btn cbi-button', 'click': ui.hideModal }, _('Close'))
+                            E('button', { class: 'btn cbi-button', click: ui.hideModal }, _('Close'))
                         ])
                     ], 'cbi-modal');
 
-                    return nikki.mihomoAPI(
-                        api.method, api.path, api.query || '', api.body || ''
-                    ).then(function (res) {
-                        const success = res && res.success;
-                        const status  = res ? res.status : 0;
-                        const data    = res ? res.data : null;
-                        const message = res ? res.message : null;
-
-                        if (!success) {
+                    return nikki.mihomoAPI(api.method, api.path, api.query || '', api.body || '').then(function (res) {
+                        if (!res || !res.success) {
                             ui.hideModal();
-                            ui.addNotification(null, E('p', _('Request failed: %s').format(message || ('HTTP ' + status))), 'error');
+                            return ui.addNotification(null, E('p', _('Request failed: %s').format(res?.message || ('HTTP ' + (res?.status || 0)))), 'error');
+                        }
+
+                        const data = res.data;
+                        const status = res.status;
+
+                        if (api.method === 'POST' && (data == null || data?.status === 'ok')) {
+                            content.innerHTML = '';
+                            content.appendChild(E('div', { style: 'text-align:center;padding:40px 20px;' }, [
+                                E('div', { style: 'font-size:56px;margin-bottom:15px;' }, '✓'),
+                                E('div', { style: 'font-size:18px;font-weight:bold;color:#28a745;' }, _('Operation Successful')),
+                                E('div', { style: 'color:#666;font-size:14px;margin-top:8px;' }, _('%s completed successfully').format(api.label)),
+                                E('div', { style: 'margin-top:20px;' }, [
+                                    E('strong', {}, _('Status: ')),
+                                    E('span', { style: 'display:inline-block;padding:2px 8px;border-radius:4px;background:#28a745;color:#fff;font-size:12px;font-weight:bold;' }, String(status))
+                                ])
+                            ]));
                             return;
                         }
 
-                        const isEmpty = (data === null || data === undefined);
-                        const isOk = (typeof data === 'object' && data !== null && data.status === 'ok');
-                        if (api.method === 'POST' && (isEmpty || isOk)) {
-                            ui.showModal(_('API Response: %s').format(api.label), [
-                                E('div', { class: 'cbi-section', style: 'text-align:center;padding:40px 20px;' }, [
-                                    E('div', { style: 'font-size:56px;margin-bottom:15px;' }, '✓'),
-                                    E('div', { style: 'font-size:18px;font-weight:bold;color:#28a745;margin-bottom:8px;' },
-                                        _('Operation Successful')),
-                                    E('div', { style: 'color:#666;font-size:14px;' },
-                                        _('%s completed successfully').format(api.label)),
-                                    E('div', { style: 'margin-top:20px;' }, [
-                                        E('strong', {}, _('Status: ')),
-                                        statusBadge
-                                    ])
-                                ]),
-                                E('div', { class: 'right', style: 'margin-top:10px;' }, [
-                                    E('button', {'class': 'btn cbi-button', 'click': ui.hideModal}, _('Close'))
-                                ])
-                            ]);
-                            return;
-                        }
+                        content.querySelector('div.spinning')?.remove();
 
                         let text = '';
-                        if (data !== null && data !== undefined) {
-                            if (typeof data === 'string')
-                                text = data;
-                            else {
-                                try { text = JSON.stringify(data, null, 2); }
-                                catch (e) { text = String(data); }
-                            }
-                        } else {
+                        if (data == null) {
                             text = _('No data returned (HTTP %s)').format(status);
+                        } else if (typeof data === 'string') {
+                            text = data;
+                        } else {
+                            text = JSON.stringify(data, null, 2);
                         }
 
-                        textarea.value = text;
+                        if (typeof data === 'string' || data == null) {
+                            content.appendChild(E('pre', {
+                                style: 'max-height:300px;overflow:auto;background:#1e1e1e;color:#d4d4d4;padding:10px;font-size:13px;'
+                            }, text));
+                            return;
+                        }
+
+                        const aceDiv = E('div', { style: 'width:100%;height:300px;' });
+                        content.appendChild(aceDiv);
 
                         return preloadAce().then(function () {
-                            textarea.style.display = 'none';
-                            aceDiv.style.display = '';
                             const editor = ace.edit(aceDiv);
                             editor.setOptions({
-                                fontSize: '14px',
-                                printMarginColumn: -1,
-                                showPrintMargin: false,
-                                mode: 'ace/mode/json',
-                                fontFamily: 'Consolas, monospace',
-                                theme: 'ace/theme/monokai',
-                                readOnly: true
+                                fontSize: '14px', printMarginColumn: -1, showPrintMargin: false,
+                                mode: 'ace/mode/json', fontFamily: 'Consolas, monospace',
+                                theme: 'ace/theme/monokai', readOnly: true
                             });
                             editor.session.setUseWrapMode(true);
                             editor.session.setOption('useWorker', false);
@@ -340,19 +313,17 @@ return view.extend({
                             aceDiv.env = { editor };
                             setTimeout(function () { editor.resize(true); }, 0);
                         }).catch(function () {
-                            Object.assign(textarea.style, {
-                                fontFamily: 'Consolas, monospace',
-                                background: '#1e1e1e', color: '#d4d4d4'
-                            });
+                            aceDiv.style.display = 'none';
+                            content.appendChild(E('pre', {
+                                style: 'max-height:400px;overflow:auto;background:#1e1e1e;color:#d4d4d4;padding:10px;font-size:13px;'
+                            }, text));
                         });
-
                     }).catch(function (err) {
                         ui.hideModal();
                         ui.addNotification(null, E('p', _('Request error: %s').format(err.message || err)), 'error');
                     });
                 })
             }, _('Execute'));
-
             node.classList.add('control-group');
             node.appendChild(btn);
             return node;
