@@ -16,6 +16,24 @@ const parseCoreLogLine = (line, dateObj) => {
     return { level, display: `[${t}] [${level.toUpperCase()}]: ${msg}` };
 };
 
+
+function preloadAce() {
+    if (window.ace?.edit) return Promise.resolve(true);
+    if (window._acePromise) return window._acePromise;
+    return window._acePromise = new Promise((resolve, reject) => {
+        const script = E('script', { src: '/luci-static/resources/view/nikki/ace/ace.js' });
+        script.onload = () => {
+            ace.config.set('basePath', '/luci-static/resources/view/nikki/ace');
+            resolve(true);
+        };
+        script.onerror = () => {
+            window._acePromise = null;
+            reject(new Error('Failed to load ace'));
+        };
+        document.head.appendChild(script);
+    });
+}
+
 return view.extend({
     load: function () {
         return Promise.all([
@@ -57,6 +75,7 @@ return view.extend({
         s.tab('core_log', _('Core Log'));
         s.tab('app_log', _('App Log'));
         s.tab('log_config', _('Log Config'));
+        s.tab('mihomoapi', _('Mihomo API'));
 
         const createLogOption = (tab, initialLog, parseFn = null, withLevelFilter = false) => {
             const opt = s.taboption(tab, form.DummyValue, `_${tab}`);
@@ -187,6 +206,156 @@ return view.extend({
                 .catch(function (e) {
                     ui.addNotification(null, E('p', _('Failed to export debug log: ') + e), 'error');
                 });
+        };
+
+        o = s.taboption('mihomoapi', form.ListValue, '_api', _('Mihomo API'));
+        o.write = function () {};
+        const mihomoAPIs = [
+            { key: 'version',          label: _('Version'),                method: 'GET',  path: '/version' },
+            { key: 'configs',          label: _('Running Config'),         method: 'GET',  path: '/configs' },
+            { key: 'proxies',          label: _('Proxies'),                method: 'GET',  path: '/proxies' },
+            { key: 'group',            label: _('Proxy Groups'),           method: 'GET',  path: '/group' },
+            { key: 'rules',            label: _('Rules'),                  method: 'GET',  path: '/rules' },
+            { key: 'rule_providers',   label: _('Rule Providers'),         method: 'GET',  path: '/providers/rules' },
+            { key: 'providers',        label: _('Proxy Providers'),        method: 'GET',  path: '/providers/proxies' },
+            { key: 'connections_once', label: _('Connections (Snapshot)'), method: 'GET',  path: '/connections' },
+            { key: 'dns_query',        label: _('DNS Query'),              method: 'GET',  path: '/dns/query', query: 'name=google.com&type=A' },
+            { key: 'flush_fakeip',     label: _('Flush FakeIP Cache'),     method: 'POST', path: '/cache/fakeip/flush' },
+            { key: 'flush_dns',        label: _('Flush DNS Cache'),        method: 'POST', path: '/cache/dns/flush' },
+            { key: 'reload',           label: _('Reload Config'),          method: 'PUT',  path: '/configs', query: 'force=true', body: '{"path":"","payload":""}' },
+            { key: 'geo',              label: _('Update Geo'),             method: 'POST', path: '/configs/geo', body: '{"path":"","payload":""}' },
+            { key: 'upgrade_geo',      label: _('Update Geo (Upgrade)'),   method: 'POST', path: '/upgrade/geo', body: '{"path":"","payload":""}' },
+            { key: 'upgrade',          label: _('Upgrade Core'),           method: 'POST', path: '/upgrade', query: 'force=true', body: '{"path":"","payload":""}' },
+            { key: 'upgrade_ui',       label: _('Upgrade UI'),             method: 'POST', path: '/upgrade/ui' },
+            { key: 'restart',          label: _('Restart Core'),           method: 'POST', path: '/restart', body: '{"path":"","payload":""}' },
+        ];
+
+        const mihomoAPIMap = {};
+        mihomoAPIs.forEach(function (api) {
+            mihomoAPIMap[api.key] = api;
+        });
+
+        mihomoAPIs.forEach(function (api) { o.value(api.key, api.label); });
+        o.renderWidget = function (section_id, option_index, cfgvalue) {
+            const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            const btn = E('button', {
+                'class': 'btn cbi-button-action',
+                'click': ui.createHandlerFn(this, function () {
+                    const selected = s.formvalue(section_id, '_api');
+                    const api = mihomoAPIMap[selected];
+
+                    if (!api) {
+                        ui.addNotification(null, E('p', _('Unknown API: %s').format(selected)), 'error');
+                        return;
+                    }
+
+                    const textarea = E('textarea', {
+                        'style': 'width:100%;height:300px;box-sizing:border-box;' +
+                                 'font-family:Consolas,monospace;white-space:pre;' +
+                                 'word-break:break-all;background:#1e1e1e;color:#d4d4d4;' +
+                                 'border:none;padding:10px;font-size:14px;'
+                    });
+                    const aceDiv = E('div', { 'style': 'width:100%;height:300px;display:none;' });
+
+                    ui.showModal(_('API Response: %s').format(api.label), [
+                        E('div', { class: 'cbi-section', style: 'padding:10px;' }, [
+                            E('div', { style: 'margin-bottom:10px;' }, [
+                                E('strong', {}, _('Method: ')), E('span', {}, api.method),
+                                E('span', {}, ' | '),
+                                E('strong', {}, _('Path: ')), E('span', {}, api.path)
+                            ]),
+                            E('p'), aceDiv, textarea
+                        ]),
+                        E('div', { class: 'right' }, [
+                            E('button', { 'class': 'btn cbi-button', 'click': ui.hideModal }, _('Close'))
+                        ])
+                    ], 'cbi-modal');
+
+                    return nikki.mihomoAPI(
+                        api.method, api.path, api.query || '', api.body || ''
+                    ).then(function (res) {
+                        const success = res && res.success;
+                        const status  = res ? res.status : 0;
+                        const data    = res ? res.data : null;
+                        const message = res ? res.message : null;
+
+                        if (!success) {
+                            ui.hideModal();
+                            ui.addNotification(null, E('p', _('Request failed: %s').format(message || ('HTTP ' + status))), 'error');
+                            return;
+                        }
+
+                        const isEmpty = (data === null || data === undefined);
+                        const isOk = (typeof data === 'object' && data !== null && data.status === 'ok');
+                        if (api.method === 'POST' && (isEmpty || isOk)) {
+                            ui.showModal(_('API Response: %s').format(api.label), [
+                                E('div', { class: 'cbi-section', style: 'text-align:center;padding:40px 20px;' }, [
+                                    E('div', { style: 'font-size:56px;margin-bottom:15px;' }, '✓'),
+                                    E('div', { style: 'font-size:18px;font-weight:bold;color:#28a745;margin-bottom:8px;' },
+                                        _('Operation Successful')),
+                                    E('div', { style: 'color:#666;font-size:14px;' },
+                                        _('%s completed successfully').format(api.label)),
+                                    E('div', { style: 'margin-top:20px;' }, [
+                                        E('strong', {}, _('Status: ')),
+                                        statusBadge
+                                    ])
+                                ]),
+                                E('div', { class: 'right', style: 'margin-top:10px;' }, [
+                                    E('button', {'class': 'btn cbi-button', 'click': ui.hideModal}, _('Close'))
+                                ])
+                            ]);
+                            return;
+                        }
+
+                        let text = '';
+                        if (data !== null && data !== undefined) {
+                            if (typeof data === 'string')
+                                text = data;
+                            else {
+                                try { text = JSON.stringify(data, null, 2); }
+                                catch (e) { text = String(data); }
+                            }
+                        } else {
+                            text = _('No data returned (HTTP %s)').format(status);
+                        }
+
+                        textarea.value = text;
+
+                        return preloadAce().then(function () {
+                            textarea.style.display = 'none';
+                            aceDiv.style.display = '';
+                            const editor = ace.edit(aceDiv);
+                            editor.setOptions({
+                                fontSize: '14px',
+                                printMarginColumn: -1,
+                                showPrintMargin: false,
+                                mode: 'ace/mode/json',
+                                fontFamily: 'Consolas, monospace',
+                                theme: 'ace/theme/monokai',
+                                readOnly: true
+                            });
+                            editor.session.setUseWrapMode(true);
+                            editor.session.setOption('useWorker', false);
+                            editor.setValue(text, -1);
+                            aceDiv.env = { editor };
+                            setTimeout(function () { editor.resize(true); }, 0);
+                        }).catch(function () {
+                            Object.assign(textarea.style, {
+                                fontFamily: 'Consolas, monospace',
+                                background: '#1e1e1e', color: '#d4d4d4'
+                            });
+                        });
+
+                    }).catch(function (err) {
+                        ui.hideModal();
+                        ui.addNotification(null, E('p', _('Request error: %s').format(err.message || err)), 'error');
+                    });
+                })
+            }, _('Execute'));
+
+            node.classList.add('control-group');
+            node.appendChild(btn);
+            return node;
         };
 
         L.Poll.add(L.bind(function () {

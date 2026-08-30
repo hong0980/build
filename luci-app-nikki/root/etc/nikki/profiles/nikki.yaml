@@ -20,6 +20,11 @@ keep-alive-idle: 600
 keep-alive-interval: 15
 log-level: "warning"
 find-process-mode: "off"
+secret: "709777"                      # RESTful API 鉴权密钥
+external-controller: '[::]:9090'      # RESTful API 监听地址
+external-ui: ui                       # WebUI 目录
+external-ui-name: Zashboard           # WebUI 名称
+external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip  # WebUI 下载地址
 
 dns:
   enable: true
@@ -28,7 +33,6 @@ dns:
   cache-algorithm: arc
   listen: 0.0.0.0:1053
   respect-rules: true
-  enhanced-mode: redir-host
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.0/16
   fake-ip-filter: ["rule-set:private_domain,cn_domain,fakeipfilter"]
@@ -83,11 +87,6 @@ profile:
   store-fake-ip: true                 # 持久化 fake-ip 映射表
   store-selected: true                # 记住策略组手动选择的节点
 
-external-ui: ui                       # WebUI 目录
-external-ui-name: Zashboard           # WebUI 名称
-external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip  # WebUI 下载地址
-external-controller: '[::]:9090'      # RESTful API 监听地址
-secret: "709777"                      # RESTful API 鉴权密钥
 geodata-mode: false                   # false 使用 .dat 格式；true 需改用 .metadb（与 geox-url 对应）
 geodata-loader: standard
 geox-url:

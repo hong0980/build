@@ -28,10 +28,15 @@ function call_controller(method, path, query, body) {
 	const protocol = api_tls_listen ? 'https' : 'http';
 	const url      = `${api_tls_listen || api_listen}${path}`;
 
-	let cmd = `curl -sSk --proto-default ${shellQuote(protocol)} -X ${shellQuote(method)} -H ${shellQuote('Authorization: Bearer ' + api_secret)}`;
-	if (query) cmd += ` --url-query ${shellQuote(query)}`;
+	let fullUrl = url;
+	if (query) {
+		fullUrl += (index(url, '?') !== -1 ? '&' : '?') + query;
+	}
+
+	let cmd = `curl -sSk --max-time 10 --proto-default ${shellQuote(protocol)} -X ${shellQuote(method)} -H ${shellQuote('Authorization: Bearer ' + api_secret)}`;
 	if (body)  cmd += ` -H ${shellQuote('Content-Type: application/json')} -d ${shellQuote(body)}`;
-	cmd += ` -w ${shellQuote('\n__HTTP_CODE__:%{http_code}')} ${shellQuote(url)} 2>&1`;
+
+	cmd += ` -w ${shellQuote('__HTTP_CODE__:%{http_code}')} ${shellQuote(fullUrl)} 2>&1`;
 
 	const proc = popen(cmd, 'r');
 	if (!proc) return { message: 'popen failed', status: 'error' };
@@ -39,10 +44,13 @@ function call_controller(method, path, query, body) {
 	const process   = proc.read('all') || '';
 	const exit_code = proc.close();
 
+	if (exit_code == 28)
+		return { message: 'Request timeout', status: 'error' };
+
 	if (!process && exit_code != 0)
 		return { message: `curl failed (exit ${exit_code})`, status: 'error' };
 
-	const marker = '\n__HTTP_CODE__:';
+	const marker = '__HTTP_CODE__:';
 	const idx    = index(process, marker, true);
 
 	let bodyText = process;

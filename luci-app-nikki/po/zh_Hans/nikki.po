@@ -2278,8 +2278,8 @@ msgstr "请求异常：%s"
 msgid "In use"
 msgstr "使用中"
 
-msgid "Click to download locally\n%s"
-msgstr "点击下载本地\n%s"
+msgid "Click to download locally"
+msgstr "点击下载本地"
 
 msgid "Close"
 msgstr "关闭"
@@ -2298,6 +2298,85 @@ msgstr "状态"
 
 msgid "Action"
 msgstr "操作"
+
+msgid "Running Config"
+msgstr "运行配置"
+
+msgid "Proxy Providers"
+msgstr "代理提供者"
+
+msgid "Flush FakeIP Cache"
+msgstr "清理 FakeIP 缓存"
+
+msgid "Flush DNS Cache"
+msgstr "清理 DNS 缓存"
+
+msgid "Restart Core"
+msgstr "重启核心"
+
+msgid "Connections (Snapshot)"
+msgstr "连接快照"
+
+msgid "DNS Query"
+msgstr "DNS 查询"
+
+msgid "Rule Providers"
+msgstr "规则提供者"
+
+msgid "Upgrade Core"
+msgstr "升级核心"
+
+msgid "Upgrade UI"
+msgstr "升级面板"
+
+msgid "Reload Config"
+msgstr "重载配置"
+
+msgid "Update Geo"
+msgstr "更新 Geo 数据库"
+
+msgid "Unknown API: %s"
+msgstr "未知 API: %s"
+
+msgid "Requesting..."
+msgstr "请求中..."
+
+msgid "Loading..."
+msgstr "加载中..."
+
+msgid "Request failed: %s"
+msgstr "请求失败: %s"
+
+msgid "Operation Successful"
+msgstr "操作成功"
+
+msgid "%s completed successfully"
+msgstr "%s 执行成功"
+
+msgid "Status: "
+msgstr "状态: "
+
+msgid "No data returned (HTTP %s)"
+msgstr "无数据返回 (HTTP %s)"
+
+msgid "Method: "
+msgstr "方法: "
+
+msgid "Path: "
+msgstr "路径: "
+
+msgid "Request error: %s"
+msgstr "请求错误: %s"
+
+msgid "Execute"
+msgstr "执行"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "API Response: %s"
+msgstr "API 响应: %s"
+
 
 msgid ""
 msgstr ""

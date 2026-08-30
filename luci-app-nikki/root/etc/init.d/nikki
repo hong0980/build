@@ -231,7 +231,9 @@ start_service() {
 		' "$TEMP_CONFIG"
 	}
 
+	[ "$core_only" = 0 ] && \
 	profile_path="$TEMP_CONFIG" ucode -S "/etc/nikki/ucode/mirror.uc"
+
 	mv -f "$TEMP_CONFIG" "$RUN_PROFILE_PATH"
 
 	if [ "$test_profile" = 1 ]; then

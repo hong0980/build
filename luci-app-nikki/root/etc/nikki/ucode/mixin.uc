@@ -208,7 +208,7 @@ if (ub(uci.get('nikki', 'config', 'url_enabled'))) {
 		if (!ub(s.enabled)) return;
 		cfg['nikki-proxy-providers'][`provider${idx + 1}`] = {
 			type:     'http',
-			proxy:    'DIRECT',
+			// proxy:    'DIRECT',
 			interval: 86400,
 			path:     `./proxies/provider${idx + 1}.yaml`,
 			url:      s.url,

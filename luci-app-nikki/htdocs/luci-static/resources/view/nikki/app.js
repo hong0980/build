@@ -239,7 +239,7 @@ return view.extend({
 
         // o = s.option(form.Button);
         // o.inputstyle = 'negative';
-        // o.inputtitle = _('Clear FakeIP Cache');
+        // o.inputtitle = _('Flush FakeIP Cache');
         // o.onclick = function () {
         //     return nikki.mihomoAPI('POST', '/cache/fakeip/flush').then(function (res) {
         //         ui.addTimeLimitedNotification(null,
@@ -250,7 +250,7 @@ return view.extend({
 
         // o = s.option(form.Button);
         // o.inputstyle = 'negative';
-        // o.inputtitle = _('Clear DNS Cache');
+        // o.inputtitle = _('Flush DNS Cache');
         // o.onclick = function () {
         //     return nikki.mihomoAPI('POST', '/cache/dns/flush').then(function (res) {
         //         ui.addTimeLimitedNotification(null,
@@ -421,7 +421,7 @@ return view.extend({
                                         .then(() => {
                                             const row = findParent(b, '.tr');
                                             if (row) {
-                                                row.cells[1].textContent = E('code', remoteVer);
+                                                L.dom.content(row.cells[1], E('code', [remoteVer]));
                                                 L.dom.content(row.cells[3], E('span', { 'class': 'label success' }, _('Up to Date')));
                                                 b.textContent = _('Redownload');
                                                 b.className = 'btn cbi-button-negative';
@@ -466,7 +466,7 @@ return view.extend({
                             }, switchLabel);
 
                             const remoteCell = hasUrl
-                                ? E('a', { 'href': hasUrl, 'target': '_blank', 'rel': 'noreferrer', 'title': ('Click to download locally\n%s').format(hasUrl) }, remoteVer)
+                                ? E('a', { 'href': hasUrl, 'target': '_blank', 'rel': 'noreferrer', 'title': _('Click to download locally') + '\n' + hasUrl }, remoteVer)
                                 : remoteVer;
                             const status = !hasUrl
                                 ? E('span', { 'class': 'label warning' }, _('Fetch Failed'))
@@ -477,7 +477,7 @@ return view.extend({
                                         : E('span', { 'class': 'label warning' }, _('Not Installed'));
 
                             rows.push([
-                                item.name, E('code', localVer), remoteCell, status,
+                                item.name, E('code', [localVer]), remoteCell, status,
                                 E('div', [dlBtn, switchBtn])
                             ]);
                         });
