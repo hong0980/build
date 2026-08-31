@@ -8,6 +8,22 @@
 
 // curl -N -H "Authorization: Bearer $api_secret" "http://$api_listen/logs?format=structured" >> "$CORE_LOG_PATH" &
 
+const callServiceStatus = L.rpc.declare({
+    object: 'service',
+    method: 'list',
+    params: ['name'],
+    filter: function(data) {
+        for (var svcName in data) {
+            var svc = data[svcName];
+            if (!svc || !svc.instances) continue;
+            for (var instName in svc.instances) {
+                return !!svc.instances[instName].running;
+            }
+        }
+        return false;
+    }
+});
+
 const parseCoreLogLine = (line, dateObj) => {
     const m = line.match(/^time="([^"]+)"\s+level=(\w+)\s+msg="(.*)"$/);
     if (!m) return null;
@@ -42,23 +58,8 @@ return view.extend({
         ]);
     },
 
-    formatted: function (rawLog, dateObj) {
-        if (!rawLog) return '';
-        return rawLog
-            .split('\n')
-            .map(parseLine)
-            .filter(Boolean)
-            .map(({ time, level, msg }) => {
-                const d = new Date(time);
-                const t = dateObj.format(d);
-                return `[${t}] [${level.toUpperCase()}]: ${msg}`;
-            })
-            .join('\n');
-    },
-
     render: function ([appLog, coreLog]) {
         let m, s, o;
-        const self = this;
         const tz = uci.get('system', '@system[0]', 'zonename')?.replaceAll(' ', '_');
         const ts = uci.get('system', '@system[0]', 'clock_timestyle') || 0;
         const hc = uci.get('system', '@system[0]', 'clock_hourcycle') || 0;
@@ -74,7 +75,6 @@ return view.extend({
         s.tab('core_log', _('Core Log'));
         s.tab('app_log', _('App Log'));
         s.tab('log_config', _('Log Config'));
-        s.tab('mihomoapi', _('Mihomo API'));
 
         const createLogOption = (tab, initialLog, parseFn = null, withLevelFilter = false) => {
             const opt = s.taboption(tab, form.DummyValue, `_${tab}`);
@@ -183,29 +183,17 @@ return view.extend({
         o.value('MB', 'MB');
         o.value('GB', 'GB');
 
-        o = s.taboption('log_config', form.Button, '_generate_download_debug_log', _('Debug Log'));
-        o.inputstyle = 'action';
-        o.inputtitle = _('Generate & Download');
-        o.onclick = function () {
-            function timestamp() {
-                const d = new Date();
-                const pad = n => String(n).padStart(2, '0');
-                return `${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
-            }
-
-            return nikki.debug()
-                .then(() => fs.read_direct(nikki.debugLogPath, 'blob'))
-                .then(data => {
-                    const url = window.URL.createObjectURL(data);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = `debug-${timestamp()}.md`;
-                    link.click();
-                    window.URL.revokeObjectURL(url);
-                })
-                .catch(function (e) {
-                    ui.addNotification(null, E('p', _('Failed to export debug log: ') + e), 'error');
-                });
+        o = s.taboption('log_config', form.HiddenValue, 'nikki_running', '');
+        o.load = function(section_id) {
+            return callServiceStatus('nikki')
+                .then((r) => r ? '1' : '0');
+        };
+        o.render = function (option_index, section_id, in_table) {
+            return Promise.resolve(
+                form.HiddenValue.prototype.render.apply(this, arguments)
+            ).then(function(node) {
+                if (node) node.style.display = 'none';
+                return node;            });
         };
 
         const mihomoAPIs = [
@@ -222,15 +210,15 @@ return view.extend({
             { k: 'k', label: _('Flush DNS Cache'),        method: 'POST', path: '/cache/dns/flush' },
             { k: 'l', label: _('Reload Config'),          method: 'PUT',  path: '/configs', query: 'force=true', body: '{"path":"","payload":""}' },
             { k: 'p', label: _('Upgrade UI'),             method: 'POST', path: '/upgrade/ui' },
-            { k: 'm', label: _('Update Geo'),             method: 'POST', path: '/configs/geo', body: '{"path":"","payload":""}' },
-            { k: 'n', label: _('Update Geo (Upgrade)'),   method: 'POST', path: '/upgrade/geo', body: '{"path":"","payload":""}' },
+            { k: 'm', label: _('Update Geo (Upgrade)'),   method: 'POST', path: '/upgrade/geo', body: '{"path":"","payload":""}' },
+            { k: 'n', label: _('Update Geo (Config)'),    method: 'POST', path: '/configs/geo', body: '{"path":"","payload":""}' },
             { k: 'o', label: _('Upgrade Core'),           method: 'POST', path: '/upgrade', query: 'force=true', body: '{"path":"","payload":""}' },
             { k: 'q', label: _('Restart Core'),           method: 'POST', path: '/restart', body: '{"path":"","payload":""}' },
         ];
         const mihomoAPIMap = {};
         mihomoAPIs.forEach((api) => mihomoAPIMap[api.k] = api);
-
-        o = s.taboption('mihomoapi', form.ListValue, '_api', _('Mihomo API'));
+        o = s.taboption('log_config', form.ListValue, '_api', _('Mihomo API'));
+        o.depends('nikki_running', '1');
         o.write = () => {};
         mihomoAPIs.forEach((api) => { o.value(api.k, api.label) });
         o.renderWidget = function (section_id, option_index, cfgvalue) {
@@ -241,6 +229,9 @@ return view.extend({
                     const api = mihomoAPIMap[s.formvalue(section_id, '_api')];
                     if (!api) return ui.addNotification(null, E('p', _('Unknown API')), 'error');
 
+                    if (/^(PUT|POST|DELETE)$/.test(api.method))
+                        if (!confirm(_('This will modify mihomo state. Continue?'))) return;
+
                     const content = E('div', { class: 'cbi-section', style: 'padding:10px;' }, [
                         E('div', { style: 'margin-bottom:10px;' }, [
                             E('strong', {}, _('Method: ')), E('span', {}, api.method), E('span', {}, ' | '),
@@ -250,7 +241,7 @@ return view.extend({
                         E('div', { class: 'spinning', style: 'text-align:center;padding:60px 0;' }, _('Loading...'))
                     ]);
 
-                    ui.showModal(_('API Response: %s').format(api.label), [
+                    const md = ui.showModal(_('API Response: %s').format(api.label), [
                         content,
                         E('div', { class: 'right' }, [
                             E('button', { class: 'btn cbi-button', click: ui.hideModal }, _('Close'))
@@ -266,20 +257,20 @@ return view.extend({
                         const data = res.data;
                         const status = res.status;
 
-                        if (api.method === 'POST' && (data == null || data?.status === 'ok')) {
+                        if (/^(PUT|POST)$/.test(api.method) && (data == null || data?.status === 'ok')) {
                             content.innerHTML = '';
-                            content.appendChild(E('div', { style: 'text-align:center;padding:40px 20px;' }, [
-                                E('div', { style: 'font-size:56px;margin-bottom:15px;' }, '✓'),
-                                E('div', { style: 'font-size:18px;font-weight:bold;color:#28a745;' }, _('Operation Successful')),
-                                E('div', { style: 'color:#666;font-size:14px;margin-top:8px;' }, _('%s completed successfully').format(api.label)),
+                            content.appendChild(E('div', { style: 'text-align:center;' }, [
+                                E('div', { style: 'font-size:35px;margin-bottom:15px;color:#28a745;' }, '✓'),
                                 E('div', { style: 'margin-top:20px;' }, [
-                                    E('strong', {}, _('Status: ')),
+                                    E('strong', _('Status') + '：'),
                                     E('span', { style: 'display:inline-block;padding:2px 8px;border-radius:4px;background:#28a745;color:#fff;font-size:12px;font-weight:bold;' }, String(status))
                                 ])
                             ]));
+                            md.style.maxWidth = '420px';
                             return;
                         }
 
+                        md.style.maxWidth = '';
                         content.querySelector('div.spinning')?.remove();
 
                         let text = '';
@@ -328,6 +319,31 @@ return view.extend({
             node.classList.add('control-group');
             node.appendChild(btn);
             return node;
+        };
+
+        o = s.taboption('log_config', form.Button, '_do', _('Debug Log'));
+        o.inputstyle = 'action';
+        o.inputtitle = _('Generate & Download');
+        o.onclick = function () {
+            function timestamp() {
+                const d = new Date();
+                const pad = n => String(n).padStart(2, '0');
+                return `${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+            }
+
+            return nikki.debug()
+                .then(() => fs.read_direct(nikki.debugLogPath, 'blob'))
+                .then(data => {
+                    const url = window.URL.createObjectURL(data);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `debug-${timestamp()}.md`;
+                    link.click();
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(function (e) {
+                    ui.addNotification(null, E('p', _('Failed to export debug log: ') + e), 'error');
+                });
         };
 
         L.Poll.add(L.bind(function () {

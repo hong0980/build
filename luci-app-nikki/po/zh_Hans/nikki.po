@@ -2329,11 +2329,14 @@ msgstr "升级核心"
 msgid "Upgrade UI"
 msgstr "升级面板"
 
+msgid "Update Geo (Config)"
+msgstr "更新 Geo 数据库（配置）"
+
 msgid "Reload Config"
 msgstr "重载配置"
 
-msgid "Update Geo"
-msgstr "更新 Geo 数据库"
+msgid "Update Geo (Upgrade)"
+msgstr "更新 Geo 数据库（升级）"
 
 msgid "Unknown API: %s"
 msgstr "未知 API: %s"
@@ -2383,5 +2386,5 @@ msgstr "跳过嗅探来源地址"
 msgid "Skiped sniffing dst address"
 msgstr "跳过嗅探目标地址"
 
-msgid ""
-msgstr ""
+msgid "This will modify mihomo state. Continue?"
+msgstr "这将会修改 mihomo 的状态。是否继续？"

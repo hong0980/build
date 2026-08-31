@@ -1287,6 +1287,7 @@ return view.extend({
         const self = this;
 
         m = new form.Map('nikki');
+        m.tabbed = true;
 
         s = m.section(form.GridSection, 'subscription', _('Subscription'));
         s.addremove = true;
@@ -1418,6 +1419,20 @@ return view.extend({
             return E('a', { href: url, target: '_blank', rel: 'noreferrer' }, url);
         };
 
+        s = m.section(form.NamedSection, 'config', 'config', _('File'));
+
+        o = s.option(form.FileUpload, '_upload_mixin', _('Upload Mixin'));
+        o.browser = true;
+        o.enable_download = true;
+        o.directory_select = true;
+        o.root_directory = '/etc/nikki/mixin';
+
+        o = s.option(form.FileUpload, '_upload_profile', _('Upload Profile'));
+        o.browser = true;
+        o.enable_download = true;
+        o.directory_select = true;
+        o.root_directory = '/etc/nikki/profiles';
+
         s = m.section(form.GridSection, 'node', _('Nodes'));
         s.addremove = true;
         s.anonymous = true;
@@ -1504,20 +1519,6 @@ return view.extend({
 
             return el;
         };
-
-        s = m.section(form.NamedSection, 'config', 'config', _('File'));
-
-        o = s.option(form.FileUpload, '_upload_mixin', _('Upload Mixin'));
-        o.browser = true;
-        o.enable_download = true;
-        o.directory_select = true;
-        o.root_directory = '/etc/nikki/mixin';
-
-        o = s.option(form.FileUpload, '_upload_profile', _('Upload Profile'));
-        o.browser = true;
-        o.enable_download = true;
-        o.directory_select = true;
-        o.root_directory = '/etc/nikki/profiles';
 
         return m.render();
     },
