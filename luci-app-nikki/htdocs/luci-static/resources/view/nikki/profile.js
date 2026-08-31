@@ -47,6 +47,24 @@ const tls_cipher_suites = [
     'TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256',
 ];
 
+const CBIStaticList = form.Value.extend({
+    renderWidget: function (section_id, option_index, cfgvalue) {
+        let values = L.toArray(cfgvalue);
+        let choices = this.transformChoices();
+
+        let widget = new ui.Dropdown(values, choices, {
+            id: this.cbid(section_id),
+            sort: true,
+            multiple: true,
+            optional: this.optional,
+            select_placeholder: _('-- Please choose --'),
+        });
+
+        let el = widget.render();
+        return el;
+    },
+});
+
 function decodeBase64Str(str) {
     if (!str) return null;
     str = str.replace(/-/g, '+').replace(/_/g, '/');
@@ -110,24 +128,6 @@ function uploadCertificate(type, name, ev) {
         ui.addNotification(null, E('p', _('Failed to upload %s: %s').format(type, e.message)));
     });
 }
-
-const CBIStaticList = form.Value.extend({
-    renderWidget: function (section_id, option_index, cfgvalue) {
-        let values = L.toArray(cfgvalue);
-        let choices = this.transformChoices();
-
-        let widget = new ui.Dropdown(values, choices, {
-            id: this.cbid(section_id),
-            sort: true,
-            multiple: true,
-            optional: this.optional,
-            select_placeholder: _('-- Please choose --'),
-        });
-
-        let el = widget.render();
-        return el;
-    },
-});
 
 function renderNodeSettings(section) {
     let s = section, o;
@@ -660,7 +660,7 @@ function renderNodeSettings(section) {
             'Conflict with <code>%s</code> and <code>%s</code>.').format(
                 _('Maximum connections'), _('Minimum streams')));
     o.datatype = 'uinteger';
-    o.depends({ 'multiplex': '1', 'multiplex_max_connections': '', 'multiplex_min_streams': '' });
+    o.depends({ 'multiplex': '1', 'multiplex_max_connections': null, 'multiplex_min_streams': null });
     o.modalonly = true;
 
     o = s.option(form.Flag, 'multiplex_padding', _('Enable padding'));
@@ -1159,85 +1159,6 @@ function parseShareLink(uri) {
     }
 
     return finalizeConfig(config);
-}
-
-function flowToJSON(s) {
-    let i = 0;
-    const n = s.length;
-
-    function ws() { while (i < n && /\s/.test(s[i])) i++; }
-
-    function readQuoted(q) {
-        i++;
-        let val = '';
-        while (i < n && s[i] !== q) {
-            if (q === '"' && s[i] === '\\') { val += s[i] + s[i + 1]; i += 2; continue; }
-            val += s[i]; i++;
-        }
-        i++; // closing quote
-        return q === '"' ? '"' + val + '"' : JSON.stringify(val);
-    }
-
-    function readBareUntil(stops) {
-        let start = i;
-        while (i < n && !stops.includes(s[i])) i++;
-        return s.slice(start, i).trim();
-    }
-
-    function quoteScalar(raw) {
-        if (raw === 'true' || raw === 'false' || raw === 'null') return raw;
-        if (raw === '~' || raw === '') return 'null';
-        if (/^-?\d+(\.\d+)?$/.test(raw)) return raw;
-        return JSON.stringify(raw);
-    }
-
-    function key() {
-        ws();
-        if (s[i] === '"') return readQuoted('"');
-        if (s[i] === "'") return readQuoted("'");
-        return JSON.stringify(readBareUntil([':']));
-    }
-
-    function value() {
-        ws();
-        if (s[i] === '{') return obj();
-        if (s[i] === '[') return arr();
-        if (s[i] === '"') return readQuoted('"');
-        if (s[i] === "'") return readQuoted("'");
-        return quoteScalar(readBareUntil([',', '}', ']']));
-    }
-
-    function obj() {
-        i++; ws(); // {
-        const parts = [];
-        while (s[i] !== '}') {
-            const k = key();
-            ws();
-            if (s[i] === ':') i++;
-            const v = value();
-            ws();
-            parts.push(k + ':' + v);
-            if (s[i] === ',') { i++; ws(); }
-        }
-        i++; // }
-        return '{' + parts.join(',') + '}';
-    }
-
-    function arr() {
-        i++; ws(); // [
-        const parts = [];
-        while (s[i] !== ']') {
-            parts.push(value());
-            ws();
-            if (s[i] === ',') { i++; ws(); }
-        }
-        i++; // ]
-        return '[' + parts.join(',') + ']';
-    }
-
-    ws();
-    if (s[i] !== '{') return null;
-    return obj();
 }
 
 function parseNode(input) {

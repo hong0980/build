@@ -99,6 +99,7 @@ return view.extend({
 
                 textareaEl._logState = state;
                 textareaEl._logRender = renderText;
+                textareaEl.id = 'textarea_' + tab;
                 renderText();
                 const reverseLabel = () => state.reversed ? _('△ Show Newest First') : _('▽ Show Oldest First');
 
@@ -315,7 +316,7 @@ return view.extend({
                         }).catch(function () {
                             aceDiv.style.display = 'none';
                             content.appendChild(E('pre', {
-                                style: 'max-height:400px;overflow:auto;background:#1e1e1e;color:#d4d4d4;padding:10px;font-size:13px;'
+                                style: 'max-height:300px;overflow:auto;background:#1e1e1e;color:#d4d4d4;padding:10px;font-size:13px;'
                             }, text));
                         });
                     }).catch(function (err) {
@@ -334,12 +335,12 @@ return view.extend({
                 L.resolveDefault(fs.read_direct(nikki.appLogPath), ''),
                 L.resolveDefault(fs.read_direct(nikki.coreLogPath), ''),
             ]).then(function ([app_log, core_log]) {
-                const appEl = document.getElementById(`widget.cbid.nikki.log._app_log`);
+                const appEl = document.getElementById('textarea_app_log');
                 if (appEl && appEl._logState) {
                     appEl._logState.raw = app_log.trim();
                     appEl._logRender();
                 }
-                const coreEl = document.getElementById(`widget.cbid.nikki.log._core_log`);
+                const coreEl = document.getElementById('textarea_core_log');
                 if (coreEl && coreEl._logState) {
                     coreEl._logState.raw = core_log.trim();
                     coreEl._logRender();

@@ -2377,6 +2377,11 @@ msgstr "关闭"
 msgid "API Response: %s"
 msgstr "API 响应: %s"
 
+msgid "Skiped sniffing src address"
+msgstr "跳过嗅探来源地址"
+
+msgid "Skiped sniffing dst address"
+msgstr "跳过嗅探目标地址"
 
 msgid ""
 msgstr ""
