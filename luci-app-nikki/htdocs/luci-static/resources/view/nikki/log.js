@@ -8,22 +8,6 @@
 
 // curl -N -H "Authorization: Bearer $api_secret" "http://$api_listen/logs?format=structured" >> "$CORE_LOG_PATH" &
 
-const callServiceStatus = L.rpc.declare({
-    object: 'service',
-    method: 'list',
-    params: ['name'],
-    filter: function(data) {
-        for (var svcName in data) {
-            var svc = data[svcName];
-            if (!svc || !svc.instances) continue;
-            for (var instName in svc.instances) {
-                return !!svc.instances[instName].running;
-            }
-        }
-        return false;
-    }
-});
-
 const parseCoreLogLine = (line, dateObj) => {
     const m = line.match(/^time="([^"]+)"\s+level=(\w+)\s+msg="(.*)"$/);
     if (!m) return null;
@@ -31,23 +15,6 @@ const parseCoreLogLine = (line, dateObj) => {
     const t = dateObj.format(new Date(time));
     return { level, display: `[${t}] [${level.toUpperCase()}]: ${msg}` };
 };
-
-function preloadAce() {
-    if (window.ace?.edit) return Promise.resolve(true);
-    if (window._acePromise) return window._acePromise;
-    return window._acePromise = new Promise((resolve, reject) => {
-        const script = E('script', { src: '/luci-static/resources/view/nikki/ace/ace.js' });
-        script.onload = () => {
-            ace.config.set('basePath', '/luci-static/resources/view/nikki/ace');
-            resolve(true);
-        };
-        script.onerror = () => {
-            window._acePromise = null;
-            reject(new Error('Failed to load ace'));
-        };
-        document.head.appendChild(script);
-    });
-}
 
 return view.extend({
     load: function () {
@@ -183,17 +150,10 @@ return view.extend({
         o.value('MB', 'MB');
         o.value('GB', 'GB');
 
-        o = s.taboption('log_config', form.HiddenValue, 'nikki_running', '');
-        o.load = function(section_id) {
-            return callServiceStatus('nikki')
-                .then((r) => r ? '1' : '0');
-        };
-        o.render = function (option_index, section_id, in_table) {
-            return Promise.resolve(
-                form.HiddenValue.prototype.render.apply(this, arguments)
-            ).then(function(node) {
-                if (node) node.style.display = 'none';
-                return node;            });
+        o = s.taboption('log_config', form.HiddenValue, 'mihomo_running');
+        o.write = function () {};
+        o.cfgvalue = function () {
+            return nikki.status('nikki').then((r) => r);
         };
 
         const mihomoAPIs = [
@@ -214,11 +174,12 @@ return view.extend({
             { k: 'n', label: _('Update Geo (Config)'),    method: 'POST', path: '/configs/geo', body: '{"path":"","payload":""}' },
             { k: 'o', label: _('Upgrade Core'),           method: 'POST', path: '/upgrade', query: 'force=true', body: '{"path":"","payload":""}' },
             { k: 'q', label: _('Restart Core'),           method: 'POST', path: '/restart', body: '{"path":"","payload":""}' },
+            { k: 'r', label: _('restart rpcd') },
         ];
         const mihomoAPIMap = {};
         mihomoAPIs.forEach((api) => mihomoAPIMap[api.k] = api);
         o = s.taboption('log_config', form.ListValue, '_api', _('Mihomo API'));
-        o.depends('nikki_running', '1');
+        o.depends('mihomo_running', 'true');
         o.write = () => {};
         mihomoAPIs.forEach((api) => { o.value(api.k, api.label) });
         o.renderWidget = function (section_id, option_index, cfgvalue) {
@@ -228,6 +189,15 @@ return view.extend({
                 'click': ui.createHandlerFn(this, function () {
                     const api = mihomoAPIMap[s.formvalue(section_id, '_api')];
                     if (!api) return ui.addNotification(null, E('p', _('Unknown API')), 'error');
+
+                    if (api.k === 'r') {
+                        ui.addNotification(null, E('p', _('rpcd is restarting, page will refresh in 3 seconds...')), 'info');
+                        nikki.service('rpcd', 'restart');
+                        setTimeout(function () {
+                            window.location.reload();
+                        }, 3000);
+                        return;
+                    }
 
                     if (/^(PUT|POST|DELETE)$/.test(api.method))
                         if (!confirm(_('This will modify mihomo state. Continue?'))) return;
@@ -247,6 +217,7 @@ return view.extend({
                             E('button', { class: 'btn cbi-button', click: ui.hideModal }, _('Close'))
                         ])
                     ], 'cbi-modal');
+
 
                     return nikki.mihomoAPI(api.method, api.path, api.query || '', api.body || '').then(function (res) {
                         if (!res || !res.success) {
@@ -292,7 +263,7 @@ return view.extend({
                         const aceDiv = E('div', { style: 'width:100%;height:300px;' });
                         content.appendChild(aceDiv);
 
-                        return preloadAce().then(function () {
+                        return nikki.preloadAce().then(function () {
                             const editor = ace.edit(aceDiv);
                             editor.setOptions({
                                 fontSize: '14px', printMarginColumn: -1, showPrintMargin: false,
@@ -364,6 +335,10 @@ return view.extend({
             });
         }, o));
 
-        return m.render();
+        return m.render().then(function (nodes) {
+            const el = m.findElement('data-name', 'mihomo_running');
+            if (el) el.style.display = 'none';
+            return nodes;
+        })
     }
 });

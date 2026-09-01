@@ -58,23 +58,6 @@ function modalnotify(title, children, timeout, ...classes) {
     return msg;
 };
 
-function preloadAce() {
-    if (window.ace?.edit) return Promise.resolve(true);
-    if (window._acePromise) return window._acePromise;
-    return window._acePromise = new Promise((resolve, reject) => {
-        const script = E('script', { src: '/luci-static/resources/view/nikki/ace/ace.js' });
-        script.onload = () => {
-            ace.config.set('basePath', '/luci-static/resources/view/nikki/ace');
-            resolve(true);
-        };
-        script.onerror = () => {
-            window._acePromise = null;
-            reject(new Error('Failed to load ace'));
-        };
-        document.head.appendChild(script);
-    });
-}
-
 function attachFileEditorButton(o, resolveTarget) {
     if (!o.vallist || o.vallist.length === 0) return;
     o.renderWidget = function (section_id, option_index, cfgvalue) {
@@ -119,7 +102,7 @@ function attachFileEditorButton(o, resolveTarget) {
                         ])
                     ], 'cbi-modal');
 
-                    return preloadAce().then(() => {
+                    return nikki.preloadAce().then(() => {
                         textarea.style.display = 'none';
                         aceDiv.style.display = '';
                         const editor = ace.edit(aceDiv);
@@ -163,7 +146,7 @@ return view.extend({
     load: function () {
         return Promise.all([
             nikki.version(),
-            nikki.status(),
+            nikki.status('nikki'),
             nikki.listfiles('/etc/nikki/mixin'),
             nikki.listfiles('/etc/nikki/profiles'),
             nikki.listfiles('/etc/nikki/subscriptions'),
@@ -172,9 +155,7 @@ return view.extend({
         ]);
     },
     render: function ([v, running, mixinfiles, profiles, subfiles, list]) {
-        let m, s, o, coreBtn, switchBtn, lgbmBtn, uibtn;
-        preloadAce().catch(() => {});
-
+        let m, s, o, os, switchBtn, lgbmBtn;
         m = new form.Map('nikki', _('Nikki'), _("Transparent Proxy with <a href='%s' target='_blank'>Mihomo</a> on OpenWrt.").format('https://wiki.metacubex.one/') +
             ` <a href="https://github.com/nikkinikki-org/OpenWrt-nikki/wiki" target="_blank">${_('How To Use')}</a>`);
 
@@ -205,74 +186,39 @@ return view.extend({
             ])
         };
 
-        s = m.section(form.TableSection, 'status', _('Status'));
-        s.anonymous = true;
+        os = m.section(form.TableSection, 'status', _('Status'));
+        os.anonymous = true;
 
-        o = s.option(form.DummyValue, '_app_version', _('App Version'));
+        o = os.option(form.DummyValue, '_app_version', _('App Version'));
         o.load = () => v.app;
 
-        o = s.option(form.DummyValue, '_core_version', _('Core Version'));
+        o = os.option(form.DummyValue, '_core_version', _('Core Version'));
         o.load = () => v.core ?? '';
 
-        o = s.option(form.DummyValue, '_core_status', _('Core Status'));
+        o = os.option(form.DummyValue, '_core_status', _('Core Status'));
         o.cfgvalue = function () {
             return setStatus(E('span', { id: 'core_status', style: 'font-style: italic; font-weight: bold;' }), running);
         };
 
-        L.Poll.add(function () {
-            return L.resolveDefault(nikki.status(), false).then(function (r) {
-                setStatus(document.getElementById('core_status'), r);
-                if (uibtn)
-                    uibtn.style.display = r ? '' : 'none';
-            });
-        });
-
-        o = s.option(form.Button);
+        o = os.option(form.Button, 'reload');
         o.inputstyle = 'action';
         o.inputtitle = _('Reload Service');
+        o.depends('nikki.config.mihomo_running', 'true');
         o.onclick = function () { return nikki.service('nikki', 'reload'); };
 
-        o = s.option(form.Button, 'restart');
+        o = os.option(form.Button, 'restart');
         o.inputstyle = 'negative';
         o.inputtitle = _('Restart Service');
+        o.depends('nikki.config.mihomo_running', 'true');
         o.onclick = function () { return nikki.service('nikki', 'restart'); };
 
-        // o = s.option(form.Button);
-        // o.inputstyle = 'negative';
-        // o.inputtitle = _('Flush FakeIP Cache');
-        // o.onclick = function () {
-        //     return nikki.mihomoAPI('POST', '/cache/fakeip/flush').then(function (res) {
-        //         ui.addTimeLimitedNotification(null,
-        //             E('p', _('FakeIP cache flushed %s.')
-        //                 .format(res?.status === 204 ? _('successfully') : _('failed'))), 3000, 'message');
-        //     });
-        // };
-
-        // o = s.option(form.Button);
-        // o.inputstyle = 'negative';
-        // o.inputtitle = _('Flush DNS Cache');
-        // o.onclick = function () {
-        //     return nikki.mihomoAPI('POST', '/cache/dns/flush').then(function (res) {
-        //         ui.addTimeLimitedNotification(null,
-        //             E('p', _('DNS cache flushed %s.')
-        //                 .format(res?.status === 204 ? _('successfully') : _('failed'))), 3000, 'message'
-        //         );
-        //     });
-        // };
-
-        // o = s.option(form.Button);
-        // o.inputstyle = 'negative';
-        // o.inputtitle = _('restart rpcd');
-        // o.onclick = function () { return nikki.service('rpcd', 'restart'); };
-
-        o = s.option(form.ListValue, 'ui_url');
+        o = os.option(form.ListValue, 'ui_url');
         o.ucisection = 'mixin';
         o.ucioption = 'ui_url';
+        o.depends('nikki.config.mihomo_running', 'true');
         o.load = function (section_id) {
             const ui_path = uci.get('nikki', 'mixin', 'ui_path');
             this.install_status = {};
-            if (uibtn)
-                uibtn.style.display = running ? '' : 'none';
             return Promise.all(nikki.ui_array.map(([url, name]) =>
                 fs.stat(`${nikki.runDir}/${ui_path}/${name}/index.html`)
                     .then(() => {
@@ -288,15 +234,13 @@ return view.extend({
                 return form.ListValue.prototype.load.apply(this, arguments);
             });
         };
-
         o.renderWidget = function (section_id) {
             let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
             el.classList.add('control-group');
             const default_label = _('Open Dashboard');
             const self = this;
-            uibtn = E('button', {
+            const uibtn = E('button', {
                 'class': 'btn cbi-button-positive',
-                'style': running ? '' : 'display:none',
                 'click': ui.createHandlerFn(this, function () {
                     const select = el.firstChild;
                     const current_url = select.value;
@@ -328,9 +272,12 @@ return view.extend({
         };
 
         s = m.section(form.NamedSection, 'config', 'config', _('App Config'));
-
         o = s.option(form.Flag, 'enabled', _('Enable'));
         o.rmempty = false;
+
+        o = s.option(form.HiddenValue, 'mihomo_running');
+        o.write = function () {};
+        o.cfgvalue = () => running;
 
         o = s.option(form.ListValue, 'core', _('Core'));
         o.value('meta', _('Meta'));
@@ -346,7 +293,7 @@ return view.extend({
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
             const core_version = uci.get('nikki', 'config', 'core_version');
             const default_label = _('Update Core');
-            coreBtn = E('button', {
+            const coreBtn = E('button', {
                 'class': 'btn cbi-button-action',
                 'click': ui.createHandlerFn(this, function (ev) {
                     const coreOpt = self.section.getOption('core');
@@ -640,8 +587,8 @@ return view.extend({
         });
 
         o.onchange = function (ev, section_id, value) {
-            const lEl = this.map.lookupOption('core_only', section_id)[0];
-            lEl?.getUIElement(section_id).setValue('0');
+            const el = this.map.lookupOption('core_only', section_id)[0];
+            el?.getUIElement(section_id).setValue('0');
         };
 
         o = s.option(form.ListValue, 'mixin_file', _('Select mixin file'), _('Select files to add to mixin'));
@@ -787,6 +734,20 @@ return view.extend({
         o = s.taboption('environment_variable', form.Flag, 'env_skip_system_ipv6_check', _('Skip System IPv6 Check'));
         o.rmempty = false;
 
-        return m.render();
+        return m.render().then(L.bind(function (m, nodes) {
+            const el = m.findElement('data-name', 'mihomo_running');
+            if (el) el.style.display = 'none';
+            L.Poll.add(L.bind(function () {
+                nikki.status('nikki').then((r) => {
+                    const res = m.lookupOption('mihomo_running', 'config', 'nikki')[0];
+                    if (res) {
+                        res.getUIElement('config').setValue(r);
+                        os.checkDepends();
+                    }
+                    setStatus(m.findElement('id', 'core_status'), r);
+                });
+            }, this), 5);
+            return nodes;
+        }, this, m));
     }
 });

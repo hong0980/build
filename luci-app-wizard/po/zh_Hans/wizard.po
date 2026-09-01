@@ -11,6 +11,9 @@ msgstr "基本设置"
 msgid "Files"
 msgstr "文件编辑"
 
+msgid "NAS"
+msgstr "网络存储"
+
 # ── wizard.js — 页面标题 ──────────────────────────────────────────────────
 msgid "Inital Router Setup"
 msgstr "路由器初始设置"

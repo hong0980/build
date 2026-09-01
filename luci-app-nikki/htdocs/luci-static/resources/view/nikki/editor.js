@@ -15,23 +15,6 @@ function formatSize(bytes) {
     return `${formatted} ${units[idx]}`;
 }
 
-function preloadAce() {
-    if (window.ace?.edit) return Promise.resolve(true);
-    if (window._acePromise) return window._acePromise;
-    return window._acePromise = new Promise((resolve, reject) => {
-        const script = E('script', { src: '/luci-static/resources/view/nikki/ace/ace.js' });
-        script.onload = () => {
-            ace.config.set('basePath', '/luci-static/resources/view/nikki/ace');
-            resolve(true);
-        };
-        script.onerror = () => {
-            window._acePromise = null;
-            reject(new Error('Failed to load ace'));
-        };
-        document.head.appendChild(script);
-    });
-}
-
 return view.extend({
     aceEditor: null,
     currentPath: null,
@@ -71,7 +54,7 @@ return view.extend({
         const statEl = E('span', { style: 'margin-left:10px;font-size:12px;color:#888;vertical-align:middle;' });
         const aceDiv = E('div', { style: 'width:auto;height:100%;display:none;' });
 
-        preloadAce().then(() => {
+        nikki.preloadAce().then(() => {
             this.textarea.style.display = 'none';
             aceDiv.style.display = '';
             this.aceEditor = ace.edit(aceDiv);

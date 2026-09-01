@@ -5,16 +5,20 @@
 'require rpc';
 'require request';
 
-const callServiceList = rpc.declare({
+const callServiceStatus = rpc.declare({
     object: 'service',
     method: 'list',
     params: ['name'],
-    expect: { '': {} },
-    filter: (data, { name }, extra) =>
-        extra.reduce((res, key) =>
-            (res && typeof res === 'object' ? res[key] : null),
-            data[name] || null
-        )
+    filter: function (data) {
+        for (var svcName in data) {
+            var svc = data[svcName];
+            if (!svc || !svc.instances) continue;
+            for (var instName in svc.instances) {
+                return !!svc.instances[instName].running;
+            }
+        }
+        return false;
+    }
 });
 
 const callRCInit = rpc.declare({
@@ -194,8 +198,8 @@ return baseclass.extend({
         return callversion(mode);
     },
 
-    status: function () {
-        return callServiceList('nikki', ['instances', 'nikki', 'running']).then(Boolean);
+    status: function (name) {
+        return callServiceStatus(name);
     },
 
     mihomoAPI: function (method, path, query, body) {
@@ -370,4 +374,21 @@ return baseclass.extend({
             throw new Error(res.message || _('Update UI failed'));
         });
     },
+
+    preloadAce: function () {
+        if (window.ace?.edit) return Promise.resolve(true);
+        if (window._acePromise) return window._acePromise;
+        return window._acePromise = new Promise((resolve, reject) => {
+            const script = E('script', { src: '/luci-static/resources/view/nikki/ace/ace.js' });
+            script.onload = () => {
+                ace.config.set('basePath', '/luci-static/resources/view/nikki/ace');
+                resolve(true);
+            };
+            script.onerror = () => {
+                window._acePromise = null;
+                reject(new Error('Failed to load ace'));
+            };
+            document.head.appendChild(script);
+        })
+    }
 });
