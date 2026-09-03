@@ -33,12 +33,11 @@ function startDownloadTask(task_id, shellCmd, targetPath) {
 			return { status: 'pending', task_id, path: targetPath, message: 'in progress' };
 		if (st == 'done' && targetPath && access(targetPath))
 			return { status: 'ok', task_id, path: targetPath, message: 'complete' };
-		if (substr(st, 0, 6) == 'error:')
-			return { status: 'error', task_id, path: targetPath, message: substr(st, 6) };
+
+		unlink(status_file);
+		unlink(log_file);
 	}
 
-	unlink(status_file);
-	unlink(log_file);
 	writefile(status_file, 'downloading');
 	system(['sh', '-c', `${shellCmd} > /dev/null 2>&1 &`]);
 
@@ -207,9 +206,9 @@ const methods = {
 	},
 
 	check_download: {
-		args: { core_type: 'core_type', path: 'path' },
+		args: { task_id: 'task_id', path: 'path' },
 		call: function(req) {
-			const task_id   = req.args?.core_type;
+			const task_id   = req.args?.task_id;
 			const final_out = req.args?.path;
 
 			if (!task_id)
@@ -220,12 +219,8 @@ const methods = {
 			if (access(status_file)) {
 				const st = trim(readfile(status_file) || '');
 
-				if (st == 'done') {
-					for (let name in lsdir('/tmp', 'nikki*')) {
-						unlink(`/tmp/${name}`);
-					}
+				if (st == 'done')
 					return { status: 'ok', path: final_out, message: 'complete' };
-				}
 				if (st == 'downloading')
 					return { status: 'pending', message: 'in progress' };
 				if (substr(st, 0, 6) == 'error:')

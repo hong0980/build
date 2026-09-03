@@ -125,7 +125,7 @@ const callUciSetCommit = rpc.declare({
 const callCheckDownload = rpc.declare({
     object: 'luci.nikki',
     method: 'check_download',
-    params: ['core_type', 'path'],
+    params: ['task_id', 'path'],
     expect: { '': {} }
 });
 
