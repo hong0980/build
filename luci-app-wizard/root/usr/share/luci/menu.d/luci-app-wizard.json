@@ -1,7 +1,7 @@
 {
 	"admin/system/wizard": {
 		"title": "Wizard",
-		"order": 80,
+		"order": 10,
 		"action": { "type": "firstchild" },
 		"depends": {
 			"acl": [ "luci-app-wizard" ]

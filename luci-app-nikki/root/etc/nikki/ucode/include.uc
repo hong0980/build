@@ -1,4 +1,4 @@
-import { readfile, popen } from 'fs';
+import { readfile, popen, mkstemp } from 'fs';
 
 export function uci_bool(obj) {
 	if (obj == '1' || obj == 'true')  return true;
@@ -27,6 +27,71 @@ export function trim_all(obj) {
 		if (obj[key] == null) delete obj[key];
 	}
 	return length(keys(obj)) == 0 ? null : obj;
+};
+
+export function isBinary(str) {
+	for (let off = 0, byte = ord(str); off < length(str); byte = ord(str, ++off))
+		if (byte <= 8 || (byte >= 14 && byte <= 31))
+			return true;
+
+	return false;
+};
+
+export function shellQuote(s) {
+	return `'${replace(s, "'", "'\\''")}'`;
+};
+
+export function executeCommand(infd, ...args) {
+	let outfd = mkstemp();
+	let errfd = mkstemp();
+
+	if (infd)
+		push(args, `<&${infd.fileno()}`);
+
+	const exitcode = system(`${join(' ', args)} >&${outfd.fileno()} 2>&${errfd.fileno()}`);
+
+	outfd.seek();
+	errfd.seek();
+
+	const stdout = outfd.read(1024 * 1024) ?? '';
+	const stderr = errfd.read(1024 * 1024) ?? '';
+
+	outfd.close();
+	errfd.close();
+
+	const binary = isBinary(stdout);
+
+	return {
+		command: join(' ', args),
+		stdout: binary ? null : stdout,
+		stderr,
+		exitcode,
+		binary
+	};
+};
+
+export function yqRead(flags, command, content) {
+	let infd = mkstemp();
+
+	if (content) {
+		content = trim(content);
+		content = replace(content, /\r\n?/g, '\n');
+		if (!match(content, /\n$/))
+			content += '\n';
+	}
+	infd.write(content);
+
+	infd.seek();
+	const out = executeCommand(infd, 'yq', flags, shellQuote(command));
+	infd.close();
+
+	return out.stdout;
+};
+
+export function yqReadFile(flags, command, filepath) {
+	const out = executeCommand(null, 'yq', flags, shellQuote(command), shellQuote(filepath));
+
+	return out.stdout;
 };
 
 export function get_cgroups_version() {
@@ -68,16 +133,12 @@ export function get_cgroups() {
 };
 
 export function load_profile(o) {
-	const out = run('yq -o json ' + (o || '/etc/nikki/run/config.yaml'));
+	let out = yqReadFile('-o json', '.', o || '/etc/nikki/run/config.yaml');
 	return out ? json(out) : {};
 };
 
 export function qs(v) {
 	return v ? '"' + replace(replace(v, /\\/g, '\\\\'), /"/g, '\\"') + '"' : '""';
-};
-
-export function shellQuote(s) {
-	return `'${replace(s, "'", "'\\''")}'`;
 };
 
 const PROXY_PREFIXES = [

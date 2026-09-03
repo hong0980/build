@@ -158,7 +158,7 @@ const ui_array          = [
     ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]
 ];
 
-function waitForDownload(core_type, path, maxRetries) {
+function waitForTask(task_id, path, maxRetries) {
     maxRetries = maxRetries || 40;
     return new Promise(function (resolve, reject) {
         let n = 0;
@@ -167,7 +167,7 @@ function waitForDownload(core_type, path, maxRetries) {
                 reject(new Error(_('Download timeout')));
                 return;
             }
-            callCheckDownload(core_type, path || '').then(function (r) {
+            callCheckDownload(task_id, path || '').then(function (r) {
                 if (r.status === 'ok') resolve(r);
                 else if (r.status === 'error')
                     reject(new Error(r.message || _('Download failed')));
@@ -241,7 +241,7 @@ return baseclass.extend({
             if (res.status === 'ok') return;
             if (res.status === 'error')
                 throw new Error(res.message || _('Update failed'));
-            return waitForDownload(core_type);
+            return waitForTask(core_type);
         });
     },
 
@@ -250,7 +250,7 @@ return baseclass.extend({
             return callSwitchCore(core_type, arch, url).then(function (res) {
                 if (res.status === 'ok') return res;
                 if (res.status === 'pending')
-                    return waitForDownload(core_type).then(attempt);
+                    return waitForTask(core_type).then(attempt);
                 throw new Error(res.message || _('Switch failed'));
             });
         };
@@ -290,7 +290,7 @@ return baseclass.extend({
                     if (res.status === 'error')
                         throw new Error(res.message || _('Download failed'));
                     if (res.status === 'pending' && res.task_id)
-                        return waitForDownload(res.task_id, path);
+                        return waitForTask(res.task_id, path);
                     throw new Error(res.message || _('Download failed'));
                 });
         };
@@ -370,7 +370,7 @@ return baseclass.extend({
             if (res.status === 'error')
                 throw new Error(res.message || _('Update UI failed'));
             if (res.status === 'pending' && res.task_id)
-                return waitForDownload(res.task_id, res.path);
+                return waitForTask(res.task_id, res.path);
             throw new Error(res.message || _('Update UI failed'));
         });
     },

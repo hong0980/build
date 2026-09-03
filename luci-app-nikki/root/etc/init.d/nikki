@@ -116,7 +116,7 @@ start_service() {
 		}
 
 		export comments explode
-		ucode -S "/etc/nikki/ucode/mixin.uc" 2>/dev/null | yq -MPoy | yq -Mi ea '
+		ucode -S "/etc/nikki/ucode/mixin.uc" | yq -MPoy | yq -Mi ea '
 			. as $item ireduce ({}; . * $item ) |
 			((select(env(explode)  == 0) | explode(.))        // .) |
 			((select(env(comments) == 0) | ... comments = "") // .) |
@@ -232,7 +232,7 @@ start_service() {
 	}
 
 	[ "$core_only" = 0 ] && \
-	profile_path="$TEMP_CONFIG" ucode -S "/etc/nikki/ucode/mirror.uc" 2>/dev/null
+	profile_path="$TEMP_CONFIG" ucode -S "/etc/nikki/ucode/mirror.uc"
 
 	mv -f "$TEMP_CONFIG" "$RUN_PROFILE_PATH"
 
@@ -429,7 +429,7 @@ service_started() {
 			ip -6 route add "$fake_ip6_range" dev "$dummy_device"
 		fi
 
-		utpl -S "/etc/nikki/ucode/hijack.ut" 2>/dev/null | nft -f -
+		utpl -S "/etc/nikki/ucode/hijack.ut" | nft -f -
 		if nft list tables | grep -q nikki; then
 			log "Proxy" "Hijack successful."
 		else

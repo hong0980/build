@@ -1,6 +1,6 @@
 import { access } from 'fs';
 import { cursor } from 'uci';
-import { load_profile, trim_all, mirrorGithubUrl, qs } from '/etc/nikki/ucode/include.uc';
+import { load_profile, trim_all, mirrorGithubUrl, qs, yqReadFile } from '/etc/nikki/ucode/include.uc';
 function ug(o) { return cursor().get('nikki', 'mixin', o); };
 
 let exprs = [], target = ug('github_mirror');
@@ -58,5 +58,5 @@ push(exprs, `
 
 if (length(trim_all(exprs)) > 0) {
 	let yqExpr = join(' | ', exprs);
-	system(['yq', '-Mi', yqExpr, file]);
+	yqReadFile('-i', yqExpr, file);
 };
