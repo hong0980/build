@@ -142,7 +142,6 @@ const coreDownload = function (list, current) {
 };
 
 return view.extend({
-    aceEditor: null,
     load: function () {
         return Promise.all([
             nikki.version(),
@@ -155,17 +154,18 @@ return view.extend({
         ]);
     },
     render: function ([v, running, mixinfiles, profiles, subfiles, list]) {
-        let m, s, o, os, switchBtn, lgbmBtn;
+        const self = this;
+        let m, s, o, os, lswitchBtn, lgbmBtn;
         m = new form.Map('nikki', _('Nikki'), _("Transparent Proxy with <a href='%s' target='_blank'>Mihomo</a> on OpenWrt.").format('https://wiki.metacubex.one/') +
             ` <a href="https://github.com/nikkinikki-org/OpenWrt-nikki/wiki" target="_blank">${_('How To Use')}</a>`);
 
         s = m.section(form.TypedSection);
         s.render = function () {
+            const weight = E('strong', [E('span', { 'style': 'color:gray' }, ' ' + _('unchecked'))]);
             return E('p', [
                 E('button', {
                     'class': 'cbi-button cbi-button-apply',
                     'click': ui.createHandlerFn(this, () => {
-                        let weight = document.getElementById('_connection_check_results');
                         weight.innerHTML = '';
                         return Promise.all(checkurls.map((site) => {
                             return L.resolveDefault(nikki.callConnStat(site[0]), {}).then((res) => {
@@ -179,10 +179,7 @@ return view.extend({
                             });
                         }));
                     })
-                }, _('Connection check')),
-                E('strong', { id: '_connection_check_results' }, [
-                    E('span', { 'style': 'color:gray' }, ' ' + _('unchecked'))
-                ])
+                }, _('Connection check')), weight
             ])
         };
 
@@ -217,16 +214,16 @@ return view.extend({
         o.ucioption = 'ui_url';
         o.depends('nikki.config.mihomo_running', 'true');
         o.load = function (section_id) {
+            self.install_status = {};
             const ui_path = uci.get('nikki', 'mixin', 'ui_path');
-            this.install_status = {};
             return Promise.all(nikki.ui_array.map(([url, name]) =>
                 fs.stat(`${nikki.runDir}/${ui_path}/${name}/index.html`)
                     .then(() => {
-                        this.install_status[url] = true;
+                        self.install_status[url] = true;
                         return [url, name];
                     })
                     .catch(() => {
-                        this.install_status[url] = false;
+                        self.install_status[url] = false;
                         return [url, `${name} (${_('Not Installed')})`];
                     })
             )).then(entries => {
@@ -238,7 +235,6 @@ return view.extend({
             let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
             el.classList.add('control-group');
             const default_label = _('Open Dashboard');
-            const self = this;
             const uibtn = E('button', {
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function () {
@@ -285,8 +281,8 @@ return view.extend({
         o.value('smart', _('Smart'));
         o.rmempty = false;
         o.onchange = function (ev, section_id, value) {
-            if (!switchBtn) return;
-            switchBtn.style.display = this.cfgvalue(section_id) !== value ? '' : 'none';
+            if (!lswitchBtn) return;
+            lswitchBtn.style.display = this.cfgvalue(section_id) !== value ? '' : 'none';
         };
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const self = this;
@@ -296,15 +292,10 @@ return view.extend({
             const coreBtn = E('button', {
                 'class': 'btn cbi-button-action',
                 'click': ui.createHandlerFn(this, function (ev) {
-                    const coreOpt = self.section.getOption('core');
-                    const options = [];
-                    if (coreOpt.keylist && coreOpt.vallist) {
-                        for (let i = 0; i < coreOpt.keylist.length; i++) {
-                            const val = coreOpt.keylist[i];
-                            if (!val) continue;
-                            options.push({ value: val, text: coreOpt.vallist[i] || val });
-                        }
-                    }
+                    const select = node.firstChild;
+                    const options = Array.from(select.options)
+                        .filter(opt => opt.value)
+                        .map(opt => ({ value: opt.value, text: opt.text || opt.value }));
 
                     const tableEl = E('table', { 'class': 'table cbi-section-table' }, [
                         E('tr', { 'class': 'tr table-titles' }, [
@@ -326,7 +317,6 @@ return view.extend({
                             E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Close'))
                         ])
                     ], 'cbi-modal');
-
                     return Promise.all(options.map((opt) => {
                         return Promise.all([
                             nikki.get_core_version(opt.value)
@@ -339,104 +329,105 @@ return view.extend({
                                         : (res.url.match(/compatible-([^/]+)\.gz$/) || [, '-'])[1];
                                     return { version, url: res.url };
                                 })
-                                .catch(() => ({ version: '-', url: null }))
-                        ]).then(res => ({ type: opt.value, name: opt.text, local: res[0], remote: res[1] }));
+                                .catch(() => ({ version: '-', url: null })),
+                            // fs.read_direct('/etc/nikki/resources.json')
+                            //     .then(s => JSON.parse(s))
+                            //     .then(j => {
+                            //         const item = j[opt.value];
+                            //         return item ? { version: item.remoteVer, url: item.url } : { version: '-', url: null };
+                            //     }).catch(() => ({ version: '-', url: null }))
+                        ]).then(res => ({
+                            type: opt.value, name: opt.text, hasurl: res[1].url,
+                            localver: res[0].version, remotever: res[1].version,
+                        }));
                     })).then((res) => {
                         content.querySelector('em.spinning')?.remove();
-                        const rows = [];
-                        res.forEach((item) => {
-                            const hasUrl = item.remote.url || null;
-                            const localVer = item.local.version;
-                            const remoteVer = item.remote.version;
-                            const isInstalled = localVer !== '-';
-                            const iscore = v.core && v.core === localVer;
-                            const isLatest = isInstalled && localVer === remoteVer;
-                            const dlLabel = isLatest
-                                ? _('Redownload')
-                                : isInstalled
-                                    ? _('Update')
-                                    : _('Download');
+                        const render = () => {
+                            const rows = [];
+                            res.forEach(item => {
+                                const { type, name, localver, remotever, hasurl } = item;
+                                const isInstalled = localver !== '-';
+                                const iscore = v.core && v.core === localver;
+                                const isLatest = isInstalled && localver === remotever;
 
-                            const dlBtn = E('button', {
-                                'disabled': hasUrl ? null : true,
-                                'class': isLatest ? 'btn cbi-button-negative' : 'btn cbi-button-positive',
-                                'click': ui.createHandlerFn(this, function (ev) {
-                                    const b = ev.target;
-                                    b.disabled = true;
-                                    b.textContent = _('Downloading...');
-                                    return nikki.cache_core(item.type, core_version, hasUrl)
-                                        .then(() => {
-                                            const row = findParent(b, '.tr');
-                                            if (row) {
-                                                L.dom.content(row.cells[1], E('code', [remoteVer]));
-                                                L.dom.content(row.cells[3], E('span', { 'class': 'label success' }, _('Up to Date')));
-                                                b.textContent = _('Redownload');
-                                                b.className = 'btn cbi-button-negative';
-                                                const sw = row.cells[4].querySelectorAll('button')[1];
-                                                if (sw && iscore) { sw.textContent = _('In use'); sw.disabled = true; }
-                                            }
-                                            modalnotify(null, E('p', _('%s download successful').format(item.name)), 3000, 'success');
-                                        })
-                                        .catch((err) => {
-                                            b.disabled = false;
-                                            b.textContent = dlLabel;
-                                            modalnotify(null, E('p', _('%s download failed: %s').format(item.name, String(err))), 'error');
-                                        });
-                                })
-                            }, dlLabel);
+                                const switchLabel = iscore ? _('In use') : _('Switch Core');
+                                const switchBtn = E('button', {
+                                    'style': 'min-width: 5.5rem;',
+                                    'disabled': iscore || type == 'smart' ? true : null,
+                                    'class': `btn cbi-button-action ${iscore ? '' : 'important'}`,
+                                    'click': ui.createHandlerFn(this, function (ev) {
+                                        const b = ev.target;
+                                        b.textContent = _('Switching...');
+                                        return nikki.switch_core(type, core_version, hasurl)
+                                            .then((ret) => {
+                                                const pending = ret && ret.status === 'pending';
+                                                if (!pending) {
+                                                    v.core = remotever;
+                                                    item.localver = remotever;
+                                                    render();
+                                                }
+                                                modalnotify(null, E('p', (pending
+                                                    ? _('%s is downloading, please refresh later')
+                                                    : _('%s switch successful, service restarted')
+                                                ).format(name)), 3000, pending ? 'info' : 'success');
+                                            })
+                                            .catch((err) => {
+                                                b.textContent = switchLabel;
+                                                modalnotify(null, E('p', _('%s switch failed: %s').format(name, String(err))), 'error');
+                                            });
+                                    })
+                                }, switchLabel);
 
-                            const switchLabel = iscore ? _('In use') : _('Switch Core');
-                            const switchBtn = E('button', {
-                                'class': `btn cbi-button-action ${iscore ? '' : 'important'}`,
-                                'disabled': iscore ? true : null,
-                                'click': ui.createHandlerFn(this, function (ev) {
-                                    const b = ev.target;
-                                    while (b && b.tagName !== 'BUTTON') b = b.parentNode;
-                                    b.disabled = true;
-                                    b.textContent = _('Switching...');
-                                    return nikki.switch_core(item.type, core_version, hasUrl)
-                                        .then((res) => {
-                                            b.disabled = false;
-                                            b.textContent = switchLabel;
-                                            const pending = res && res.status === 'pending';
-                                            modalnotify(null, E('p', (pending
-                                                ? _('%s is downloading, please refresh later')
-                                                : _('%s switch successful, service restarted')
-                                            ).format(item.name)), 3000, pending ? 'info' : 'success');
-                                        })
-                                        .catch((err) => {
-                                            b.disabled = false;
-                                            b.textContent = switchLabel;
-                                            modalnotify(null, E('p', _('%s switch failed: %s').format(item.name, String(err))), 'error');
-                                        });
-                                })
-                            }, switchLabel);
+                                const dlLabel = isLatest
+                                    ? _('Redownload')
+                                    : isInstalled ? _('Update') : _('Download');
+                                const dlBtn = E('button', {
+                                    'style': 'min-width: 5.5rem;',
+                                    'disabled': hasurl ? null : true,
+                                    'class': `btn cbi-button-${isLatest ? 'negative' : 'positive'}`,
+                                    'click': ui.createHandlerFn(this, function (ev) {
+                                        const b = ev.target;
+                                        b.textContent = _('Downloading...');
+                                        return nikki.cache_core(type, core_version, hasurl)
+                                            .then(() => {
+                                                item.localver = remotever;
+                                                render();
+                                                modalnotify(null, E('p', _('%s download successful').format(name)), 3000, 'success');
+                                            })
+                                            .catch((err) => {
+                                                b.textContent = dlLabel;
+                                                modalnotify(null, E('p', _('%s download failed: %s').format(name, String(err))), 'error');
+                                            });
+                                    })
+                                }, dlLabel);
 
-                            const remoteCell = hasUrl
-                                ? E('a', { 'href': hasUrl, 'target': '_blank', 'rel': 'noreferrer', 'title': _('Click to download locally') + '\n' + hasUrl }, remoteVer)
-                                : remoteVer;
-                            const status = !hasUrl
-                                ? E('span', { 'class': 'label warning' }, _('Fetch Failed'))
-                                : isLatest
-                                    ? E('span', { 'class': 'label success' }, _('Up to Date'))
-                                    : isInstalled
-                                        ? E('span', { 'class': 'label notice' }, _('Update Available'))
-                                        : E('span', { 'class': 'label warning' }, _('Not Installed'));
+                                const remoteCell = hasurl
+                                    ? E('a', { 'href': hasurl, 'target': '_blank', 'rel': 'noreferrer', 'title': _('Click to download locally') + '\n' + hasurl }, remotever)
+                                    : remotever;
+                                const status = hasurl
+                                    ? isLatest
+                                        ? E('span', { 'class': 'label success' }, _('Up to Date'))
+                                        : isInstalled
+                                            ? E('span', { 'class': 'label notice' }, _('Update Available'))
+                                            : E('span', { 'class': 'label warning' }, _('Not Installed'))
+                                    : E('span', { 'class': 'label warning' }, _('Fetch Failed'));
 
-                            rows.push([
-                                item.name, E('code', [localVer]), remoteCell, status,
-                                E('div', [dlBtn, switchBtn])
-                            ]);
-                        });
+                                rows.push([
+                                    name, E('code', [localver]), remoteCell, status,
+                                    E('div', { 'style': 'display: flex; gap: .5rem;' }, [dlBtn, switchBtn])
+                                ]);
+                            });
+                            cbi_update_table(tableEl, rows, _('No data available'));
+                        };
 
-                        cbi_update_table(tableEl, rows, _('No data available'));
+                        render();
                     }).catch((err) => {
                         content.innerHTML = '';
                         content.appendChild(E('p', { 'style': 'text-align: center; color: #f44336; padding: 2rem 0;' }, _('Request exception: %s').format(String(err))));
                     });
                 })
             }, default_label);
-            switchBtn = E('button', {
+            lswitchBtn = E('button', {
                 'style': 'display:none',
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function (ev) {
@@ -455,9 +446,13 @@ return view.extend({
                         .then(function (res) {
                             if (res?.status !== 'ok')
                                 throw new Error(res.message || _('Switch failed'));
-                            return self.map.save(null, true).then(() => {
-                                ui.changes.apply(true);
+
+                            return self.map.save(null, true).then(function () {
+                                return uci.save()
+                                    .then(L.bind(ui.changes.init, ui.changes))
+                                    .then(L.bind(ui.changes.apply, ui.changes));
                             });
+
                         })
                         .catch(function (err) {
                             ui.addNotification(null,
@@ -466,7 +461,7 @@ return view.extend({
                 })
             }, _('Switch Core'));
             node.classList.add('control-group');
-            node.appendChild(switchBtn);
+            node.appendChild(lswitchBtn);
             node.appendChild(coreBtn);
             return node;
         };
