@@ -29,15 +29,18 @@ download() {
 		return $?
 	fi
 
-	# curl fallback: stat 轮询
 	curl -SsL --connect-timeout 15 --max-time 300 --retry 3 --retry-delay 2 \
 		-A "$UA" -o "$output" "$url" 2>>"$log" &
 	local pid=$!
-	local total_size=$(curl -sI "$url" 2>/dev/null | grep -i content-length | awk '{print $2}' | tr -d '\r')
+	local total_size=$(curl -sIL -A "$UA" "$url" 2>/dev/null | grep -i '^content-length:' | tail -1 | awk '{print $2}' | tr -d '\r')
+
 	if [ -n "$total_size" ] && [ "$total_size" -gt 0 ]; then
 		(
 			while kill -0 $pid 2>/dev/null; do
-				local cur=$(stat -c %s "$output" 2>/dev/null || echo 0)
+				local cur=0
+				if [ -f "$output" ]; then
+					cur=$(wc -c < "$output" 2>/dev/null || echo 0)
+				fi
 				local pct=$(( cur * 100 / total_size ))
 				[ "$pct" -gt 100 ] && pct=100
 				echo "$pct" > "$progress"
