@@ -22,6 +22,15 @@ function setStatus(element, running) {
     return element;
 }
 
+function createButtonProgressBar() {
+    return E('div', {
+        'class': 'cbi-progressbar',
+        'style': 'position:absolute;left:0;bottom:0;width:100%;height:3px;margin:0;min-width:0;border:0;border-radius:0;background:rgba(0,0,0,0.08);z-index:0;display:none;'
+    }, E('div', {
+        'style': 'width:0%;height:100%;background:#286090;transition:width 0.25s ease-in;'
+    }));
+}
+
 function modalnotify(title, children, timeout, ...classes) {
     function fadeOut(element) {
         element?.classList.replace('fade-in', 'fade-out');
@@ -235,17 +244,27 @@ return view.extend({
             let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
             el.classList.add('control-group');
             const default_label = _('Open Dashboard');
+
+            const uiBar = createButtonProgressBar();;
+            const uiLabel = E('span', { 'style': 'position:relative;z-index:1;' }, default_label);
+
             const uibtn = E('button', {
+                'style': 'min-width: 5.5rem; position: relative; overflow: hidden;',
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function () {
                     const select = el.firstChild;
                     const current_url = select.value;
                     const ui_entry = nikki.ui_array.find(x => x[0] === current_url);
+
                     const openOrDownload = self.install_status[current_url]
                         ? Promise.resolve()
                         : (() => {
-                            uibtn.textContent = _('Please wait, downloading %s...').format(ui_entry[1]);
-                            return nikki.update_ui(current_url, ui_entry[1])
+                            uiLabel.textContent = _('Please wait, downloading %s...').format(ui_entry[1]);
+                            uiBar.style.display = '';
+
+                            return nikki.update_ui(current_url, ui_entry[1], function (pct) {
+                                uiBar.firstChild.style.width = pct + '%';
+                            })
                                 .then(result => {
                                     if (result?.status === 'ok') {
                                         self.install_status[current_url] = true;
@@ -255,14 +274,20 @@ return view.extend({
                                     }
                                     throw new Error(result?.message);
                                 })
-                                .finally(() => uibtn.textContent = default_label);
+                                .finally(() => {
+                                    uiLabel.textContent = default_label;
+                                    uiBar.style.display = 'none';
+                                    uiBar.firstChild.style.width = '0%';
+                                    uibtn.disabled = false;
+                                });
                         })();
 
                     return openOrDownload
                         .then(() => nikki.openDashboard(ui_entry[1]))
                         .catch(e => ui.addNotification(null, E('p', _('Update failed: ') + e), 'error'));
                 })
-            }, default_label);
+            }, [uiLabel, uiBar]);
+
             el.appendChild(uibtn);
             return el;
         };
@@ -352,29 +377,30 @@ return view.extend({
 
                                 const switchLabel = iscore ? _('In use') : _('Switch Core');
                                 const switchBtn = E('button', {
-                                    'style': 'min-width: 5.5rem;',
+                                    'style': 'min-width: 5.5rem; position: relative; overflow: hidden;',
                                     'disabled': iscore || type == 'smart' ? true : null,
                                     'class': `btn cbi-button-action ${iscore ? '' : 'important'}`,
                                     'click': ui.createHandlerFn(this, function (ev) {
                                         const b = ev.target;
-                                        b.textContent = _('Switching...');
-                                        return nikki.switch_core(type, core_version, hasurl)
-                                            .then((ret) => {
-                                                const pending = ret && ret.status === 'pending';
-                                                if (!pending) {
-                                                    v.core = remotever;
-                                                    item.localver = remotever;
-                                                    render();
-                                                }
-                                                modalnotify(null, E('p', (pending
-                                                    ? _('%s is downloading, please refresh later')
-                                                    : _('%s switch successful, service restarted')
-                                                ).format(name)), 3000, pending ? 'info' : 'success');
-                                            })
-                                            .catch((err) => {
-                                                b.textContent = switchLabel;
-                                                modalnotify(null, E('p', _('%s switch failed: %s').format(name, String(err))), 'error');
-                                            });
+                                        const bar = createButtonProgressBar();
+                                        bar.style.display = '';
+
+                                        const label = E('span', { 'style': 'position:relative;z-index:1;' }, _('Switching...'));
+                                        b.innerHTML = '';
+                                        b.appendChild(bar);
+                                        b.appendChild(label);
+
+                                        return nikki.switch_core(type, core_version, hasurl, function (pct) {
+                                            bar.firstChild.style.width = pct + '%';
+                                        }).then(() => {
+                                            v.core = remotever;
+                                            item.localver = remotever;
+                                            render();
+                                            modalnotify(null, E('p', _('%s switch successful, service restarted').format(name)), 3000, 'success');
+                                        }).catch((err) => {
+                                            render();
+                                            modalnotify(null, E('p', _('%s switch failed: %s').format(name, String(err))), 'error');
+                                        });
                                     })
                                 }, switchLabel);
 
@@ -382,22 +408,29 @@ return view.extend({
                                     ? _('Redownload')
                                     : isInstalled ? _('Update') : _('Download');
                                 const dlBtn = E('button', {
-                                    'style': 'min-width: 5.5rem;',
+                                    'style': 'min-width: 5.5rem; position: relative; overflow: hidden;',
                                     'disabled': hasurl ? null : true,
                                     'class': `btn cbi-button-${isLatest ? 'negative' : 'positive'}`,
                                     'click': ui.createHandlerFn(this, function (ev) {
                                         const b = ev.target;
-                                        b.textContent = _('Downloading...');
-                                        return nikki.cache_core(type, core_version, hasurl)
-                                            .then(() => {
-                                                item.localver = remotever;
-                                                render();
-                                                modalnotify(null, E('p', _('%s download successful').format(name)), 3000, 'success');
-                                            })
-                                            .catch((err) => {
-                                                b.textContent = dlLabel;
-                                                modalnotify(null, E('p', _('%s download failed: %s').format(name, String(err))), 'error');
-                                            });
+                                        const bar = createButtonProgressBar();
+                                        bar.style.display = '';
+
+                                        const label = E('span', { 'style': 'position:relative;z-index:1;' }, _('Downloading...'));
+                                        b.innerHTML = '';
+                                        b.appendChild(bar);
+                                        b.appendChild(label);
+
+                                        return nikki.cache_core(type, core_version, hasurl, function (pct) {
+                                            bar.firstChild.style.width = pct + '%';
+                                        }).then(() => {
+                                            item.localver = remotever;
+                                            render();
+                                            modalnotify(null, E('p', _('%s download successful').format(name)), 3000, 'success');
+                                        }).catch((err) => {
+                                            render();
+                                            modalnotify(null, E('p', _('%s download failed: %s').format(name, String(err))), 'error');
+                                        });
                                     })
                                 }, dlLabel);
 
@@ -489,22 +522,33 @@ return view.extend({
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const default_label = _('Download Model');
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            const lgbmBar = createButtonProgressBar();
+
+            const lgbmLabel = E('span', { 'style': 'position:relative;z-index:1;' }, default_label);
+
             lgbmBtn = E('button', {
                 'class': 'btn cbi-button-action',
-                'style': !cfgvalue ? '' : 'display:none',
+                'style': (!cfgvalue ? '' : 'display:none;') + 'position: relative; overflow: hidden;',
                 'click': ui.createHandlerFn(this, function () {
                     const mode = this.formvalue(section_id).trim();
                     if (!mode) return false;
 
-                    lgbmBtn.textContent = _('Please wait, downloading %s...').format(mode);
+                    lgbmLabel.textContent = _('Please wait, downloading %s...').format(mode);
+                    lgbmBar.style.display = '';
+                    lgbmBtn.disabled = true;
+
                     return nikki.download_file({
                         url: 'https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/' + mode,
-                        path: '/etc/nikki/run/Model.bin', task_id: 'Model'
+                        path: '/etc/nikki/run/Model.bin',
+                        task_id: 'Model',
+                        onProgress: function (pct) {
+                            lgbmBar.firstChild.style.width = pct + '%';
+                        }
                     }).then(function (res) {
                         if (res?.status !== 'ok')
                             throw new Error(res.message || _('Update failed'));
 
-                        lgbmBtn.textContent = _('Model updated successfully! Path: %s').format('/etc/nikki/run/Model.bin');
+                        lgbmLabel.textContent = _('Model updated successfully! Path: %s').format('/etc/nikki/run/Model.bin');
                         setTimeout(function () {
                             lgbmBtn.style.display = 'none';
                         }, 3000);
@@ -513,9 +557,15 @@ return view.extend({
                     }).catch(function (err) {
                         ui.addNotification(null,
                             E('p', _('Update failed: %s').format(err.message || err)), 'error');
-                    }).finally(() => lgbmBtn.textContent = default_label);
+                    }).finally(() => {
+                        lgbmLabel.textContent = default_label;
+                        lgbmBar.style.display = 'none';
+                        lgbmBar.firstChild.style.width = '0%';
+                        lgbmBtn.disabled = false;
+                    });
                 })
-            }, default_label);
+            }, [lgbmLabel, lgbmBar]);
+
             node.classList.add('control-group');
             node.appendChild(lgbmBtn);
             return node;

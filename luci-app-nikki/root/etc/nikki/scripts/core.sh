@@ -6,14 +6,48 @@ auth_header="${GITHUB_TOKEN:+Authorization: Bearer $GITHUB_TOKEN}"
 set_status() { printf '%s\n' "$2" > "$1"; }
 
 download() {
-	local url="$1" output="$2" log="$3"
+	local url="$1" output="$2" log="$3" progress="$4"
+
 	if command -v axel >/dev/null 2>&1; then
-		rm -f "$output" "${output}.st"
-		axel -q -T 15 -U "$UA" -o "$output" "$url" >>"$log" 2>&1
-	else
-		curl -SsL --connect-timeout 15 --max-time 300 --retry 3 --retry-delay 2 \
-			-A "$UA" -o "$output" "$url" 2>>"$log"
+		rm -f "$output" "${output}.st" "$progress"
+		axel -p -T 15 -U "$UA" -o "$output" "$url" >"$progress" 2>>"$log"
+		return $?
 	fi
+
+	if command -v wget >/dev/null 2>&1; then
+		wget --show-progress -T 15 --user-agent="$UA" -O "$output" "$url" >>"$log" 2>&1 &
+		local pid=$!
+		(
+			while kill -0 $pid 2>/dev/null; do
+				local pct=$(tail -c 500 "$log" 2>/dev/null | tr '\r' '\n' | sed -n 's/.*[[:space:]]\([0-9]\{1,3\}\)%.*/\1/p' | tail -1)
+				[ -n "$pct" ] && echo "$pct" > "$progress"
+				sleep 1
+			done
+			echo "100" > "$progress" 2>/dev/null
+		) &
+		wait $pid
+		return $?
+	fi
+
+	# curl fallback: stat 轮询
+	curl -SsL --connect-timeout 15 --max-time 300 --retry 3 --retry-delay 2 \
+		-A "$UA" -o "$output" "$url" 2>>"$log" &
+	local pid=$!
+	local total_size=$(curl -sI "$url" 2>/dev/null | grep -i content-length | awk '{print $2}' | tr -d '\r')
+	if [ -n "$total_size" ] && [ "$total_size" -gt 0 ]; then
+		(
+			while kill -0 $pid 2>/dev/null; do
+				local cur=$(stat -c %s "$output" 2>/dev/null || echo 0)
+				local pct=$(( cur * 100 / total_size ))
+				[ "$pct" -gt 100 ] && pct=100
+				echo "$pct" > "$progress"
+				sleep 1
+			done
+			echo "100" > "$progress" 2>/dev/null
+		) &
+	fi
+	wait $pid
+	return $?
 }
 
 with_lock() {
@@ -177,6 +211,7 @@ do_cache() {
 	log_file="/tmp/dl_${CORE_TYPE}.log"
 	lock_file="/tmp/dl_${CORE_TYPE}.lock"
 	status_file="/tmp/dl_${CORE_TYPE}.status"
+	progress_file="/tmp/dl_${CORE_TYPE}.progress"
 
 	if [ "$url" = 'null' ] || [ -z "$url" ]; then
 		local url_json url_status msg
@@ -199,7 +234,7 @@ do_cache() {
 	archive_path="/tmp/${CORE_TYPE}-mihomo.gz"
 	rm -f "$log_file" "$archive_path" "$tmp_file"
 
-	if ! download "$(mirror_url "$url")" "$archive_path" "$log_file" || [ ! -s "$archive_path" ]; then
+	if ! download "$(mirror_url "$url")" "$archive_path" "$log_file" "$progress_file" || [ ! -s "$archive_path" ]; then
 		set_status "$status_file" "error: download failed"
 		rm -f "$archive_path" "$tmp_file"
 		release_lock
@@ -225,12 +260,19 @@ download_file() {
 	local task_id="$1" url="$2" path="$3"
 	local log_file="/tmp/dl_${task_id}.log"
 	local status_file="/tmp/dl_${task_id}.status"
+	local progress_file="/tmp/dl_${task_id}.progress"
+
+	set_status "$status_file" "downloading"
+	rm -f "$log_file" "$progress_file"
 
 	echo "[$(date '+%Y-%m-%d %H:%M:%S')] start" >> "$log_file"
-	download "$url" "$path" "$log_file"
+	download "$url" "$path" "$log_file" "$progress_file"
 	local ret=$?
 
+	rm -f "${path}.st"
+
 	if [ $ret -eq 0 ] && [ -s "$path" ]; then
+		echo "100" > "$progress_file" 2>/dev/null
 		echo "[$(date '+%Y-%m-%d %H:%M:%S')] done" >> "$log_file"
 		set_status "$status_file" "done"
 	else
@@ -247,6 +289,7 @@ update_ui() {
 	log_file="/tmp/dl_${name}.log"
 	tmp_zip="/tmp/nikki_ui_${name}_$$.zip"
 	status_file="/tmp/dl_${name}.status"
+	progress_file="/tmp/dl_${name}.progress"
 	local lock_file="/tmp/dl_${name}.lock"
 
 	if ! with_lock "$lock_file" "$status_file"; then
@@ -257,7 +300,7 @@ update_ui() {
 	set_status "$status_file" "downloading"
 	rm -f "$log_file"
 
-	if ! download "$(mirror_url "$url")" "$tmp_zip" "$log_file"; then
+	if ! download "$(mirror_url "$url")" "$tmp_zip" "$log_file" "$progress_file"; then
 		set_status "$status_file" "error: download failed"
 		rm -rf "$tmp_zip" "$temp_dir"
 		release_lock

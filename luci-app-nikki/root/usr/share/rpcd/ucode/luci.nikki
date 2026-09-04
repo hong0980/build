@@ -200,8 +200,10 @@ const methods = {
 			const final_out = req.args?.path;
 
 			if (!task_id) return { status: 'error', message: 'missing task_id' };
-			const log_file    = `/tmp/dl_${task_id}.log`;
-			const status_file = `/tmp/dl_${task_id}.status`;
+
+			const log_file      = `/tmp/dl_${task_id}.log`;
+			const status_file   = `/tmp/dl_${task_id}.status`;
+			const progress_file = `/tmp/dl_${task_id}.progress`;
 
 			if (access(status_file)) {
 				const st = trim(readfile(status_file) || '');
@@ -209,12 +211,29 @@ const methods = {
 				if (st == 'done') {
 					unlink(log_file);
 					unlink(status_file);
+					unlink(progress_file);
 					return { status: 'ok', path: final_out, message: 'complete' };
 				}
-				if (st == 'downloading')
-					return { status: 'pending', message: 'in progress' };
+
+				if (st == 'downloading') {
+					let progress = null;
+					if (access(progress_file)) {
+						const raw = readfile(progress_file) || '';
+						const lines = split(raw, '\n');
+						for (let i = length(lines) - 1; i >= 0; i--) {
+							const line = trim(lines[i]);
+							if (match(line, /^[0-9]+$/)) {
+								progress = +line;
+								break;
+							}
+						}
+					}
+					return { status: 'pending', progress, message: 'in progress' };
+				}
+
 				if (substr(st, 0, 6) == 'error:') {
 					const ms = trim(readfile(log_file) || '');
+					unlink(progress_file);
 					return { status: 'error', message: ms || substr(st, 6) };
 				}
 

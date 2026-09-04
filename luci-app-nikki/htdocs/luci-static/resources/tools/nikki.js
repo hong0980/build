@@ -158,8 +158,8 @@ const ui_array          = [
     ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]
 ];
 
-function waitForTask(task_id, path, maxRetries) {
-    maxRetries = maxRetries || 40;
+function waitForTask(task_id, path, onProgress, maxRetries) {
+    maxRetries = maxRetries || 80;
     return new Promise(function (resolve, reject) {
         let n = 0;
         const check = function () {
@@ -168,11 +168,16 @@ function waitForTask(task_id, path, maxRetries) {
                 return;
             }
             callCheckDownload(task_id, path || '').then(function (r) {
-                if (r.status === 'ok') resolve(r);
-                else if (r.status === 'error')
+                if (r.status === 'ok') {
+                    if (onProgress) onProgress(100);
+                    resolve(r);
+                } else if (r.status === 'error') {
                     reject(new Error(r.message || _('Download failed')));
-                else
-                    setTimeout(check, 3000);
+                } else {
+                    if (onProgress && r.progress != null)
+                        onProgress(r.progress);
+                    setTimeout(check, 1500);
+                }
             }).catch(reject);
         };
         check();
@@ -236,21 +241,21 @@ return baseclass.extend({
         return promise;
     },
 
-    cache_core: function (core_type, arch, url) {
+    cache_core: function (core_type, arch, url, onProgress) {
         return callCacheCore(core_type, arch, url).then(function (res) {
             if (res.status === 'ok') return;
             if (res.status === 'error')
                 throw new Error(res.message || _('Update failed'));
-            return waitForTask(core_type);
+            return waitForTask(core_type, null, onProgress);
         });
     },
 
-    switch_core: function (core_type, arch, url) {
+    switch_core: function (core_type, arch, url, onProgress) {
         const attempt = function () {
             return callSwitchCore(core_type, arch, url).then(function (res) {
                 if (res.status === 'ok') return res;
                 if (res.status === 'pending')
-                    return waitForTask(core_type).then(attempt);
+                    return waitForTask(core_type, null, onProgress).then(attempt);
                 throw new Error(res.message || _('Switch failed'));
             });
         };
@@ -270,10 +275,11 @@ return baseclass.extend({
             throw new Error('download_file expects an options object');
         }
 
-        const url      = opts.url      || '';
-        const path     = opts.path     || '';
-        const filename = opts.filename || '';
-        const task_id  = opts.task_id  || ('file_' + Date.now());
+        const url         = opts.url         || '';
+        const path        = opts.path        || '';
+        const filename    = opts.filename    || '';
+        const task_id     = opts.task_id     || ('file_' + Date.now());
+        const onProgress  = opts.onProgress;
 
         const attempt = function () {
             return calldownload_file(url, path, filename, task_id)
@@ -282,7 +288,7 @@ return baseclass.extend({
                     if (res.status === 'error')
                         throw new Error(res.message || _('Download failed'));
                     if (res.status === 'pending' && res.task_id)
-                        return waitForTask(res.task_id, path);
+                        return waitForTask(res.task_id, path, onProgress);
                     throw new Error(res.message || _('Download failed'));
                 });
         };
@@ -356,13 +362,13 @@ return baseclass.extend({
         return callConnStat(url);
     },
 
-    update_ui: function (url, name) {
+    update_ui: function (url, name, onProgress) {
         return callUpdateUI(url, name).then(res => {
             if (res.status === 'ok') return res;
             if (res.status === 'error')
                 throw new Error(res.message || _('Update UI failed'));
             if (res.status === 'pending' && res.task_id)
-                return waitForTask(res.task_id, res.path);
+                return waitForTask(res.task_id, res.path, onProgress);
             throw new Error(res.message || _('Update UI failed'));
         });
     },
