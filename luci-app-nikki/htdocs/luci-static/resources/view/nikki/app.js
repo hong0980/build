@@ -499,7 +499,7 @@ return view.extend({
                     lgbmBtn.textContent = _('Please wait, downloading %s...').format(mode);
                     return nikki.download_file({
                         url: 'https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/' + mode,
-                        path: '/etc/nikki/run/Model.bin'
+                        path: '/etc/nikki/run/Model.bin', task_id: 'Model'
                     }).then(function (res) {
                         if (res?.status !== 'ok')
                             throw new Error(res.message || _('Update failed'));
@@ -513,7 +513,7 @@ return view.extend({
                     }).catch(function (err) {
                         ui.addNotification(null,
                             E('p', _('Update failed: %s').format(err.message || err)), 'error');
-                    });
+                    }).finally(() => lgbmBtn.textContent = default_label);
                 })
             }, default_label);
             node.classList.add('control-group');

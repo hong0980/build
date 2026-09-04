@@ -90,7 +90,7 @@ const callConnStat = rpc.declare({
 const calldownload_file = rpc.declare({
     object: 'luci.nikki',
     method: 'download_file',
-    params: ['url', 'path', 'filename', 'chmod', 'ua', 'secret', 'headers', 'task_id'],
+    params: ['url', 'path', 'filename', 'task_id'],
     expect: { '': {} }
 });
 
@@ -270,21 +270,13 @@ return baseclass.extend({
             throw new Error('download_file expects an options object');
         }
 
-        const ua       = opts.ua       || '';
         const url      = opts.url      || '';
         const path     = opts.path     || '';
-        const secret   = opts.secret   || '';
-        const headers  = opts.headers  || '';
         const filename = opts.filename || '';
-        let chmod = opts.chmod;
-        chmod = (chmod == null || chmod === false || chmod === 0 || chmod === '')
-            ? ''
-            : (typeof chmod === 'string' ? chmod : '1');
-
-        const task_id = opts.task_id || ('file_' + Date.now());
+        const task_id  = opts.task_id  || ('file_' + Date.now());
 
         const attempt = function () {
-            return calldownload_file(url, path, filename, chmod, ua, secret, headers, task_id)
+            return calldownload_file(url, path, filename, task_id)
                 .then(function (res) {
                     if (res.status === 'ok') return res;
                     if (res.status === 'error')

@@ -7,8 +7,13 @@ set_status() { printf '%s\n' "$2" > "$1"; }
 
 download() {
 	local url="$1" output="$2" log="$3"
-	curl -SsL -C - --connect-timeout 15 --max-time 300 --retry 3 --retry-delay 2 \
-		-A "$UA" -o "$output" "$url" 2>>"$log"
+	if command -v axel >/dev/null 2>&1; then
+		rm -f "$output" "${output}.st"
+		axel -q -T 15 -U "$UA" -o "$output" "$url" >>"$log" 2>&1
+	else
+		curl -SsL --connect-timeout 15 --max-time 300 --retry 3 --retry-delay 2 \
+			-A "$UA" -o "$output" "$url" 2>>"$log"
+	fi
 }
 
 with_lock() {
@@ -169,9 +174,9 @@ do_cache() {
 
 	out_name="${CORE_TYPE}-mihomo"
 	final_out="${CACHE_DIR}/${out_name}"
-	log_file="/tmp/nikki_dl_${CORE_TYPE}.log"
-	lock_file="/tmp/nikki_dl_${CORE_TYPE}.lock"
-	status_file="/tmp/nikki_dl_${CORE_TYPE}.status"
+	log_file="/tmp/dl_${CORE_TYPE}.log"
+	lock_file="/tmp/dl_${CORE_TYPE}.lock"
+	status_file="/tmp/dl_${CORE_TYPE}.status"
 
 	if [ "$url" = 'null' ] || [ -z "$url" ]; then
 		local url_json url_status msg
@@ -217,32 +222,15 @@ do_cache() {
 }
 
 download_file() {
-	local task_id="$1" headers="$2" url="$3" path="$4" ua="$5" secret="$6" do_chmod="$7"
-	local status_file="/tmp/nikki_dl_${task_id}.status"
-	local log_file="/tmp/nikki_dl_${task_id}.log"
-
-	set_status "$status_file" "downloading"
-	rm -f "$log_file"
-
-	local curl_cmd="curl -SsL --connect-timeout 15 --max-time 120 --retry 3 --retry-delay 2 --retry-max-time 180"
-	curl_cmd="$curl_cmd -A '${ua:-$UA}' -o '$path'"
-
-	[ -n "$secret" ] && curl_cmd="$curl_cmd -H '$secret'"
-
-	if [ -n "$headers" ]; then
-		local IFS='|'
-		for h in $headers; do
-			h=$(printf '%s' "$h" | sed 's/^ *//;s/ *$//')
-			[ -n "$h" ] && curl_cmd="$curl_cmd -H '$h'"
-		done
-	fi
+	local task_id="$1" url="$2" path="$3"
+	local log_file="/tmp/dl_${task_id}.log"
+	local status_file="/tmp/dl_${task_id}.status"
 
 	echo "[$(date '+%Y-%m-%d %H:%M:%S')] start" >> "$log_file"
-	eval "$curl_cmd '$url' 2>>'$log_file'"
+	download "$url" "$path" "$log_file"
 	local ret=$?
 
 	if [ $ret -eq 0 ] && [ -s "$path" ]; then
-		[ "$do_chmod" = "1" ] && chmod 755 "$path"
 		echo "[$(date '+%Y-%m-%d %H:%M:%S')] done" >> "$log_file"
 		set_status "$status_file" "done"
 	else
@@ -256,10 +244,10 @@ update_ui() {
 	local target_dir temp_dir status_file log_file tmp_zip src_dir count only_entry entry
 
 	target_dir="${RUN_DIR}/${ui_path}/${name}"
-	log_file="/tmp/nikki_dl_ui_${name}.log"
+	log_file="/tmp/dl_${name}.log"
 	tmp_zip="/tmp/nikki_ui_${name}_$$.zip"
-	status_file="/tmp/nikki_dl_ui_${name}.status"
-	local lock_file="/tmp/nikki_dl_ui_${name}.lock"
+	status_file="/tmp/dl_${name}.status"
+	local lock_file="/tmp/dl_${name}.lock"
 
 	if ! with_lock "$lock_file" "$status_file"; then
 		return 0
@@ -310,6 +298,6 @@ case "$ACTION" in
 	get_core_url)    get_core_url "$1" ;;
 	do_cache)        do_cache "$1" "$2" ;;
 	update_ui)       update_ui "$1" "$2" "$3" ;;
-	download_file)   download_file "$1" "$2" "$3" "$4" "$5" "$6" "$7" ;;
+	download_file)   download_file "$1" "$2" "$3" ;;
 	*)               printf '{"status":"error","message":"invalid action: %s"}\n' "$ACTION"; exit 1 ;;
 esac

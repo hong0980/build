@@ -4,7 +4,7 @@
 import { cursor } from 'uci';
 import { access, popen, writefile, chmod, mkdir, readfile, unlink, lsdir } from 'fs';
 import {
-	get_users, get_groups, get_cgroups, shellQuote, run, mirrorGithubUrl, yqRead, yqReadFile
+	get_users, get_groups, get_cgroups, shellQuote, run, mirrorGithubUrl, yqRead, yqReadFile, executeCommand
 } from '/etc/nikki/ucode/include.uc';
 
 const uci          = cursor();
@@ -24,8 +24,8 @@ function load_profile(defaults) {
 };
 
 function startDownloadTask(task_id, shellCmd, targetPath) {
-	const status_file = `/tmp/nikki_dl_${task_id}.status`;
-	const log_file    = `/tmp/nikki_dl_${task_id}.log`;
+	const status_file = `/tmp/dl_${task_id}.status`;
+	const log_file    = `/tmp/dl_${task_id}.log`;
 
 	if (access(status_file)) {
 		const st = trim(readfile(status_file) || '');
@@ -42,7 +42,7 @@ function startDownloadTask(task_id, shellCmd, targetPath) {
 	system(['sh', '-c', `${shellCmd} > /dev/null 2>&1 &`]);
 
 	return { status: 'pending', task_id, path: targetPath, message: 'started' };
-}
+};
 
 function cache_core_call(req) {
 	const core_type = req.args?.core_type;
@@ -56,7 +56,7 @@ function cache_core_call(req) {
 	const cmd = `${shellQuote(CORE_SCRIPT)} do_cache ${shellQuote(core_type)} ${url ? shellQuote(url) : 'null'}`;
 
 	return startDownloadTask(core_type, cmd, final_out);
-}
+};
 
 const methods = {
 	set_commit: {
@@ -129,7 +129,8 @@ const methods = {
 		call: function (req) {
 			let version = null;
 			const mode  = req.args?.mode;
-			const core  = `/etc/nikki/run/core/${mode}-mihomo`;
+			let core  = `/etc/nikki/run/core/${mode}-mihomo`;
+			if (mode === 'meta' && !access(core)) core = '/usr/bin/mihomo';
 			if (access(core))
 				version = trim(run(`${core} -v | grep Mihomo | cut -d " " -f 3`));
 
@@ -169,37 +170,24 @@ const methods = {
 				return { status: 'ok', path: target_dir, message: 'already exists' };
 
 			const cmd = `${shellQuote(CORE_SCRIPT)} update_ui ${shellQuote(url)} ${shellQuote(name)} ${shellQuote(ui_path)}`;
-			return startDownloadTask('ui_' + name, cmd, target_dir);
+			return startDownloadTask(name, cmd, target_dir);
 		}
 	},
 
 	download_file: {
-		args: {
-			url: 'url', path: 'path', filename: 'filename',
-			chmod: 'chmod', ua: 'ua', secret: 'secret', headers: 'headers',
-			task_id: 'task_id'
-		},
+		args: { url: 'url', path: 'path', filename: 'filename', task_id: 'task_id' },
 		call: function (req) {
 			const url      = req.args?.url;
 			let   path     = req.args?.path;
-			const filename = req.args?.filename;
-			const ua       = req.args?.ua || DEFAULT_UA;
-			const secret   = req.args?.secret;
-			const headers  = req.args?.headers;
 			let   task_id  = req.args?.task_id;
+			const filename = req.args?.filename;
 
 			if (!url)  return { status: 'error', message: 'missing url' };
 			if (!path) return { status: 'error', message: 'missing path' };
 			if (match(url, /['"`$\\;&|<>(){}\n']/))
 				return { status: 'error', message: 'invalid url' };
-
 			path = filename ? `${path}/${filename}` : path;
-
-			if (!task_id || !match(task_id, /^[A-Za-z0-9_-]+$/))
-				task_id = 'file_' + time() + '_' + rand();
-
-			const do_chmod = req.args?.chmod ? '1' : '';
-			const cmd = `${shellQuote(CORE_SCRIPT)} download_file ${shellQuote(task_id)} ${shellQuote(headers || '')} ${shellQuote(url)} ${shellQuote(path)} ${shellQuote(ua)} ${shellQuote(secret || '')} ${do_chmod}`;
+			const cmd = `${shellQuote(CORE_SCRIPT)} download_file ${shellQuote(task_id)} ${shellQuote(url)} ${shellQuote(path)}`;
 
 			return startDownloadTask(task_id, cmd, path);
 		}
@@ -211,20 +199,24 @@ const methods = {
 			const task_id   = req.args?.task_id;
 			const final_out = req.args?.path;
 
-			if (!task_id)
-				return { status: 'error', message: 'missing task_id' };
-
-			const status_file = `/tmp/nikki_dl_${task_id}.status`;
+			if (!task_id) return { status: 'error', message: 'missing task_id' };
+			const log_file    = `/tmp/dl_${task_id}.log`;
+			const status_file = `/tmp/dl_${task_id}.status`;
 
 			if (access(status_file)) {
 				const st = trim(readfile(status_file) || '');
 
-				if (st == 'done')
+				if (st == 'done') {
+					unlink(log_file);
+					unlink(status_file);
 					return { status: 'ok', path: final_out, message: 'complete' };
+				}
 				if (st == 'downloading')
 					return { status: 'pending', message: 'in progress' };
-				if (substr(st, 0, 6) == 'error:')
-					return { status: 'error', message: substr(st, 6) };
+				if (substr(st, 0, 6) == 'error:') {
+					const ms = trim(readfile(log_file) || '');
+					return { status: 'error', message: ms || substr(st, 6) };
+				}
 
 				return { status: 'unknown', message: st };
 			}
@@ -247,9 +239,9 @@ const methods = {
 		args: { section_id: 'section_id' },
 		call: function (req) {
 			const section_id = req.args?.section_id;
-			const success    = section_id
-				? system(['service', 'nikki', 'update_subscription', section_id]) == 0
-				: false;
+			if (!section_id) return { status: 'error', message: 'missing section_id' };
+
+			const success = system(['service', 'nikki', 'update_subscription', section_id]) == 0;
 			return { success };
 		}
 	},
@@ -262,15 +254,15 @@ const methods = {
 				'external-controller':     null,
 				'external-controller-tls': null
 			});
-			const secret    = profile['secret'];
-			const listen    = profile['external-controller'];
-			const tlsListen = profile['external-controller-tls'];
+			const secret = profile['secret'];
+			const http   = profile['external-controller'];
+			const https  = profile['external-controller-tls'];
 
-			if (!listen && !tlsListen)
+			if (!http && !https)
 				return { message: 'not found: listen', status: 'error' };
 
-			const protocol = tlsListen ? 'https' : 'http';
-			let url = (tlsListen || listen) + (req.args?.path || '/');
+			const protocol = https ? 'https' : 'http';
+			let url = (https || http) + (req.args?.path || '/');
 			if (req.args?.query)
 				url += (index(url, '?') !== -1 ? '&' : '?') + req.args.query;
 
@@ -361,23 +353,11 @@ const methods = {
 	get_core_url: {
 		args: { core_type: 'core_type', arch: 'arch' },
 		call: function (req) {
-			const arch      = req.args?.arch;
 			const core_type = req.args?.core_type;
 
-			if (!core_type || !arch)
-				return { status: 'error', message: 'missing params' };
-
-			const out = run(`${shellQuote(CORE_SCRIPT)} get_core_url ${shellQuote(core_type)}`);
-			if (!out)
-				return { status: 'error', message: 'script returned empty' };
-
-			let result;
-			try {
-				result = json(out);
-			} catch (e) {
-				return { status: 'error', message: `json parse failed: ${substr(out, 0, 200)}` };
-			}
-			return result;
+			if (!core_type) return { status: 'error', message: 'missing params' };
+			const out = json(run(`${shellQuote(CORE_SCRIPT)} get_core_url ${shellQuote(core_type)}`));
+			return json(run(`${shellQuote(CORE_SCRIPT)} get_core_url ${shellQuote(core_type)}`));
 		}
 	},
 
@@ -391,7 +371,8 @@ const methods = {
 			if (!core_type)
 				return { status: 'error', message: 'missing core_type' };
 
-			const final_out = `${CACHE_DIR}/${core_type}-mihomo`;
+			let final_out = `${CACHE_DIR}/${core_type}-mihomo`;
+			if (core_type === 'meta' && !access(final_out)) final_out = '/usr/bin/mihomo';
 
 			if (!access(final_out)) {
 				const cache = cache_core_call({ args: { core_type, arch, url } });

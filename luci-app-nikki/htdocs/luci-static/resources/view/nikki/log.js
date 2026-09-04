@@ -156,79 +156,75 @@ return view.extend({
             return nikki.status('nikki').then((r) => r);
         };
 
-        const mihomoAPIs = [
-            { k: 'a', label: _('Version'),                method: 'GET',  path: '/version' },
-            { k: 'b', label: _('Running Config'),         method: 'GET',  path: '/configs' },
-            { k: 'c', label: _('Proxies'),                method: 'GET',  path: '/proxies' },
-            { k: 'd', label: _('Proxy Groups'),           method: 'GET',  path: '/group' },
-            { k: 'e', label: _('Rules'),                  method: 'GET',  path: '/rules' },
-            { k: 'f', label: _('Rule Providers'),         method: 'GET',  path: '/providers/rules' },
-            { k: 'g', label: _('Proxy Providers'),        method: 'GET',  path: '/providers/proxies' },
-            { k: 'h', label: _('Connections (Snapshot)'), method: 'GET',  path: '/connections' },
-            { k: 'i', label: _('DNS Query'),              method: 'GET',  path: '/dns/query', query: 'name=google.com&type=A' },
-            { k: 'j', label: _('Flush FakeIP Cache'),     method: 'POST', path: '/cache/fakeip/flush' },
-            { k: 'k', label: _('Flush DNS Cache'),        method: 'POST', path: '/cache/dns/flush' },
-            { k: 'l', label: _('Reload Config'),          method: 'PUT',  path: '/configs', query: 'force=true', body: '{"path":"","payload":""}' },
-            { k: 'p', label: _('Upgrade UI'),             method: 'POST', path: '/upgrade/ui' },
-            { k: 'm', label: _('Update Geo (Upgrade)'),   method: 'POST', path: '/upgrade/geo', body: '{"path":"","payload":""}' },
-            { k: 'n', label: _('Update Geo (Config)'),    method: 'POST', path: '/configs/geo', body: '{"path":"","payload":""}' },
-            { k: 'o', label: _('Upgrade Core'),           method: 'POST', path: '/upgrade', query: 'force=true', body: '{"path":"","payload":""}' },
-            { k: 'q', label: _('Restart Core'),           method: 'POST', path: '/restart', body: '{"path":"","payload":""}' },
-            { k: 'r', label: _('restart rpcd') },
-        ];
-        const mihomoAPIMap = {};
-        mihomoAPIs.forEach((api) => mihomoAPIMap[api.k] = api);
+        const mihomoAPIs = {
+            a: { label: _('Version'),                method: 'GET',  path: '/version' },
+            b: { label: _('Running Config'),         method: 'GET',  path: '/configs' },
+            c: { label: _('Proxies'),                method: 'GET',  path: '/proxies' },
+            d: { label: _('Proxy Groups'),           method: 'GET',  path: '/group' },
+            e: { label: _('Rules'),                  method: 'GET',  path: '/rules' },
+            f: { label: _('Rule Providers'),         method: 'GET',  path: '/providers/rules' },
+            g: { label: _('Proxy Providers'),        method: 'GET',  path: '/providers/proxies' },
+            h: { label: _('Connections (Snapshot)'), method: 'GET',  path: '/connections' },
+            i: { label: _('DNS Query'),              method: 'GET',  path: '/dns/query', query: 'name=google.com&type=A' },
+            j: { label: _('Flush FakeIP Cache'),     method: 'POST', path: '/cache/fakeip/flush' },
+            k: { label: _('Flush DNS Cache'),        method: 'POST', path: '/cache/dns/flush' },
+            l: { label: _('Reload Config'),          method: 'PUT',  path: '/configs', query: 'force=true', body: '{"path":"","payload":""}' },
+            m: { label: _('Upgrade UI'),             method: 'POST', path: '/upgrade/ui' },
+            n: { label: _('Update Geo (Upgrade)'),   method: 'POST', path: '/upgrade/geo', body: '{"path":"","payload":""}' },
+            o: { label: _('Update Geo (Config)'),    method: 'POST', path: '/configs/geo', body: '{"path":"","payload":""}' },
+            p: { label: _('Upgrade Core'),           method: 'POST', path: '/upgrade', query: 'force=true', body: '{"path":"","payload":""}' },
+            q: { label: _('Restart Core'),           method: 'POST', path: '/restart', body: '{"path":"","payload":""}' },
+            r: { label: _('restart rpcd') },
+        };
+
         o = s.taboption('log_config', form.ListValue, '_api', _('Mihomo API'));
         o.depends('mihomo_running', 'true');
         o.write = () => {};
-        mihomoAPIs.forEach((api) => { o.value(api.k, api.label) });
+        Object.entries(mihomoAPIs).forEach(([k, v]) => o.value(k, v.label));
+
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
             const btn = E('button', {
                 'class': 'btn cbi-button-action',
                 'click': ui.createHandlerFn(this, function () {
-                    const api = mihomoAPIMap[s.formvalue(section_id, '_api')];
-                    if (!api) return ui.addNotification(null, E('p', _('Unknown API')), 'error');
+                    const value = s.formvalue(section_id, '_api');
+                    let { label, method, path, body = '', query = '' } = mihomoAPIs[value];
 
-                    if (api.k === 'r') {
+                    if (value === 'r') {
                         ui.addNotification(null, E('p', _('rpcd is restarting, page will refresh in 3 seconds...')), 'info');
                         nikki.service('rpcd', 'restart');
-                        setTimeout(function () {
-                            window.location.reload();
-                        }, 3000);
+                        setTimeout(function () { window.location.reload(); }, 3000);
                         return;
                     }
 
-                    if (/^(PUT|POST|DELETE)$/.test(api.method))
+                    if (/^(PUT|POST|DELETE)$/.test(method))
                         if (!confirm(_('This will modify mihomo state. Continue?'))) return;
 
                     const content = E('div', { class: 'cbi-section', style: 'padding:10px;' }, [
                         E('div', { style: 'margin-bottom:10px;' }, [
-                            E('strong', {}, _('Method: ')), E('span', {}, api.method), E('span', {}, ' | '),
-                            E('strong', {}, _('Path: ')), E('span', {}, api.path)
+                            E('strong', {}, _('Method: ')), E('span', {}, method), E('span', {}, ' | '),
+                            E('strong', {}, _('Path: ')), E('span', {}, path)
                         ]),
                         E('p'),
                         E('div', { class: 'spinning', style: 'text-align:center;padding:60px 0;' }, _('Loading...'))
                     ]);
 
-                    const md = ui.showModal(_('API Response: %s').format(api.label), [
+                    const md = ui.showModal(_('API Response: %s').format(label), [
                         content,
                         E('div', { class: 'right' }, [
                             E('button', { class: 'btn cbi-button', click: ui.hideModal }, _('Close'))
                         ])
                     ], 'cbi-modal');
 
-
-                    return nikki.mihomoAPI(api.method, api.path, api.query || '', api.body || '').then(function (res) {
+                    return nikki.mihomoAPI(method, path, query, body).then(function (res) {
                         if (!res || !res.success) {
                             ui.hideModal();
                             return ui.addNotification(null, E('p', _('Request failed: %s').format(res?.message || ('HTTP ' + (res?.status || 0)))), 'error');
                         }
 
-                        const data = res.data;
-                        const status = res.status;
+                        let { data = null, status = '' } = res;
 
-                        if (/^(PUT|POST)$/.test(api.method) && (data == null || data?.status === 'ok')) {
+                        if (/^(PUT|POST)$/.test(method) && (data == null || data?.status === 'ok')) {
                             content.innerHTML = '';
                             content.appendChild(E('div', { style: 'text-align:center;' }, [
                                 E('div', { style: 'font-size:35px;margin-bottom:15px;color:#28a745;' }, '✓'),
@@ -270,16 +266,7 @@ return view.extend({
                                 mode: 'ace/mode/json', fontFamily: 'Consolas, monospace',
                                 theme: 'ace/theme/monokai', readOnly: true
                             });
-                            editor.session.setUseWrapMode(true);
-                            editor.session.setOption('useWorker', false);
                             editor.setValue(text, -1);
-                            aceDiv.env = { editor };
-                            setTimeout(function () { editor.resize(true); }, 0);
-                        }).catch(function () {
-                            aceDiv.style.display = 'none';
-                            content.appendChild(E('pre', {
-                                style: 'max-height:300px;overflow:auto;background:#1e1e1e;color:#d4d4d4;padding:10px;font-size:13px;'
-                            }, text));
                         });
                     }).catch(function (err) {
                         ui.hideModal();
@@ -317,27 +304,26 @@ return view.extend({
                 });
         };
 
-        L.Poll.add(L.bind(function () {
-            return Promise.all([
-                L.resolveDefault(fs.read_direct(nikki.appLogPath), ''),
-                L.resolveDefault(fs.read_direct(nikki.coreLogPath), ''),
-            ]).then(function ([app_log, core_log]) {
-                const appEl = document.getElementById('textarea_app_log');
-                if (appEl && appEl._logState) {
-                    appEl._logState.raw = app_log.trim();
-                    appEl._logRender();
-                }
-                const coreEl = document.getElementById('textarea_core_log');
-                if (coreEl && coreEl._logState) {
-                    coreEl._logState.raw = core_log.trim();
-                    coreEl._logRender();
-                }
-            });
-        }, o));
-
         return m.render().then(function (nodes) {
             const el = m.findElement('data-name', 'mihomo_running');
             if (el) el.style.display = 'none';
+            L.Poll.add(L.bind(function () {
+                return Promise.all([
+                    L.resolveDefault(fs.read_direct(nikki.appLogPath), ''),
+                    L.resolveDefault(fs.read_direct(nikki.coreLogPath), ''),
+                ]).then(function ([app_log, core_log]) {
+                    const appEl = m.findElement('id', 'textarea_app_log');
+                    if (appEl && appEl._logState) {
+                        appEl._logState.raw = app_log.trim();
+                        appEl._logRender();
+                    }
+                    const coreEl = m.findElement('id', 'textarea_core_log');
+                    if (coreEl && coreEl._logState) {
+                        coreEl._logState.raw = core_log.trim();
+                        coreEl._logRender();
+                    }
+                });
+            }, o));
             return nodes;
         })
     }
