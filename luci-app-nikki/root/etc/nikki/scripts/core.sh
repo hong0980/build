@@ -9,7 +9,7 @@ download() {
 	local url="$1" output="$2" log="$3" progress="$4"
 
 	if command -v axel >/dev/null 2>&1; then
-		rm -f "$output" "${output}.st" "$progress"
+		rm -f "${output}.st" "$progress"
 		axel -p -T 15 -U "$UA" -o "$output" "$url" >"$progress" 2>>"$log"
 		return $?
 	fi
