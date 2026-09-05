@@ -23,25 +23,16 @@ function load_profile(defaults) {
 	return out ? json(out) : {};
 };
 
-function startDownloadTask(task_id, shellCmd, targetPath) {
-	const status_file = `/tmp/dl_${task_id}.status`;
-	const log_file    = `/tmp/dl_${task_id}.log`;
+function startDownloadTask(task_id, cmd, path) {
+	const log_file      = `/tmp/dl_${task_id}.log`;
+	const status_file   = `/tmp/dl_${task_id}.status`;
+	const progress_file = `/tmp/dl_${task_id}.progress`;
 
-	if (access(status_file)) {
-		const st = trim(readfile(status_file) || '');
-		if (st == 'downloading')
-			return { status: 'pending', task_id, path: targetPath, message: 'in progress' };
-		if (st == 'done' && targetPath && access(targetPath))
-			return { status: 'ok', task_id, path: targetPath, message: 'complete' };
-
-		unlink(status_file);
-		unlink(log_file);
-	}
-
+	writefile(log_file, '');
+	writefile(progress_file, '');
 	writefile(status_file, 'downloading');
-	system(['sh', '-c', `${shellCmd} > /dev/null 2>&1 &`]);
-
-	return { status: 'pending', task_id, path: targetPath, message: 'started' };
+	system(['sh', '-c', `${cmd} > /dev/null 2>&1 &`]);
+	return { status: 'pending', task_id, path, message: 'started' };
 };
 
 function cache_core_call(req) {
@@ -54,7 +45,6 @@ function cache_core_call(req) {
 
 	const final_out = `${CACHE_DIR}/${core_type}-mihomo`;
 	const cmd = `${shellQuote(CORE_SCRIPT)} do_cache ${shellQuote(core_type)} ${url ? shellQuote(url) : 'null'}`;
-
 	return startDownloadTask(core_type, cmd, final_out);
 };
 
@@ -188,7 +178,6 @@ const methods = {
 				return { status: 'error', message: 'invalid url' };
 			path = filename ? `${path}/${filename}` : path;
 			const cmd = `${shellQuote(CORE_SCRIPT)} download_file ${shellQuote(task_id)} ${shellQuote(url)} ${shellQuote(path)}`;
-
 			return startDownloadTask(task_id, cmd, path);
 		}
 	},
@@ -232,9 +221,10 @@ const methods = {
 				}
 
 				if (substr(st, 0, 6) == 'error:') {
-					const ms = trim(readfile(log_file) || '');
-					unlink(progress_file);
-					return { status: 'error', message: ms || substr(st, 6) };
+					const raw      = readfile(log_file) || '';
+					const lines    = split(raw, '\n');
+					const lastLine = trim(lines[length(lines) - 1] || '');
+					return { status: 'error', message: lastLine || substr(st, 6) };
 				}
 
 				return { status: 'unknown', message: st };
@@ -312,8 +302,7 @@ const methods = {
 			const marker = '__HTTP_CODE__:';
 			const idx = index(out, marker, true);
 
-			let bodyText = out;
-			let httpCode = 0;
+			let bodyText = out, httpCode = 0;
 
 			if (idx !== -1) {
 				bodyText = trim(substr(out, 0, idx));
@@ -375,7 +364,6 @@ const methods = {
 			const core_type = req.args?.core_type;
 
 			if (!core_type) return { status: 'error', message: 'missing params' };
-			const out = json(run(`${shellQuote(CORE_SCRIPT)} get_core_url ${shellQuote(core_type)}`));
 			return json(run(`${shellQuote(CORE_SCRIPT)} get_core_url ${shellQuote(core_type)}`));
 		}
 	},

@@ -22,12 +22,12 @@ function setStatus(element, running) {
     return element;
 }
 
-function createButtonProgressBar() {
+function buttonProgressbar() {
     return E('div', {
         'class': 'cbi-progressbar',
-        'style': 'position:absolute;left:0;bottom:0;width:100%;height:3px;margin:0;min-width:0;border:0;border-radius:0;background:rgba(0,0,0,0.08);z-index:0;display:none;'
+        'style': 'position:absolute;left:0;bottom:0;width:100%;height:2px;margin:0;min-width:0;border:0;border-radius:0;z-index:0;display:none;'
     }, E('div', {
-        'style': 'width:0%;height:100%;background:#286090;transition:width 0.25s ease-in;'
+        'style': 'width:0%;height:100%;transition:width 0.25s ease-in;'
     }));
 }
 
@@ -244,8 +244,7 @@ return view.extend({
             let el = form.ListValue.prototype.renderWidget.apply(this, arguments);
             el.classList.add('control-group');
             const default_label = _('Open Dashboard');
-
-            const uiBar = createButtonProgressBar();;
+            const uiBar = buttonProgressbar();
             const uiLabel = E('span', { 'style': 'position:relative;z-index:1;' }, default_label);
 
             const uibtn = E('button', {
@@ -264,24 +263,21 @@ return view.extend({
 
                             return nikki.update_ui(current_url, ui_entry[1], function (pct) {
                                 uiBar.firstChild.style.width = pct + '%';
-                            })
-                                .then(result => {
-                                    if (result?.status === 'ok') {
-                                        self.install_status[current_url] = true;
-                                        const opt = Array.from(select.options).find(o => o.value === current_url);
-                                        if (opt) opt.textContent = ui_entry[1];
-                                        return;
-                                    }
-                                    throw new Error(result?.message);
-                                })
-                                .finally(() => {
-                                    uiLabel.textContent = default_label;
-                                    uiBar.style.display = 'none';
-                                    uiBar.firstChild.style.width = '0%';
-                                    uibtn.disabled = false;
-                                });
+                            }).then(result => {
+                                if (result?.status === 'ok') {
+                                    self.install_status[current_url] = true;
+                                    const opt = Array.from(select.options).find(o => o.value === current_url);
+                                    if (opt) opt.textContent = ui_entry[1];
+                                    return;
+                                }
+                                throw new Error(result?.message);
+                            }).finally(() => {
+                                uiLabel.textContent = default_label;
+                                uiBar.style.display = 'none';
+                                uiBar.firstChild.style.width = '0%';
+                                uibtn.disabled = false;
+                            });
                         })();
-
                     return openOrDownload
                         .then(() => nikki.openDashboard(ui_entry[1]))
                         .catch(e => ui.addNotification(null, E('p', _('Update failed: ') + e), 'error'));
@@ -382,7 +378,7 @@ return view.extend({
                                     'class': `btn cbi-button-action ${iscore ? '' : 'important'}`,
                                     'click': ui.createHandlerFn(this, function (ev) {
                                         const b = ev.target;
-                                        const bar = createButtonProgressBar();
+                                        const bar = buttonProgressbar();
                                         bar.style.display = '';
 
                                         const label = E('span', { 'style': 'position:relative;z-index:1;' }, _('Switching...'));
@@ -413,7 +409,7 @@ return view.extend({
                                     'class': `btn cbi-button-${isLatest ? 'negative' : 'positive'}`,
                                     'click': ui.createHandlerFn(this, function (ev) {
                                         const b = ev.target;
-                                        const bar = createButtonProgressBar();
+                                        const bar = buttonProgressbar();
                                         bar.style.display = '';
 
                                         const label = E('span', { 'style': 'position:relative;z-index:1;' }, _('Downloading...'));
@@ -522,8 +518,7 @@ return view.extend({
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const default_label = _('Download Model');
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
-            const lgbmBar = createButtonProgressBar();
-
+            const lgbmBar = buttonProgressbar();
             const lgbmLabel = E('span', { 'style': 'position:relative;z-index:1;' }, default_label);
 
             lgbmBtn = E('button', {
@@ -552,7 +547,7 @@ return view.extend({
                         setTimeout(function () {
                             lgbmBtn.style.display = 'none';
                         }, 3000);
-                        nikki.uciSetAndCommit('nikki', 'config', 'lgbm', mode);
+                        nikki.uciCommit('nikki', 'config', 'lgbm', mode);
                         return nikki.service('nikki', 'reload');
                     }).catch(function (err) {
                         ui.addNotification(null,

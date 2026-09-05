@@ -8,11 +8,11 @@ set_status() { printf '%s\n' "$2" > "$1"; }
 download() {
 	local url="$1" output="$2" log="$3" progress="$4"
 
-	if command -v axel >/dev/null 2>&1; then
-		rm -f "${output}.st" "$progress"
-		axel -p -T 15 -U "$UA" -o "$output" "$url" >"$progress" 2>>"$log"
-		return $?
-	fi
+	# if command -v axel >/dev/null 2>&1; then
+	# 	rm -f "${output}.st" "${output}"
+	# 	axel -p -T 15 -U "$UA" -o "$output" "$url" >"$progress" 2>>"$log"
+	# 	return $?
+	# fi
 
 	if command -v wget >/dev/null 2>&1; then
 		wget --show-progress -T 15 --user-agent="$UA" -O "$output" "$url" >>"$log" 2>&1 &
@@ -53,17 +53,6 @@ download() {
 	return $?
 }
 
-with_lock() {
-	exec 200>"$1"
-	if ! flock -n 200; then
-		set_status "$2" "downloading"
-		return 1
-	fi
-	return 0
-}
-
-release_lock() { flock -u 200 2>/dev/null; }
-
 mirror_url() {
 	local url="$1" target
 	target="$(uci -q get nikki.mixin.github_mirror)"
@@ -96,35 +85,6 @@ github_api() {
 	printf '%s\n' "$api_out"
 }
 
-get_ui_url() {
-	local repo="$1" asset_pattern="$2"
-	local api_out status tag asset_count i name url
-
-	api_out=$(github_api "repos/${repo}/releases/latest")
-	status=$(printf '%s' "$api_out" | jsonfilter -qe '@.status' 2>/dev/null)
-	[ "$status" = "error" ] && { printf '%s\n' "$api_out"; return 1; }
-
-	tag=$(printf '%s' "$api_out" | jsonfilter -qe '@.tag_name' 2>/dev/null)
-	asset_count=$(printf '%s' "$api_out" | jsonfilter -qe '@.assets[*].name' 2>/dev/null | wc -l)
-
-	i=0
-	while [ "$i" -lt "$asset_count" ]; do
-		name=$(printf '%s' "$api_out" | jsonfilter -qe "@.assets[$i].name" 2>/dev/null)
-		url=$(printf '%s' "$api_out"  | jsonfilter -qe "@.assets[$i].browser_download_url" 2>/dev/null)
-
-		case "$name" in
-			*"$asset_pattern"*)
-				printf '{"status":"ok","url":"%s","tag":"%s","name":"%s"}\n' "$url" "$tag" "$name"
-				return 0
-				;;
-		esac
-		i=$((i + 1))
-	done
-
-	printf '{"status":"error","message":"no matching asset for %s"}\n' "$asset_pattern"
-	return 1
-}
-
 get_core_url() {
 	local CORE_TYPE="$1"
 	local api_out status tag names urls name found_idx found_url i=0
@@ -138,7 +98,6 @@ get_core_url() {
 		meta)   api_out=$(github_api "repos/MetaCubeX/mihomo/releases/latest") ;;
 		alpha)  api_out=$(github_api "repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha") ;;
 		smart)  api_out=$(github_api "repos/vernesong/mihomo/releases/tags/Prerelease-Alpha") ;;
-		*)      printf '{"status":"error","message":"invalid core type"}\n'; return 1 ;;
 	esac
 
 	status=$(printf '%s' "$api_out" | jsonfilter -qe '@.status' 2>/dev/null)
@@ -229,18 +188,13 @@ do_cache() {
 		fi
 	fi
 
-	if ! with_lock "$lock_file" "$status_file"; then
-		return 0
-	fi
-
 	tmp_file="/tmp/${out_name}.tmp"
 	archive_path="/tmp/${CORE_TYPE}-mihomo.gz"
-	rm -f "$log_file" "$archive_path" "$tmp_file"
+	rm -f "$archive_path" "$tmp_file"
 
 	if ! download "$(mirror_url "$url")" "$archive_path" "$log_file" "$progress_file" || [ ! -s "$archive_path" ]; then
 		set_status "$status_file" "error: download failed"
 		rm -f "$archive_path" "$tmp_file"
-		release_lock
 		return 1
 	fi
 
@@ -252,34 +206,24 @@ do_cache() {
 	else
 		set_status "$status_file" "error: extract failed"
 		rm -f "$tmp_file" "$archive_path"
-		release_lock
 		return 1
 	fi
-
-	release_lock
 }
 
 download_file() {
 	local task_id="$1" url="$2" path="$3"
 	local log_file="/tmp/dl_${task_id}.log"
+	local lock_file="/tmp/dl_${task_id}.lock"
 	local status_file="/tmp/dl_${task_id}.status"
 	local progress_file="/tmp/dl_${task_id}.progress"
 
-	set_status "$status_file" "downloading"
-	rm -f "$log_file" "$progress_file"
-
-	echo "[$(date '+%Y-%m-%d %H:%M:%S')] start" >> "$log_file"
 	download "$url" "$path" "$log_file" "$progress_file"
 	local ret=$?
-
 	rm -f "${path}.st"
 
 	if [ $ret -eq 0 ] && [ -s "$path" ]; then
-		echo "100" > "$progress_file" 2>/dev/null
-		echo "[$(date '+%Y-%m-%d %H:%M:%S')] done" >> "$log_file"
 		set_status "$status_file" "done"
 	else
-		echo "[$(date '+%Y-%m-%d %H:%M:%S')] error: download failed" >> "$log_file"
 		set_status "$status_file" "error: download failed"
 	fi
 }
@@ -289,31 +233,23 @@ update_ui() {
 	local target_dir temp_dir status_file log_file tmp_zip src_dir count only_entry entry
 
 	target_dir="${RUN_DIR}/${ui_path}/${name}"
-	log_file="/tmp/dl_${name}.log"
 	tmp_zip="/tmp/nikki_ui_${name}_$$.zip"
+	log_file="/tmp/dl_${name}.log"
 	status_file="/tmp/dl_${name}.status"
-	progress_file="/tmp/dl_${name}.progress"
+	local progress_file="/tmp/dl_${name}.progress"
 	local lock_file="/tmp/dl_${name}.lock"
 
-	if ! with_lock "$lock_file" "$status_file"; then
-		return 0
-	fi
-
 	temp_dir=$(mktemp -d)
-	set_status "$status_file" "downloading"
-	rm -f "$log_file"
 
 	if ! download "$(mirror_url "$url")" "$tmp_zip" "$log_file" "$progress_file"; then
 		set_status "$status_file" "error: download failed"
 		rm -rf "$tmp_zip" "$temp_dir"
-		release_lock
 		return 1
 	fi
 
 	if ! unzip -o "$tmp_zip" -d "$temp_dir" 2>>"$log_file"; then
 		set_status "$status_file" "error: unzip failed"
 		rm -rf "$tmp_zip" "$temp_dir"
-		release_lock
 		return 1
 	fi
 
@@ -335,7 +271,6 @@ update_ui() {
 
 	rm -rf "$tmp_zip" "$temp_dir"
 	set_status "$status_file" "done"
-	release_lock
 }
 
 ACTION="$1"

@@ -1,9 +1,7 @@
 'use strict';
 'require baseclass';
-'require uci';
 'require fs';
 'require rpc';
-'require request';
 
 const callServiceStatus = rpc.declare({
     object: 'service',
@@ -115,7 +113,7 @@ const callSwitchCore = rpc.declare({
     expect: { '': {} }
 });
 
-const callUciSetCommit = rpc.declare({
+const calluciCommit = rpc.declare({
     object: 'luci.nikki',
     method: 'set_commit',
     params: ['config', 'section', 'option', 'value'],
@@ -135,28 +133,6 @@ const callversion = rpc.declare({
     params: ['mode'],
     expect: { '': {} }
 });
-
-const homeDir           = '/etc/nikki';
-const profilesDir       = `${homeDir}/profiles`;
-const subscriptionsDir  = `${homeDir}/subscriptions`;
-const mixinFilePath     = `${homeDir}/mixin.yaml`;
-const runDir            = `${homeDir}/run`;
-const PROG              = `${runDir}/mihomo`
-const runProfilePath    = `${runDir}/config.yaml`;
-const providersDir      = `${runDir}/providers`;
-const ruleProvidersDir  = `${providersDir}/rule`;
-const proxyProvidersDir = `${providersDir}/proxy`;
-const logDir            = '/var/log/nikki';
-const appLogPath        = `${logDir}/app.log`;
-const coreLogPath       = `${logDir}/core.log`;
-const debugLogPath      = `${logDir}/debug.log`;
-const nftDir            = `${homeDir}/nftables`;
-const ui_array          = [
-    ["https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages-no-fonts.zip", "Zashboard"],
-    ["https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip", "MetaCubeXD"],
-    ["https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip", "YACD"],
-    ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]
-];
 
 function waitForTask(task_id, path, onProgress, maxRetries) {
     maxRetries = maxRetries || 80;
@@ -182,22 +158,30 @@ function waitForTask(task_id, path, onProgress, maxRetries) {
         };
         check();
     });
-}
+};
 
 return baseclass.extend({
-    PROG:              PROG,
-    runDir:            runDir,
-    homeDir:           homeDir,
-    ui_array:          ui_array,
-    appLogPath:        appLogPath,
-    profilesDir:       profilesDir,
-    coreLogPath:       coreLogPath,
-    debugLogPath:      debugLogPath,
-    mixinFilePath:     mixinFilePath,
-    runProfilePath:    runProfilePath,
-    subscriptionsDir:  subscriptionsDir,
-    ruleProvidersDir:  ruleProvidersDir,
-    proxyProvidersDir: proxyProvidersDir,
+    homeDir:           '/etc/nikki',
+    profilesDir:       '/etc/nikki/profiles',
+    mixinFilePath:     '/etc/nikki/mixin.yaml',
+    subscriptionsDir:  '/etc/nikki/subscriptions',
+    runDir:            '/etc/nikki/run',
+    PROG:              '/etc/nikki/run/mihomo',
+    runProfilePath:    '/etc/nikki/run/config.yaml',
+    providersDir:      '/etc/nikki/run/providers',
+    ruleProvidersDir:  '/etc/nikki/run/providers/rule',
+    proxyProvidersDir: '/etc/nikki/run/providers/proxy',
+    logDir:            '/var/log/nikki',
+    appLogPath:        '/var/log/nikki/app.log',
+    coreLogPath:       '/var/log/nikki/core.log',
+    debugLogPath:      '/var/log/nikki/debug.log',
+    nftDir:            '/etc/nikki/nftables',
+    ui_array:          [
+        ["https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages-no-fonts.zip", "Zashboard"],
+        ["https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip", "MetaCubeXD"],
+        ["https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip", "YACD"],
+        ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]
+    ],
 
     get_core_version: function (mode) {
         return callversion(mode);
@@ -215,8 +199,8 @@ return baseclass.extend({
         return callRCInit(name || 'nikki', command);
     },
 
-    uciSetAndCommit(config, section, option, value) {
-        return callUciSetCommit(config, section, option, value);
+    uciCommit: function (config, section, option, value) {
+        return calluciCommit(config, section, option, value);
     },
 
     writefile: function (path, data, mode) {
@@ -246,7 +230,7 @@ return baseclass.extend({
             if (res.status === 'ok') return;
             if (res.status === 'error')
                 throw new Error(res.message || _('Update failed'));
-            return waitForTask(core_type, null, onProgress);
+            return waitForTask(core_type, null, onProgress, 120);
         });
     },
 
@@ -255,7 +239,7 @@ return baseclass.extend({
             return callSwitchCore(core_type, arch, url).then(function (res) {
                 if (res.status === 'ok') return res;
                 if (res.status === 'pending')
-                    return waitForTask(core_type, null, onProgress).then(attempt);
+                    return waitForTask(core_type, null, onProgress, 120).then(attempt);
                 throw new Error(res.message || _('Switch failed'));
             });
         };
@@ -315,26 +299,26 @@ return baseclass.extend({
             'external-controller-tls': null
         });
 
-        const uiName       = overrideUiName ?? profile['external-ui-name'] ?? '';
-        const apiSecret    = profile['secret'] ?? '';
-        const apiListen    = profile['external-controller'];
-        const apiTLSListen = profile['external-controller-tls'];
+        const uiName = overrideUiName ?? profile['external-ui-name'] ?? '';
+        const secret = profile['secret'] ?? '';
+        const http   = profile['external-controller'];
+        const https  = profile['external-controller-tls'];
 
-        if (!apiListen && !apiTLSListen)
+        if (!http && !https)
             return Promise.reject('API has not been configured');
 
-        const protocol = apiTLSListen ? 'https' : 'http';
-        const endpoint = apiTLSListen ?? apiListen;
-        const port     = endpoint.substring(endpoint.lastIndexOf(':') + 1);
-        const host     = window.location.hostname;
-        const uiMap    = {
+        const protocol =  https ? 'https' : 'http';
+        const endpoint =  https ?? http;
+        const port     =  endpoint.substring(endpoint.lastIndexOf(':') + 1);
+        const host     =  window.location.hostname;
+        const uiMap    =  {
             'Razord':     { hash: '#/',      hostKey: 'host' },
             'YACD':       { hash: '',        hostKey: 'hostname' },
             'Zashboard':  { hash: '#/setup', hostKey: 'hostname' },
             'MetaCubeXD': { hash: '#/setup', hostKey: 'hostname' },
         };
         const cfg      = uiMap[uiName] ?? { hash: '', hostKey: 'host' };
-        const query    = new URLSearchParams({ [cfg.hostKey]: host, port, secret: apiSecret }).toString();
+        const query    = new URLSearchParams({ [cfg.hostKey]: host, port, secret }).toString();
         const base     = `${protocol}://${host}:${port}/ui${uiName ? '/' + uiName : ''}/`;
         const finalUrl = cfg.hash ? `${base}${cfg.hash}?${query}` : `${base}?${query}`;
 
