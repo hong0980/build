@@ -2,6 +2,8 @@
 
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
 auth_header="${GITHUB_TOKEN:+Authorization: Bearer $GITHUB_TOKEN}"
+CACHE_DIR="/tmp/mihomo_api_cache"
+CACHE_TTL=900
 
 set_status() { printf '%s\n' "$2" > "$1"; }
 
@@ -60,105 +62,72 @@ mirror_url() {
 
 	ucode -e "
 		import { mirrorGithubUrl } from '/etc/nikki/ucode/include.uc';
-		print(mirrorGithubUrl('${url//\'/\\\'}', '${target//\'/\\\'}'));
-	"
+		print(mirrorGithubUrl(ARGV[0], ARGV[1]));
+	" "$url" "$target"
 }
 
 github_api() {
-	local api_path="$1" api_out msg
+	mkdir -p "$CACHE_DIR"
+	local api_out msg status api_path="$1" type="$2"
+	local cache_file="${CACHE_DIR}/$type.text"
+	local time_file="${cache_file}.time"
 
-	api_out=$(curl -sL --max-time 15 \
-		${auth_header:+-H "$auth_header"} \
-		-A "${UA:-Mozilla/5.0}" "https://api.github.com/${api_path}" 2>/dev/null)
-
-	if [ -z "$api_out" ]; then
-		printf '{"status":"error","message":"github api empty response"}\n'
-		return 1
+	if [ -f "$cache_file" ] && [ -f "$time_file" ]; then
+		local now=$(date +%s)
+		local cached_time=$(cat "$time_file" 2>/dev/null || echo 0)
+		local age=$(( now - cached_time ))
+		[ "$age" -lt "$CACHE_TTL" ] && {
+			cat "$cache_file" | grep "$ARCH"
+			return 0;
+		}
 	fi
+
+	api_out=$(curl -sL --max-time 15 ${auth_header:+-H "$auth_header"} \
+		-A "$UA" "https://api.github.com/${api_path}" 2>/dev/null)
+
+	[ -z "$api_out" ] && { printf '{"status":"error","message":"github api empty response"}\n'; return 1; }
 
 	msg=$(printf '%s' "$api_out" | jsonfilter -qe '@.message' 2>/dev/null)
-	if [ -n "$msg" ]; then
-		printf '{"status":"error","message":"github api error: %s"}\n' "$msg"
-		return 1
-	fi
+	[ -n "$msg" ] && { printf '{"status":"error","message":"github api error: %s"}\n' "$msg"; return 1; }
 
-	printf '%s\n' "$api_out"
+	printf '%s' "$api_out" | jsonfilter -qe '@.assets[*].browser_download_url' > "$cache_file" 2>/dev/null
+	date +%s > "$time_file"
+	cat "$cache_file" | grep "$ARCH"
 }
 
 get_core_url() {
-	local CORE_TYPE="$1"
-	local api_out status tag names urls name found_idx found_url i=0
-
-	if [ -z "$CORE_TYPE" ] && [ -z "$ARCH" ]; then
-		printf '{"status":"error","message":"missing params"}\n'
-		return 1
-	fi
+	local CORE_TYPE="$1" status tag urls found_url
 
 	case "$CORE_TYPE" in
-		meta)   api_out=$(github_api "repos/MetaCubeX/mihomo/releases/latest") ;;
-		alpha)  api_out=$(github_api "repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha") ;;
-		smart)  api_out=$(github_api "repos/vernesong/mihomo/releases/tags/Prerelease-Alpha") ;;
+		meta)
+			tag=$(curl -sI --max-time 10 \
+				 "https://github.com/MetaCubeX/mihomo/releases/latest" 2>/dev/null | \
+				 grep -i "^location:" | sed -n 's|.*/tag/\(.*\)|\1|p' | tr -d '\r\n')
+			if [ -z "$tag" ]; then
+				printf '{"status":"error","message":"failed to get latest tag"}\n'
+				return 1
+			fi
+			local filename="mihomo-${ARCH}-compatible-${tag}.gz"
+			found_url="https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${filename}"
+			printf '{"status":"ok","url":"%s"}\n' "$found_url"
+			return 0
+			;;
+		alpha) urls=$(github_api "repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha" "$CORE_TYPE") ;;
+		smart) urls=$(github_api "repos/vernesong/mihomo/releases/tags/Prerelease-Alpha" "$CORE_TYPE") ;;
 	esac
+	[ -n "$urls" ] || { printf '{"status":"error","message":"no api out"}\n'; return 1; }
 
-	status=$(printf '%s' "$api_out" | jsonfilter -qe '@.status' 2>/dev/null)
-	if [ "$status" = "error" ]; then
-		printf '{"status":"error","message":"no api out %s"}\n' "$api_out"
-		return 1
-	fi
+	found_url=$(printf '%s\n' "$urls" | grep "mihomo-${ARCH}-compatible.*\\.gz" | head -n 1)
 
-	tag=$(printf '%s' "$api_out" | jsonfilter -qe '@.tag_name' 2>/dev/null)
-
-	if [ "$CORE_TYPE" = "meta" ]; then
-		if [ -z "$tag" ]; then
-			printf '{"status":"error","message":"no tag found"}\n'
-			return 1
-		fi
-		local filename="mihomo-${ARCH}-compatible-${tag}.gz"
-		local url="https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${filename}"
-		printf '{"status":"ok","url":"%s"}\n' "$url"
-		return 0
-	fi
-
-	names=$(printf '%s' "$api_out" | jsonfilter -qe '@.assets[*].name')
-	urls=$(printf '%s' "$api_out"  | jsonfilter -qe '@.assets[*].browser_download_url')
-
-	if [ -z "$names" ]; then
-		printf '{"status":"error","message":"no assets found"}\n'
-		return 1
-	fi
-
-	found_idx=-1
-	while IFS= read -r name; do
-		case "$name" in
-			*"${ARCH}"*".gz"*)
-				[ "$found_idx" -lt 0 ] && found_idx=$i
-				case "$name" in
-					*"compatible"*) found_idx=$i; break ;;
-				esac
-				;;
-		esac
-		i=$((i + 1))
-	done <<EOF
-$names
-EOF
-
-	if [ "$found_idx" -lt 0 ]; then
-		printf '{"status":"error","message":"no matching asset for %s"}\n' "$ARCH"
-		return 1
-	fi
-
-	found_url=$(printf '%s' "$urls" | sed -n "$((found_idx + 1))p")
-	if [ -z "$found_url" ]; then
-		printf '{"status":"error","message":"no matching asset for %s"}\n' "$ARCH"
-		return 1
-	fi
+	[ -z "$found_url" ] && found_url=$(printf '%s\n' "$urls" | grep "mihomo-${ARCH}.*\\.gz" | head -n 1)
+	[ -z "$found_url" ] && { printf '{"status":"error","message":"no matching asset for %s"}\n' "$ARCH"; return 1; }
 
 	printf '{"status":"ok","url":"%s"}\n' "$found_url"
 }
 
 do_cache() {
 	local CORE_TYPE="$1" url="$2"
-	local out_name final_out log_file lock_file status_file tmp_file archive_path
+	local out_name final_out log_file status_file tmp_file archive_path
 
 	[ -z "$CORE_TYPE" ] && [ -z "$ARCH" ] && {
 		log "error" "cache_core missing params"
@@ -171,7 +140,6 @@ do_cache() {
 	out_name="${CORE_TYPE}-mihomo"
 	final_out="${CACHE_DIR}/${out_name}"
 	log_file="/tmp/dl_${CORE_TYPE}.log"
-	lock_file="/tmp/dl_${CORE_TYPE}.lock"
 	status_file="/tmp/dl_${CORE_TYPE}.status"
 	progress_file="/tmp/dl_${CORE_TYPE}.progress"
 
@@ -190,11 +158,10 @@ do_cache() {
 
 	tmp_file="/tmp/${out_name}.tmp"
 	archive_path="/tmp/${CORE_TYPE}-mihomo.gz"
-	rm -f "$archive_path" "$tmp_file"
 
 	if ! download "$(mirror_url "$url")" "$archive_path" "$log_file" "$progress_file" || [ ! -s "$archive_path" ]; then
 		set_status "$status_file" "error: download failed"
-		rm -f "$archive_path" "$tmp_file"
+		rm -f "$archive_path"
 		return 1
 	fi
 
@@ -213,13 +180,11 @@ do_cache() {
 download_file() {
 	local task_id="$1" url="$2" path="$3"
 	local log_file="/tmp/dl_${task_id}.log"
-	local lock_file="/tmp/dl_${task_id}.lock"
 	local status_file="/tmp/dl_${task_id}.status"
 	local progress_file="/tmp/dl_${task_id}.progress"
 
 	download "$url" "$path" "$log_file" "$progress_file"
 	local ret=$?
-	rm -f "${path}.st"
 
 	if [ $ret -eq 0 ] && [ -s "$path" ]; then
 		set_status "$status_file" "done"
@@ -230,14 +195,13 @@ download_file() {
 
 update_ui() {
 	local url="$1" name="$2" ui_path="${3:-ui}"
-	local target_dir temp_dir status_file log_file tmp_zip src_dir count only_entry entry
+	local target_dir temp_dir status_file log_file tmp_zip src_dir count only_entry entry progress_file
 
 	target_dir="${RUN_DIR}/${ui_path}/${name}"
 	tmp_zip="/tmp/nikki_ui_${name}_$$.zip"
 	log_file="/tmp/dl_${name}.log"
 	status_file="/tmp/dl_${name}.status"
-	local progress_file="/tmp/dl_${name}.progress"
-	local lock_file="/tmp/dl_${name}.lock"
+	progress_file="/tmp/dl_${name}.progress"
 
 	temp_dir=$(mktemp -d)
 
@@ -276,9 +240,8 @@ update_ui() {
 ACTION="$1"
 shift
 case "$ACTION" in
-	get_core_url)    get_core_url "$1" ;;
-	do_cache)        do_cache "$1" "$2" ;;
-	update_ui)       update_ui "$1" "$2" "$3" ;;
-	download_file)   download_file "$1" "$2" "$3" ;;
-	*)               printf '{"status":"error","message":"invalid action: %s"}\n' "$ACTION"; exit 1 ;;
+	get_core_url)  get_core_url "$1" ;;
+	do_cache)      do_cache "$1" "$2" ;;
+	update_ui)     update_ui "$1" "$2" "$3" ;;
+	download_file) download_file "$1" "$2" "$3" ;;
 esac
