@@ -1355,23 +1355,20 @@ return view.extend({
         o.modalonly = false;
         o.onclick = function (ev, section_id) {
             const self = this;
+            const name = uci.get('nikki', section_id, 'name') || '';
             return nikki.updateSubscription(section_id)
                 .then(function (r) {
-                    const name = uci.get('nikki', section_id, 'name') || '';
                     if (!r.success) {
                         ui.addTimeLimitedNotification(null, E('p', _('%s Subscription update failed.').format(name)), 8000, 'error');
-                        return Promise.reject();
+                        return;
                     }
                     ui.addTimeLimitedNotification(null, E('p', _('%s Subscription update successful.').format(name)), 5000, 'info')
                     uci.unload('nikki');
-                    return uci.load('nikki');
+                    return uci.load('nikki')
+                        .then(() => self.map.load())
+                        .then(() => self.map.reset());
                 })
-                .then(function () {
-                    return self.map.load().then(() => {
-                        return self.map.reset();
-                    });
-                })
-                .catch((err) => ui.addTimeLimitedNotification(null, E('p', _('Subscription update failed %s.').format(err.message || err)), 8000, 'error'));
+                .catch(err => ui.addTimeLimitedNotification(null, E('p', _('Subscription update failed %s.').format(err?.message || err || _('Unknown error'))), 8000, 'error'));
         };
 
         o = s.option(form.Value, 'user_agent', _('User Agent'));
