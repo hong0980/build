@@ -144,45 +144,18 @@ export function qs(v) {
 const PROXY_PREFIXES = [
 	/^https?:\/\/gh-proxy\.com\/https?:\/\//,
 	/^https?:\/\/gh-proxy\.com\//,
-	/^https?:\/\/gh-proxy\.org\/https?:\/\//,
-	/^https?:\/\/gh-proxy\.org\//,
 	/^https?:\/\/ghproxy\.net\/https?:\/\//,
 	/^https?:\/\/ghproxy\.net\//,
-
-	/^https?:\/\/gh\.zwy\.one\/https?:\/\//,
-	/^https?:\/\/gh\.zwy\.one\//,
-	/^https?:\/\/gh\.xxooo\.cf\/https?:\/\//,
-	/^https?:\/\/gh\.xxooo\.cf\//,
-	/^https?:\/\/git\.yylx\.win\/https?:\/\//,
-	/^https?:\/\/git\.yylx\.win\//,
-	/^https?:\/\/gh\.monlor\.com\/https?:\/\//,
-	/^https?:\/\/gh\.monlor\.com\//,
-	/^https?:\/\/cdn\.akaere\.online\/https?:\/\//,
-	/^https?:\/\/cdn\.akaere\.online\//,
-	/^https?:\/\/gh\.jasonzeng\.dev\/https?:\/\//,
-	/^https?:\/\/gh\.jasonzeng\.dev\//,
-	/^https?:\/\/ghproxy\.monkeyray\.net\/https?:\/\//,
-	/^https?:\/\/ghproxy\.monkeyray\.net\//,
-	/^https?:\/\/down\.mxw\.xx\.kg\/https?:\/\//,
-	/^https?:\/\/down\.mxw\.xx\.kg\//,
-	/^https?:\/\/github\.tbap\.top\/https?:\/\//,
-	/^https?:\/\/github\.tbap\.top\//,
-	/^https?:\/\/ghm\.078465\.xyz\/https?:\/\//,
-	/^https?:\/\/ghm\.078465\.xyz\//,
-	/^https?:\/\/ghfile\.geekertao\.top\/https?:\/\//,
-	/^https?:\/\/ghfile\.geekertao\.top\//,
-	/^https?:\/\/ghproxy\.cxkpro\.top\/https?:\/\//,
-	/^https?:\/\/ghproxy\.cxkpro\.top\//,
-	/^https?:\/\/cdn\.crashmc\.com\/https?:\/\//,
-	/^https?:\/\/cdn\.crashmc\.com\//,
-	/^https?:\/\/cors\.isteed\.cc\/https?:\/\//,
-	/^https?:\/\/cors\.isteed\.cc\//,
-	/^https?:\/\/fastgit\.cc\/https?:\/\//,
-	/^https?:\/\/fastgit\.cc\//,
-	/^https?:\/\/gh\.con\.sh\/https?:\/\//,
-	/^https?:\/\/gh\.con\.sh\//,
-	/^https?:\/\/gh\.tryxd\.cn\/https?:\/\//,
-	/^https?:\/\/gh\.tryxd\.cn\//,
+	/^https?:\/\/ghproxy\.homeboyc\.cn\/https?:\/\//,
+	/^https?:\/\/ghproxy\.homeboyc\.cn\//,
+	/^https?:\/\/moeyy\.cn\/gh-proxy\/https?:\/\//,
+	/^https?:\/\/moeyy\.cn\/gh-proxy\//,
+	/^https?:\/\/ghp\.ci\/https?:\/\//,
+	/^https?:\/\/ghp\.ci\//,
+	/^https?:\/\/github\.akams\.cn\/https?:\/\//,
+	/^https?:\/\/github\.akams\.cn\//,
+	/^https?:\/\/ghfast\.top\/https?:\/\//,
+	/^https?:\/\/ghfast\.top\//,
 ];
 
 function stripProxyPrefix(url) {
@@ -237,25 +210,13 @@ export function mirrorGithubUrl(url, target) {
 	if (target === 'fastly')            return convertToJsdelivr(url, 'fastly.jsdelivr.net');
 	if (target === 'testingcf')         return convertToJsdelivr(url, 'testingcf.jsdelivr.net');
 	if (target === 'gcore')             return convertToJsdelivr(url, 'gcore.jsdelivr.net');
-	if (target === 'gh_proxy_org')      return 'https://gh-proxy.org/'          + url;
+	if (target === 'gh_proxy_com')      return 'https://gh-proxy.com/'          + url;
 	if (target === 'ghproxy_net')       return 'https://ghproxy.net/'           + url;
-	if (target === 'gh_zwy')            return 'https://gh.zwy.one/'            + url;
-	if (target === 'gh_xxooo')          return 'https://gh.xxooo.cf/'           + url;
-	if (target === 'git_yylx')          return 'https://git.yylx.win/'          + url;
-	if (target === 'gh_monlor')         return 'https://gh.monlor.com/'         + url;
-	if (target === 'cdn_akaere')        return 'https://cdn.akaere.online/'     + url;
-	if (target === 'gh_jasonzeng')      return 'https://gh.jasonzeng.dev/'      + url;
-	if (target === 'ghproxy_monkeyray') return 'https://ghproxy.monkeyray.net/' + url;
-	if (target === 'down_mxw')          return 'https://down.mxw.xx.kg/'        + url;
-	if (target === 'github_tbap')       return 'https://github.tbap.top/'       + url;
-	if (target === 'ghm_078465')        return 'https://ghm.078465.xyz/'        + url;
-	if (target === 'ghfile_geekertao')  return 'https://ghfile.geekertao.top/'  + url;
-	if (target === 'ghproxy_cxkpro')    return 'https://ghproxy.cxkpro.top/'    + url;
-	if (target === 'cdn_crashmc')       return 'https://cdn.crashmc.com/'       + url;
-	if (target === 'cors_isteed')       return 'https://cors.isteed.cc/'        + url;
-	if (target === 'fastgit')           return 'https://fastgit.cc/'            + url;
-	if (target === 'gh_con_sh')         return 'https://gh.con.sh/'             + url;
-	if (target === 'gh_tryxd')          return 'https://gh.tryxd.cn/'           + url;
+	if (target === 'ghproxy_homeboyc')  return 'https://ghproxy.homeboyc.cn/'   + url;
+	if (target === 'moeyy')             return 'https://moeyy.cn/gh-proxy/'     + url;
+	if (target === 'ghp_ci')            return 'https://ghp.ci/'                + url;
+	if (target === 'github_akams')      return 'https://github.akams.cn/'       + url;
+	if (target === 'ghfast')            return 'https://ghfast.top/'            + url;
 
 	return url;
 };

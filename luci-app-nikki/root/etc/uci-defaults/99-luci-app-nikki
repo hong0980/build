@@ -36,45 +36,42 @@ config_get init config init
 
 source "/etc/openwrt_release"
 case "${DISTRIB_ARCH}" in
-    aarch64_*)
-        core_arch="linux-arm64"
-        ;;
-    arm_*_neon*|arm_*_vfpv3*|arm_*_vfpv4*|arm_*_neon-vfpv4*)
-        core_arch="linux-armv7"
-        ;;
-    arm_*_vfp*)
-        core_arch="linux-armv6"
-        ;;
-    arm*)
-        core_arch="linux-armv5"
-        ;;
-    i386_*|i686_*)
-        core_arch="linux-386"
-        ;;
-    x86_64)
-        core_arch="linux-amd64"
-        ;;
-    mips64el_*)
-        core_arch="linux-mips64le"
-        ;;
-    mips64_*)
-        core_arch="linux-mips64"
-        ;;
-    mipsel_*)
-        core_arch="linux-mipsle-softfloat"
-        ;;
-    mips_*)
-        core_arch="linux-mips-softfloat"
-        ;;
-    riscv64_*)
-        core_arch="linux-riscv64"
-        ;;
-    loongarch64_*|loong64_*)
-        core_arch="linux-loong64-abi1"
-        ;;
-    *)
-        :
-        ;;
+	amd64-v3)
+		core_arch="linux-amd64-v3" ;;
+	amd64-v2)
+		core_arch="linux-amd64-v2" ;;
+	amd64-v1)
+		core_arch="linux-amd64-v1" ;;
+	x86_64*)
+		core_arch="linux-amd64" ;;
+	arm64|aarch64*)
+		core_arch="linux-arm64" ;;
+	armv7|arm_cortex-a[5-9]*|arm_cortex-a1[0-9]*)
+		core_arch="linux-armv7" ;;
+	armv6|arm_arm1176*)
+		core_arch="linux-armv6" ;;
+	armv5|arm_arm926*|arm_fa526*)
+		core_arch="linux-armv5" ;;
+	i386_*|i686_*)
+		core_arch="linux-386" ;;
+	mips64el_*)
+		core_arch="linux-mips64le" ;;
+	mips64_*)
+		core_arch="linux-mips64" ;;
+	mipsel_*)
+		core_arch="linux-mipsle-softfloat" ;;
+	mips_*)
+		core_arch="linux-mips-softfloat" ;;
+	riscv64_*)
+		core_arch="linux-riscv64" ;;
+	loongarch64_*|loong64_*)
+		core_arch="linux-loong64-abi2" ;;
+	s390x_*)
+		core_arch="linux-s390x" ;;
+	ppc64le_*)
+		core_arch="linux-ppc64le" ;;
+	*)
+		core_arch="linux-amd64" ;;
 esac
 uci -q set nikki.config.core_version="$core_arch"
 

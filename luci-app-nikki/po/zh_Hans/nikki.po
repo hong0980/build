@@ -2089,11 +2089,8 @@ msgstr "下载模型"
 msgid "Please select a model version first."
 msgstr "请先选择模型版本。"
 
-msgid "Downloading model..."
-msgstr "正在下载模型..."
-
-msgid "Model updated successfully! Path: %s"
-msgstr "模型更新成功！路径：%s"
+msgid "Model updated successfully!"
+msgstr "模型更新成功！"
 
 msgid "RPC request failed: %s"
 msgstr "RPC 请求失败：%s"
@@ -2281,8 +2278,8 @@ msgstr "使用中"
 msgid "Click to download locally"
 msgstr "点击下载本地"
 
-msgid "Close"
-msgstr "关闭"
+msgid "restart rpcd"
+msgstr "重启 rpcd"
 
 msgid "Type"
 msgstr "类型"

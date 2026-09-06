@@ -234,9 +234,9 @@ return baseclass.extend({
         });
     },
 
-    switch_core: function (core_type, arch, url, onProgress) {
+    switch_core: function (core_type, arch, onProgress) {
         const attempt = function () {
-            return callSwitchCore(core_type, arch, url).then(function (res) {
+            return callSwitchCore(core_type, arch).then(function (res) {
                 if (res.status === 'ok') return res;
                 if (res.status === 'pending')
                     return waitForTask(core_type, null, onProgress, 120).then(attempt);

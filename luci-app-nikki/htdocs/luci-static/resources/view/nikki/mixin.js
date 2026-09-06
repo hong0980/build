@@ -160,34 +160,22 @@ return view.extend({
         o.optional = true;
         o.placeholder = _('Unmodified');
 
+        o.value('', _('Unmodified'));
         o.value('jsdelivr', _('jsDelivr (cdn.jsdelivr.net)'));
         o.value('fastly', _('jsDelivr Fastly (fastly.jsdelivr.net)'));
         o.value('testingcf', _('jsDelivr China (testingcf.jsdelivr.net)'));
         o.value('gcore', _('jsDelivr Gcore (gcore.jsdelivr.net)'));
-
-        o.value('gh_proxy_org', _('gh-proxy.org (Stable)'));
+        o.value('gh_proxy_com', _('gh-proxy.com (Stable)'));
         o.value('ghproxy_net', _('ghproxy.net (Stable)'));
-        o.value('cdn_akaere', _('cdn.akaere.online (All-in-one)'));
-        o.value('ghproxy_monkeyray', _('ghproxy.monkeyray.net (All-in-one)'));
-        o.value('down_mxw', _('down.mxw.xx.kg (All-in-one)'));
-        o.value('github_tbap', _('github.tbap.top (All-in-one)'));
-        o.value('ghm_078465', _('ghm.078465.xyz (All-in-one)'));
-        o.value('gh_zwy', _('gh.zwy.one (High Speed)'));
-        o.value('gh_xxooo', _('gh.xxooo.cf'));
-        o.value('git_yylx', _('git.yylx.win'));
-        o.value('gh_monlor', _('gh.monlor.com'));
-        o.value('gh_jasonzeng', _('gh.jasonzeng.dev'));
-        o.value('ghfile_geekertao', _('ghfile.geekertao.top'));
-        o.value('ghproxy_cxkpro', _('ghproxy.cxkpro.top'));
-        o.value('cdn_crashmc', _('cdn.crashmc.com'));
-        o.value('cors_isteed', _('cors.isteed.cc'));
-        o.value('fastgit', _('fastgit.cc'));
-        o.value('gh_con_sh', _('gh.con.sh'));
-        o.value('gh_tryxd', _('gh.tryxd.cn'));
+        o.value('ghproxy_homeboyc', _('ghproxy.homeboyc.cn (Large File)'));
+        o.value('moeyy', _('moeyy.cn/gh-proxy (Full-featured)'));
+        o.value('ghp_ci', _('ghp.ci (Simple)'));
+        o.value('github_akams', _('github.akams.cn (All-in-one)'));
+        o.value('ghfast', _('ghfast.top (Stable)'));
 
         o = s.taboption('general', form.Button, '_button', _('测试镜像网址'));
         o.inputstyle = 'action';
-        o.inputtitle = _('测试');
+        o.inputtitle = _('verify');
         o.onclick = function (ev, section_id) {
             const testUrl = 'https://raw.githubusercontent.com/MetaCubeX/mihomo/HEAD/README.md';
             const style = 'margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #eee;';
@@ -224,27 +212,10 @@ return view.extend({
                 return progressBar.textContent = _('No mirrors to test');
 
             let idx = 0;
-            function updateProgress() {
-                progressBar.textContent = `${_('Testing ')} ${idx} / ${options.length}`;
-            }
 
             function appendResult(node) {
                 resultBox.appendChild(node);
                 resultBox.scrollTop = resultBox.scrollHeight;
-            }
-
-            function okResult(opt, res) {
-                return E('div', { style: style }, [
-                    E('span', { style: 'color:green;font-weight:600;' }, `${idx} ✓ ${opt.text}`), ' ',
-                    E('span', { style: 'color:green;' }, `HTTP ${res.httpcode}  ${res.elapsed_ms}ms`), E('br'),
-                    E('span', { style: 'color:#1e1e1e;font-size:11px;' }, res.url)
-                ]);
-            }
-
-            function skipResult(opt) {
-                return E('div', { style: style }, [
-                    E('span', { style: 'color:#888;' }, `- ${opt.text}  (skip)`)
-                ]);
             }
 
             function errResult(opt, msg) {
@@ -261,14 +232,20 @@ return view.extend({
                     return;
                 }
 
-                updateProgress();
+                progressBar.textContent = `${_('Testing ')} ${idx} / ${options.length}`;
                 const opt = options[idx++];
 
                 callTestMirror(testUrl, opt.value).then(function (res) {
                     if (res.status === 'ok') {
-                        appendResult(okResult(opt, res));
+                        appendResult(E('div', { style: style }, [
+                            E('span', { style: 'color:green;font-weight:600;' }, `${idx} ✓ ${opt.text}`), ' ',
+                            E('span', { style: 'color:green;' }, `HTTP ${res.httpcode}  ${res.elapsed_ms}ms`), E('br'),
+                            E('span', { style: 'color:#1e1e1e;font-size:11px;' }, res.url)
+                        ]));
                     } else if (res.status === 'skip') {
-                        appendResult(skipResult(opt));
+                        appendResult(E('div', { style: style }, [
+                            E('span', { style: 'color:#888;' }, `- ${opt.text}  (skip)`)
+                        ]));
                     } else {
                         appendResult(errResult(opt, res.message));
                     }

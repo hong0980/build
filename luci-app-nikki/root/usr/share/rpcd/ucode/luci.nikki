@@ -159,7 +159,7 @@ const methods = {
 			if (access(target_dir))
 				return { status: 'ok', path: target_dir, message: 'already exists' };
 
-			const cmd = `${shellQuote(CORE_SCRIPT)} update_ui ${shellQuote(url)} ${shellQuote(name)} ${shellQuote(ui_path)}`;
+			const cmd = `${shellQuote(CORE_SCRIPT)} update_ui ${shellQuote(name)} ${shellQuote(url)} ${shellQuote(ui_path)}`;
 			return startDownloadTask(name, cmd, target_dir);
 		}
 	},
@@ -221,10 +221,9 @@ const methods = {
 				}
 
 				if (substr(st, 0, 6) == 'error:') {
-					const raw      = readfile(log_file) || '';
-					const lines    = split(raw, '\n');
-					const lastLine = trim(lines[length(lines) - 1] || '');
-					return { status: 'error', message: lastLine || substr(st, 6) };
+					const raw = readfile(log_file) || '';
+					const m   = match(raw, /([^\n]+?)\s*$/);
+					return { status: 'error', message: m ? trim(m[1]) : substr(st, 6) };
 				}
 
 				return { status: 'unknown', message: st };

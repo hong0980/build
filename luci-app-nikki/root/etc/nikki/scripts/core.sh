@@ -2,57 +2,63 @@
 
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
 auth_header="${GITHUB_TOKEN:+Authorization: Bearer $GITHUB_TOKEN}"
-CACHE_DIR="/tmp/mihomo_api_cache"
-CACHE_TTL=900
+CACHE_DIR="/tmp/mihomo_core_cache"
+CACHE_TTL=1800
 
 set_status() { printf '%s\n' "$2" > "$1"; }
 
-download() {
-	local url="$1" output="$2" log="$3" progress="$4"
-
-	# if command -v axel >/dev/null 2>&1; then
-	# 	rm -f "${output}.st" "${output}"
-	# 	axel -p -T 15 -U "$UA" -o "$output" "$url" >"$progress" 2>>"$log"
-	# 	return $?
-	# fi
+_Download() {
+	local task_id="$1" url="$2" output="$3"
+	local log_file="/tmp/dl_${task_id}.log"
+	local status_file="/tmp/dl_${task_id}.status"
+	local progress_file="/tmp/dl_${task_id}.progress"
+	local ret mirrored_url; mirrored_url=$(mirror_url "$url")
 
 	if command -v wget >/dev/null 2>&1; then
-		wget --show-progress -T 15 --user-agent="$UA" -O "$output" "$url" >>"$log" 2>&1 &
+		wget --show-progress -T 15 --user-agent="$UA" -O "$output" "$mirrored_url" >>"$log_file" 2>&1 &
 		local pid=$!
 		(
 			while kill -0 $pid 2>/dev/null; do
-				local pct=$(tail -c 500 "$log" 2>/dev/null | tr '\r' '\n' | sed -n 's/.*[[:space:]]\([0-9]\{1,3\}\)%.*/\1/p' | tail -1)
-				[ -n "$pct" ] && echo "$pct" > "$progress"
+				local pct=$(tail -c 500 "$log_file" 2>/dev/null | tr '\r' '\n' | sed -n 's/.*[[:space:]]\([0-9]\{1,3\}\)%.*/\1/p' | tail -1)
+				[ -n "$pct" ] && echo "$pct" > "$progress_file"
 				sleep 1
 			done
-			echo "100" > "$progress" 2>/dev/null
+			echo "100" > "$progress_file" 2>/dev/null
 		) &
 		wait $pid
-		return $?
+		ret=$?
+	# elif command -v axel >/dev/null 2>&1; then
+	# 	rm -f "${output}.st" "${output}"
+	# 	axel -p -T 15 -U "$UA" -o "$output" "$mirrored_url" >"$progress_file" 2>>"$log_file"
+	# 	ret=$?
+	else
+		curl -SsL --connect-timeout 15 --max-time 300 --retry 3 --retry-delay 2 \
+			-A "$UA" -o "$output" "$mirrored_url" 2>>"$log_file" &
+		local pid=$!
+		local total_size=$(curl -sIL -A "$UA" "$mirrored_url" 2>/dev/null | grep -i '^content-length:' | tail -1 | awk '{print $2}' | tr -d '\r')
+
+		if [ -n "$total_size" ] && [ "$total_size" -gt 0 ]; then
+			(
+				while kill -0 $pid 2>/dev/null; do
+					local cur=0
+					[ -f "$output" ] && cur=$(wc -c < "$output" 2>/dev/null || echo 0)
+					local pct=$(( cur * 100 / total_size ))
+					[ "$pct" -gt 100 ] && pct=100
+					echo "$pct" > "$progress_file"
+					sleep 1
+				done
+				echo "100" > "$progress_file" 2>/dev/null
+			) &
+		fi
+		wait $pid
+		ret=$?
 	fi
 
-	curl -SsL --connect-timeout 15 --max-time 300 --retry 3 --retry-delay 2 \
-		-A "$UA" -o "$output" "$url" 2>>"$log" &
-	local pid=$!
-	local total_size=$(curl -sIL -A "$UA" "$url" 2>/dev/null | grep -i '^content-length:' | tail -1 | awk '{print $2}' | tr -d '\r')
-
-	if [ -n "$total_size" ] && [ "$total_size" -gt 0 ]; then
-		(
-			while kill -0 $pid 2>/dev/null; do
-				local cur=0
-				if [ -f "$output" ]; then
-					cur=$(wc -c < "$output" 2>/dev/null || echo 0)
-				fi
-				local pct=$(( cur * 100 / total_size ))
-				[ "$pct" -gt 100 ] && pct=100
-				echo "$pct" > "$progress"
-				sleep 1
-			done
-			echo "100" > "$progress" 2>/dev/null
-		) &
+	if [ $ret -ne 0 ] || [ ! -s "$output" ]; then
+		set_status "$status_file" "error: download failed"
+		rm -f "$output"
+		return 1
 	fi
-	wait $pid
-	return $?
 }
 
 mirror_url() {
@@ -68,8 +74,8 @@ mirror_url() {
 
 github_api() {
 	mkdir -p "$CACHE_DIR"
-	local api_out msg status api_path="$1" type="$2"
-	local cache_file="${CACHE_DIR}/$type.text"
+	local api_out msg api_path="$1" task_id="$2"
+	local cache_file="${CACHE_DIR}/$task_id.text"
 	local time_file="${cache_file}.time"
 
 	if [ -f "$cache_file" ] && [ -f "$time_file" ]; then
@@ -77,8 +83,8 @@ github_api() {
 		local cached_time=$(cat "$time_file" 2>/dev/null || echo 0)
 		local age=$(( now - cached_time ))
 		[ "$age" -lt "$CACHE_TTL" ] && {
-			cat "$cache_file" | grep "$ARCH"
-			return 0;
+			cat "$cache_file"
+			return 0
 		}
 	fi
 
@@ -90,129 +96,95 @@ github_api() {
 	msg=$(printf '%s' "$api_out" | jsonfilter -qe '@.message' 2>/dev/null)
 	[ -n "$msg" ] && { printf '{"status":"error","message":"github api error: %s"}\n' "$msg"; return 1; }
 
-	printf '%s' "$api_out" | jsonfilter -qe '@.assets[*].browser_download_url' > "$cache_file" 2>/dev/null
+	printf '%s' "$api_out" | \
+		jsonfilter -qe '@.assets[*].browser_download_url' | \
+		grep "/mihomo-${ARCH}-[^/]*\.gz$" | grep -v '\-go[0-9]' > "$cache_file" 2>/dev/null
 	date +%s > "$time_file"
-	cat "$cache_file" | grep "$ARCH"
+	cat "$cache_file"
 }
 
 get_core_url() {
-	local CORE_TYPE="$1" status tag urls found_url
+	local task_id="$1" tag urls found_url
 
-	case "$CORE_TYPE" in
+	case "$task_id" in
 		meta)
 			tag=$(curl -sI --max-time 10 \
 				 "https://github.com/MetaCubeX/mihomo/releases/latest" 2>/dev/null | \
 				 grep -i "^location:" | sed -n 's|.*/tag/\(.*\)|\1|p' | tr -d '\r\n')
-			if [ -z "$tag" ]; then
-				printf '{"status":"error","message":"failed to get latest tag"}\n'
-				return 1
-			fi
-			local filename="mihomo-${ARCH}-compatible-${tag}.gz"
-			found_url="https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${filename}"
-			printf '{"status":"ok","url":"%s"}\n' "$found_url"
-			return 0
+			[ -z "$tag" ] && { printf '{"status":"error","message":"failed to get latest tag"}\n'; return 1; }
+			urls=$(github_api "repos/MetaCubeX/mihomo/releases/tags/${tag}" "$task_id")
 			;;
-		alpha) urls=$(github_api "repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha" "$CORE_TYPE") ;;
-		smart) urls=$(github_api "repos/vernesong/mihomo/releases/tags/Prerelease-Alpha" "$CORE_TYPE") ;;
+		alpha) urls=$(github_api "repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha" "$task_id") ;;
+		smart) urls=$(github_api "repos/vernesong/mihomo/releases/tags/Prerelease-Alpha" "$task_id") ;;
 	esac
 	[ -n "$urls" ] || { printf '{"status":"error","message":"no api out"}\n'; return 1; }
 
-	found_url=$(printf '%s\n' "$urls" | grep "mihomo-${ARCH}-compatible.*\\.gz" | head -n 1)
-
-	[ -z "$found_url" ] && found_url=$(printf '%s\n' "$urls" | grep "mihomo-${ARCH}.*\\.gz" | head -n 1)
+	found_url=$(printf '%s\n' "$urls" | grep "compatible" | head -n 1)
+	[ -z "$found_url" ] && found_url=$(printf '%s\n' "$urls" | grep "\-v1-" | head -n 1)
+	[ -z "$found_url" ] && found_url=$(printf '%s\n' "$urls" | head -n 1)
 	[ -z "$found_url" ] && { printf '{"status":"error","message":"no matching asset for %s"}\n' "$ARCH"; return 1; }
 
 	printf '{"status":"ok","url":"%s"}\n' "$found_url"
 }
 
 do_cache() {
-	local CORE_TYPE="$1" url="$2"
-	local out_name final_out log_file status_file tmp_file archive_path
+	local task_id="$1" url="$2" CORE_DIR; CORE_DIR="$RUN_DIR/core"
+	local final_out archive_path status_file
 
-	[ -z "$CORE_TYPE" ] && [ -z "$ARCH" ] && {
+	[ -z "$task_id" ] || [ -z "$ARCH" ] && {
 		log "error" "cache_core missing params"
 		return 1
 	}
+	mkdir -p "$CORE_DIR"
 
-	CACHE_DIR="$RUN_DIR/core"
-	mkdir -p "$CACHE_DIR"
-
-	out_name="${CORE_TYPE}-mihomo"
-	final_out="${CACHE_DIR}/${out_name}"
-	log_file="/tmp/dl_${CORE_TYPE}.log"
-	status_file="/tmp/dl_${CORE_TYPE}.status"
-	progress_file="/tmp/dl_${CORE_TYPE}.progress"
+	final_out="${CORE_DIR}/${task_id}-mihomo"
+	archive_path="/tmp/${task_id}-mihomo.gz"
+	status_file="/tmp/dl_${task_id}.status"
 
 	if [ "$url" = 'null' ] || [ -z "$url" ]; then
-		local url_json url_status msg
-		url_json=$(get_core_url "$CORE_TYPE")
-		url_status=$(printf '%s' "$url_json" | jsonfilter -e '@.status' 2>/dev/null)
-		msg=$(printf '%s' "$url_json" | jsonfilter -e '@.message' 2>/dev/null)
+		local url_json msg
+		url_json=$(get_core_url "$task_id")
 		url=$(printf '%s' "$url_json" | jsonfilter -e '@.url' 2>/dev/null)
-
-		if [ "$url_status" != "ok" ]; then
+		if [ -z "$url" ]; then
+			msg=$(printf '%s' "$url_json" | jsonfilter -e '@.message' 2>/dev/null)
 			set_status "$status_file" "error: get url failed: ${msg:-unknown}"
 			return 1
 		fi
 	fi
 
-	tmp_file="/tmp/${out_name}.tmp"
-	archive_path="/tmp/${CORE_TYPE}-mihomo.gz"
+	_Download "$task_id" "$url" "$archive_path" || return 1
 
-	if ! download "$(mirror_url "$url")" "$archive_path" "$log_file" "$progress_file" || [ ! -s "$archive_path" ]; then
-		set_status "$status_file" "error: download failed"
-		rm -f "$archive_path"
-		return 1
-	fi
-
-	if gzip -dc "$archive_path" > "$tmp_file" 2>>"$log_file" && [ -s "$tmp_file" ]; then
-		mv -f "$tmp_file" "$final_out"
+	if gzip -dc "$archive_path" > "$final_out" 2>>"/tmp/dl_${task_id}.log" && [ -s "$final_out" ]; then
 		chmod 755 "$final_out"
 		rm -f "$archive_path"
 		set_status "$status_file" "done"
 	else
 		set_status "$status_file" "error: extract failed"
-		rm -f "$tmp_file" "$archive_path"
+		rm -f "$final_out" "$archive_path"
 		return 1
 	fi
 }
 
 download_file() {
 	local task_id="$1" url="$2" path="$3"
-	local log_file="/tmp/dl_${task_id}.log"
-	local status_file="/tmp/dl_${task_id}.status"
-	local progress_file="/tmp/dl_${task_id}.progress"
-
-	download "$url" "$path" "$log_file" "$progress_file"
-	local ret=$?
-
-	if [ $ret -eq 0 ] && [ -s "$path" ]; then
-		set_status "$status_file" "done"
-	else
-		set_status "$status_file" "error: download failed"
-	fi
+	_Download "$task_id" "$url" "$path" && set_status "/tmp/dl_${task_id}.status" "done"
 }
 
 update_ui() {
-	local url="$1" name="$2" ui_path="${3:-ui}"
-	local target_dir temp_dir status_file log_file tmp_zip src_dir count only_entry entry progress_file
+	local task_id="$1" url="$2" ui_path="${3:-ui}"
+	local target_dir temp_dir tmp_zip src_dir count only_entry entry
 
-	target_dir="${RUN_DIR}/${ui_path}/${name}"
-	tmp_zip="/tmp/nikki_ui_${name}_$$.zip"
-	log_file="/tmp/dl_${name}.log"
-	status_file="/tmp/dl_${name}.status"
-	progress_file="/tmp/dl_${name}.progress"
-
+	target_dir="${RUN_DIR}/${ui_path}/${task_id}"
+	tmp_zip="/tmp/nikki_ui_${task_id}_$$.zip"
 	temp_dir=$(mktemp -d)
 
-	if ! download "$(mirror_url "$url")" "$tmp_zip" "$log_file" "$progress_file"; then
-		set_status "$status_file" "error: download failed"
-		rm -rf "$tmp_zip" "$temp_dir"
+	if ! _Download "$task_id" "$url" "$tmp_zip"; then
+		rm -rf "$temp_dir"
 		return 1
 	fi
 
-	if ! unzip -o "$tmp_zip" -d "$temp_dir" 2>>"$log_file"; then
-		set_status "$status_file" "error: unzip failed"
+	if ! unzip -o "$tmp_zip" -d "$temp_dir" 2>>"/tmp/dl_${task_id}.log"; then
+		set_status "/tmp/dl_${task_id}.status" "error: unzip failed"
 		rm -rf "$tmp_zip" "$temp_dir"
 		return 1
 	fi
@@ -222,7 +194,6 @@ update_ui() {
 
 	src_dir="$temp_dir"
 	count=$(find "$temp_dir" -mindepth 1 -maxdepth 1 | wc -l)
-
 	if [ "$count" -eq 1 ]; then
 		only_entry=$(find "$temp_dir" -mindepth 1 -maxdepth 1)
 		[ -d "$only_entry" ] && src_dir="$only_entry"
@@ -234,7 +205,7 @@ update_ui() {
 	done
 
 	rm -rf "$tmp_zip" "$temp_dir"
-	set_status "$status_file" "done"
+	set_status "/tmp/dl_${task_id}.status" "done"
 }
 
 ACTION="$1"
