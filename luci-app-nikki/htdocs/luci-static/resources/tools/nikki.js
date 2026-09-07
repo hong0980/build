@@ -109,7 +109,7 @@ const callCacheCore = rpc.declare({
 const callSwitchCore = rpc.declare({
     object: 'luci.nikki',
     method: 'switch_core',
-    params: ['core_type', 'arch', 'url'],
+    params: ['core_type', 'arch'],
     expect: { '': {} }
 });
 

@@ -142,20 +142,20 @@ export function qs(v) {
 };
 
 const PROXY_PREFIXES = [
-	/^https?:\/\/gh-proxy\.com\/https?:\/\//,
-	/^https?:\/\/gh-proxy\.com\//,
-	/^https?:\/\/ghproxy\.net\/https?:\/\//,
-	/^https?:\/\/ghproxy\.net\//,
-	/^https?:\/\/ghproxy\.homeboyc\.cn\/https?:\/\//,
-	/^https?:\/\/ghproxy\.homeboyc\.cn\//,
-	/^https?:\/\/moeyy\.cn\/gh-proxy\/https?:\/\//,
-	/^https?:\/\/moeyy\.cn\/gh-proxy\//,
-	/^https?:\/\/ghp\.ci\/https?:\/\//,
 	/^https?:\/\/ghp\.ci\//,
-	/^https?:\/\/github\.akams\.cn\/https?:\/\//,
-	/^https?:\/\/github\.akams\.cn\//,
-	/^https?:\/\/ghfast\.top\/https?:\/\//,
 	/^https?:\/\/ghfast\.top\//,
+	/^https?:\/\/ghproxy\.net\//,
+	/^https?:\/\/gh-proxy\.com\//,
+	/^https?:\/\/github\.akams\.cn\//,
+	/^https?:\/\/ghp\.ci\/https?:\/\//,
+	/^https?:\/\/moeyy\.cn\/gh-proxy\//,
+	/^https?:\/\/ghproxy\.homeboyc\.cn\//,
+	/^https?:\/\/ghfast\.top\/https?:\/\//,
+	/^https?:\/\/ghproxy\.net\/https?:\/\//,
+	/^https?:\/\/gh-proxy\.com\/https?:\/\//,
+	/^https?:\/\/github\.akams\.cn\/https?:\/\//,
+	/^https?:\/\/moeyy\.cn\/gh-proxy\/https?:\/\//,
+	/^https?:\/\/ghproxy\.homeboyc\.cn\/https?:\/\//,
 ];
 
 function stripProxyPrefix(url) {
@@ -173,13 +173,13 @@ function restoreFromJsdelivr(url) {
 };
 
 const GITHUB_PATTERNS = [
-	/^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/refs\/heads\/([^\/]+)\/(.+)$/,
-	/^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/refs\/tags\/([^\/]+)\/(.+)$/,
-	/^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)$/,
-	/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/refs\/heads\/([^\/]+)\/(.+)$/,
-	/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/refs\/tags\/([^\/]+)\/(.+)$/,
 	/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/([^\/]+)\/(.+)$/,
 	/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)$/,
+	/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/refs\/tags\/([^\/]+)\/(.+)$/,
+	/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/refs\/heads\/([^\/]+)\/(.+)$/,
+	/^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)$/,
+	/^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/refs\/tags\/([^\/]+)\/(.+)$/,
+	/^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/refs\/heads\/([^\/]+)\/(.+)$/,
 ];
 
 function toJsdelivr(m, domain) {
@@ -196,7 +196,8 @@ function convertToJsdelivr(url, domain) {
 };
 
 export function mirrorGithubUrl(url, target) {
-	if (!url) return url;
+	if (!url)    return url;
+	if (!target) return url;
 
 	url = stripProxyPrefix(url);
 	url = restoreFromJsdelivr(url);
@@ -205,18 +206,18 @@ export function mirrorGithubUrl(url, target) {
 		if (!match(target, /\/$/)) target = target + '/';
 		return target + url;
 	};
-	if (!target || target === 'raw' || target === 'github') return url;
-	if (target === 'jsdelivr' || target === 'cdn')          return convertToJsdelivr(url);
+	if (target === 'raw' || target === 'github')   return url;
+	if (target === 'jsdelivr' || target === 'cdn') return convertToJsdelivr(url);
 	if (target === 'fastly')            return convertToJsdelivr(url, 'fastly.jsdelivr.net');
 	if (target === 'testingcf')         return convertToJsdelivr(url, 'testingcf.jsdelivr.net');
 	if (target === 'gcore')             return convertToJsdelivr(url, 'gcore.jsdelivr.net');
-	if (target === 'gh_proxy_com')      return 'https://gh-proxy.com/'          + url;
-	if (target === 'ghproxy_net')       return 'https://ghproxy.net/'           + url;
-	if (target === 'ghproxy_homeboyc')  return 'https://ghproxy.homeboyc.cn/'   + url;
-	if (target === 'moeyy')             return 'https://moeyy.cn/gh-proxy/'     + url;
-	if (target === 'ghp_ci')            return 'https://ghp.ci/'                + url;
-	if (target === 'github_akams')      return 'https://github.akams.cn/'       + url;
-	if (target === 'ghfast')            return 'https://ghfast.top/'            + url;
+	if (target === 'gh_proxy_com')      return 'https://gh-proxy.com/'        + url;
+	if (target === 'ghproxy_net')       return 'https://ghproxy.net/'         + url;
+	if (target === 'ghproxy_homeboyc')  return 'https://ghproxy.homeboyc.cn/' + url;
+	if (target === 'moeyy')             return 'https://moeyy.cn/gh-proxy/'   + url;
+	if (target === 'ghp_ci')            return 'https://ghp.ci/'              + url;
+	if (target === 'github_akams')      return 'https://github.akams.cn/'     + url;
+	if (target === 'ghfast')            return 'https://ghfast.top/'          + url;
 
 	return url;
 };

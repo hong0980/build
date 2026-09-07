@@ -1876,9 +1876,6 @@ msgstr "由于已启用定时清理且超出大小限制，应用日志已清空
 msgid "Core log is cleared due to scheduled clear and exceeding size limits."
 msgstr "由于已启用定时清理且超出大小限制，核心日志已清空。"
 
-msgid ""
-msgstr ""
-
 msgid "Select files to add to mixin"
 msgstr "选择文件加入混入"
 
@@ -2385,3 +2382,9 @@ msgstr "跳过嗅探目标地址"
 
 msgid "This will modify mihomo state. Continue?"
 msgstr "这将会修改 mihomo 的状态。是否继续？"
+
+msgid "Release Time"
+msgstr "发布时间"
+
+msgid ""
+msgstr ""

@@ -44,7 +44,7 @@ function cache_core_call(req) {
 		return { status: 'error', message: 'missing params' };
 
 	const final_out = `${CACHE_DIR}/${core_type}-mihomo`;
-	const cmd = `${shellQuote(CORE_SCRIPT)} do_cache ${shellQuote(core_type)} ${url ? shellQuote(url) : 'null'}`;
+	const cmd = `${shellQuote(CORE_SCRIPT)} do_cache ${shellQuote(core_type)} ${url ? shellQuote(url) : ''}`;
 	return startDownloadTask(core_type, cmd, final_out);
 };
 
@@ -368,7 +368,7 @@ const methods = {
 	},
 
 	switch_core: {
-		args: { core_type: 'core_type', arch: 'arch', url: 'url' },
+		args: { core_type: 'core_type', arch: 'arch'},
 		call: function (req) {
 			const url       = req.args?.url;
 			const arch      = req.args?.arch;
@@ -378,10 +378,11 @@ const methods = {
 				return { status: 'error', message: 'missing core_type' };
 
 			let final_out = `${CACHE_DIR}/${core_type}-mihomo`;
-			if (core_type === 'meta' && !access(final_out)) final_out = '/usr/bin/mihomo';
+			if (core_type === 'meta' && !access(final_out) && access('/usr/bin/mihomo'))
+				final_out = '/usr/bin/mihomo';
 
 			if (!access(final_out)) {
-				const cache = cache_core_call({ args: { core_type, arch, url } });
+				const cache = cache_core_call({ args: { core_type, arch } });
 				if (!cache || cache.status == 'error')
 					return { status: 'error', message: cache?.message || `cached binary not found: ${final_out}` };
 				return cache;

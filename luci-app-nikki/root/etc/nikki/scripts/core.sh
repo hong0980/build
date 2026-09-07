@@ -3,7 +3,7 @@
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
 auth_header="${GITHUB_TOKEN:+Authorization: Bearer $GITHUB_TOKEN}"
 CACHE_DIR="/tmp/mihomo_core_cache"
-CACHE_TTL=1800
+CACHE_TTL=3600
 
 set_status() { printf '%s\n' "$2" > "$1"; }
 
@@ -72,59 +72,76 @@ mirror_url() {
 	" "$url" "$target"
 }
 
+utc_to_cst() {
+	local iso="$1"
+	echo "$iso" | awk '{
+		gsub(/[-T:Z]/, " ")
+		utc = mktime($1" "$2" "$3" "$4" "$5" "$6)
+		cst = utc + 28800
+		print strftime("%Y-%m-%d %H:%M:%S", cst)
+	}'
+}
+
 github_api() {
 	mkdir -p "$CACHE_DIR"
-	local api_out msg api_path="$1" task_id="$2"
-	local cache_file="${CACHE_DIR}/$task_id.text"
-	local time_file="${cache_file}.time"
+	local api_path="$1" task_id="$2" tag
+	local now=$(date +%s) cache_file="${CACHE_DIR}/${task_id}.cache"
 
-	if [ -f "$cache_file" ] && [ -f "$time_file" ]; then
-		local now=$(date +%s)
-		local cached_time=$(cat "$time_file" 2>/dev/null || echo 0)
-		local age=$(( now - cached_time ))
-		[ "$age" -lt "$CACHE_TTL" ] && {
-			cat "$cache_file"
-			return 0
-		}
+	if [ -f "$cache_file" ]; then
+		local age=$(( now - $(head -n1 "$cache_file" 2>/dev/null || echo 0) ))
+		[ "$age" -lt "$CACHE_TTL" ] && { tail -n +2 "$cache_file"; return 0; }
 	fi
 
-	api_out=$(curl -sL --max-time 15 ${auth_header:+-H "$auth_header"} \
-		-A "$UA" "https://api.github.com/${api_path}" 2>/dev/null)
+	if [ "$task_id" = "meta" ]; then
+		tag=$(curl -sI --max-time 10 "https://github.com/MetaCubeX/mihomo/releases/latest" 2>/dev/null | \
+			grep -i "^location:" | sed -n 's|.*/tag/\(.*\)|\1|p' | tr -d '\r\n')
+		[ -z "$tag" ] && { printf '{"status":"error","message":"failed to get latest tag"}\n'; return 1; }
+		api_path="${api_path}${tag}"
+	else
+		api_path="${api_path}Prerelease-Alpha"
+	fi
+
+	local api_out=$(curl -sL --max-time 15 ${auth_header:+-H "$auth_header"} -A "$UA" \
+		"https://api.github.com/${api_path}" 2>/dev/null)
 
 	[ -z "$api_out" ] && { printf '{"status":"error","message":"github api empty response"}\n'; return 1; }
 
-	msg=$(printf '%s' "$api_out" | jsonfilter -qe '@.message' 2>/dev/null)
+	local msg=$(printf '%s' "$api_out" | jsonfilter -qe '@.message' 2>/dev/null)
 	[ -n "$msg" ] && { printf '{"status":"error","message":"github api error: %s"}\n' "$msg"; return 1; }
 
-	printf '%s' "$api_out" | \
-		jsonfilter -qe '@.assets[*].browser_download_url' | \
-		grep "/mihomo-${ARCH}-[^/]*\.gz$" | grep -v '\-go[0-9]' > "$cache_file" 2>/dev/null
-	date +%s > "$time_file"
-	cat "$cache_file"
+	local urls=$(printf '%s' "$api_out" | jsonfilter -qe '@.assets[*].browser_download_url' | \
+		grep "/mihomo-${ARCH}-[^/]*\.gz$" | grep -v '\-go[0-9]')
+
+	local updated_at=$(printf '%s' "$api_out" | jsonfilter -qe '@.updated_at' 2>/dev/null)
+
+	{
+		printf '%s\n' "$now"
+		printf '%s\n' "$urls"
+		printf '%s\n' "$(utc_to_cst "$updated_at")"
+	} > "${cache_file}.tmp" && mv "${cache_file}.tmp" "$cache_file"
+
+	tail -n +2 "$cache_file"
 }
 
 get_core_url() {
-	local task_id="$1" tag urls found_url
+	local task_id="$1" api_out urls_only found_url updated_at
 
 	case "$task_id" in
-		meta)
-			tag=$(curl -sI --max-time 10 \
-				 "https://github.com/MetaCubeX/mihomo/releases/latest" 2>/dev/null | \
-				 grep -i "^location:" | sed -n 's|.*/tag/\(.*\)|\1|p' | tr -d '\r\n')
-			[ -z "$tag" ] && { printf '{"status":"error","message":"failed to get latest tag"}\n'; return 1; }
-			urls=$(github_api "repos/MetaCubeX/mihomo/releases/tags/${tag}" "$task_id")
-			;;
-		alpha) urls=$(github_api "repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha" "$task_id") ;;
-		smart) urls=$(github_api "repos/vernesong/mihomo/releases/tags/Prerelease-Alpha" "$task_id") ;;
+		meta)  api_out=$(github_api "repos/MetaCubeX/mihomo/releases/tags/" "$task_id") ;;
+		alpha) api_out=$(github_api "repos/MetaCubeX/mihomo/releases/tags/" "$task_id") ;;
+		smart) api_out=$(github_api "repos/vernesong/mihomo/releases/tags/" "$task_id") ;;
 	esac
-	[ -n "$urls" ] || { printf '{"status":"error","message":"no api out"}\n'; return 1; }
+	[ -n "$api_out" ] || { printf '{"status":"error","message":"no api out"}\n'; return 1; }
 
-	found_url=$(printf '%s\n' "$urls" | grep "compatible" | head -n 1)
-	[ -z "$found_url" ] && found_url=$(printf '%s\n' "$urls" | grep "\-v1-" | head -n 1)
-	[ -z "$found_url" ] && found_url=$(printf '%s\n' "$urls" | head -n 1)
+	updated_at=$(printf '%s\n' "$api_out" | tail -n 1)
+	urls_only=$(printf '%s\n' "$api_out" | sed '$d')
+
+	found_url=$(printf '%s\n' "$urls_only" | grep "compatible" | head -n 1)
+	[ -z "$found_url" ] && found_url=$(printf '%s\n' "$urls_only" | grep "\-v1-" | head -n 1)
+	[ -z "$found_url" ] && found_url=$(printf '%s\n' "$urls_only" | head -n 1)
 	[ -z "$found_url" ] && { printf '{"status":"error","message":"no matching asset for %s"}\n' "$ARCH"; return 1; }
 
-	printf '{"status":"ok","url":"%s"}\n' "$found_url"
+	printf '{"status":"ok","url":"%s","updated_at":"%s"}\n' "$found_url" "$updated_at"
 }
 
 do_cache() {
@@ -141,7 +158,7 @@ do_cache() {
 	archive_path="/tmp/${task_id}-mihomo.gz"
 	status_file="/tmp/dl_${task_id}.status"
 
-	if [ "$url" = 'null' ] || [ -z "$url" ]; then
+	if [ -z "$url" ]; then
 		local url_json msg
 		url_json=$(get_core_url "$task_id")
 		url=$(printf '%s' "$url_json" | jsonfilter -e '@.url' 2>/dev/null)

@@ -178,7 +178,7 @@ return view.extend({
             const weight = E('strong', [E('span', { 'style': 'color:gray' }, ' ' + _('unchecked'))]);
             return E('p', [
                 E('button', {
-                    'class': 'cbi-button cbi-button-apply',
+                    'class': 'btn cbi-button-apply',
                     'click': ui.createHandlerFn(this, () => {
                         weight.innerHTML = '';
                         return Promise.all(checkurls.map((site) => {
@@ -297,32 +297,35 @@ return view.extend({
             const coreBtn = E('button', {
                 'class': 'btn cbi-button-action',
                 'click': ui.createHandlerFn(this, function (ev) {
-                    const select = node.firstChild;
-                    const options = Array.from(select.options)
-                        .filter(opt => opt.value)
-                        .map(opt => ({ value: opt.value, text: opt.text || opt.value }));
-
                     const tableEl = E('table', { 'class': 'table cbi-section-table' }, [
                         E('tr', { 'class': 'tr table-titles' }, [
                             E('th', { 'class': 'th' }, _('Type')),
                             E('th', { 'class': 'th' }, _('Local Version')),
                             E('th', { 'class': 'th' }, _('Remote Version')),
+                            E('th', { 'class': 'th' }, _('Release Time')),
                             E('th', { 'class': 'th' }, _('Status')),
                             E('th', { 'class': 'th cbi-section-actions' })
                         ])
                     ]);
 
-                    const content = E('div', { 'class': 'cbi-section' }, [
-                        tableEl, E('em', { 'class': 'spinning' }, _('Loading...'))
-                    ]);
+                    const options = Array.from(node.firstChild.options)
+                        .filter(opt => opt.value)
+                        .map(opt => ({ value: opt.value, text: opt.text }));
 
-                    ui.showModal(_('Core Version Management'), [
-                        content,
-                        E('div', { 'class': 'right' }, [
+                    const md = ui.showModal(_('Core Version Management'), [
+                        tableEl,
+                        E('em', { 'class': 'spinning', 'style': 'display:block;margin-bottom:1em;' }, _('Loading...')),
+                        E('div', { 'class': 'button-row' }, [
+                            E('button', {
+                                'class': 'btn cbi-button-remove', 'click': ui.createHandlerFn(this, function (ev) {
+                                    options.forEach(opt => fs.remove(`/tmp/mihomo_core_cache/${opt.value}.cache`));
+                                })
+                            }, _('Flush Cache')),
                             E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Close'))
                         ])
                     ], 'cbi-modal');
-                    return Promise.all(options.map((opt) => {
+
+                    return Promise.all(options.map(opt => {
                         return Promise.all([
                             nikki.get_core_version(opt.value)
                                 .then(res => ({ version: res.version || '-' }))
@@ -332,26 +335,25 @@ return view.extend({
                                     const version = opt.value === 'meta'
                                         ? (res.url.match(/\/download\/([^/]+)\//) || [, '-'])[1]
                                         : (res.url.match(/(alpha(?:-smart)?-[a-f0-9]+)\.gz$/) || [, '-'])[1];
-                                    return { version, url: res.url };
+                                    return { version, url: res.url, updated_at: res.updated_at || '-' };
                                 })
                                 .catch(() => ({ version: '-', url: null }))
                         ]).then(res => ({
-                            type: opt.value, name: opt.text, hasurl: res[1].url,
-                            localver: res[0].version, remotever: res[1].version,
+                            type: opt.value, hasurl: res[1].url, updated_at: res[1].updated_at,
+                            localver: res[0].version, remotever: res[1].version, name: opt.text,
                         }));
                     })).then((res) => {
-                        content.querySelector('em.spinning')?.remove();
+                        md.querySelector('em.spinning')?.remove();
                         const render = () => {
                             const rows = [];
                             res.forEach(item => {
-                                const { type, name, localver, remotever, hasurl } = item;
+                                const { type, name, localver, remotever, hasurl, updated_at } = item;
                                 const isInstalled = localver !== '-';
                                 const iscore = v.core && v.core === localver;
                                 const isLatest = isInstalled && localver === remotever;
-
                                 const switchLabel = iscore ? _('In use') : _('Switch Core');
                                 const switchBtn = E('button', {
-                                    'style': 'min-width: 5.5rem; position: relative; overflow: hidden;',
+                                    'style': 'min-width:5.5rem;position:relative;overflow:hidden;',
                                     'disabled': iscore || type == 'smart' ? true : null,
                                     'class': `btn cbi-button-action ${iscore ? '' : 'important'}`,
                                     'click': ui.createHandlerFn(this, function (ev) {
@@ -374,7 +376,7 @@ return view.extend({
                                     ? _('Redownload')
                                     : isInstalled ? _('Update') : _('Download');
                                 const dlBtn = E('button', {
-                                    'style': 'min-width: 5.5rem; position: relative; overflow: hidden;',
+                                    'style': 'min-width:5.5rem;position:relative;overflow:hidden;',
                                     'disabled': hasurl ? null : true,
                                     'class': `btn cbi-button-${isLatest ? 'negative' : 'positive'}`,
                                     'click': ui.createHandlerFn(this, function (ev) {
@@ -404,22 +406,22 @@ return view.extend({
                                     : E('span', { 'class': 'label warning' }, _('Fetch Failed'));
 
                                 rows.push([
-                                    name, E('code', [localver]), remoteCell, status,
-                                    E('div', { 'style': 'display: flex; gap: .5rem;' }, [dlBtn, switchBtn])
+                                    name,
+                                    E('code', localver),
+                                    remoteCell,
+                                    E('span', { 'style': 'color:#666;font-size:90%;' }, updated_at),
+                                    status,
+                                    E('div', { 'style': 'display:flex;gap:.5rem;' }, [dlBtn, switchBtn])
                                 ]);
                             });
                             cbi_update_table(tableEl, rows, _('No data available'));
                         };
-
                         render();
-                    }).catch((err) => {
-                        content.innerHTML = '';
-                        content.appendChild(E('p', { 'style': 'text-align: center; color: #f44336; padding: 2rem 0;' }, _('Request exception: %s').format(String(err))));
                     });
                 })
             }, default_label);
             lswitchBtn = E('button', {
-                'style': `display:none; position: relative; overflow: hidden;`,
+                'style': `display:none;position:relative;overflow:hidden;`,
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function (ev) {
                     ev.preventDefault();
@@ -440,8 +442,8 @@ return view.extend({
                                 .then(L.bind(ui.changes.init, ui.changes))
                                 .then(L.bind(ui.changes.apply, ui.changes));
                         });
-
                     }).catch(function (err) {
+                        lswitchBtn.style.display = 'none';
                         ui.addNotification(null,
                             E('p', _('Switch failed: %s').format(err.message || err)), 'error');
                     });
@@ -571,6 +573,7 @@ return view.extend({
         o.onchange = function (ev, section_id, value) {
             const el = this.map.lookupOption('core_only', section_id)[0];
             el?.getUIElement(section_id).setValue('0');
+            console.log(el);
         };
 
         o = s.option(form.ListValue, 'mixin_file', _('Select mixin file'), _('Select files to add to mixin'));
@@ -632,15 +635,13 @@ return view.extend({
         o.renderWidget = function () {
             let node = form.Value.prototype.renderWidget.apply(this, arguments);
             (node.querySelector('.control-group') || node).appendChild(E('button', {
-                'class': 'cbi-button cbi-button-apply',
-                'title': _('Save'),
+                'class': 'btn cbi-button-apply', 'title': _('Save'),
                 'click': ui.createHandlerFn(this, () => {
                     return this.map.save(null, true).then(() => {
                         ui.changes.apply(true);
                     });
                 }, this.option)
-            }, [_('Save')]));
-
+            }, _('Save')));
             return node;
         };
 

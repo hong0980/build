@@ -22,7 +22,7 @@ boot() {
 
 start_service() {
 	config_load nikki
-	local enabled
+	local enabled temp_config="$(mktemp)"
 	config_get_bool enabled config enabled 0
 	if [ "$enabled" = 0 ]; then
 		log "App" "Disabled."
@@ -77,7 +77,7 @@ start_service() {
 			log "App" "Exit."
 			return
 		fi
-		cp -f "$profile_file" "$TEMP_CONFIG"
+		cp -f "$profile_file" "$temp_config"
 	elif [ "${profile%%:*}" = "subscription" ]; then
 		local name prefer section="${profile#*:}"
 		config_get name   "$section" "name"
@@ -92,7 +92,7 @@ start_service() {
 			log "App" "Exit."
 			return
 		fi
-		cp -f "$subscription_file" "$TEMP_CONFIG"
+		cp -f "$subscription_file" "$temp_config"
 	else
 		log "Profile" "No profile/subscription selected."
 		log "App" "Exit."
@@ -109,7 +109,7 @@ start_service() {
 		[ "$fake_ip_filter"        = 1 ] && del_expr="$del_expr|del(.dns.fake-ip-filter)"
 		[ "$dns_nameserver_policy" = 1 ] && del_expr="$del_expr|del(.dns.nameserver-policy)"
 		[ "$dns_nameserver"        = 1 ] && del_expr="$del_expr|del(.dns.default-nameserver,.dns.fallback,.dns.proxy-server-nameserver,.dns.direct-nameserver,.dns.nameserver)"
-		[ -n "$del_expr" ] && yq -Mi "${del_expr#|}" "$TEMP_CONFIG"
+		[ -n "$del_expr" ] && yq -Mi "${del_expr#|}" "$temp_config"
 		[ -n "$mixin_file" ] && {
 			log "Mixin" "%s Mixin config." "$mixin_file"
 			mixin_extra_file="/etc/nikki/mixin/$mixin_file"
@@ -130,14 +130,14 @@ start_service() {
 				.path = (($p | select(test("/$")) | . + key + $q) // $p)
 			)) |
 			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups, .nikki-proxy-providers)
-		' "$TEMP_CONFIG" $mixin_extra_file - >/dev/null 2>&1
+		' "$temp_config" $mixin_extra_file - >/dev/null 2>&1
 
 		if [ "$proxy_enabled" = 1 ]; then
-			if yq 'has("tun")' "$TEMP_CONFIG" >/dev/null 2>&1; then
-				yq -Mi '(.tun) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$TEMP_CONFIG"
+			if yq 'has("tun")' "$temp_config" >/dev/null 2>&1; then
+				yq -Mi '(.tun) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$temp_config"
 			fi
-			if yq 'has("listeners")' "$TEMP_CONFIG" >/dev/null 2>&1; then
-				yq -Mi '(.listeners[] | select(.type == "tun")) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$TEMP_CONFIG"
+			if yq 'has("listeners")' "$temp_config" >/dev/null 2>&1; then
+				yq -Mi '(.listeners[] | select(.type == "tun")) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$temp_config"
 			fi
 		fi
 	else
@@ -149,12 +149,12 @@ start_service() {
 			.tun["auto-route"] = true    |
 			.tun["auto-redirect"] = true |
 			.tun["auto-detect-interface"] = true
-		' "$TEMP_CONFIG"
+		' "$temp_config"
 	fi
 
 	if [ "$core_only" = 0 -a "$proxy_enabled" = 1 ]; then
 		if [ "$ipv4_dns_hijack" = 1 -o "$ipv6_dns_hijack" = 1 ]; then
-			if ! yq '(has("dns") and (.dns | .enable) and (.dns | has("listen")))' "$TEMP_CONFIG" > /dev/null 2>&1; then
+			if ! yq '(has("dns") and (.dns | .enable) and (.dns | has("listen")))' "$temp_config" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "DNS should be enabled and listen should be defined."
 				log "App" "Exit."
@@ -163,7 +163,7 @@ start_service() {
 		fi
 		if [ "$tcp_mode" = "redirect" ]; then
 			export redirect_listener_name
-			if yq -Me '((has("redir-port")) or (has("listeners") and .listeners | any_c(.name == strenv(redirect_listener_name) and .type == "redir"))) | not' "$TEMP_CONFIG" > /dev/null 2>&1; then
+			if yq -Me '((has("redir-port")) or (has("listeners") and .listeners | any_c(.name == strenv(redirect_listener_name) and .type == "redir"))) | not' "$temp_config" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "Redirect Port/Listener should be defined."
 				log "App" "Exit."
@@ -172,7 +172,7 @@ start_service() {
 		fi
 		if [ "$tcp_mode" = "tproxy" -o "$udp_mode" = "tproxy" ]; then
 			export tproxy_listener_name
-			if yq -Me '((has("tproxy-port")) or (has("listeners") and .listeners | any_c(.name == strenv(tproxy_listener_name) and .type == "tproxy"))) | not' "$TEMP_CONFIG" > /dev/null 2>&1; then
+			if yq -Me '((has("tproxy-port")) or (has("listeners") and .listeners | any_c(.name == strenv(tproxy_listener_name) and .type == "tproxy"))) | not' "$temp_config" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "TPROXY Port/Listener should be defined."
 				log "App" "Exit."
@@ -181,7 +181,7 @@ start_service() {
 		fi
 		if [ "$tcp_mode" = "tun" -o "$udp_mode" = "tun" ]; then
 			export tun_listener_name
-			if yq -Me '((has("tun") and (.tun | .enable) and (.tun | has("device"))) or (has("listeners") and .listeners | any_c(.name == strenv(tun_listener_name) and .type == "tun" and has("device")))) | not' "$TEMP_CONFIG" > /dev/null 2>&1; then
+			if yq -Me '((has("tun") and (.tun | .enable) and (.tun | has("device"))) or (has("listeners") and .listeners | any_c(.name == strenv(tun_listener_name) and .type == "tun" and has("device")))) | not' "$temp_config" > /dev/null 2>&1; then
 				log "Profile" "Check failed."
 				log "Profile" "TUN should be defined."
 				log "App" "Exit."
@@ -229,13 +229,13 @@ start_service() {
 					((select(strenv(policy_priority) != "") | .["policy-priority"] = strenv(policy_priority)) // .)
 				)
 			)
-		' "$TEMP_CONFIG"
+		' "$temp_config"
 	}
 
 	[ "$core_only" = 0 ] && \
-	profile_path="$TEMP_CONFIG" ucode -S "/etc/nikki/ucode/mirror.uc"
+	profile_path="$temp_config" ucode -S "/etc/nikki/ucode/mirror.uc"
 
-	mv -f "$TEMP_CONFIG" "$RUN_PROFILE_PATH"
+	mv -f "$temp_config" "$RUN_PROFILE_PATH"
 
 	if [ "$test_profile" = 1 ]; then
 		log "Profile" "Testing..."
@@ -446,7 +446,7 @@ service_stopped() {
 
 reload_service() {
 	cleanup
-	restart
+	start
 }
 
 service_triggers() {
@@ -543,7 +543,7 @@ _try_download() {
 }
 
 update_subscription() {
-	local section="$1"
+	local section="$1" temp_config="$(mktemp)"
 	[ -z "$section" ] && return
 	config_load nikki
 
@@ -569,7 +569,7 @@ update_subscription() {
 
 	for ua in "$@"; do
 		[ -z "$ua" ] && continue
-		_try_download "$url" "$ua" "$TEMP_CONFIG" "$header_tmpfile" && {
+		_try_download "$url" "$ua" "$temp_config" "$header_tmpfile" && {
 			success=1
 			used_ua="$ua"
 			break
@@ -588,7 +588,7 @@ update_subscription() {
 
 	if [ "$success" != 1 ]; then
 		log "Profile" "Subscription update failed."
-		rm -f "$TEMP_CONFIG" "$header_tmpfile" "$info_header_tmpfile"
+		rm -f "$temp_config" "$header_tmpfile" "$info_header_tmpfile"
 		uci_commit nikki
 		return 1
 	fi
@@ -631,7 +631,7 @@ update_subscription() {
 	[ "$name_changed" = 1 ] && uci_set nikki "$section" name "$name"
 	[ -n "$used_ua" ] && [ "$used_ua" != "$detected_ua" ] && uci_set nikki "$section" detected_user_agent "$used_ua"
 	uci_set nikki "$section" update "$(date "+%Y-%m-%d %H:%M:%S")"
-	mv -f "$TEMP_CONFIG" "$SUBSCRIPTIONS_DIR/$name.yaml"
+	mv -f "$temp_config" "$SUBSCRIPTIONS_DIR/$name.yaml"
 	rm -f "$header_tmpfile" "$info_header_tmpfile"
 	uci_commit nikki
 	return 0
