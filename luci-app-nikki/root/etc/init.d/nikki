@@ -4,6 +4,7 @@ START=99
 STOP=10
 USE_PROCD=1
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
+CR=/etc/crontabs/root
 
 extra_command 'clear_logs' 'Clear logs if size exceeds the limit'
 extra_command 'update_subscription' 'Update subscription by section id'
@@ -301,18 +302,29 @@ start_service() {
 	config_get      scheduled_restart_cron config "scheduled_restart_cron"
 	config_get_bool scheduled_restart      config "scheduled_restart" 0
 
-	grep -q "#nikki" "/etc/crontabs/root" && \
-		sed -i '/#nikki/d' "/etc/crontabs/root"
+	grep -q "#nikki" "$CR" && sed -i '/#nikki/d' "$CR"
 	if [ "$scheduled_restart" = 1 -a -n "$scheduled_restart_cron" ]; then
 		log "App" "Set scheduled restart."
-		echo "$scheduled_restart_cron /etc/init.d/nikki restart #nikki scheduled restart" >> "/etc/crontabs/root"
+		echo "$scheduled_restart_cron /etc/init.d/nikki restart #nikki scheduled restart" >> "$CR"
 		reload_cron=1
 	fi
 	if [ "$log_scheduled_clear" = 1 -a -n "$log_scheduled_clear_cron" ]; then
 		log "App" "Set log scheduled clear."
-		echo "$log_scheduled_clear_cron /etc/init.d/nikki clear_logs #nikki log scheduled clear" >> "/etc/crontabs/root"
+		echo "$log_scheduled_clear_cron /etc/init.d/nikki clear_logs #nikki log scheduled clear" >> "$CR"
 		reload_cron=1
 	fi
+
+	auto_update() {
+		local enable hour time cfg="$1"
+		config_get_bool enable "$cfg" auto_update
+		[ "$enable" = '0' ] && return
+		config_get hour "$cfg" hour 2
+		config_get time "$cfg" time 10
+		echo "$time $hour * * * /etc/init.d/nikki update_subscription $cfg #nikki update_subscription" >> "$CR"
+	}
+
+	config_foreach auto_update subscription
+
 	[ "$reload_cron" = 1 ] && /etc/init.d/cron restart
 	touch "$STARTED_FLAG_PATH"
 }
@@ -499,8 +511,8 @@ cleanup() {
 		sysctl -q -w net.bridge.bridge-nf-call-ip6tables=1
 	fi
 
-	grep -q "#nikki" "/etc/crontabs/root" && {
-		sed -i "/#nikki/d" "/etc/crontabs/root" > /dev/null 2>&1
+	grep -q "#nikki" "$CR" && {
+		sed -i "/#nikki/d" "$CR" > /dev/null 2>&1
 		/etc/init.d/cron restart
 	}
 }

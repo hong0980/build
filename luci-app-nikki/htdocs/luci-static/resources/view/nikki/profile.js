@@ -1393,6 +1393,28 @@ return view.extend({
         o.value('remote', _('Remote'));
         o.value('local', _('Local'));
 
+        o = s.option(form.Flag, 'auto_update', _('Auto update'));
+        o.rmempty = false;
+        o.modalonly = true;
+
+        o = s.option(form.ListValue, 'hour', _('hour'));
+        for (let i = 0; i < 24; i++) {
+            const label = i < 10 ? '0' + i : String(i);
+            o.value(i, label);
+        }
+        o.default = '2';
+        o.modalonly = true;
+        o.depends('auto_update', '1');
+
+        o = s.option(form.ListValue, 'time', _('minute'));
+        for (let i = 0; i < 60; i++) {
+            const label = i < 10 ? '0' + i : String(i);
+            o.value(i, label);
+        }
+        o.default = '2';
+        o.modalonly = true;
+        o.depends('auto_update', '1');
+
         o = s.option(form.Value, 'info_url', _('Subscription Info Url'));
         o.modalonly = true;
 
