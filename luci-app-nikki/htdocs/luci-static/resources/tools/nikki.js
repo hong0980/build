@@ -102,7 +102,7 @@ const callGetCoreUrl = rpc.declare({
 const callCacheCore = rpc.declare({
     object: 'luci.nikki',
     method: 'cache_core',
-    params: ['core_type', 'arch', 'url'],
+    params: ['core_type', 'arch'],
     expect: { '': {} }
 });
 
@@ -225,8 +225,8 @@ return baseclass.extend({
         return promise;
     },
 
-    cache_core: function (core_type, arch, url, onProgress) {
-        return callCacheCore(core_type, arch, url).then(function (res) {
+    cache_core: function (core_type, arch, onProgress) {
+        return callCacheCore(core_type, arch).then(function (res) {
             if (res.status === 'ok') return;
             if (res.status === 'error')
                 throw new Error(res.message || _('Update failed'));

@@ -200,13 +200,13 @@ return view.extend({
                     if (/^(PUT|POST|DELETE)$/.test(method))
                         if (!confirm(_('This will modify mihomo state. Continue?'))) return;
 
-                    const content = E('div', { class: 'cbi-section', style: 'padding:10px;' }, [
-                        E('div', { style: 'margin-bottom:10px;' }, [
+                    const content = E('div', { class: 'cbi-section', style: 'padding:0;' }, [
+                        E('div', { style: 'margin-bottom:8px;padding:0 4px;' }, [
                             E('strong', {}, _('Method: ')), E('span', {}, method), E('span', {}, ' | '),
                             E('strong', {}, _('Path: ')), E('span', {}, path)
                         ]),
                         E('p'),
-                        E('div', { class: 'spinning', style: 'text-align:center;padding:60px 0;' }, _('Loading...'))
+                        E('div', { class: 'spinning', style: 'text-align:center;padding:40px 0;' }, _('Loading...'))
                     ]);
 
                     const md = ui.showModal(_('API Response: %s').format(label), [
@@ -238,6 +238,7 @@ return view.extend({
                         }
 
                         md.style.maxWidth = '';
+                        md.style.setProperty('padding', '.75em .5em .5em .5em');
                         content.querySelector('div.spinning')?.remove();
 
                         let text = '';
@@ -251,7 +252,7 @@ return view.extend({
 
                         if (typeof data === 'string' || data == null) {
                             content.appendChild(E('pre', {
-                                style: 'max-height:300px;overflow:auto;background:#1e1e1e;color:#d4d4d4;padding:10px;font-size:13px;'
+                                style: 'max-height:300px;overflow:auto;background:#1e1e1e;color:#d4d4d4;padding:.5em .75em;margin:0;font-size:13px;border-radius:3px;line-height:1.4;'
                             }, text));
                             return;
                         }

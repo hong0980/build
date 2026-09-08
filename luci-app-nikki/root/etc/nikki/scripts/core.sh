@@ -78,7 +78,7 @@ utc_to_cst() {
 		gsub(/[-T:Z]/, " ")
 		utc = mktime($1" "$2" "$3" "$4" "$5" "$6)
 		cst = utc + 28800
-		print strftime("%Y-%m-%d %H:%M:%S", cst)
+		print strftime("%m-%d %H:%M", cst)
 	}'
 }
 
@@ -145,8 +145,8 @@ get_core_url() {
 }
 
 do_cache() {
-	local task_id="$1" url="$2" CORE_DIR; CORE_DIR="$RUN_DIR/core"
-	local final_out archive_path status_file
+	local task_id="$1" url CORE_DIR; CORE_DIR="$RUN_DIR/core"
+	local final_out archive_path status_file url_json msg
 
 	[ -z "$task_id" ] || [ -z "$ARCH" ] && {
 		log "error" "cache_core missing params"
@@ -158,15 +158,12 @@ do_cache() {
 	archive_path="/tmp/${task_id}-mihomo.gz"
 	status_file="/tmp/dl_${task_id}.status"
 
+	url_json=$(get_core_url "$task_id")
+	url=$(printf '%s' "$url_json" | jsonfilter -e '@.url' 2>/dev/null)
 	if [ -z "$url" ]; then
-		local url_json msg
-		url_json=$(get_core_url "$task_id")
-		url=$(printf '%s' "$url_json" | jsonfilter -e '@.url' 2>/dev/null)
-		if [ -z "$url" ]; then
-			msg=$(printf '%s' "$url_json" | jsonfilter -e '@.message' 2>/dev/null)
-			set_status "$status_file" "error: get url failed: ${msg:-unknown}"
-			return 1
-		fi
+		msg=$(printf '%s' "$url_json" | jsonfilter -e '@.message' 2>/dev/null)
+		set_status "$status_file" "error: get url failed: ${msg:-unknown}"
+		return 1
 	fi
 
 	_Download "$task_id" "$url" "$archive_path" || return 1
@@ -229,7 +226,7 @@ ACTION="$1"
 shift
 case "$ACTION" in
 	get_core_url)  get_core_url "$1" ;;
-	do_cache)      do_cache "$1" "$2" ;;
+	do_cache)      do_cache "$1" ;;
 	update_ui)     update_ui "$1" "$2" "$3" ;;
 	download_file) download_file "$1" "$2" "$3" ;;
 esac

@@ -73,16 +73,14 @@ function modalnotify(title, children, timeout, ...classes) {
 };
 
 function attachFileEditorButton(o, resolveTarget) {
-    if (!o.vallist || o.vallist.length === 0) return;
     o.renderWidget = function (section_id, option_index, cfgvalue) {
         const self = this;
         const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
+        const select = node.firstChild;
         const btn = E('button', {
+            'id': this.cbid(section_id + 'btn'),
             'class': 'btn cbi-button-positive',
             'click': ui.createHandlerFn(this, function (ev) {
-                ev.stopPropagation();
-                ev.preventDefault();
-
                 const target = resolveTarget(self.formvalue(section_id));
                 if (!target) return;
                 const { title, path } = target;
@@ -93,8 +91,7 @@ function attachFileEditorButton(o, resolveTarget) {
 
                 return L.resolveDefault(fs.read_direct(path), '').then((content) => {
                     textarea.value = content;
-
-                    ui.showModal(_('Edit: %s').format(title), [
+                    const md = ui.showModal(_('Edit: %s').format(title), [
                         aceDiv, textarea,
                         E('div', { 'class': 'button-row' }, [
                             E('button', {
@@ -115,12 +112,14 @@ function attachFileEditorButton(o, resolveTarget) {
                             E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Dismiss'))
                         ])
                     ], 'cbi-modal');
+                    md.style.setProperty('padding', '.75em .5em .5em .5em');
 
                     return nikki.preloadAce().then(() => {
-                        textarea.style.display = 'none';
                         aceDiv.style.display = '';
+                        textarea.style.display = 'none';
                         const editor = ace.edit(aceDiv);
                         editor.setOptions({
+                            wrap: true,
                             fontSize: '14px',
                             printMarginColumn: -1,
                             showPrintMargin: true,
@@ -128,17 +127,21 @@ function attachFileEditorButton(o, resolveTarget) {
                             fontFamily: 'Consolas',
                             theme: 'ace/theme/monokai'
                         });
-                        editor.session.setUseWrapMode(true);
-                        editor.session.setWrapLimitRange(null, null);
                         editor.setValue(content || '', -1);
-                        aceDiv.env = { editor };
-                        setTimeout(() => editor.resize(true), 0);
                     }).catch(() => Object.assign(textarea.style, {
                         fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4'
                     }));
                 });
             })
         }, _('Edit'));
+
+        if (!cfgvalue) btn.style.display = 'none';
+
+        select.addEventListener('change', function (ev) {
+            const el = self.map.lookupOption('core_only', section_id)[0];
+            el?.getUIElement(section_id).setValue('0');
+            btn.style.display = this.value ? '' : 'none';
+        });
 
         node.classList.add('control-group');
         node.appendChild(btn);
@@ -358,13 +361,18 @@ return view.extend({
                                     'class': `btn cbi-button-action ${iscore ? '' : 'important'}`,
                                     'click': ui.createHandlerFn(this, function (ev) {
                                         const bar = showButtonLoading(ev.target, _('Switching...'));
-                                        return nikki.switch_core(type, core_version, hasurl, function (pct) {
+                                        return nikki.switch_core(type, core_version, function (pct) {
                                             bar.firstChild.style.width = pct + '%';
-                                        }).then(() => {
+                                        }).then((res) => {
+                                            if (res?.status !== 'ok') return;
+
                                             v.core = remotever;
                                             item.localver = remotever;
                                             render();
                                             modalnotify(null, E('p', _('%s switch successful, service restarted').format(name)), 3000, 'success');
+                                            // return uci.save()
+                                            //     .then(L.bind(ui.changes.init, ui.changes))
+                                            //     .then(L.bind(ui.changes.apply, ui.changes));
                                         }).catch((err) => {
                                             render();
                                             modalnotify(null, E('p', _('%s switch failed: %s').format(name, String(err))), 'error');
@@ -381,7 +389,7 @@ return view.extend({
                                     'class': `btn cbi-button-${isLatest ? 'negative' : 'positive'}`,
                                     'click': ui.createHandlerFn(this, function (ev) {
                                         const bar = showButtonLoading(ev.target, _('Downloading...'));
-                                        return nikki.cache_core(type, core_version, hasurl, function (pct) {
+                                        return nikki.cache_core(type, core_version, function (pct) {
                                             bar.firstChild.style.width = pct + '%';
                                         }).then(() => {
                                             item.localver = remotever;
@@ -434,8 +442,7 @@ return view.extend({
                     return nikki.switch_core(val, core_version, function (pct) {
                         bar.firstChild.style.width = pct + '%';
                     }).then((res) => {
-                        if (res?.status !== 'ok')
-                            throw new Error(res.message || _('Switch failed'));
+                        if (res?.status !== 'ok') return;
 
                         return self.map.save(null, true).then(function () {
                             return uci.save()
@@ -570,22 +577,13 @@ return view.extend({
             return { title: fileName, path: `/etc/nikki/subscriptions/${fileName}` };
         });
 
-        o.onchange = function (ev, section_id, value) {
-            const el = this.map.lookupOption('core_only', section_id)[0];
-            el?.getUIElement(section_id).setValue('0');
-            console.log(el);
-        };
-
         o = s.option(form.ListValue, 'mixin_file', _('Select mixin file'), _('Select files to add to mixin'));
         o.optional = true;
         o.depends({ profile: 'subscription', '!contains': true });
-
         for (const p of mixinfiles) o.value(p.name, _('Mixin:') + p.name);
 
-        attachFileEditorButton(o, (value) => {
-            if (!value) return null;
-            return { title: value, path: `/etc/nikki/mixin/${value}` }
-        });
+        attachFileEditorButton(o, (value) =>
+            ({ title: value, path: `/etc/nikki/mixin/${value}` }));
 
         o = s.option(form.Flag, 'url_enabled', _('Subscription'), _('为启动配置添加已经存在订阅的地址'));
         o.depends({ profile: 'file', '!contains': true, core_only: 0 });
