@@ -198,7 +198,7 @@ start_service() {
 	[ -x "$1" ] || set -- /usr/bin/mihomo
 	ln -sf "$1" "$PROG"
 
-	[ "$core" = 'smart' -a "$uselightgbm" = '1' ] && {
+	[ "$core" = 'smart' -o "$core" = 'smart_oix' ] && [ "$uselightgbm" = '1' ] && {
 		local collectdata sample_rate prefer_asn smart_strategy policy_priority collector_size lgbm lgbm_url
 		config_get lgbm            config lgbm
 		config_get collectdata     config collectdata          '0'

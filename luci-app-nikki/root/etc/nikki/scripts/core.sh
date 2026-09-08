@@ -97,6 +97,8 @@ github_api() {
 			grep -i "^location:" | sed -n 's|.*/tag/\(.*\)|\1|p' | tr -d '\r\n')
 		[ -z "$tag" ] && { printf '{"status":"error","message":"failed to get latest tag"}\n'; return 1; }
 		api_path="${api_path}${tag}"
+	elif [ "$task_id" = "smart_oix" ]; then
+		api_path="${api_path}Pre-Alpha"
 	else
 		api_path="${api_path}Prerelease-Alpha"
 	fi
@@ -127,9 +129,10 @@ get_core_url() {
 	local task_id="$1" api_out urls_only found_url updated_at
 
 	case "$task_id" in
-		meta)  api_out=$(github_api "repos/MetaCubeX/mihomo/releases/tags/" "$task_id") ;;
-		alpha) api_out=$(github_api "repos/MetaCubeX/mihomo/releases/tags/" "$task_id") ;;
-		smart) api_out=$(github_api "repos/vernesong/mihomo/releases/tags/" "$task_id") ;;
+		meta)      api_out=$(github_api "repos/MetaCubeX/mihomo/releases/tags/"     "$task_id") ;;
+		alpha)     api_out=$(github_api "repos/MetaCubeX/mihomo/releases/tags/"     "$task_id") ;;
+		smart)     api_out=$(github_api "repos/vernesong/mihomo/releases/tags/"     "$task_id") ;;
+		smart_oix) api_out=$(github_api "repos/vernesong/mihomo-oix/releases/tags/" "$task_id") ;;
 	esac
 	[ -n "$api_out" ] || { printf '{"status":"error","message":"no api out"}\n'; return 1; }
 

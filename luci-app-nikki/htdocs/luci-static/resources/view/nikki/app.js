@@ -14,6 +14,13 @@ const checkurls = [
     ['https://www.youtube.com', _('YouTube')]
 ];
 
+const callTestMirror = L.rpc.declare({
+    object: 'luci.nikki',
+    method: 'test_mirror',
+    params: ['url', 'target'],
+    expect: { '': {} }
+});
+
 function setStatus(element, running) {
     if (element) {
         element.style.color = running ? 'green' : 'red';
@@ -35,42 +42,6 @@ function showButtonLoading(btn, text) {
     btn.appendChild(label);
     return bar;
 }
-
-function modalnotify(title, children, timeout, ...classes) {
-    function fadeOut(element) {
-        element?.classList.replace('fade-in', 'fade-out');
-        setTimeout(() => element?.remove());
-    };
-
-    const modalContainer = document.querySelector('#modal_overlay .modal');
-    if (!modalContainer) return;
-    const msg = E('div', {
-        'class': 'alert-message fade-in',
-        'style': 'display:flex; margin: 10px 0;',
-        transitionend: function (ev) {
-            const node = ev.currentTarget;
-            if (node.parentNode && node.classList.contains('fade-out')) {
-                node.parentNode.removeChild(node);
-            };
-        }
-    }, [
-        E('div', { 'style': 'flex:10' }),
-        E('div', { 'style': 'flex:1 1 auto; display:flex' }, [
-            E('button', {
-                'class': 'btn', 'style': 'margin-left:auto; margin-top:auto',
-                'click': () => fadeOut(msg)
-            }, _('Dismiss'))
-        ])
-    ]);
-
-    L.dom.append(msg.firstElementChild, children);
-    msg.classList.add(...classes);
-    modalContainer.insertBefore(msg, modalContainer.firstChild);
-    if (typeof timeout === 'number' && timeout > 0) {
-        setTimeout(() => fadeOut(msg), timeout);
-    };
-    return msg;
-};
 
 function attachFileEditorButton(o, resolveTarget) {
     o.renderWidget = function (section_id, option_index, cfgvalue) {
@@ -217,20 +188,17 @@ return view.extend({
         o = os.option(form.Button, 'reload');
         o.inputstyle = 'action';
         o.inputtitle = _('Reload Service');
-        o.depends('nikki.config.mihomo_running', 'true');
         o.onclick = function () { return nikki.service('nikki', 'reload'); };
 
         o = os.option(form.Button, 'restart');
         o.inputstyle = 'negative';
         o.inputtitle = _('Restart Service');
-        o.depends('nikki.config.mihomo_running', 'true');
         o.onclick = function () { return nikki.service('nikki', 'restart'); };
 
         o = os.option(form.ListValue, 'ui_url');
         o.ucisection = 'mixin';
         o.ucioption = 'ui_url';
         o.retain = true;
-        o.depends('nikki.config.mihomo_running', 'true');
 
         o.load = function (section_id) {
             self.install_status = {};
@@ -249,7 +217,7 @@ return view.extend({
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
             const btn = E('button', {
-                'class': 'btn cbi-button-positive',
+                'class': 'cbi-button cbi-button-positive',
                 'click': ui.createHandlerFn(this, function (ev) {
                     const url = node.firstChild.value;
                     const entry = self.install_status[url];
@@ -279,14 +247,11 @@ return view.extend({
         o = s.option(form.Flag, 'enabled', _('Enable'));
         o.rmempty = false;
 
-        o = s.option(form.HiddenValue, 'mihomo_running');
-        o.write = function () {};
-        o.cfgvalue = () => running;
-
         o = s.option(form.ListValue, 'core', _('Core'));
         o.value('meta', _('Meta'));
         o.value('alpha', _('Alpha'));
         o.value('smart', _('Smart'));
+        o.value('smart_oix', _('Smart-oix'));
         o.rmempty = false;
         o.onchange = function (ev, section_id, value) {
             if (!lswitchBtn) return;
@@ -337,7 +302,7 @@ return view.extend({
                                 .then(res => {
                                     const version = opt.value === 'meta'
                                         ? (res.url.match(/\/download\/([^/]+)\//) || [, '-'])[1]
-                                        : (res.url.match(/(alpha(?:-smart)?-[a-f0-9]+)\.gz$/) || [, '-'])[1];
+                                        : (res.url.match(/(alpha(?:-(?:smart|oix))*-[a-f0-9]+)\.gz$/) || [, '-'])[1];
                                     return { version, url: res.url, updated_at: res.updated_at || '-' };
                                 })
                                 .catch(() => ({ version: '-', url: null }))
@@ -369,13 +334,13 @@ return view.extend({
                                             v.core = remotever;
                                             item.localver = remotever;
                                             render();
-                                            modalnotify(null, E('p', _('%s switch successful, service restarted').format(name)), 3000, 'success');
+                                            nikki.modalnotify(null, E('p', _('%s switch successful, service restarted').format(name)), 3000, 'success');
                                             // return uci.save()
                                             //     .then(L.bind(ui.changes.init, ui.changes))
                                             //     .then(L.bind(ui.changes.apply, ui.changes));
                                         }).catch((err) => {
                                             render();
-                                            modalnotify(null, E('p', _('%s switch failed: %s').format(name, String(err))), 'error');
+                                            nikki.modalnotify(null, E('p', _('%s switch failed: %s').format(name, String(err))), 'error');
                                         });
                                     })
                                 }, switchLabel);
@@ -394,10 +359,10 @@ return view.extend({
                                         }).then(() => {
                                             item.localver = remotever;
                                             render();
-                                            modalnotify(null, E('p', _('%s download successful').format(name)), 3000, 'success');
+                                            nikki.modalnotify(null, E('p', _('%s download successful').format(name)), 3000, 'success');
                                         }).catch((err) => {
                                             render();
-                                            modalnotify(null, E('p', _('%s download failed: %s').format(name, String(err))), 'error');
+                                            nikki.modalnotify(null, E('p', _('%s download failed: %s').format(name, String(err))), 'error');
                                         });
                                     })
                                 }, dlLabel);
@@ -413,12 +378,28 @@ return view.extend({
                                             : E('span', { 'class': 'label warning' }, _('Not Installed'))
                                     : E('span', { 'class': 'label warning' }, _('Fetch Failed'));
 
+                                // const TestBtn = E('button', {
+                                //     'class': 'btn cbi-button-action',
+                                //     'click': ui.createHandlerFn(this, function (ev) {
+                                //         return callTestMirror(hasurl, '')
+                                //             .then(function (res) {
+                                //                 if (res?.status !== 'ok') {
+                                //                     const msg = res.message === 'HTTP 000'
+                                //                         ? _('本机直连失败')
+                                //                         : (res.message || _('测试失败'));
+                                //                     nikki.modalnotify(null, E('p', _('%s: %s').format(name, msg)), 'error');
+                                //                     return;
+                                //                 };
+                                //                 nikki.modalnotify(null, E('p', _('%s 延迟 %s ms').format(name, res.elapsed_ms)), 4000, 'info');
+                                //             });
+                                //     })
+                                // }, _('verify'));
+
                                 rows.push([
                                     name,
-                                    E('code', localver),
-                                    remoteCell,
-                                    E('span', { 'style': 'color:#666;font-size:90%;' }, updated_at),
-                                    status,
+                                    E('code', localver), remoteCell,
+                                    E('span', { 'style': 'color:#666;font-size:90%;' }, updated_at), status,
+                                    // E('div', { 'style': 'display:flex;gap:.5rem;' }, [TestBtn, dlBtn, switchBtn])
                                     E('div', { 'style': 'display:flex;gap:.5rem;' }, [dlBtn, switchBtn])
                                 ]);
                             });
@@ -465,7 +446,7 @@ return view.extend({
         o = s.option(form.Flag, 'uselightgbm', _('Enable LightGBM'));
         o.default = '0';
         o.rmempty = false;
-        o.depends('core', 'smart');
+        o.depends('core', /smart/);
 
         o = s.option(form.ListValue, 'lgbm', _('Model Version'));
         o.rmempty = true;
@@ -716,15 +697,14 @@ return view.extend({
         o.rmempty = false;
 
         return m.render().then(L.bind(function (m, nodes) {
-            const el = m.findElement('data-name', 'mihomo_running');
-            if (el) el.style.display = 'none';
             L.Poll.add(L.bind(function () {
                 nikki.status('nikki').then((r) => {
-                    const res = m.lookupOption('mihomo_running', 'config', 'nikki')[0];
-                    if (res) {
-                        res.getUIElement('config').setValue(r);
-                        os.checkDepends();
-                    }
+                    ['reload', 'restart', 'ui_url'].forEach(p => {
+                        const el = m.findElement('id', 'cbi-nikki-status-' + p);
+                        el.querySelectorAll('select, button').forEach(ctrl => {
+                            ctrl.disabled = !r;
+                        });
+                    });
                     setStatus(m.findElement('id', 'core_status'), r);
                 });
             }, this), 5);

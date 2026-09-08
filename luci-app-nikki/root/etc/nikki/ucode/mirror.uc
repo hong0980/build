@@ -51,9 +51,7 @@ push(exprs, `
 	(${ug('lazy')}     // "") as $l | (${ug('tolerance')}        // "") as $t |
 	(${ug('timeout')}  // "") as $o | (${qs(ug('urltest_url'))}  // "") as $u |
 	(${ug('interval')} // "") as $i | (${ug('max_failed_times')} // "") as $m |
-	(.. | select(tag == "!!str")) style="double" |
-	(.. | select(tag == "!!map")) |= (${pgs('$x')}) | .["proxy-groups"] |= map(${pgs('$y')}) |
-	 .. |= map_values(key |= (select(tag == "!!str" and test("[.,:]")) | . style="double") // .)
+	(.. | select(tag == "!!map")) |= (${pgs('$x')}) | .["proxy-groups"] |= map(${pgs('$y')})
 `);
 
 if (length(trim_all(exprs)) > 0) {

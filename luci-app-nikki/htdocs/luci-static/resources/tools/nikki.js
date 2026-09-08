@@ -246,8 +246,40 @@ return baseclass.extend({
         return attempt();
     },
 
-    pollDownload: function (core_type) {
-        return this.cache_core(core_type);
+    modalnotify: function(title, children, timeout, ...classes) {
+        function fadeOut(element) {
+            element?.classList.replace('fade-in', 'fade-out');
+            setTimeout(() => element?.remove());
+        };
+
+        const modalContainer = document.querySelector('#modal_overlay .modal');
+        if (!modalContainer) return;
+        const msg = E('div', {
+            'class': 'alert-message fade-in',
+            'style': 'display:flex; margin: 10px 0;',
+            transitionend: function (ev) {
+                const node = ev.currentTarget;
+                if (node.parentNode && node.classList.contains('fade-out')) {
+                    node.parentNode.removeChild(node);
+                };
+            }
+        }, [
+            E('div', { 'style': 'flex:10' }),
+            E('div', { 'style': 'flex:1 1 auto; display:flex' }, [
+                E('button', {
+                    'class': 'btn', 'style': 'margin-left:auto; margin-top:auto',
+                    'click': () => fadeOut(msg)
+                }, _('Dismiss'))
+            ])
+        ]);
+
+        L.dom.append(msg.firstElementChild, children);
+        msg.classList.add(...classes);
+        modalContainer.insertBefore(msg, modalContainer.firstChild);
+        if (typeof timeout === 'number' && timeout > 0) {
+            setTimeout(() => fadeOut(msg), timeout);
+        };
+        return msg;
     },
 
     get_core_url: function (core_type, arch) {
@@ -373,4 +405,5 @@ return baseclass.extend({
             document.head.appendChild(script);
         })
     }
+
 });
