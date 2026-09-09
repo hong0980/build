@@ -260,14 +260,12 @@ return view.extend({
                         const aceDiv = E('div', { style: 'width:100%;height:300px;' });
                         content.appendChild(aceDiv);
 
-                        return nikki.preloadAce().then(function () {
-                            const editor = ace.edit(aceDiv);
-                            editor.setOptions({
-                                fontSize: '14px', printMarginColumn: -1, showPrintMargin: false,
-                                mode: 'ace/mode/json', fontFamily: 'Consolas, monospace',
-                                theme: 'ace/theme/monokai', readOnly: true
+                        return nikki.initAceEditor(aceDiv, text, 'json', {
+                            readOnly: true, wrap: false, fontFamily: 'Consolas, monospace'
+                        }).catch(() => {
+                            Object.assign(textarea.style, {
+                                fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4'
                             });
-                            editor.setValue(text, -1);
                         });
                     }).catch(function (err) {
                         ui.hideModal();

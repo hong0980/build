@@ -14,12 +14,12 @@ const checkurls = [
     ['https://www.youtube.com', _('YouTube')]
 ];
 
-const callTestMirror = L.rpc.declare({
-    object: 'luci.nikki',
-    method: 'test_mirror',
-    params: ['url', 'target'],
-    expect: { '': {} }
-});
+// const callTestMirror = L.rpc.declare({
+//     object: 'luci.nikki',
+//     method: 'test_mirror',
+//     params: ['url', 'target'],
+//     expect: { '': {} }
+// });
 
 function setStatus(element, running) {
     if (element) {
@@ -49,34 +49,36 @@ function attachFileEditorButton(o, resolveTarget) {
         const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
         const select = node.firstChild;
         const btn = E('button', {
-            'id': this.cbid(section_id + 'btn'),
             'class': 'btn cbi-button-positive',
             'click': ui.createHandlerFn(this, function (ev) {
                 const target = resolveTarget(self.formvalue(section_id));
                 if (!target) return;
                 const { title, path } = target;
                 const textarea = E('textarea', {
-                    'style': 'width:100%;height:400px;box-sizing:border-box;font-family:Consolas,monospace;white-space:pre-wrap;word-break:break-all;'
+                    'style': 'width:100%;height:350px;box-sizing:border-box;font-family:Consolas,monospace;white-space:pre-wrap;word-break:break-all;'
                 });
-                const aceDiv = E('div', { 'style': 'width:100%;height:400px;display:none;' });
+                const aceDiv = E('div', { 'style': 'width:100%;height:350px;display:none;' });
 
                 return L.resolveDefault(fs.read_direct(path), '').then((content) => {
                     textarea.value = content;
-                    const md = ui.showModal(_('Edit: %s').format(title), [
+                    const md = ui.showModal(_('Edit: %s').format(path), [
                         aceDiv, textarea,
                         E('div', { 'class': 'button-row' }, [
                             E('button', {
                                 'class': 'btn cbi-button-positive',
-                                'click': ui.createHandlerFn(self, function () {
-                                    const finalValue = window.ace?.edit ? aceDiv.env?.editor?.getValue() ?? textarea.value : textarea.value;
+                                'click': ui.createHandlerFn(this, function () {
+                                    const isAceVisible = aceDiv.style.display !== 'none';
+                                    const finalValue = (isAceVisible && aceDiv._aceEditor)
+                                        ? aceDiv._aceEditor.getValue()
+                                        : textarea.value;
+                                    if (content === finalValue) return;
                                     return nikki.writefile(path, finalValue)
                                         .then(() => {
-                                            ui.addTimeLimitedNotification(null,
-                                                E('p', _('Config saved, files updated')), 5000, 'info');
-                                            ui.hideModal();
+                                            nikki.modalnotify(null,
+                                                E('p', _('Config saved, files updated')), 5000, 'success');
                                         })
                                         .catch((e) => {
-                                            ui.addTimeLimitedNotification(null, E('p', e.message), 8000, 'error');
+                                            nikki.modalnotify(null, E('p', e.message || e), 8000, 'error');
                                         });
                                 })
                             }, _('Save')),
@@ -84,24 +86,17 @@ function attachFileEditorButton(o, resolveTarget) {
                         ])
                     ], 'cbi-modal');
                     md.style.setProperty('padding', '.75em .5em .5em .5em');
+                    const title = md.querySelector('h3, h4');
+                    if (title) title.style.fontSize = '14px';
 
-                    return nikki.preloadAce().then(() => {
+                    nikki.initAceEditor(aceDiv, content, 'yaml').then(editor => {
                         aceDiv.style.display = '';
                         textarea.style.display = 'none';
-                        const editor = ace.edit(aceDiv);
-                        editor.setOptions({
-                            wrap: true,
-                            fontSize: '14px',
-                            printMarginColumn: -1,
-                            showPrintMargin: true,
-                            mode: 'ace/mode/yaml',
-                            fontFamily: 'Consolas',
-                            theme: 'ace/theme/monokai'
+                    }).catch(() => {
+                        Object.assign(textarea.style, {
+                            fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4'
                         });
-                        editor.setValue(content || '', -1);
-                    }).catch(() => Object.assign(textarea.style, {
-                        fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4'
-                    }));
+                    });
                 });
             })
         }, _('Edit'));
@@ -119,15 +114,6 @@ function attachFileEditorButton(o, resolveTarget) {
         return node;
     };
 }
-
-const coreDownload = function (list, current) {
-    if (!current) return false;
-    if (current === 'alpha') return true;
-    const exists = (list?.some(f =>
-        f.type === 'file' && f.name.includes(`${current}-mihomo`)
-    ) ?? false);
-    return !exists;
-};
 
 return view.extend({
     load: function () {
@@ -216,24 +202,25 @@ return view.extend({
 
         o.renderWidget = function (section_id, option_index, cfgvalue) {
             const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            const select = node.firstChild;
             const btn = E('button', {
                 'class': 'cbi-button cbi-button-positive',
                 'click': ui.createHandlerFn(this, function (ev) {
-                    const url = node.firstChild.value;
-                    const entry = self.install_status[url];
+                    const value = select.value;
+                    const entry = self.install_status[value];
                     if (!entry) return;
                     if (entry.installed) return nikki.openDashboard(entry.name);
 
                     const bar = showButtonLoading(ev.target, _('Please wait, downloading %s...').format(entry.name));
-                    return nikki.update_ui(url, entry.name, pct => bar.firstChild.style.width = pct + '%')
+                    return nikki.update_ui(value, entry.name, pct => bar.firstChild.style.width = pct + '%')
                         .then(res => {
-                            if (res?.status !== 'ok') throw new Error(res?.message);
+                            if (res.status !== 'ok') return;
                             entry.installed = true;
-                            const opt = node.firstChild.querySelector(`option[value="${CSS.escape(url)}"]`);
+                            const opt = select.querySelector(`option[value="${CSS.escape(value)}"]`);
                             if (opt) opt.textContent = entry.name;
                         })
                         .then(() => nikki.openDashboard(entry.name))
-                        .catch(err => ui.addNotification(null, E('p', _('Update failed: ') + err), 'error'))
+                        .catch(err => ui.addNotification(null, E('p', _('Update failed: %s').format(res.message || res)), 'error'))
                         .finally(() => btn.textContent = _('Open Dashboard'));
                 })
             }, _('Open Dashboard'));
@@ -282,11 +269,11 @@ return view.extend({
 
                     const md = ui.showModal(_('Core Version Management'), [
                         tableEl,
-                        E('em', { 'class': 'spinning', 'style': 'display:block;margin-bottom:1em;' }, _('Loading...')),
+                        E('em', { 'class': 'spinning', 'style': 'display:block;margin-bottom:1em;' }, _('Checking latest version...')),
                         E('div', { 'class': 'button-row' }, [
                             E('button', {
                                 'class': 'btn cbi-button-remove', 'click': ui.createHandlerFn(this, function (ev) {
-                                    options.forEach(opt => fs.remove(`/tmp/mihomo_core_cache/${opt.value}.cache`));
+                                    options.forEach(opt => fs.remove(`${nikki.TEMP_DIR}/${opt.value}.cache`));
                                 })
                             }, _('Flush Cache')),
                             E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Close'))
@@ -328,26 +315,28 @@ return view.extend({
                                         const bar = showButtonLoading(ev.target, _('Switching...'));
                                         return nikki.switch_core(type, core_version, function (pct) {
                                             bar.firstChild.style.width = pct + '%';
-                                        }).then((res) => {
-                                            if (res?.status !== 'ok') return;
+                                        }).then(res => {
+                                            if (res.status !== 'ok') {
+                                                nikki.modalnotify(null, E('p', _('%s switch failed: %s').format(name, String(res.message))), 'error');
+                                                render();
+                                                return;
+                                            };
 
                                             v.core = remotever;
                                             item.localver = remotever;
                                             render();
                                             nikki.modalnotify(null, E('p', _('%s switch successful, service restarted').format(name)), 3000, 'success');
-                                            // return uci.save()
-                                            //     .then(L.bind(ui.changes.init, ui.changes))
-                                            //     .then(L.bind(ui.changes.apply, ui.changes));
-                                        }).catch((err) => {
-                                            render();
-                                            nikki.modalnotify(null, E('p', _('%s switch failed: %s').format(name, String(err))), 'error');
+                                            uci.unload('nikki');
+                                            return uci.load('nikki')
+                                                .then(() => self.map.load())
+                                                .then(() => self.map.reset());
                                         });
                                     })
                                 }, switchLabel);
 
                                 const dlLabel = isLatest
                                     ? _('Redownload')
-                                    : isInstalled ? _('Update') : _('Download');
+                                    : isInstalled ? _('Update Core') : _('Download');
                                 const dlBtn = E('button', {
                                     'style': 'min-width:5.5rem;position:relative;overflow:hidden;',
                                     'disabled': hasurl ? null : true,
@@ -356,13 +345,24 @@ return view.extend({
                                         const bar = showButtonLoading(ev.target, _('Downloading...'));
                                         return nikki.cache_core(type, core_version, function (pct) {
                                             bar.firstChild.style.width = pct + '%';
-                                        }).then(() => {
+                                        }).then(res => {
+                                            if (res.status !== 'ok') {
+                                                render();
+                                                nikki.modalnotify(null, E('p', _('%s download failed: %s').format(name, String(res.message))), 'error');
+                                                return;
+                                            };
+                                            nikki.modalnotify(null, E('p', _('%s download successful').format(name)), 3000, 'success');
+                                            if (isInstalled) {
+                                                nikki.switch_core(type, core_version, null)
+                                                    .then(res => {
+                                                        if (res.status !== 'ok')
+                                                            nikki.modalnotify(null, E('p', _('Update failed: %s').format(name)), 'error');
+
+                                                        nikki.modalnotify(null, E('p', _('Core %s updated successfully').format(name)), 3000, 'success');
+                                                    });
+                                            }
                                             item.localver = remotever;
                                             render();
-                                            nikki.modalnotify(null, E('p', _('%s download successful').format(name)), 3000, 'success');
-                                        }).catch((err) => {
-                                            render();
-                                            nikki.modalnotify(null, E('p', _('%s download failed: %s').format(name, String(err))), 'error');
                                         });
                                     })
                                 }, dlLabel);
@@ -413,27 +413,25 @@ return view.extend({
                 'style': `display:none;position:relative;overflow:hidden;`,
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function (ev) {
-                    ev.preventDefault();
                     if (!core_version)
-                        return ui.addNotification(null,
-                            E('p', _('Unknown device architecture, cannot download core.')), 'error');
+                        return ui.addNotification(null, E('p', _('Unknown device architecture, cannot download core.')), 'error');
 
                     const val = self.formvalue(section_id);
                     const bar = showButtonLoading(ev.target, _('Switching...'));
                     return nikki.switch_core(val, core_version, function (pct) {
                         bar.firstChild.style.width = pct + '%';
-                    }).then((res) => {
-                        if (res?.status !== 'ok') return;
+                    }).then(res => {
+                        if (res.status !== 'ok') {
+                            lswitchBtn.style.display = 'none';
+                            ui.addNotification(null, E('p', _('Switch failed: %s').format(err.message || err)), 'error');
+                            return;
+                        };
 
                         return self.map.save(null, true).then(function () {
                             return uci.save()
                                 .then(L.bind(ui.changes.init, ui.changes))
                                 .then(L.bind(ui.changes.apply, ui.changes));
                         });
-                    }).catch(function (err) {
-                        lswitchBtn.style.display = 'none';
-                        ui.addNotification(null,
-                            E('p', _('Switch failed: %s').format(err.message || err)), 'error');
                     });
                 })
             }, _('Switch Core'));
@@ -471,22 +469,20 @@ return view.extend({
                     const mode = this.formvalue(section_id);
                     const bar = showButtonLoading(lgbmBtn, _('Please wait, downloading %s...').format(mode));
                     return nikki.download_file({
-                        url: 'https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/' + mode,
                         path: '/etc/nikki/run/Model.bin', task_id: 'Model',
+                        url: 'https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/' + mode,
                         onProgress: pct => bar.firstChild.style.width = pct + '%'
                     }).then(res => {
-                        if (res?.status !== 'ok')
-                            throw new Error(res.message || _('Update failed'));
-
-                        lgbmBtn.innerHTML = '';
-                        lgbmBtn.appendChild(E('span', { style: 'position:relative;z-index:1;' },
-                            _('Model updated successfully!')));
+                        if (res?.status !== 'ok') {
+                            ui.addNotification(null, E('p', _('Update failed: %s').format(res.message || res)), 'error');
+                            return;
+                        }
+                        lgbmBtn.textContent = _('Model updated successfully!');
                         nikki.uciCommit('nikki', 'config', 'lgbm', mode);
                     }).catch(err => {
-                        ui.addNotification(null,
-                            E('p', _('Update failed: %s').format(err.message || err)), 'error');
                     }).finally(() => {
                         setTimeout(() => {
+                            lgbmBtn.textContent = defaultLabel;
                             lgbmBtn.style.display = 'none';
                         }, 2000);
                     });
@@ -592,13 +588,11 @@ return view.extend({
             const btn = E('button', {
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function (ev) {
-                    ev.preventDefault();
                     const val = this.formvalue(section_id).trim().replace(/\s+/g, ' ');
                     if (!val)
-                        return ui.addNotification(null,
-                            E('p', _('Please enter a cron expression first.')));
-                    const fields = val.split(' ');
+                        return ui.addNotification(null, E('p', _('Please enter a cron expression first.')));
 
+                    const fields = val.split(' ');
                     if (fields.length !== 5)
                         return ui.addNotification(null, E('p', _('Invalid cron expression.')));
                     window.open('https://crontab.guru/#' + fields.join('_'), '_blank');
@@ -699,7 +693,7 @@ return view.extend({
         return m.render().then(L.bind(function (m, nodes) {
             L.Poll.add(L.bind(function () {
                 nikki.status('nikki').then((r) => {
-                    ['reload', 'restart', 'ui_url'].forEach(p => {
+                    ['reload', 'ui_url'].forEach(p => {
                         const el = m.findElement('id', 'cbi-nikki-status-' + p);
                         el.querySelectorAll('select, button').forEach(ctrl => {
                             ctrl.disabled = !r;

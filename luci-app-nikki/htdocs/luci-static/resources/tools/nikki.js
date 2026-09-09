@@ -162,6 +162,7 @@ function waitForTask(task_id, path, onProgress, maxRetries) {
 
 return baseclass.extend({
     homeDir:           '/etc/nikki',
+    TEMP_DIR:          '/var/run/nikki',
     profilesDir:       '/etc/nikki/profiles',
     mixinFilePath:     '/etc/nikki/mixin.yaml',
     subscriptionsDir:  '/etc/nikki/subscriptions',
@@ -230,7 +231,7 @@ return baseclass.extend({
             if (res.status === 'ok') return;
             if (res.status === 'error')
                 throw new Error(res.message || _('Update failed'));
-            return waitForTask(core_type, null, onProgress, 120);
+            return waitForTask(core_type, null, onProgress, 200);
         });
     },
 
@@ -239,7 +240,7 @@ return baseclass.extend({
             return callSwitchCore(core_type, arch).then(function (res) {
                 if (res.status === 'ok') return res;
                 if (res.status === 'pending')
-                    return waitForTask(core_type, null, onProgress, 120).then(attempt);
+                    return waitForTask(core_type, null, onProgress, 200).then(attempt);
                 throw new Error(res.message || _('Switch failed'));
             });
         };
@@ -247,6 +248,13 @@ return baseclass.extend({
     },
 
     modalnotify: function(title, children, timeout, ...classes) {
+        // info/success/warning/danger/error
+        if (typeof timeout !== 'number') {
+            if (timeout != null)
+                classes.unshift(timeout);
+            timeout = null;
+        };
+
         function fadeOut(element) {
             element?.classList.replace('fade-in', 'fade-out');
             setTimeout(() => element?.remove());
@@ -272,6 +280,9 @@ return baseclass.extend({
                 }, _('Dismiss'))
             ])
         ]);
+
+        if (title != null)
+            L.dom.append(msg.firstElementChild, E('h4', {}, title));
 
         L.dom.append(msg.firstElementChild, children);
         msg.classList.add(...classes);
@@ -304,7 +315,7 @@ return baseclass.extend({
                     if (res.status === 'error')
                         throw new Error(res.message || _('Download failed'));
                     if (res.status === 'pending' && res.task_id)
-                        return waitForTask(res.task_id, path, onProgress);
+                        return waitForTask(res.task_id, path, onProgress, 200);
                     throw new Error(res.message || _('Download failed'));
                 });
         };
@@ -384,7 +395,7 @@ return baseclass.extend({
             if (res.status === 'error')
                 throw new Error(res.message || _('Update UI failed'));
             if (res.status === 'pending' && res.task_id)
-                return waitForTask(res.task_id, res.path, onProgress);
+                return waitForTask(res.task_id, res.path, onProgress, 120);
             throw new Error(res.message || _('Update UI failed'));
         });
     },
@@ -404,6 +415,25 @@ return baseclass.extend({
             };
             document.head.appendChild(script);
         })
-    }
+    },
+
+    initAceEditor: function (container, content, mode, options) {
+        const aceMode = mode === 'json' ? 'ace/mode/json' : 'ace/mode/yaml';
+        return this.preloadAce().then(() => {
+            const editor = ace.edit(container);
+            container._aceEditor = editor;
+            editor.setOptions({
+                wrap: true,
+                fontSize: '14px',
+                printMarginColumn: -1,
+                mode: aceMode,
+                fontFamily: 'Consolas',
+                theme: 'ace/theme/monokai',
+                ...options
+            });
+            editor.setValue(content || '', -1);
+            return editor;
+        });
+    },
 
 });

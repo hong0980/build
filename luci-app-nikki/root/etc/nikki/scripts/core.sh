@@ -83,9 +83,8 @@ utc_to_cst() {
 }
 
 github_api() {
-	mkdir -p "$CACHE_DIR"
 	local api_path="$1" task_id="$2" tag
-	local now=$(date +%s) cache_file="${CACHE_DIR}/${task_id}.cache"
+	local now=$(date +%s) cache_file="${TEMP_DIR}/${task_id}.cache"
 
 	if [ -f "$cache_file" ]; then
 		local age=$(( now - $(head -n1 "$cache_file" 2>/dev/null || echo 0) ))
