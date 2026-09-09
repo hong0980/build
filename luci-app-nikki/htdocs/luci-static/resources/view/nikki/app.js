@@ -41,7 +41,7 @@ function showButtonLoading(btn, text) {
     btn.appendChild(bar);
     btn.appendChild(label);
     return bar;
-}
+};
 
 function attachFileEditorButton(o, resolveTarget) {
     o.renderWidget = function (section_id, option_index, cfgvalue) {
@@ -51,35 +51,21 @@ function attachFileEditorButton(o, resolveTarget) {
         const btn = E('button', {
             'class': 'btn cbi-button-positive',
             'click': ui.createHandlerFn(this, function (ev) {
-                const target = resolveTarget(self.formvalue(section_id));
-                if (!target) return;
-                const { title, path } = target;
-                const textarea = E('textarea', {
-                    'style': 'width:100%;height:350px;box-sizing:border-box;font-family:Consolas,monospace;white-space:pre-wrap;word-break:break-all;'
-                });
-                const aceDiv = E('div', { 'style': 'width:100%;height:350px;display:none;' });
-
-                return L.resolveDefault(fs.read_direct(path), '').then((content) => {
-                    textarea.value = content;
+                const path = resolveTarget(select.value);
+                if (!path) return;
+                const aceDiv = E('div', { 'style': 'width:100%;height:350px;' });
+                return L.resolveDefault(fs.read_direct(path), '').then(content => {
                     const md = ui.showModal(_('Edit: %s').format(path), [
-                        aceDiv, textarea,
+                        aceDiv,
                         E('div', { 'class': 'button-row' }, [
                             E('button', {
                                 'class': 'btn cbi-button-positive',
                                 'click': ui.createHandlerFn(this, function () {
-                                    const isAceVisible = aceDiv.style.display !== 'none';
-                                    const finalValue = (isAceVisible && aceDiv._aceEditor)
-                                        ? aceDiv._aceEditor.getValue()
-                                        : textarea.value;
+                                    const finalValue = aceDiv._aceEditor.getValue();
                                     if (content === finalValue) return;
                                     return nikki.writefile(path, finalValue)
-                                        .then(() => {
-                                            nikki.modalnotify(null,
-                                                E('p', _('Config saved, files updated')), 5000, 'success');
-                                        })
-                                        .catch((e) => {
-                                            nikki.modalnotify(null, E('p', e.message || e), 8000, 'error');
-                                        });
+                                        .then(() => nikki.modalnotify(null, E('p', _('Config saved, files updated')), 5000, 'success'))
+                                        .catch(e => nikki.modalnotify(null, E('p', e.message || e), 8000, 'error'));
                                 })
                             }, _('Save')),
                             E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Dismiss'))
@@ -88,15 +74,7 @@ function attachFileEditorButton(o, resolveTarget) {
                     md.style.setProperty('padding', '.75em .5em .5em .5em');
                     const title = md.querySelector('h3, h4');
                     if (title) title.style.fontSize = '14px';
-
-                    nikki.initAceEditor(aceDiv, content, 'yaml').then(editor => {
-                        aceDiv.style.display = '';
-                        textarea.style.display = 'none';
-                    }).catch(() => {
-                        Object.assign(textarea.style, {
-                            fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4'
-                        });
-                    });
+                    nikki.initAceEditor(aceDiv, content, 'yaml');
                 });
             })
         }, _('Edit'));
@@ -310,7 +288,7 @@ return view.extend({
                                 const switchBtn = E('button', {
                                     'style': 'min-width:5.5rem;position:relative;overflow:hidden;',
                                     'disabled': iscore || type == 'smart' ? true : null,
-                                    'class': `btn cbi-button-action ${iscore ? '' : 'important'}`,
+                                    'class': `btn cbi-button-action ${iscore ? 'important' : ''}`,
                                     'click': ui.createHandlerFn(this, function (ev) {
                                         const bar = showButtonLoading(ev.target, _('Switching...'));
                                         return nikki.switch_core(type, core_version, function (pct) {
@@ -545,22 +523,26 @@ return view.extend({
 
         attachFileEditorButton(o, (value) => {
             const [type, id] = value.split(/:(.+)/);
-            if (type === 'file') return { title: id, path: `/etc/nikki/profiles/${id}` };
+            if (type === 'file') {
+                const profile = profiles.find(p => p.name === id);
+                return profile ? profile.path : null;
+            }
 
             const subName = uci.get('nikki', id, 'name');
             if (!subName) return null;
 
-            const fileName = subName + '.yaml';
-            return { title: fileName, path: `/etc/nikki/subscriptions/${fileName}` };
+            const subfile = subfiles.find(p => p.path.includes(subName));
+            return subfile ? subfile.path : null;
         });
 
         o = s.option(form.ListValue, 'mixin_file', _('Select mixin file'), _('Select files to add to mixin'));
         o.optional = true;
         o.depends({ profile: 'subscription', '!contains': true });
         for (const p of mixinfiles) o.value(p.name, _('Mixin:') + p.name);
-
-        attachFileEditorButton(o, (value) =>
-            ({ title: value, path: `/etc/nikki/mixin/${value}` }));
+        attachFileEditorButton(o, (value) => {
+            const mixinfile = mixinfiles.find(p => p.name === value);
+            return mixinfile ? mixinfile.path : null;
+        });
 
         o = s.option(form.Flag, 'url_enabled', _('Subscription'), _('为启动配置添加已经存在订阅的地址'));
         o.depends({ profile: 'file', '!contains': true, core_only: 0 });

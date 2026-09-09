@@ -72,19 +72,18 @@ start_service() {
 	if [ "${profile%%:*}" = "file" ]; then
 		profile_name="${profile#*:}"
 		local profile_file; profile_file="$PROFILES_DIR/$profile_name"
-		log "Profile" "Use file: %s." "$profile_name"
 		if [ ! -f "$profile_file" ]; then
 			log "Profile" "File not found."
 			log "App" "Exit."
 			return
 		fi
 		cp -f "$profile_file" "$temp_config"
+		log "Profile" "Use file: %s." "$profile_file"
 	elif [ "${profile%%:*}" = "subscription" ]; then
 		local name prefer section="${profile#*:}"
 		config_get name   "$section" "name"
 		config_get prefer "$section" "prefer" "remote"
-		log "Profile" "Use subscription: %s." "$name"
-		local subscription_file; subscription_file="$SUBSCRIPTIONS_DIR/$name.yaml"
+		local subscription_file; subscription_file="$(ls $SUBSCRIPTIONS_DIR/$name*)"
 		if [ "$prefer" = "remote" -o ! -f "$subscription_file" ]; then
 			update_subscription "$section"
 		fi
@@ -94,6 +93,7 @@ start_service() {
 			return
 		fi
 		cp -f "$subscription_file" "$temp_config"
+		log "Profile" "Use subscription: %s." "$subscription_file"
 	else
 		log "Profile" "No profile/subscription selected."
 		log "App" "Exit."

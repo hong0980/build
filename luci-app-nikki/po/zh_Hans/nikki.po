@@ -2294,7 +2294,7 @@ msgid "Action"
 msgstr "操作"
 
 msgid "Running Config"
-msgstr "运行配置"
+msgstr "运行的配置"
 
 msgid "Proxy Providers"
 msgstr "代理提供者"

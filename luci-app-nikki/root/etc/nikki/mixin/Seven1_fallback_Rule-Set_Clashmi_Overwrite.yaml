@@ -1,5 +1,5 @@
 # 名称： Seven1_fallback_Rule-Set _Clashmi_Overwrite
-# 版本： V2026.8.12
+# 版本： V2026.8.28
 # 频道： https://t.me/Seven1gogogo
 # 地址： https://github.com/Seven1echo/Yaml
 # 说明： ①本文件适用于Clashmi覆写； ②已隐藏“区域-故转”、“区域-自动”这两个策略组，使用时手动选取对应地区策略组即可。
@@ -38,7 +38,7 @@ Anchor_OT: &Anchor_OT '^(?!.*(DIRECT|香港|台湾|日本|新加坡|韩国|美�
 # ███████████████████████████ 核心配置 ███████████████████████████
 # ══ 基础配置 ══
 mode: rule                                                              # 工作模式  rule（规则模式）/ global（全局模式）/ direct（直连模式）
-ipv6: true                                                              # 网络协议  是否启用 IPv6 支持
+ipv6: false                                                             # 网络协议  是否启用 IPv6 支持
 mixed-port: 7893                                                        # 监听端口  HTTP + SOCKS5 混合代理端口
 allow-lan: true                                                         # 局域连接  是否允许局域网设备连接
 bind-address: "*"                                                       # 监听接口  监听的网络接口（* 表示所有接口）
@@ -81,8 +81,10 @@ sniffer:
     - "+.media.dssott.com"                                              # 强制嗅探  Disney+ 流媒体
     - "+.tiktok.com"                                                    # 强制嗅探  TikTok 流媒体
   skip-domain:
-    - Mijia Cloud                                                       # 跳过嗅探  米家云服务
-    - dlg.io.mi.com                                                     # 跳过嗅探  小米设备通信
+    - "dlg.io.mi.com"                                                   # 跳过嗅探  小米设备通信
+    - "+.mi.com"                                                        # 跳过嗅探  小米相关服务
+    - "+.xiaomi.com"                                                    # 跳过嗅探  小米官方服务
+    - "+.miwifi.com"                                                    # 跳过嗅探  小米网络服务
     - "+.oray.com"                                                      # 跳过嗅探  花生壳服务
     - "+.sunlogin.net"                                                  # 跳过嗅探  向日葵远程控制
     - "+.push.apple.com"                                                # 跳过嗅探  苹果推送服务
@@ -92,22 +94,23 @@ hosts:
 # ══ DNS配置 ══
 dns:
   enable: true                                                          # 解析服务  启用 Clash 内置 DNS 服务
-  ipv6: true                                                            # 网络协议  启用 IPv6 DNS 解析支持
+  ipv6: false                                                           # 网络协议  启用 IPv6 DNS 解析支持
+  use-hosts: true                                                       # 配置映射  使用 Mihomo 配置中的 hosts 映射
+  use-system-hosts: true                                                # 系统映射  使用操作系统 hosts 文件中的域名映射
+  cache-algorithm: arc                                                  # 缓存策略  DNS 按访问频率与最近使用情况动态淘汰缓存
   listen: 0.0.0.0:7874                                                  # 监听服务  DNS 服务监听地址与端口
   enhanced-mode: fake-ip                                                # 增强模式  FDNS 增强模式（Fake-IP，用于防止 DNS 泄露）
-  fake-ip-range: 198.18.0.1/16                                          # 虚拟地址  Fake-IP 虚拟地址池范围
+  fake-ip-range: 198.18.0.1/16                                          # 虚拟地址  Fake-IP IPv4虚拟地址池范围
   fake-ip-filter-mode: blacklist                                        # 过滤模式  Fake-IP 过滤模式（命中规则则返回真实 IP）
   respect-rules: false                                                  # 遵循规则  不强制遵循规则顺序
   fake-ip-filter:
     - "+.lan"                                                           # 真实解析  常见局域网域名后缀
+    - "+.local"                                                         # 真实解析  常见局域网域名后缀
     - "rule-set:add_direct_domain"                                      # 真实解析  大陆冷门域名
     - "rule-set:cn_domain"                                              # 真实解析  大陆域名数据
   nameserver:                                                           # 解析服务  请使用运营商提供的 DNS
     - 114.114.114.114
     - 223.5.5.5
-  nameserver-policy:
-    "rule-set:geolocation-!cn": ['https://1.1.1.1/dns-query', https://8.8.8.8/dns-query]
-    "rule-set:apple_domain,cn_domain,private_domain": [https://223.5.5.5/dns-query, https://223.6.6.6/dns-query]
 
 
 
@@ -163,11 +166,13 @@ proxy-groups:
 
 # ███████████████████████████ 规则匹配 ███████████████████████████
 rules:
+  - AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn_domain),(RULE-SET,cn_ip,no-resolve)))))),REJECT
   - RULE-SET,private_domain,国内直连                                    # Private
   - RULE-SET,private_ip,国内直连,no-resolve                             # Private
   - RULE-SET,pt_domain,国内直连                                         # PT
   - RULE-SET,claude_domain,日本-自动                                    # claude
   - RULE-SET,cdn_cn,国内直连                                            # cnc
+  - RULE-SET,games@cn_domain,国内直连                                   # 游戏直连
   - RULE-SET,ai-!cn_domain,AI                                           # AI(国际)
   - RULE-SET,youtube_domain,YouTube                                     # YouTube
   - RULE-SET,google_domain,Google                                       # Google
@@ -203,6 +208,7 @@ rule-providers:
   pt_domain:             {<<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-pt.mrs"}
   cdn_cn:                {<<: *Anchor_DN,  url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-cdn-cn.mrs"}
   private_domain:        { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
+  games@cn_domain:       { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-games@cn.mrs"}
   ai-!cn_domain:         { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs" }
   youtube_domain:        { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs"}
   google_domain:         { <<: *Anchor_DN, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/google.mrs"}

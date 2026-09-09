@@ -74,11 +74,14 @@ mirror_url() {
 
 utc_to_cst() {
 	local iso="$1"
-	echo "$iso" | awk '{
+	local tz=$(uci -q get system.@system[0].timezone 2>/dev/null || echo 'CST-8')
+	local offset=$(echo "$tz" | grep -oE '[+-]?[0-9]+' | head -1)
+
+	echo "$iso" | awk -v off="${offset:-0}" '{
 		gsub(/[-T:Z]/, " ")
 		utc = mktime($1" "$2" "$3" "$4" "$5" "$6)
-		cst = utc + 28800
-		print strftime("%m-%d %H:%M", cst)
+		if (utc < 0) { print "Invalid"; exit }
+		print strftime("%m-%d %H:%M", utc - off * 3600)
 	}'
 }
 

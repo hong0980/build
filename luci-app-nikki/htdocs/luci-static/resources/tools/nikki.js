@@ -374,7 +374,11 @@ return baseclass.extend({
     },
 
     listfiles: function (dir) {
-        return L.resolveDefault(fs.list(dir), []);
+        return L.resolveDefault(fs.list(dir), []).then(files => {
+            return files.map(f => Object.assign({}, f, {
+                path: `${dir}/${f.name}`
+            }));
+        });
     },
 
     clearLog: function (path) {
@@ -404,9 +408,9 @@ return baseclass.extend({
         if (window.ace?.edit) return Promise.resolve(true);
         if (window._acePromise) return window._acePromise;
         return window._acePromise = new Promise((resolve, reject) => {
-            const script = E('script', { src: '/luci-static/resources/view/nikki/ace/ace.js' });
+            const script = E('script', { src: '/luci-static/resources/view/ace/ace.js' });
             script.onload = () => {
-                ace.config.set('basePath', '/luci-static/resources/view/nikki/ace');
+                ace.config.set('basePath', '/luci-static/resources/view/ace');
                 resolve(true);
             };
             script.onerror = () => {
