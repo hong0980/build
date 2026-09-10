@@ -15,7 +15,7 @@ _Download() {
 	local ret mirrored_url; mirrored_url=$(mirror_url "$url")
 
 	if command -v wget >/dev/null 2>&1; then
-		wget --show-progress -T 15 --user-agent="$UA" -O "$output" "$mirrored_url" >>"$log_file" 2>&1 &
+		wget -T 15 --user-agent="$UA" -O "$output" "$mirrored_url" >>"$log_file" 2>&1 &
 		local pid=$!
 		(
 			while kill -0 $pid 2>/dev/null; do
@@ -151,12 +151,12 @@ get_core_url() {
 
 do_cache() {
 	local task_id="$1" url CORE_DIR; CORE_DIR="$RUN_DIR/core"
-	local final_out archive_path status_file url_json msg
+	local final_out archive_path status_file url_json msg tmp_out
 
-	[ -z "$task_id" ] || [ -z "$ARCH" ] && {
+	if [ -z "$task_id" ] || [ -z "$ARCH" ]; then
 		log "error" "cache_core missing params"
 		return 1
-	}
+	fi
 	mkdir -p "$CORE_DIR"
 
 	final_out="${CORE_DIR}/${task_id}-mihomo"
@@ -173,13 +173,15 @@ do_cache() {
 
 	_Download "$task_id" "$url" "$archive_path" || return 1
 
-	if gzip -dc "$archive_path" > "$final_out" 2>>"/tmp/dl_${task_id}.log" && [ -s "$final_out" ]; then
+	tmp_out="${final_out}.tmp.$$"
+	if gzip -dc "$archive_path" > "$tmp_out" 2>>"/tmp/dl_${task_id}.log" && [ -s "$tmp_out" ]; then
+		mv -f "$tmp_out" "$final_out"
 		chmod 755 "$final_out"
 		rm -f "$archive_path"
 		set_status "$status_file" "done"
 	else
 		set_status "$status_file" "error: extract failed"
-		rm -f "$final_out" "$archive_path"
+		rm -f "$tmp_out" "$archive_path"
 		return 1
 	fi
 }

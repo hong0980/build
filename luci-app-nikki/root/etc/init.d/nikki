@@ -613,7 +613,14 @@ update_subscription() {
 	[ -n "$content_disp" ] && sub_name=$(printf '%b' "${content_disp//%/\\x}")
 
 	if [ -z "$name" ]; then
-		name="${sub_name:-subscription-$(date +%s)}"
+		host=${url#*://}; host=${host%%[/?#]*}; host=${host%%:*}
+		case $host in
+			*[!0-9.]*)
+				def=${host%.*}; def=${def##*.} ;;
+			*)
+				def=$host ;;
+		esac
+		name="${sub_name:-$def}"
 		name_changed=1
 	fi
 	log "Profile" "Subscription update successful."
