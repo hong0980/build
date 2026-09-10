@@ -250,7 +250,8 @@ return view.extend({
                         E('em', { 'class': 'spinning', 'style': 'display:block;margin-bottom:1em;' }, _('Checking latest version...')),
                         E('div', { 'class': 'button-row' }, [
                             E('button', {
-                                'class': 'btn cbi-button-remove', 'click': ui.createHandlerFn(this, function (ev) {
+                                'class': 'btn cbi-button-remove',
+                                'click': ui.createHandlerFn(this, function (ev) {
                                     options.forEach(opt => fs.remove(`${nikki.TEMP_DIR}/${opt.value}.cache`));
                                 })
                             }, _('Flush Cache')),
@@ -331,13 +332,15 @@ return view.extend({
                                             };
                                             nikki.modalnotify(null, E('p', _('%s download successful').format(name)), 3000, 'success');
                                             if (isInstalled) {
-                                                nikki.switch_core(type, core_version, null)
-                                                    .then(res => {
-                                                        if (res.status !== 'ok')
-                                                            nikki.modalnotify(null, E('p', _('Update failed: %s').format(name)), 'error');
-
-                                                        nikki.modalnotify(null, E('p', _('Core %s updated successfully').format(name)), 3000, 'success');
-                                                    });
+                                                nikki.switch_core(type, core_version, null).then(res => {
+                                                    if (res.status !== 'ok')
+                                                        nikki.modalnotify(null, E('p', _('Update failed: %s').format(name)), 'error');
+                                                    nikki.modalnotify(null, E('p', _('Core %s updated successfully').format(name)), 3000, 'success');
+                                                    uci.unload('nikki');
+                                                    return uci.load('nikki')
+                                                        .then(() => self.map.load())
+                                                        .then(() => self.map.reset());
+                                                });
                                             }
                                             item.localver = remotever;
                                             render();

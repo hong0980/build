@@ -551,7 +551,7 @@ _try_download() {
 	req_url="${url}${sep}flag=${ua}"
 
 	curl -sfL --max-time 120 --connect-timeout 15 --retry 2 -A "$ua" -D "$hdr" -o "$out" "$req_url" > /dev/null 2>&1 || return 1
-	[ "$(yq -r '(has("proxies") or has("proxy-providers")) // false' "$out" 2>/dev/null)" = "true" ]
+	[ "$(yq -r '(has("proxies") and has("proxy-groups")) // false' "$out" 2>/dev/null)" = "true" ]
 }
 
 update_subscription() {
@@ -611,6 +611,7 @@ update_subscription() {
 	content_disp=$(cat "$header_tmpfile" "$info_header_tmpfile" 2>/dev/null | grep -m1 -i "^content-disposition:" | tr -d '\r')
 	content_disp=$(echo "$content_disp" | sed -En "s/.*filename\*=UTF-8''([^;[:space:]]*).*/\1/p")
 	[ -n "$content_disp" ] && sub_name=$(printf '%b' "${content_disp//%/\\x}")
+	sub_name=${sub_name//[\/\\:\*\?\"\<\>\|\ ]/_}
 
 	if [ -z "$name" ]; then
 		host=${url#*://}; host=${host%%[/?#]*}; host=${host%%:*}
