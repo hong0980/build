@@ -190,10 +190,9 @@ download_file() {
 }
 
 update_ui() {
-	local task_id="$1" url="$2" ui_path="${3:-ui}"
-	local target_dir temp_dir tmp_zip src_dir count only_entry entry
+	local task_id="$1" url="$2" target_dir="$3"
+	local  temp_dir tmp_zip src_dir count only_entry entry
 
-	target_dir="${RUN_DIR}/${ui_path}/${task_id}"
 	tmp_zip="/tmp/nikki_ui_${task_id}_$$.zip"
 	temp_dir=$(mktemp -d)
 

@@ -410,7 +410,7 @@ return baseclass.extend({
         return window._acePromise = new Promise((resolve, reject) => {
             const script = E('script', { src: '/luci-static/resources/view/ace/ace.js' });
             script.onload = () => {
-                ace.config.set('basePath', '/luci-static/resources/view/ace');
+                ace.config.set('basePath', '/luci-static/resources/ace');
                 resolve(true);
             };
             script.onerror = () => {

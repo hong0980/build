@@ -1591,8 +1591,107 @@ msgstr "倒序"
 msgid "Wrap"
 msgstr "换行"
 
+msgid "Wrap: Off"
+msgstr "换行：关"
+
+msgid "Wrap: On"
+msgstr "换行：开"
+
+msgid "Fullscreen"
+msgstr "全屏"
+
+msgid "Toggle word wrap"
+msgstr "切换自动换行"
+
+msgid "File content unchanged"
+msgstr "文件内容没有变动"
+
+msgid "rpcd is restarting, page will refresh in 3 seconds..."
+msgstr "rpcd 正在重启，页面将在 3 秒后刷新……"
+
 msgid "Upload Mixin"
 msgstr "上传混入文件"
+
+msgid "SOCKS5 proxy port"
+msgstr "SOCKS5 代理端口"
+
+msgid "HTTP(S) proxy server port"
+msgstr "HTTP(S) 代理服务器端口"
+
+msgid "Mixed port for HTTP(S) and SOCKS proxies"
+msgstr "HTTP(S) 和 SOCKS 代理混合端口"
+
+msgid "Transparent proxy port"
+msgstr "透明代理端口"
+
+msgid "Only effective when allow-lan is true; defaults to 0.0.0.0/0 and ::/0"
+msgstr "仅作用于 allow-lan 为 true，默认值为 0.0.0.0/0 和 ::/0"
+
+msgid "Use in config"
+msgstr "配置中使用"
+
+msgid "Automatically add this subscription URL to the active configuration file"
+msgstr "在启动的配置文件中自动添加这个订阅 URL"
+
+msgid "Comments"
+msgstr "注释"
+
+msgid "Keep config comments when selected"
+msgstr "选中保留配置注释"
+
+msgid "Anchors"
+msgstr "锚点"
+
+msgid "Do not expand config anchors when selected"
+msgstr "选中不展开配置锚点"
+
+msgid "Test mirror URL"
+msgstr "测试镜像网址"
+
+msgid "IP ranges exempt from authentication"
+msgstr "跳过验证的 IP 段"
+
+msgid "Allowed client IP ranges"
+msgstr "允许连接的 IP 地址段"
+
+msgid "Disallowed client IP ranges"
+msgstr "禁止连接的 IP 地址段"
+
+msgid "The blacklist takes precedence over the whitelist; empty by default"
+msgstr "黑名单优先级高于白名单，默认值为空"
+
+msgid "Primary DNS configuration affecting all direct connections; use a DNS that resolves mainland China accurately"
+msgstr "主要 DNS 配置，影响所有直连，确保使用对大陆解析精准的 DNS"
+
+msgid "Resolves the domain names of the DNS servers in the nameserver/fallback config; IP addresses only"
+msgstr "用于解析 nameserver/fallback 等配置的 DNS 服务域名，只能使用纯 IP"
+
+msgid "DNS server dedicated to resolving proxy server domains"
+msgstr "专用于节点域名解析的 DNS 服务器"
+
+msgid "DNS server dedicated to resolving domains for the direct outbound"
+msgstr "专用于 direct 出口域名解析的 DNS 服务器"
+
+msgid "When the IP returned by nameserver is not in mainland China, use the query result from fallback DNS"
+msgstr "当 nameserver 返回的 IP 非大陆时，使用 fallback 中的 DNS 查询结果"
+
+msgid "Specify DNS servers per domain; highest priority"
+msgstr "按域名指定使用的 DNS 服务器，优先级最高"
+
+msgid "Trigger conditions for fallback, such as geoip, ipcidr and domain"
+msgstr "配置 fallback 的触发条件，如 geoip、ipcidr、domain"
+
+msgid "Specify the DNS for proxy server domain resolution per domain, same format as nameserver-policy"
+msgstr "按域名指定节点解析用的 DNS，格式同 nameserver-policy"
+
+msgid "Whether to follow nameserver-policy; disabled by default and only takes effect when direct-nameserver is not empty"
+msgstr "是否遵循 nameserver-policy，默认为不遵守，仅当 direct-nameserver 不为空时生效"
+
+msgid "Override nameserver"
+msgstr "覆盖 nameserver"
+
+msgid "Use the ISP-provided DNS as nameserver (preferred)"
+msgstr "使用运营商提供的 DNS 为 nameserver（优先）"
 
 msgid "Select a local file to upload, it will directly overwrite %s"
 msgstr "选择本地文件上传，会直接覆盖 %s"

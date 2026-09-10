@@ -59,6 +59,7 @@ const methods = {
 			if (!uci.get(config, section))
 				return { status: 'error', message: 'section not found' };
 
+			uci.load(config);
 			uci.set(config, section, option, value);
 			uci.commit(config);
 			return { status: 'ok' };
@@ -152,13 +153,14 @@ const methods = {
 			if (!url || !name || !match(name, /^[A-Za-z0-9_-]+$/) || match(url, /['"`$\\;&|<>(){}\n']/))
 				return { status: 'error', message: 'invalid url/name' };
 
-			const ui_path    = trim(uci.get('nikki', 'mixin', 'ui_path') || 'ui');
+			uci.load('nikki');
+			const ui_path    = uci.get('nikki', 'mixin', 'ui_path');
 			const target_dir = `${RUN_DIR}/${ui_path}/${name}`;
 
 			if (access(target_dir))
 				return { status: 'ok', path: target_dir, message: 'already exists' };
 
-			const cmd = `${shellQuote(CORE_SCRIPT)} update_ui ${shellQuote(name)} ${shellQuote(url)} ${shellQuote(ui_path)}`;
+			const cmd = `${shellQuote(CORE_SCRIPT)} update_ui ${shellQuote(name)} ${shellQuote(url)} ${shellQuote(target_dir)}`;
 			return startDownloadTask(name, cmd, target_dir);
 		}
 	},

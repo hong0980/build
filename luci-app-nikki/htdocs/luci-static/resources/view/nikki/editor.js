@@ -16,18 +16,6 @@ function formatSize(bytes) {
 }
 
 return view.extend({
-    aceEditor: null,
-    currentPath: null,
-
-    setEditorValue: function (content) {
-        if (this.aceEditor) {
-            this.aceEditor.setValue(content, -1);
-            this.aceEditor.resize(true);
-        } else {
-            this.textarea.value = content;
-        }
-    },
-
     load: function () {
         return Promise.all([
             L.resolveDefault(fs.stat(nikki.runProfilePath), { path: null }),
@@ -59,24 +47,25 @@ return view.extend({
     },
 
     render: function (data) {
-        this.textarea = E('textarea', { style: 'width:100%;height:350px;box-sizing:border-box;', wrap: 'off' });
         const statEl = E('span', { style: 'margin-left:10px;font-size:12px;color:#888;vertical-align:middle;' });
-        const aceDiv = E('div', { style: 'width:auto;height:100%;display:none;' });
-
-        nikki.initAceEditor(aceDiv, '', 'yaml', { showPrintMargin: true })
-            .then(editor => {
-                this.textarea.style.display = 'none';
-                aceDiv.style.display = '';
-                this.aceEditor = editor;
+        const aceDiv = E('div', { style: 'width:auto;height:100%;' });
+        const wrapbtn = E('button', {
+            type: 'button', title: _('Toggle word wrap'),
+            style: 'position:absolute;top:3px;right:55px;padding:3px 8px;font-size:12px;z-index:1000;background:#557ef1;color:#fff;border:none;cursor:pointer;border-radius:3px;line-height:1.4;display:none;',
+            click: ui.createHandlerFn(this, function () {
+                const ed = this.aceEditor;
+                const on = ed.session.getUseWrapMode();
+                ed.setOption('wrap', on ? 'off' : 'free');
+                requestAnimationFrame(() => ed.resize(true));
+                wrapbtn.textContent = on ? _('Wrap: On') : _('Wrap: Off');
             })
-            .catch(() => {
-                Object.assign(this.textarea.style, {
-                    fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4'
-                });
-            });
+        }, _('Wrap: On'));
+
+        nikki.initAceEditor(aceDiv, '', 'yaml')
+            .then(editor => this.aceEditor = editor);
 
         return E('div', { class: 'cbi-map' }, [
-            E('h3', {}, _('Editor')),
+            E('h3', _('Editor')),
             E('div', { class: 'cbi-section' }, [
                 E('div', { class: 'cbi-value' }, [
                     E('label', { class: 'cbi-value-title' }, _('Choose File')),
@@ -84,20 +73,24 @@ return view.extend({
                         E('select', {
                             class: 'cbi-input-select',
                             change: L.bind(function (ev) {
-                                this.content = '';
                                 const value = ev.target.value;
-                                this.currentPath = value || null;
+                                const ed = this.aceEditor;
+                                if (!value) {
+                                    wrapbtn.style.display = 'none';
+                                    return ed.setValue('');
+                                }
+
+                                this.content = '';
+                                this.path = value;
                                 const item = data.find(i => i.path === value);
                                 statEl.textContent = item?.stat ?? '';
 
-                                if (!value) {
-                                    this.setEditorValue('');
-                                    return;
-                                }
-
                                 return L.resolveDefault(fs.read_direct(value), '').then((c) => {
-                                    this.setEditorValue(c);
-                                    this.content = this.aceEditor ? this.aceEditor.getValue() : this.textarea.value;
+                                    ed.setValue(c, -1);
+                                    ed.session.setScrollLeft(0);
+                                    requestAnimationFrame(() => ed.resize(true));
+                                    this.content = ed.getValue();
+                                    wrapbtn.style.display = '';
                                 });
                             }, this)
                         }, [
@@ -106,33 +99,34 @@ return view.extend({
                         ]), statEl])
                 ])
             ]),
-            E('div', {}, [
-                E('div', { style: 'position:relative;width:auto;height:350px;margin-top:10px;' }, [
-                    aceDiv, this.textarea,
+            E('div', [
+                E('div', { style: 'position:relative;width:auto;height:350px;' }, [
+                    aceDiv, wrapbtn,
                     E('button', {
                         type: 'button', title: _('Fullscreen'),
                         style: 'position:absolute;top:3px;right:15px;padding:3px 8px;font-size:18px;z-index:1000;background:#557ef1;color:#fff;border:none;cursor:pointer;border-radius:3px;line-height:1;',
                         click: ui.createHandlerFn(this, () =>
                             (aceDiv.requestFullscreen || aceDiv.webkitRequestFullscreen).call(aceDiv))
                     }, '⛶')
-                ])])
+                ])
+            ])
         ]);
     },
 
     handleSave: function (ev) {
-        if (!this.currentPath) {
+        if (!this.path) {
             this._showTip(_('No file selected'), 'warning', 2000);
             return Promise.resolve();
         }
-        const value = (this.aceEditor ? this.aceEditor.getValue() : this.textarea.value).trim();
-        const original = (this.content || '').trim();
-        if (value === original) return Promise.resolve();
 
-        return nikki.writefile(this.currentPath, value)
-            .then(() => {
-                this.content = value;
-                this._showTip(_('Config saved, files updated'), 'success', 2000);
-            });
+        const content = this.aceEditor.getValue().replace(/[ \t]+\r?$/gm, '');
+        if (content === this.content) {
+            this._showTip(_('File content unchanged'), 'warning', 2000);
+            return Promise.resolve();
+        }
+
+        return nikki.writefile(this.path, content)
+            .then(() => this._showTip(_('Config saved, files updated'), 'success', 2000));
     },
 
     _showTip: function (msg, type, ms) {
@@ -143,15 +137,6 @@ return view.extend({
         document.body.appendChild(tip);
         setTimeout(() => tip.remove(), ms || 2000);
     },
-
-    // handleSaveApply: function (ev, mode) {
-    //     return this.handleSave(ev)
-    //         .then(() => {
-    //             this._showTip(mode === '0' ? _('Saved, reloading...') : _('Saved, restarting...'), 5000, 'info');
-    //             return nikki.service('nikki', mode === '0' ? 'reload' : 'restart');
-    //         })
-    //         .catch((e) => this._showTip(e.message, 8000, 'error'));
-    // },
 
     handleReset: null,
     handleSaveApply: null

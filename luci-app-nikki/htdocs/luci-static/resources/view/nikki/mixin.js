@@ -149,11 +149,11 @@ return view.extend({
         o.value('rule', _('rule'), _('Rule Mode'));
         o.value('direct', _('direct'), _('Direct Mode'));
 
-        o = s.taboption('general', form.Flag, 'comments', _('注释'));
-        o.description = _('选中保留配置注释');
+        o = s.taboption('general', form.Flag, 'comments', _('Comments'));
+        o.description = _('Keep config comments when selected');
 
-        o = s.taboption('general', form.Flag, 'explode', _('锚点'));
-        o.description = _('选中不展开配置锚点');
+        o = s.taboption('general', form.Flag, 'explode', _('Anchors'));
+        o.description = _('Do not expand config anchors when selected');
 
         o = s.taboption('general', form.Value, 'github_mirror', _('GitHub Mirror'),
             _('Select a mirror to replace GitHub URLs in config (geox-url, rule-providers, proxy-providers, external-ui, icons).'));
@@ -173,7 +173,7 @@ return view.extend({
         o.value('github_akams', _('github.akams.cn (All-in-one)'));
         o.value('ghfast', _('ghfast.top (Stable)'));
 
-        o = s.taboption('general', form.Button, '_button', _('测试镜像网址'));
+        o = s.taboption('general', form.Button, '_button', _('Test mirror URL'));
         o.inputstyle = 'action';
         o.inputtitle = _('verify');
         o.onclick = function (ev, section_id) {
@@ -410,22 +410,22 @@ return view.extend({
         o.value('1', _('Enable'));
 
         o = s.taboption('inbound', form.Value, 'http_port', _('HTTP Port'));
-        o.description = _('HTTP(S) 代理服务器端口');
+        o.description = _('HTTP(S) proxy server port');
         o.datatype = 'port';
         o.placeholder = _('Unmodified');
 
         o = s.taboption('inbound', form.Value, 'socks_port', _('SOCKS Port'));
-        o.description = _('SOCKS5 代理端口');
+        o.description = _('SOCKS5 proxy port');
         o.datatype = 'port';
         o.placeholder = _('Unmodified');
 
         o = s.taboption('inbound', form.Value, 'mixed_port', _('Mixed Port'));
-        o.description = _('HTTP(S) 和 SOCKS 代理混合端口');
+        o.description = _('Mixed port for HTTP(S) and SOCKS proxies');
         o.datatype = 'port';
         o.placeholder = _('Unmodified');
 
         o = s.taboption('inbound', form.Value, 'redir_port', _('Redirect Port'));
-        o.description = _('透明代理端口');
+        o.description = _('Transparent proxy port');
         o.datatype = 'port';
         o.placeholder = _('Unmodified');
 
@@ -433,18 +433,16 @@ return view.extend({
         o.datatype = 'port';
         o.placeholder = _('Unmodified');
 
-        o = s.taboption('inbound', form.DynamicList, 'skip_auth_prefixes', _('跳过验证的 IP 段'));
+        o = s.taboption('inbound', form.DynamicList, 'skip_auth_prefixes', _('IP ranges exempt from authentication'));
         o.datatype = 'cidr';
         o.placeholder = '127.0.0.1/8';
 
-        o = s.taboption('inbound', form.DynamicList, 'lan_allowed_ips', _('允许连接的 IP 地址段')
-        );
-        o.description = _('仅作用于 allow-lan 为 true, 默认值为 0.0.0.0/0 和::/0');
+        o = s.taboption('inbound', form.DynamicList, 'lan_allowed_ips', _('Allowed client IP ranges'));
+        o.description = _('Only effective when allow-lan is true; defaults to 0.0.0.0/0 and ::/0');
         o.datatype = 'cidr';
 
-        o = s.taboption('inbound', form.DynamicList, 'lan_disallowed_ips', _('禁止连接的 IP 地址段')
-        );
-        o.description = _('黑名单优先级高于白名单，默认值为空');
+        o = s.taboption('inbound', form.DynamicList, 'lan_disallowed_ips', _('Disallowed client IP ranges'));
+        o.description = _('The blacklist takes precedence over the whitelist; empty by default');
         o.datatype = 'cidr';
 
         o = s.taboption('inbound', form.Flag, 'authentication', _('Overwrite Authentication'));
@@ -628,12 +626,12 @@ return view.extend({
         so.editable = true;
 
         so = o.subsection.option(form.RichListValue, 'type', _('Type'));
-        so.value('nameserver', _('nameserver'), _('主要 DNS 配置，影响所有直连，确保使用对大陆解析精准的 DNS'));
-        so.value('default-nameserver', _('default-nameserver'), _('用于解析 nameserver/fallback 等配置的 DNS 服务域名，只能使用纯 IP'));
-        so.value('proxy-server-nameserver', _('proxy-server-nameserver'), _('专用于节点域名解析的 DNS 服务器'));
-        so.value('direct-nameserver', _('direct-nameserver'), _('专用于 direct 出口域名解析的 DNS 服务器'));
-        so.value('fallback', _('fallback'), _('当 nameserver 返回的 IP 非大陆时，使用 fallback 中的 DNS 查询结果'));
-        so.value('nameserver-policy', _('nameserver-policy'), _('按域名指定使用的 DNS 服务器，优先级最高'));
+        so.value('nameserver', _('nameserver'), _('Primary DNS configuration affecting all direct connections; use a DNS that resolves mainland China accurately'));
+        so.value('default-nameserver', _('default-nameserver'), _('Resolves the domain names of the DNS servers in the nameserver/fallback config; IP addresses only'));
+        so.value('proxy-server-nameserver', _('proxy-server-nameserver'), _('DNS server dedicated to resolving proxy server domains'));
+        so.value('direct-nameserver', _('direct-nameserver'), _('DNS server dedicated to resolving domains for the direct outbound'));
+        so.value('fallback', _('fallback'), _('When the IP returned by nameserver is not in mainland China, use the query result from fallback DNS'));
+        so.value('nameserver-policy', _('nameserver-policy'), _('Specify DNS servers per domain; highest priority'));
 
         so = o.subsection.option(form.DynamicList, 'nameserver', _('Nameserver'));
         so.validate = function (section_id, value) {
@@ -673,8 +671,8 @@ return view.extend({
         so.editable = true;
 
         so = o.subsection.option(form.RichListValue, 'type', _('Type'));
-        so.value('fallback-filter', _('fallback-filter'), _('配置 fallback 的触发条件，如 geoip、ipcidr、domain'));
-        so.value('proxy-server-nameserver-policy', _('proxy-server-nameserver-policy'), _('按域名指定节点解析用的 DNS，格式同 nameserver-policy'));
+        so.value('fallback-filter', _('fallback-filter'), _('Trigger conditions for fallback, such as geoip, ipcidr and domain'));
+        so.value('proxy-server-nameserver-policy', _('proxy-server-nameserver-policy'), _('Specify the DNS for proxy server domain resolution per domain, same format as nameserver-policy'));
 
         so = o.subsection.option(form.Value, 'matcher', _('Matcher'));
         so.rmempty = false;
@@ -701,10 +699,10 @@ return view.extend({
 
         so = o.subsection.option(form.DynamicList, 'nameserver', _('Nameserver'));
 
-        o = s.taboption('dns', form.Flag, 'dns_direct_nameserver_follow_policy', _('Direct Nameserver Follow Policy'), _('是否遵循nameserver-policy，默认为不遵守，仅当direct-nameserver不为空时生效'));
+        o = s.taboption('dns', form.Flag, 'dns_direct_nameserver_follow_policy', _('Direct Nameserver Follow Policy'), _('Whether to follow nameserver-policy; disabled by default and only takes effect when direct-nameserver is not empty'));
         o.default = o.disabled;
 
-        o = s.taboption('dns', form.Flag, 'wanDns', _('覆盖 nameserver'), _('使用运营商提供的 DNS 为 nameserver（优先）'));
+        o = s.taboption('dns', form.Flag, 'wanDns', _('Override nameserver'), _('Use the ISP-provided DNS as nameserver (preferred)'));
         o.default = o.disabled;
 
         o = s.taboption('sniffer', form.ListValue, 'sniffer', _('Enable'));

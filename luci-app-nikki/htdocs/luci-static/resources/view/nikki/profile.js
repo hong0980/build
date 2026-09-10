@@ -1343,7 +1343,7 @@ return view.extend({
         o.modalonly = true;
         o.rmempty = false;
 
-        o = s.option(form.Flag, 'enabled', _('配置中使用'), _('在启动的配置文件中自动添加这个订阅URL'));
+        o = s.option(form.Flag, 'enabled', _('Use in config'), _('Automatically add this subscription URL to the active configuration file'));
         o.editable = true;
         o.rmempty = true;
         o.width = '9%';
@@ -1386,12 +1386,12 @@ return view.extend({
         o.optional = true;
         o.readonly = true;
 
-        o = s.option(form.ListValue, 'prefer', _('Prefer'));
-        o.default = 'local';
-        o.modalonly = true;
-        o.rmempty = false;
-        o.value('remote', _('Remote'));
-        o.value('local', _('Local'));
+        // o = s.option(form.ListValue, 'prefer', _('Prefer'));
+        // o.default = 'local';
+        // o.modalonly = true;
+        // o.rmempty = false;
+        // o.value('remote', _('Remote'));
+        // o.value('local', _('Local'));
 
         o = s.option(form.Flag, 'auto_update', _('Auto update'));
         o.rmempty = false;
