@@ -61,6 +61,22 @@ _Download() {
 	fi
 }
 
+urlencode() {
+	local url="$1"
+	ucode -e '
+		const s = ARGV[0];
+		let out = "";
+		for (let i = 0; i < length(s); i++) {
+			const c = substr(s, i, 1);
+			if (match(c, /^[A-Za-z0-9_.~-]$/))
+				out += c;
+			else
+				out += sprintf("%%%02X", ord(c));
+		}
+		print(out);
+	' "$url"
+}
+
 mirror_url() {
 	local url="$1" target
 	target="$(uci -q get nikki.mixin.github_mirror)"

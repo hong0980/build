@@ -316,12 +316,42 @@ start_service() {
 	fi
 
 	auto_update() {
-		local enable hour time cfg="$1"
+		local cfg="$1" enable hour time week mode interval cmd
 		config_get_bool enable "$cfg" auto_update
 		[ "$enable" = '0' ] && return
-		config_get hour "$cfg" hour 2
-		config_get time "$cfg" time 10
-		echo "$time $hour * * * /etc/init.d/nikki update_subscription $cfg #nikki update_subscription" >> "$CR"
+		config_get hour     "$cfg" hour 2
+		config_get time     "$cfg" time 10
+		config_get week     "$cfg" week '*'
+		config_get mode     "$cfg" mode 0
+		config_get interval "$cfg" interval 30
+		cmd="/etc/init.d/nikki update_subscription $cfg #nikki update_subscription"
+
+		if [ "$mode" = '1' ]; then
+			echo "$time $hour $week * * $cmd" >> "$CR"
+			return
+		fi
+
+		if [ "$interval" -lt 60 ]; then
+			echo "*/$interval * * * * $cmd" >> "$CR"
+		elif [ "$interval" -lt 1440 ]; then
+			awk -v step="$interval" -v cmd="$cmd" '
+			BEGIN {
+				for (t = 0; t < 1440; t += step) {
+					h = int(t/60); m = t%60
+					if (h in hl) hl[h] = hl[h] "," m
+					else         hl[h] = m
+				}
+				for (h = 0; h < 24; h++)
+					if (h in hl) {
+						k = hl[h]
+						if (k in g) g[k] = g[k] "," h
+						else        g[k] = h
+					}
+				for (k in g) print k, g[k], "* * *", cmd
+			}' >> "$CR"
+		else
+			echo "0 0 */$((interval/1440)) * * $cmd" >> "$CR"
+		fi
 	}
 	config_foreach auto_update subscription
 

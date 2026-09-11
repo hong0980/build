@@ -1633,6 +1633,54 @@ msgstr "配置中使用"
 msgid "Automatically add this subscription URL to the active configuration file"
 msgstr "在启动的配置文件中自动添加这个订阅 URL"
 
+msgid "Auto update"
+msgstr "自动更新"
+
+msgid "Update Mode"
+msgstr "更新模式"
+
+msgid "Loop Mode"
+msgstr "循环模式"
+
+msgid "Appointment Mode"
+msgstr "定时模式"
+
+msgid "Update Interval(min)"
+msgstr "更新间隔（分钟）"
+
+msgid "weeks"
+msgstr "星期"
+
+msgid "Every Day"
+msgstr "每天"
+
+msgid "Every Monday"
+msgstr "每周一"
+
+msgid "Every Tuesday"
+msgstr "每周二"
+
+msgid "Every Wednesday"
+msgstr "每周三"
+
+msgid "Every Thursday"
+msgstr "每周四"
+
+msgid "Every Friday"
+msgstr "每周五"
+
+msgid "Every Saturday"
+msgstr "每周六"
+
+msgid "Every Sunday"
+msgstr "每周日"
+
+msgid "hour"
+msgstr "时"
+
+msgid "minute"
+msgstr "分"
+
 msgid "Comments"
 msgstr "注释"
 

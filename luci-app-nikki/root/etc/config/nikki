@@ -23,12 +23,6 @@ config core 'core'
 	option tproxy_listener_name 'tproxy-in'
 	option tun_listener_name 'tun-in'
 
-config subscription
-	option name 'default'
-	option url 'http://example.com/default.yaml'
-	option user_agent 'clash'
-	option prefer 'local'
-
 config mixin 'mixin'
 	option log_level 'warning'
 	option mode 'rule'

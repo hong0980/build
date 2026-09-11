@@ -1381,10 +1381,10 @@ return view.extend({
         o.value('clash.meta');
         o.value('mihomo');
 
-        o = s.option(form.Value, 'detected_user_agent', _('Detected User Agent'));
-        o.modalonly = true;
-        o.optional = true;
-        o.readonly = true;
+        // o = s.option(form.Value, 'detected_user_agent', _('Detected User Agent'));
+        // o.modalonly = true;
+        // o.optional = true;
+        // o.readonly = true;
 
         // o = s.option(form.ListValue, 'prefer', _('Prefer'));
         // o.default = 'local';
@@ -1397,6 +1397,33 @@ return view.extend({
         o.rmempty = false;
         o.modalonly = true;
 
+        o = s.option(form.ListValue, "mode", _("Update Mode"));
+        o.value("0", _("Loop Mode"));
+        o.value("1", _("Appointment Mode"));
+        o.default = "1";
+        o.rmempty = true;
+        o.modalonly = true;
+        o.depends("auto_update", "1");
+
+        o = s.option(form.Value, "interval", _("Update Interval(min)"))
+        o.default = "60";
+        o.datatype = "range(1, 10080)";
+        o.rmempty = true;
+        o.modalonly = true;
+        o.depends("mode", "0");
+
+        o = s.option(form.ListValue, 'week', _("weeks"));
+        o.value("*", _("Every Day"))
+        o.value("1", _("Every Monday"))
+        o.value("2", _("Every Tuesday"))
+        o.value("3", _("Every Wednesday"))
+        o.value("4", _("Every Thursday"))
+        o.value("5", _("Every Friday"))
+        o.value("6", _("Every Saturday"))
+        o.value("0", _("Every Sunday"))
+        o.modalonly = true;
+        o.depends('mode', '1');
+
         o = s.option(form.ListValue, 'hour', _('hour'));
         for (let i = 0; i < 24; i++) {
             const label = i < 10 ? '0' + i : String(i);
@@ -1404,7 +1431,7 @@ return view.extend({
         }
         o.default = '2';
         o.modalonly = true;
-        o.depends('auto_update', '1');
+        o.depends('mode', '1');
 
         o = s.option(form.ListValue, 'time', _('minute'));
         for (let i = 0; i < 60; i++) {
@@ -1413,10 +1440,10 @@ return view.extend({
         }
         o.default = '2';
         o.modalonly = true;
-        o.depends('auto_update', '1');
+        o.depends('mode', '1');
 
-        o = s.option(form.Value, 'info_url', _('Subscription Info Url'));
-        o.modalonly = true;
+        // o = s.option(form.Value, 'info_url', _('Subscription Info Url'));
+        // o.modalonly = true;
 
         // o = s.option(form.Value, 'upload', _('Uploaded'));
         // o.modalonly = true;
