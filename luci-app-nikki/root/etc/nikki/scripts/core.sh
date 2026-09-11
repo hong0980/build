@@ -1,11 +1,248 @@
 #!/bin/sh
 
+. /lib/functions.sh
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
 auth_header="${GITHUB_TOKEN:+Authorization: Bearer $GITHUB_TOKEN}"
-CACHE_DIR="/tmp/mihomo_core_cache"
 CACHE_TTL=3600
 
 set_status() { printf '%s\n' "$2" > "$1"; }
+
+mirror_url() {
+	local url="$1" target
+	target="$(uci -q get nikki.mixin.github_mirror)"
+	[ -z "$target" ] && target='raw'
+
+	ucode -e "
+		import { mirrorGithubUrl } from '/etc/nikki/ucode/include.uc';
+		print(mirrorGithubUrl(ARGV[0], ARGV[1]));
+	" "$url" "$target"
+}
+
+utc_to_cst() {
+	local iso="$1"
+	local tz=$(uci -q get system.@system[0].timezone 2>/dev/null || echo 'CST-8')
+	local offset=$(echo "$tz" | grep -oE '[+-]?[0-9]+' | head -1)
+
+	echo "$iso" | awk -v off="${offset:-0}" '{
+		gsub(/[-T:Z]/, " ")
+		utc = mktime($1" "$2" "$3" "$4" "$5" "$6)
+		if (utc < 0) { print "Invalid"; exit }
+		print strftime("%m-%d %H:%M", utc - off * 3600)
+	}'
+}
+
+urlencode() {
+	local url="$1"
+	ucode -e '
+		const s = ARGV[0];
+		let out = "";
+		for (let i = 0; i < length(s); i++) {
+			const c = substr(s, i, 1);
+			if (match(c, /^[A-Za-z0-9_.~-]$/))
+				out += c;
+			else
+				out += sprintf("%%%02X", ord(c));
+		}
+		print(out);
+	' "$url"
+}
+
+_conv_str() {
+	[ -n "$2" ] && QS="$QS&$1=$(urlencode "$2")"
+}
+
+_try_download() {
+	local url="$1" ua="$2" out="$3" hdr="$4" add_flag="${5:-1}"
+	local sep req_url="$url"
+
+	if [ "$add_flag" = "1" ]; then
+		case "$url" in
+			*\?*) sep='&' ;;
+			*)    sep='?' ;;
+		esac
+		req_url="${url}${sep}flag=${ua}"
+	fi
+
+	curl -sfL --max-time 120 --connect-timeout 15 --retry 2 \
+		-A "$ua" -D "$hdr" -o "$out" "$req_url" > /dev/null 2>&1 || return 1
+
+	[ "$(yq -r '(has("proxies") and has("proxy-groups")) // false' "$out" 2>/dev/null)" = "true" ]
+}
+
+build_converter_url() {
+	local sub_url="$1" base sep flag val
+	case "$converter_service" in
+		api.asailor.org)     base="https://api.asailor.org/sub?target=clash" ;;
+		subconverter_public) base="https://sub.xeton.dev/sub?target=clash" ;;
+		custom)              base="$converter_url" ;;
+		*) return 1 ;;
+	esac
+	[ -z "$base" ] && return 1
+	case "$base" in *\?*) sep='&' ;; *) sep='?' ;; esac
+
+	local QS="url=$(urlencode "$sub_url")"
+	_conv_str config   "$converter_template"
+	_conv_str token    "$converter_token"
+	_conv_str group    "$converter_group"
+	_conv_str filename "$converter_filename"
+	_conv_str include  "$converter_include"
+	_conv_str exclude  "$converter_exclude"
+	_conv_str rename   "$converter_rename"
+	_conv_str script   "$converter_script"
+
+	for flag in emoji udp tfo tls13 scv fdn sort expand new_name \
+				append_type append_info classic list info; do
+		eval "val=\$converter_$flag"
+		[ "$val" = "1" ] && QS="$QS&$flag=true"
+	done
+
+	converter_extra="${converter_extra#&}"
+	[ -n "$converter_extra" ] && QS="$QS&$converter_extra"
+
+	printf '%s%s%s' "$base" "$sep" "$QS"
+}
+
+update_subscription() {
+	local section="$1" temp_config="$(mktemp)"
+	[ -z "$section" ] && return
+	config_load nikki
+
+	local url name info_url user_agent detected_ua success=0 \
+		  header_tmpfile info_file used_ua ua
+
+	config_get url         "$section" url
+	config_get name        "$section" name
+	config_get info_url    "$section" info_url
+	config_get user_agent  "$section" user_agent
+	config_get detected_ua "$section" detected_user_agent
+
+	local use_converter converter_service converter_url converter_template \
+		  converter_token converter_group converter_filename \
+		  converter_include converter_exclude converter_rename converter_script \
+		  converter_emoji converter_udp converter_tfo converter_tls13 \
+		  converter_scv converter_sort converter_fdn converter_expand \
+		  converter_new_name converter_append_type converter_append_info \
+		  converter_classic converter_list converter_info_node \
+		  converter_extra
+	config_get use_converter           "$section" use_converter           0
+	config_get converter_service       "$section" converter_service       none
+	config_get converter_url           "$section" converter_url           ""
+	config_get converter_template      "$section" converter_template      ""
+	config_get converter_token         "$section" converter_token         ""
+	config_get converter_group         "$section" converter_group         ""
+	config_get converter_filename      "$section" converter_filename      ""
+	config_get converter_include       "$section" converter_include       ""
+	config_get converter_exclude       "$section" converter_exclude       ""
+	config_get converter_rename        "$section" converter_rename        ""
+	config_get converter_script        "$section" converter_script        ""
+	config_get converter_emoji         "$section" converter_emoji         0
+	config_get converter_udp           "$section" converter_udp           1
+	config_get converter_tfo           "$section" converter_tfo           0
+	config_get converter_tls13         "$section" converter_tls13         0
+	config_get converter_scv           "$section" converter_scv           0
+	config_get converter_sort          "$section" converter_sort          1
+	config_get converter_fdn           "$section" converter_fdn           0
+	config_get converter_expand        "$section" converter_expand        0
+	config_get converter_new_name      "$section" converter_new_name      0
+	config_get converter_append_type   "$section" converter_append_type   1
+	config_get converter_append_info   "$section" converter_append_info   0
+	config_get converter_classic       "$section" converter_classic       0
+	config_get converter_list          "$section" converter_list          0
+	config_get converter_info_node     "$section" converter_info_node     0
+	config_get converter_extra         "$section" converter_extra         ""
+
+	local req_url="$url" add_flag=1
+	if [ "$use_converter" = "1" ] && [ "$converter_service" != "none" ]; then
+		log "Profile" "Use online converter: %s." "$converter_service"
+		if req_url=$(build_converter_url "$url"); then
+			add_flag=0
+		else
+			log "Profile" "Converter misconfigured, fallback to direct download."
+			req_url="$url"
+		fi
+	fi
+
+	log "Profile" "Update subscription: %s." "${name:-<unnamed>}"
+	header_tmpfile="$TEMP_DIR/$section.header"
+
+	log "Profile" "Download subscription."
+	if [ -z "$user_agent" -o "$user_agent" = "auto" ]; then
+		set -- "$detected_ua" meta clash clash.meta mihomo
+	else
+		set -- "$user_agent"
+	fi
+
+	for ua in "$@"; do
+		[ -z "$ua" ] && continue
+		_try_download "$req_url" "$ua" "$temp_config" "$header_tmpfile" "$add_flag" && {
+			success=1
+			used_ua="$ua"
+			break
+		}
+	done
+
+	if grep -q -i "subscription-userinfo:" "$header_tmpfile" 2>/dev/null; then
+		info_file="$header_tmpfile"
+	fi
+
+	if [ "$success" != 1 ]; then
+		log "Profile" "Subscription update failed."
+		rm -f "$temp_config" "$header_tmpfile"
+		uci_commit nikki
+		return 1
+	fi
+
+	local userinfo expire upload download total used avaliable \
+		  web_page_url content_disp sub_name name_changed=0
+
+	content_disp=$(cat "$header_tmpfile" 2>/dev/null | grep -m1 -i "^content-disposition:" | tr -d '\r')
+	content_disp=$(echo "$content_disp" | sed -En "s/.*filename\*=UTF-8''([^;[:space:]]*).*/\1/p")
+	[ -n "$content_disp" ] && sub_name=$(printf '%b' "${content_disp//%/\\x}")
+	sub_name=${sub_name//[\/\\:\*\?\"\<\>\|\ ]/_}
+
+	if [ -z "$name" ]; then
+		host=${url#*://}; host=${host%%[/?#]*}; host=${host%%:*}
+		case $host in
+			*[!0-9.]*)
+				def=${host%.*}; def=${def##*.} ;;
+			*)
+				def=$host ;;
+		esac
+		name="${sub_name:-$def}"
+		name_changed=1
+	fi
+	log "Profile" "Subscription update successful."
+
+	if [ -f "$info_file" ]; then
+		userinfo=$(grep -i "subscription-userinfo:" "$info_file" | tr -d '\r')
+		total=$(echo    "$userinfo" | sed -En 's/.*total=([0-9]*).*/\1/p')
+		expire=$(echo   "$userinfo" | sed -En 's/.*expire=([0-9]*).*/\1/p')
+		upload=$(echo   "$userinfo" | sed -En 's/.*upload=([0-9]*).*/\1/p')
+		download=$(echo "$userinfo" | sed -En 's/.*download=([0-9]*).*/\1/p')
+
+		if [ -n "$upload" ] && [ -n "$download" ]; then
+			used=$((upload + download))
+			[ -n "$total" ] && avaliable=$((total - used))
+		fi
+
+		web_page_url=$(grep -m1 -i "^profile-web-page-url:" "$info_file" | sed -En 's/^[^:]*:[[:space:]]*(.*)$/\1/p' | tr -d '\r')
+
+		for opt in used total avaliable; do
+			eval "val=\$$opt"
+			[ -n "$val" ] && uci_set nikki "$section" "$opt" "$(format_filesize "$val")"
+		done
+		[ -n "$expire" ]       && uci_set nikki "$section" expire       "$(date "+%Y-%m-%d %H:%M:%S" -d "@$expire")"
+		[ -n "$web_page_url" ] && uci_set nikki "$section" web_page_url "$web_page_url"
+	fi
+
+	[ "$name_changed" = 1 ] && uci_set nikki "$section" name "$name"
+	[ -n "$used_ua" ] && [ "$used_ua" != "$detected_ua" ] && uci_set nikki "$section" detected_user_agent "$used_ua"
+	uci_set nikki "$section" update "$(date "+%Y-%m-%d %H:%M:%S")"
+	mv -f "$temp_config" "$SUBSCRIPTIONS_DIR/$name.yaml"
+	rm -f "$header_tmpfile"
+	uci_commit nikki
+	return 0
+}
 
 _Download() {
 	local task_id="$1" url="$2" output="$3"
@@ -59,30 +296,6 @@ _Download() {
 		rm -f "$output"
 		return 1
 	fi
-}
-
-mirror_url() {
-	local url="$1" target
-	target="$(uci -q get nikki.mixin.github_mirror)"
-	[ -z "$target" ] && target='raw'
-
-	ucode -e "
-		import { mirrorGithubUrl } from '/etc/nikki/ucode/include.uc';
-		print(mirrorGithubUrl(ARGV[0], ARGV[1]));
-	" "$url" "$target"
-}
-
-utc_to_cst() {
-	local iso="$1"
-	local tz=$(uci -q get system.@system[0].timezone 2>/dev/null || echo 'CST-8')
-	local offset=$(echo "$tz" | grep -oE '[+-]?[0-9]+' | head -1)
-
-	echo "$iso" | awk -v off="${offset:-0}" '{
-		gsub(/[-T:Z]/, " ")
-		utc = mktime($1" "$2" "$3" "$4" "$5" "$6)
-		if (utc < 0) { print "Invalid"; exit }
-		print strftime("%m-%d %H:%M", utc - off * 3600)
-	}'
 }
 
 github_api() {
@@ -192,37 +405,29 @@ download_file() {
 }
 
 update_ui() {
-	local task_id="$1" url="$2" target_dir="$3"
-	local  temp_dir tmp_zip src_dir count only_entry entry
+	local task_id="$1" url="$2" target_dir="$3" src_dir
+	local tmp_zip="/tmp/nikki_ui_${task_id}_$$.zip"
+	local temp_dir=$(mktemp -d)
 
-	tmp_zip="/tmp/nikki_ui_${task_id}_$$.zip"
-	temp_dir=$(mktemp -d)
-
-	if ! _Download "$task_id" "$url" "$tmp_zip"; then
-		rm -rf "$temp_dir"
+	if ! { _Download "$task_id" "$url" "$tmp_zip" \
+		   && unzip -o "$tmp_zip" -d "$temp_dir" 2>>"/tmp/dl_${task_id}.log"; }; then
+		set_status "/tmp/dl_${task_id}.status" "error: download or unzip failed"
+		rm -rf "$tmp_zip" "$temp_dir"
 		return 1
 	fi
 
-	if ! unzip -o "$tmp_zip" -d "$temp_dir" 2>>"/tmp/dl_${task_id}.log"; then
-		set_status "/tmp/dl_${task_id}.status" "error: unzip failed"
+	set -- "$temp_dir"/*/index.html
+	if [ -f "$1" ]; then
+		src_dir="${1%/index.html}"
+	else
+		set_status "/tmp/dl_${task_id}.status" "error: invalid package"
 		rm -rf "$tmp_zip" "$temp_dir"
 		return 1
 	fi
 
 	rm -rf "${target_dir:?}"
 	mkdir -p "$target_dir"
-
-	src_dir="$temp_dir"
-	count=$(find "$temp_dir" -mindepth 1 -maxdepth 1 | wc -l)
-	if [ "$count" -eq 1 ]; then
-		only_entry=$(find "$temp_dir" -mindepth 1 -maxdepth 1)
-		[ -d "$only_entry" ] && src_dir="$only_entry"
-	fi
-
-	for entry in "$src_dir"/* "$src_dir"/.[!.]* "$src_dir"/..?*; do
-		[ -e "$entry" ] || continue
-		mv "$entry" "$target_dir"/ 2>/dev/null || true
-	done
+	cp -a "$src_dir"/. "$target_dir"/
 
 	rm -rf "$tmp_zip" "$temp_dir"
 	set_status "/tmp/dl_${task_id}.status" "done"
@@ -235,4 +440,5 @@ case "$ACTION" in
 	do_cache)      do_cache "$1" ;;
 	update_ui)     update_ui "$1" "$2" "$3" ;;
 	download_file) download_file "$1" "$2" "$3" ;;
+	update_subscription) update_subscription "$1" ;;
 esac

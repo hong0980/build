@@ -47,22 +47,6 @@ GEOIP6_CN_NFT="$NFT_DIR/geoip6_cn.nft"
 [ -d "$LOG_DIR"  ] || mkdir -p "$LOG_DIR"
 [ -d "$TEMP_DIR" ] || mkdir -p "$TEMP_DIR"
 
-urlencode() {
-	local url="$1"
-	ucode -e '
-		const s = ARGV[0];
-		let out = "";
-		for (let i = 0; i < length(s); i++) {
-			const c = substr(s, i, 1);
-			if (match(c, /^[A-Za-z0-9_.~-]$/))
-				out += c;
-			else
-				out += sprintf("%%%02X", ord(c));
-		}
-		print(out);
-	' "$url"
-}
-
 # functions
 format_filesize() {
 	local b; b=1
