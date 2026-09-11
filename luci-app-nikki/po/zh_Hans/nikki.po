@@ -2533,5 +2533,167 @@ msgstr "这将会修改 mihomo 的状态。是否继续？"
 msgid "Release Time"
 msgstr "发布时间"
 
+msgid "Enable Online Converter"
+msgstr "启用在线订阅转换"
+
+msgid "Send subscription URL to an online converter before saving"
+msgstr "保存前先将订阅地址发送给在线转换器处理"
+
+msgid "Converter Service"
+msgstr "转换订阅模板API服务器"
+
+msgid "SubConverter (public)"
+msgstr "SubConverter（公共实例）"
+
+msgid "Custom (use Converter URL)"
+msgstr "自定义（使用转换器地址）"
+
+msgid "Converter URL"
+msgstr "自定义模板地址"
+
+msgid "Full endpoint for custom service, e.g. https://sub.example.com/sub"
+msgstr "自定义服务的完整接口地址，例如 https://sub.example.com/sub"
+
+msgid "Access Token"
+msgstr "访问令牌"
+
+msgid "Auth token if the converter requires it"
+msgstr "若转换器要求鉴权，在此填写令牌"
+
+msgid "Config / Template"
+msgstr "订阅转换模板"
+
+msgid "Preset name (self-hosted) or full URL of external config (.yml)"
+msgstr "预设名称（仅自建后端支持）或外部配置 (.yml) 的完整地址"
+
+msgid "None"
+msgstr "无"
+
+msgid "Group Name"
+msgstr "自定义策略组名称"
+
+msgid "Custom proxy-group name (group=)"
+msgstr "自定义 proxy-group 名称（group= 参数）"
+
+msgid "Output Filename"
+msgstr "输出文件名"
+
+msgid "Content-Disposition filename (filename=)"
+msgstr "下载时 Content-Disposition 中的文件名（filename= 参数）"
+
+msgid "Include (regex)"
+msgstr "节点筛选（包含）"
+
+msgid "Only keep nodes matching this regex"
+msgstr "仅保留匹配此正则表达式的节点"
+
+msgid "Exclude (regex)"
+msgstr "节点筛选（排除）"
+
+msgid "Remove nodes matching this regex"
+msgstr "移除匹配此正则表达式的节点"
+
+msgid "Rename Rules"
+msgstr "节点重命名规则"
+
+msgid "Format: old@new|old2@new2, applied to node names"
+msgstr "格式：旧名@新名|旧名2@新名2，将应用于节点名称"
+
+msgid "Filter Script (JS)"
+msgstr "过滤脚本（JS）"
+
+msgid "Custom JavaScript to filter/modify nodes (script=)"
+msgstr "自定义 JavaScript，用于过滤/修改节点（script= 参数）"
+
+msgid "Add Emoji"
+msgstr "添加 Emoji"
+
+msgid "add_emoji / emoji"
+msgstr "为节点名称添加国家/地区 Emoji"
+
+msgid "UDP Support"
+msgstr "UDP 支持"
+
+msgid "udp=true"
+msgstr "转换时启用 UDP 支持（udp=true）"
+
+msgid "TCP Fast Open"
+msgstr "TCP Fast Open"
+
+msgid "tfo=true"
+msgstr "启用 TCP Fast Open（tfo=true）"
+
+msgid "TLS 1.3"
+msgstr "TLS 1.3"
+
+msgid "tls13=true"
+msgstr "启用 TLS 1.3（tls13=true）"
+
+msgid "Skip Cert Verify"
+msgstr "跳过证书验证"
+
+msgid "scv=true"
+msgstr "跳过证书校验，不安全（scv=true）"
+
+msgid "Filter Deprecated"
+msgstr "过滤失效节点"
+
+msgid "filter deprecated nodes"
+msgstr "过滤掉已弃用/失效的节点（fdn=true）"
+
+msgid "Sort Nodes"
+msgstr "节点排序"
+
+msgid "sort=true"
+msgstr "按名称对节点排序（sort=true）"
+
+msgid "Expand"
+msgstr "展开规则集"
+
+msgid "expand rulesets"
+msgstr "展开引用的规则集（expand=true）"
+
+msgid "Rename Nodes"
+msgstr "重命名节点"
+
+msgid "new_name=true"
+msgstr "重命名节点以避免重名（new_name=true）"
+
+msgid "Append Node Type"
+msgstr "插入节点类型"
+
+msgid "append_type=true"
+msgstr "在节点名称后追加类型标识（append_type=true）"
+
+msgid "Append Node Info"
+msgstr "追加节点信息"
+
+msgid "append_info=true"
+msgstr "在节点名称后附加延迟/倍率等信息（append_info=true）"
+
+msgid "Classic Rules"
+msgstr "经典规则格式"
+
+msgid "classic rule format"
+msgstr "输出 classical 规则格式而非 rule-providers（classic=true）"
+
+msgid "Node List Only"
+msgstr "仅输出节点列表"
+
+msgid "list=true, no groups"
+msgstr "仅输出节点列表，不包含策略组（list=true）"
+
+msgid "Info Node"
+msgstr "信息节点"
+
+msgid "append subscription info as node"
+msgstr "将订阅流量/到期信息附加为节点（info=true）"
+
+msgid "Converter Extra Params"
+msgstr "自定义参数"
+
+msgid "Raw query string appended as-is, e.g. new_name=true&insert=..."
+msgstr "原样追加的查询串，例如 new_name=true&insert=..."
+
 msgid ""
 msgstr ""

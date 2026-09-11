@@ -571,17 +571,58 @@ clear_logs() {
 }
 
 _try_download() {
-	local url="$1" ua="$2" out="$3" hdr="$4"
-	local sep req_url
+	local url="$1" ua="$2" out="$3" hdr="$4" add_flag="${5:-1}"
+	local sep req_url="$url"
 
-	case "$url" in
-		*\?*) sep='&' ;;
-		*)    sep='?' ;;
-	esac
-	req_url="${url}${sep}flag=${ua}"
+	if [ "$add_flag" = "1" ]; then
+		case "$url" in
+			*\?*) sep='&' ;;
+			*)    sep='?' ;;
+		esac
+		req_url="${url}${sep}flag=${ua}"
+	fi
 
-	curl -sfL --max-time 120 --connect-timeout 15 --retry 2 -A "$ua" -D "$hdr" -o "$out" "$req_url" > /dev/null 2>&1 || return 1
+	curl -sfL --max-time 120 --connect-timeout 15 --retry 2 \
+		-A "$ua" -D "$hdr" -o "$out" "$req_url" > /dev/null 2>&1 || return 1
+
 	[ "$(yq -r '(has("proxies") and has("proxy-groups")) // false' "$out" 2>/dev/null)" = "true" ]
+}
+
+_conv_str() {
+	[ -n "$2" ] && QS="$QS&$1=$(urlencode "$2")"
+}
+
+build_converter_url() {
+	local sub_url="$1" base sep flag val
+	case "$converter_service" in
+		api.asailor.org)     base="https://api.asailor.org/sub?target=clash" ;;
+		subconverter_public) base="https://sub.xeton.dev/sub?target=clash" ;;
+		custom)              base="$converter_url" ;;
+		*) return 1 ;;
+	esac
+	[ -z "$base" ] && return 1
+	case "$base" in *\?*) sep='&' ;; *) sep='?' ;; esac
+
+	local QS="url=$(urlencode "$sub_url")"
+	_conv_str config   "$converter_template"
+	_conv_str token    "$converter_token"
+	_conv_str group    "$converter_group"
+	_conv_str filename "$converter_filename"
+	_conv_str include  "$converter_include"
+	_conv_str exclude  "$converter_exclude"
+	_conv_str rename   "$converter_rename"
+	_conv_str script   "$converter_script"
+
+	for flag in emoji udp tfo tls13 scv fdn sort expand new_name \
+				append_type append_info classic list info; do
+		eval "val=\$converter_$flag"
+		[ "$val" = "1" ] && QS="$QS&$flag=true"
+	done
+
+	converter_extra="${converter_extra#&}"
+	[ -n "$converter_extra" ] && QS="$QS&$converter_extra"
+
+	printf '%s%s%s' "$base" "$sep" "$QS"
 }
 
 update_subscription() {
@@ -590,17 +631,62 @@ update_subscription() {
 	config_load nikki
 
 	local url name info_url user_agent detected_ua success=0 \
-		  header_tmpfile info_header_tmpfile info_file used_ua ua
+		  header_tmpfile info_file used_ua ua
 
-	config_get url        "$section" url
-	config_get name       "$section" name
-	config_get info_url   "$section" info_url
-	config_get user_agent "$section" user_agent
+	config_get url         "$section" url
+	config_get name        "$section" name
+	config_get info_url    "$section" info_url
+	config_get user_agent  "$section" user_agent
 	config_get detected_ua "$section" detected_user_agent
+
+	local use_converter converter_service converter_url converter_template \
+		  converter_token converter_group converter_filename \
+		  converter_include converter_exclude converter_rename converter_script \
+		  converter_emoji converter_udp converter_tfo converter_tls13 \
+		  converter_scv converter_sort converter_fdn converter_expand \
+		  converter_new_name converter_append_type converter_append_info \
+		  converter_classic converter_list converter_info_node \
+		  converter_extra
+	config_get use_converter           "$section" use_converter           0
+	config_get converter_service       "$section" converter_service       none
+	config_get converter_url           "$section" converter_url           ""
+	config_get converter_template      "$section" converter_template      ""
+	config_get converter_token         "$section" converter_token         ""
+	config_get converter_group         "$section" converter_group         ""
+	config_get converter_filename      "$section" converter_filename      ""
+	config_get converter_include       "$section" converter_include       ""
+	config_get converter_exclude       "$section" converter_exclude       ""
+	config_get converter_rename        "$section" converter_rename        ""
+	config_get converter_script        "$section" converter_script        ""
+	config_get converter_emoji         "$section" converter_emoji         0
+	config_get converter_udp           "$section" converter_udp           1
+	config_get converter_tfo           "$section" converter_tfo           0
+	config_get converter_tls13         "$section" converter_tls13         0
+	config_get converter_scv           "$section" converter_scv           0
+	config_get converter_sort          "$section" converter_sort          1
+	config_get converter_fdn           "$section" converter_fdn           0
+	config_get converter_expand        "$section" converter_expand        0
+	config_get converter_new_name      "$section" converter_new_name      0
+	config_get converter_append_type   "$section" converter_append_type   1
+	config_get converter_append_info   "$section" converter_append_info   0
+	config_get converter_classic       "$section" converter_classic       0
+	config_get converter_list          "$section" converter_list          0
+	config_get converter_info_node     "$section" converter_info_node     0
+	config_get converter_extra         "$section" converter_extra         ""
+
+	local req_url="$url" add_flag=1
+	if [ "$use_converter" = "1" ] && [ "$converter_service" != "none" ]; then
+		log "Profile" "Use online converter: %s." "$converter_service"
+		if req_url=$(build_converter_url "$url"); then
+			add_flag=0
+		else
+			log "Profile" "Converter misconfigured, fallback to direct download."
+			req_url="$url"
+		fi
+	fi
 
 	log "Profile" "Update subscription: %s." "${name:-<unnamed>}"
 	header_tmpfile="$TEMP_DIR/$section.header"
-	info_header_tmpfile="$TEMP_DIR/$section.info.header"
 
 	log "Profile" "Download subscription."
 	if [ -z "$user_agent" -o "$user_agent" = "auto" ]; then
@@ -611,26 +697,20 @@ update_subscription() {
 
 	for ua in "$@"; do
 		[ -z "$ua" ] && continue
-		_try_download "$url" "$ua" "$temp_config" "$header_tmpfile" && {
+		_try_download "$req_url" "$ua" "$temp_config" "$header_tmpfile" "$add_flag" && {
 			success=1
 			used_ua="$ua"
 			break
 		}
 	done
 
-	if [ -n "$info_url" -a -n "$used_ua" ]; then
-		log "Profile" "Fetch subscription info."
-		curl -sfL --max-time 120 --connect-timeout 15 --retry 3 -A "$used_ua" -D "$info_header_tmpfile" "$info_url" > /dev/null 2>&1
-	fi
-	if grep -q -i "subscription-userinfo:" "$info_header_tmpfile" 2>/dev/null; then
-		info_file="$info_header_tmpfile"
-	elif grep -q -i "subscription-userinfo:" "$header_tmpfile" 2>/dev/null; then
+	if grep -q -i "subscription-userinfo:" "$header_tmpfile" 2>/dev/null; then
 		info_file="$header_tmpfile"
 	fi
 
 	if [ "$success" != 1 ]; then
 		log "Profile" "Subscription update failed."
-		rm -f "$temp_config" "$header_tmpfile" "$info_header_tmpfile"
+		rm -f "$temp_config" "$header_tmpfile"
 		uci_commit nikki
 		return 1
 	fi
@@ -638,7 +718,7 @@ update_subscription() {
 	local userinfo expire upload download total used avaliable \
 		  web_page_url content_disp sub_name name_changed=0
 
-	content_disp=$(cat "$header_tmpfile" "$info_header_tmpfile" 2>/dev/null | grep -m1 -i "^content-disposition:" | tr -d '\r')
+	content_disp=$(cat "$header_tmpfile" 2>/dev/null | grep -m1 -i "^content-disposition:" | tr -d '\r')
 	content_disp=$(echo "$content_disp" | sed -En "s/.*filename\*=UTF-8''([^;[:space:]]*).*/\1/p")
 	[ -n "$content_disp" ] && sub_name=$(printf '%b' "${content_disp//%/\\x}")
 	sub_name=${sub_name//[\/\\:\*\?\"\<\>\|\ ]/_}
@@ -682,7 +762,7 @@ update_subscription() {
 	[ -n "$used_ua" ] && [ "$used_ua" != "$detected_ua" ] && uci_set nikki "$section" detected_user_agent "$used_ua"
 	uci_set nikki "$section" update "$(date "+%Y-%m-%d %H:%M:%S")"
 	mv -f "$temp_config" "$SUBSCRIPTIONS_DIR/$name.yaml"
-	rm -f "$header_tmpfile" "$info_header_tmpfile"
+	rm -f "$header_tmpfile"
 	uci_commit nikki
 	return 0
 }
