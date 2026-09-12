@@ -141,27 +141,11 @@ export function qs(v) {
 	return v ? '"' + replace(replace(v, /\\/g, '\\\\'), /"/g, '\\"') + '"' : '""';
 };
 
-const PROXY_PREFIXES = [
-	/^https?:\/\/ghp\.ci\//,
-	/^https?:\/\/ghfast\.top\//,
-	/^https?:\/\/ghproxy\.net\//,
-	/^https?:\/\/gh-proxy\.com\//,
-	/^https?:\/\/github\.akams\.cn\//,
-	/^https?:\/\/ghp\.ci\/https?:\/\//,
-	/^https?:\/\/moeyy\.cn\/gh-proxy\//,
-	/^https?:\/\/ghproxy\.homeboyc\.cn\//,
-	/^https?:\/\/ghfast\.top\/https?:\/\//,
-	/^https?:\/\/ghproxy\.net\/https?:\/\//,
-	/^https?:\/\/gh-proxy\.com\/https?:\/\//,
-	/^https?:\/\/github\.akams\.cn\/https?:\/\//,
-	/^https?:\/\/moeyy\.cn\/gh-proxy\/https?:\/\//,
-	/^https?:\/\/ghproxy\.homeboyc\.cn\/https?:\/\//,
-];
-
 function stripProxyPrefix(url) {
-	for (let i = 0; i < length(PROXY_PREFIXES); i++) {
-		let newUrl = replace(url, PROXY_PREFIXES[i], 'https://');
-		if (newUrl != url) url = newUrl;
+	let m = match(url, /^https?:\/\/[^\/]+(\/[^\/]+)?\/(https?:\/\/.+)$/);
+	while (m) {
+		url = m[2];
+		m = match(url, /^https?:\/\/[^\/]+(\/[^\/]+)?\/(https?:\/\/.+)$/);
 	}
 	return url;
 };
@@ -208,16 +192,9 @@ export function mirrorGithubUrl(url, target) {
 	};
 	if (target === 'raw' || target === 'github')   return url;
 	if (target === 'jsdelivr' || target === 'cdn') return convertToJsdelivr(url);
-	if (target === 'fastly')            return convertToJsdelivr(url, 'fastly.jsdelivr.net');
-	if (target === 'testingcf')         return convertToJsdelivr(url, 'testingcf.jsdelivr.net');
-	if (target === 'gcore')             return convertToJsdelivr(url, 'gcore.jsdelivr.net');
-	if (target === 'gh_proxy_com')      return 'https://gh-proxy.com/'        + url;
-	if (target === 'ghproxy_net')       return 'https://ghproxy.net/'         + url;
-	if (target === 'ghproxy_homeboyc')  return 'https://ghproxy.homeboyc.cn/' + url;
-	if (target === 'moeyy')             return 'https://moeyy.cn/gh-proxy/'   + url;
-	if (target === 'ghp_ci')            return 'https://ghp.ci/'              + url;
-	if (target === 'github_akams')      return 'https://github.akams.cn/'     + url;
-	if (target === 'ghfast')            return 'https://ghfast.top/'          + url;
+	if (target === 'fastly')    return convertToJsdelivr(url, 'fastly.jsdelivr.net');
+	if (target === 'testingcf') return convertToJsdelivr(url, 'testingcf.jsdelivr.net');
+	if (target === 'gcore')     return convertToJsdelivr(url, 'gcore.jsdelivr.net');
 
 	return url;
 };

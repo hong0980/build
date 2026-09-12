@@ -73,7 +73,7 @@ build_converter_url() {
 	local sub_url="$1" base sep flag val
 	case "$converter_service" in
 		api.asailor.org)     base="https://api.asailor.org/sub?target=clash" ;;
-		subconverter_public) base="https://sub.xeton.dev/sub?target=clash" ;;
+		api.wcc.best) base="https://api.wcc.best/sub?target=clash" ;;
 		custom)              base="$converter_url" ;;
 		*) return 1 ;;
 	esac

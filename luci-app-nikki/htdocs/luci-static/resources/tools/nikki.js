@@ -422,7 +422,7 @@ return baseclass.extend({
     },
 
     initAceEditor: function (container, content, mode, options) {
-        const aceMode = mode === 'json' ? 'ace/mode/json' : 'ace/mode/yaml';
+        const aceMode = mode ? `ace/mode/${mode}` : 'ace/mode/text';
         return this.preloadAce().then(() => {
             const editor = ace.edit(container);
             container._aceEditor = editor;

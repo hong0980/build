@@ -1304,6 +1304,11 @@ return view.extend({
             if (name) self.pendingDeletes.push(name);
             return this.super('handleRemove', [section_id, ev]);
         };
+        s.handleModalSave = function (modalMap, ev) {
+            return this.super('handleModalSave', arguments)
+                .then(() => uci.apply(L.env.apply_rollback))
+                .then(L.bind(ui.changes.init, ui.changes));
+        };
 
         o = s.option(form.Value, 'name', _('Subscription Name'));
         o.rmempty = true;
@@ -1465,7 +1470,7 @@ return view.extend({
         o = s.option(form.ListValue, 'converter_service', _('Converter Service'));
         o.modalonly = true; o.rmempty = true;
         o.value('api.asailor.org', 'api.asailor.org');
-        o.value('subconverter_public', _('SubConverter (public)'));
+        o.value('api.wcc.best', _('api.wcc.best'));
         o.value('custom', _('Custom (use Converter URL)'));
         o.default = 'api.asailor.org';
         o.depends('use_converter', '1');
@@ -1496,62 +1501,72 @@ return view.extend({
             o.value(url, name);
         });
 
+        o = s.option(form.Flag, 'ad_option', _('高级选项'),
+            _('显示更多订阅设置'));
+        o.modalonly = true; o.rmempty = true; o.default = '0';
+        o.depends('use_converter', '1');
+
+        const converterFlags = [
+            ['converter_emoji',       'emoji',       _('Add Emoji'),         _('add_emoji / emoji'),   false],
+            ['converter_udp',         'udp',         _('UDP Support'),       _('udp=true'),            false],
+            ['converter_tfo',         'tfo',         _('TCP Fast Open'),     _('tfo=true'),            false],
+            ['converter_tls13',       'tls13',       _('TLS 1.3'),           _('tls13=true'),          false],
+            ['converter_scv',         'scv',         _('Skip Cert Verify'),  _('scv=true'),            false],
+            ['converter_fdn',         'fdn',         _('Filter Deprecated'), _('filter deprecated nodes'), false],
+            ['converter_sort',        'sort',        _('Sort Nodes'),        _('sort=true'),           true],
+            ['converter_expand',      'expand',      _('Expand'),            _('expand rulesets'),     true],
+            ['converter_new_name',    'new_name',    _('Rename Nodes'),      _('new_name=true'),       true],
+            ['converter_append_type', 'append_type', _('Append Node Type'),  _('append_type=true'),    true],
+            ['converter_append_info', 'append_info', _('Append Node Info'),  _('append_info=true'),    true],
+            ['converter_classic',     'classic',     _('Classic Rules'),     _('classic rule format'), true],
+            ['converter_list',        'list',        _('Node List Only'),    _('list=true, no groups'), true],
+            ['converter_info_node',   'info',        _('Info Node'),         _('append subscription info as node'), true],
+        ];
+
+        for (const [name, param, title, desc, advanced = false] of converterFlags) {
+            o = s.option(form.Flag, name, title, desc);
+            o.modalonly = true;
+            o.rmempty = true;
+            o.default = '0';
+
+            if (advanced) o.depends('ad_option', '1');
+            else o.depends('use_converter', '1');
+        }
+
         o = s.option(form.Value, 'converter_group', _('Group Name'),
             _('Custom proxy-group name (group=)'));
         o.modalonly = true; o.rmempty = true;
-        o.depends('use_converter', '1');
+        o.depends('ad_option', '1');
 
         o = s.option(form.Value, 'converter_filename', _('Output Filename'),
             _('Content-Disposition filename (filename=)'));
         o.modalonly = true; o.rmempty = true;
-        o.depends('use_converter', '1');
+        o.depends('ad_option', '1');
 
         o = s.option(form.Value, 'converter_include', _('Include (regex)'),
             _('Only keep nodes matching this regex'));
         o.modalonly = true; o.rmempty = true;
-        o.depends('use_converter', '1');
+        o.depends('ad_option', '1');
 
         o = s.option(form.Value, 'converter_exclude', _('Exclude (regex)'),
             _('Remove nodes matching this regex'));
         o.modalonly = true; o.rmempty = true;
-        o.depends('use_converter', '1');
+        o.depends('ad_option', '1');
 
         o = s.option(form.Value, 'converter_rename', _('Rename Rules'),
             _('Format: old@new|old2@new2, applied to node names'));
         o.modalonly = true; o.rmempty = true;
-        o.depends('use_converter', '1');
+        o.depends('ad_option', '1');
 
         o = s.option(form.TextValue, 'converter_script', _('Filter Script (JS)'),
             _('Custom JavaScript to filter/modify nodes (script=)'));
         o.modalonly = true; o.rmempty = true; o.rows = 4;
-        o.depends('use_converter', '1');
+        o.depends('ad_option', '1');
 
         o = s.option(form.Value, 'converter_extra', _('Converter Extra Params'),
             _('Raw query string appended as-is, e.g. new_name=true&insert=...'));
         o.modalonly = true; o.rmempty = true;
-        o.depends('use_converter', '1');
-        const converterFlags = [
-            ['converter_emoji',       'emoji',       _('Add Emoji'),          _('add_emoji / emoji')],
-            ['converter_udp',         'udp',         _('UDP Support'),        _('udp=true')],
-            ['converter_tfo',         'tfo',         _('TCP Fast Open'),      _('tfo=true')],
-            ['converter_tls13',       'tls13',       _('TLS 1.3'),            _('tls13=true')],
-            ['converter_scv',         'scv',         _('Skip Cert Verify'),   _('scv=true')],
-            ['converter_fdn',         'fdn',         _('Filter Deprecated'),  _('filter deprecated nodes')],
-            ['converter_sort',        'sort',        _('Sort Nodes'),         _('sort=true')],
-            ['converter_expand',      'expand',      _('Expand'),             _('expand rulesets')],
-            ['converter_new_name',    'new_name',    _('Rename Nodes'),       _('new_name=true')],
-            ['converter_append_type', 'append_type', _('Append Node Type'),   _('append_type=true')],
-            ['converter_append_info', 'append_info', _('Append Node Info'),   _('append_info=true')],
-            ['converter_classic',     'classic',     _('Classic Rules'),      _('classic rule format')],
-            ['converter_list',        'list',        _('Node List Only'),     _('list=true, no groups')],
-            ['converter_info_node',   'info',        _('Info Node'),          _('append subscription info as node')],
-        ];
-
-        for (const [name, param, title, desc] of converterFlags) {
-            o = s.option(form.Flag, name, title, _('%s').format(desc));
-            o.modalonly = true; o.rmempty = true; o.default = '0';
-            o.depends('use_converter', '1');
-        }
+        o.depends('ad_option', '1');
 
         o = s.option(form.Value, 'web_page_url', _('Panel URL'));
         o.modalonly = true;

@@ -124,14 +124,14 @@ return view.extend({
             network.getNetworks(),
             nikki.listfiles(nikki.profilesDir),
             nikki.listfiles(nikki.subscriptionsDir),
+            L.resolveDefault(fs.read_direct('/etc/nikki/res/cdn.list'), ''),
             uci.load('nikki')
         ]);
     },
-    render: function ([networks, profiles, subfiles]) {
+    render: function ([networks, profiles, subfiles, github_mirror_list]) {
         let m, s, o, so;
 
         m = new form.Map('nikki');
-
         s = m.section(form.NamedSection, 'mixin', 'mixin', _('Mixin Option'));
         s.tab('general', _('General Config'));
         s.tab('external_control', _('External Control Config'));
@@ -155,8 +155,8 @@ return view.extend({
         o = s.taboption('general', form.Flag, 'explode', _('Anchors'));
         o.description = _('Do not expand config anchors when selected');
 
-        o = s.taboption('general', form.Value, 'github_mirror', _('GitHub Mirror'),
-            _('Select a mirror to replace GitHub URLs in config (geox-url, rule-providers, proxy-providers, external-ui, icons).'));
+        o = s.taboption('general', form.ListValue, 'github_mirror', _('GitHub Mirror'),
+            _('Select a mirror to replace GitHub URLs in config'));
         o.optional = true;
         o.placeholder = _('Unmodified');
 
@@ -165,14 +165,44 @@ return view.extend({
         o.value('fastly', _('jsDelivr Fastly (fastly.jsdelivr.net)'));
         o.value('testingcf', _('jsDelivr China (testingcf.jsdelivr.net)'));
         o.value('gcore', _('jsDelivr Gcore (gcore.jsdelivr.net)'));
-        o.value('gh_proxy_com', _('gh-proxy.com (Stable)'));
-        o.value('ghproxy_net', _('ghproxy.net (Stable)'));
-        o.value('ghproxy_homeboyc', _('ghproxy.homeboyc.cn (Large File)'));
-        o.value('moeyy', _('moeyy.cn/gh-proxy (Full-featured)'));
-        o.value('ghp_ci', _('ghp.ci (Simple)'));
-        o.value('github_akams', _('github.akams.cn (All-in-one)'));
-        o.value('ghfast', _('ghfast.top (Stable)'));
-
+        github_mirror_list?.split('\n').forEach(function (line) {
+            line = line.trim();
+            if (!line || line.startsWith('#')) return;
+            o.value(line, line);
+        });
+        o.renderWidget = function (section_id, option_index, cfgvalue) {
+            const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            const btn = E('button', {
+                'class': 'btn cbi-button-positive',
+                'click': ui.createHandlerFn(this, function (ev) {
+                    const path = '/etc/nikki/res/cdn.list';
+                    const aceDiv = E('div', { 'style': 'width:100%;height:350px;' });
+                    return L.resolveDefault(fs.read_direct(path), '').then(content => {
+                        const md = ui.showModal(null, [
+                            aceDiv,
+                            E('div', { 'class': 'button-row' }, [
+                                E('button', {
+                                    'class': 'btn cbi-button-positive',
+                                    'click': ui.createHandlerFn(this, function () {
+                                        const finalValue = aceDiv._aceEditor.getValue();
+                                        if (content === finalValue) return;
+                                        return nikki.writefile(path, finalValue)
+                                            .then(() => nikki.modalnotify(null, E('p', _('Config saved, files updated')), 5000, 'success'))
+                                            .catch(e => nikki.modalnotify(null, E('p', e.message || e), 8000, 'error'));
+                                    })
+                                }, _('Save')),
+                                E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Dismiss'))
+                            ])
+                        ], 'cbi-modal');
+                        md.style.setProperty('padding', '.5em');
+                        nikki.initAceEditor(aceDiv, content, null);
+                    });
+                })
+            }, _('Edit'));
+            node.classList.add('control-group');
+            node.appendChild(btn);
+            return node;
+        };
         o = s.taboption('general', form.Button, '_button', _('Test mirror URL'));
         o.inputstyle = 'action';
         o.inputtitle = _('verify');
