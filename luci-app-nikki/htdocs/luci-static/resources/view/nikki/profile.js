@@ -137,7 +137,6 @@ function renderNodeSettings(section) {
 
     o = s.option(form.Flag, 'enabled', _('Enable'));
     o.editable = true;
-    o.rmempty = true;
 
     o = s.option(form.Value, 'label', _('Name'));
     o.editable = true;
@@ -1311,7 +1310,6 @@ return view.extend({
         };
 
         o = s.option(form.Value, 'name', _('Subscription Name'));
-        o.rmempty = true;
         o.datatype = 'string';
         o.placeholder = _('Auto-filled from subscription response if empty');
         o.write = function (section_id, value) {
@@ -1353,7 +1351,6 @@ return view.extend({
 
         o = s.option(form.Flag, 'enabled', _('Use in config'), _('Automatically add this subscription URL to the active configuration file'));
         o.editable = true;
-        o.rmempty = true;
         o.width = '9%';
 
         o = s.option(form.Button, 'update_subscription');
@@ -1409,14 +1406,12 @@ return view.extend({
         o.value("0", _("Loop Mode"));
         o.value("1", _("Appointment Mode"));
         o.default = "1";
-        o.rmempty = true;
         o.modalonly = true;
         o.depends("auto_update", "1");
 
         o = s.option(form.Value, "interval", _("Update Interval(min)"))
         o.default = "60";
         o.datatype = "range(1, 10080)";
-        o.rmempty = true;
         o.modalonly = true;
         o.depends("mode", "0");
 
@@ -1465,30 +1460,30 @@ return view.extend({
 
         o = s.option(form.Flag, 'use_converter', _('Enable Online Converter'),
             _('Send subscription URL to an online converter before saving'));
-        o.modalonly = true; o.rmempty = true; o.default = '0';
+        o.modalonly = true; o.default = '0';
 
         o = s.option(form.ListValue, 'converter_service', _('Converter Service'));
-        o.modalonly = true; o.rmempty = true;
+        o.modalonly = true; o.rmempty = false;
         o.value('api.asailor.org', 'api.asailor.org');
-        o.value('api.wcc.best', _('api.wcc.best'));
+        // o.value('sub.xeton.dev', 'sub.xeton.dev');
         o.value('custom', _('Custom (use Converter URL)'));
-        o.default = 'api.asailor.org';
         o.depends('use_converter', '1');
 
         o = s.option(form.Value, 'converter_url', _('Converter URL'),
-            _('Full endpoint for custom service, e.g. https://sub.example.com/sub'));
-        o.modalonly = true; o.rmempty = true;
+            _('Full endpoint for custom service'));
+        o.modalonly = true; o.rmempty = false;
         o.depends({ use_converter: '1', converter_service: 'custom' });
 
-        o = s.option(form.Value, 'converter_token', _('Access Token'),
-            _('Auth token if the converter requires it'));
-        o.modalonly = true; o.rmempty = true;
+        o = s.option(form.DynamicList, 'surl', _('Subscription URL'),
+            _('Multiple URLs supported, separated by the API with |'));
+        o.modalonly = true;
+        o.datatype = 'url';
         o.depends('use_converter', '1');
 
-        o = s.option(form.Value, 'converter_template', _('Config / Template'),
+        o = s.option(form.ListValue, 'converter_template', _('Config / Template'),
             _('Preset name (self-hosted) or full URL of external config (.yml)'));
         o.modalonly = true;
-        o.rmempty = true;
+        o.rmempty = false;
         o.depends('use_converter', '1');
         iniContent?.split('\n').forEach(function (line) {
             line = line.trim();
@@ -1500,72 +1495,101 @@ return view.extend({
             var url = parts[2].trim();
             o.value(url, name);
         });
-
-        o = s.option(form.Flag, 'ad_option', _('高级选项'),
-            _('显示更多订阅设置'));
-        o.modalonly = true; o.rmempty = true; o.default = '0';
-        o.depends('use_converter', '1');
+        o.renderWidget = function (section_id, option_index, cfgvalue) {
+            const node = form.ListValue.prototype.renderWidget.apply(this, arguments);
+            const btn = E('button', {
+                'class': 'btn cbi-button-positive',
+                'click': ui.createHandlerFn(this, function (ev) {
+                    const path = '/etc/nikki/res/sub_ini.list';
+                    const aceDiv = E('div', { 'style': 'width:100%;height:350px;' });
+                    return L.resolveDefault(fs.read_direct(path), '').then(content => {
+                        const md = ui.showModal(null, [
+                            aceDiv,
+                            E('div', { 'class': 'button-row' }, [
+                                E('button', {
+                                    'class': 'btn cbi-button-positive',
+                                    'click': ui.createHandlerFn(this, function () {
+                                        const finalValue = aceDiv._aceEditor.getValue();
+                                        if (content === finalValue) return;
+                                        return nikki.writefile(path, finalValue)
+                                            .then(() => nikki.modalnotify(null, E('p', _('Config saved, files updated')), 5000, 'success'))
+                                            .catch(e => nikki.modalnotify(null, E('p', e.message || e), 8000, 'error'));
+                                    })
+                                }, _('Save')),
+                                E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Dismiss'))
+                            ])
+                        ], 'cbi-modal');
+                        md.style.setProperty('padding', '.5em');
+                        nikki.initAceEditor(aceDiv, content, null);
+                    });
+                })
+            }, _('Edit'));
+            node.classList.add('control-group');
+            node.appendChild(btn);
+            return node;
+        };
 
         const converterFlags = [
-            ['converter_emoji',       'emoji',       _('Add Emoji'),         _('add_emoji / emoji'),   false],
-            ['converter_udp',         'udp',         _('UDP Support'),       _('udp=true'),            false],
-            ['converter_tfo',         'tfo',         _('TCP Fast Open'),     _('tfo=true'),            false],
-            ['converter_tls13',       'tls13',       _('TLS 1.3'),           _('tls13=true'),          false],
-            ['converter_scv',         'scv',         _('Skip Cert Verify'),  _('scv=true'),            false],
-            ['converter_fdn',         'fdn',         _('Filter Deprecated'), _('filter deprecated nodes'), false],
-            ['converter_sort',        'sort',        _('Sort Nodes'),        _('sort=true'),           true],
-            ['converter_expand',      'expand',      _('Expand'),            _('expand rulesets'),     true],
-            ['converter_new_name',    'new_name',    _('Rename Nodes'),      _('new_name=true'),       true],
-            ['converter_append_type', 'append_type', _('Append Node Type'),  _('append_type=true'),    true],
-            ['converter_append_info', 'append_info', _('Append Node Info'),  _('append_info=true'),    true],
-            ['converter_classic',     'classic',     _('Classic Rules'),     _('classic rule format'), true],
-            ['converter_list',        'list',        _('Node List Only'),    _('list=true, no groups'), true],
-            ['converter_info_node',   'info',        _('Info Node'),         _('append subscription info as node'), true],
+            ['converter_emoji',       'emoji',       _('Add Emoji'),         _('add_emoji / emoji')],
+            ['converter_scv',         'scv',         _('Skip Cert Verify'),  _('scv=true')],
+            ['converter_append_type', 'append_type', _('Append Node Type'),  _('append_type=true')],
+            ['converter_append_info', 'append_info', _('Append Node Info'),  _('append_info=true')],
+            ['converter_sort',        'sort',        _('Sort Nodes'),        _('sort=true')],
+            ['converter_fdn',         'fdn',         _('Filter Deprecated'), _('filter deprecated nodes')],
+            ['converter_udp',         'udp',         _('UDP Support'),       _('udp=true'),                         true],
+            ['converter_tfo',         'tfo',         _('TCP Fast Open'),     _('tfo=true'),                         true],
+            ['converter_add_emoji',   'add_emoji',   _('Add Emoji (add_emoji)'), _('add_emoji=true'),               true],
+            ['converter_remove_emoji','remove_emoji',_('Remove Emoji'),      _('remove existing emoji'),            true],
+            ['converter_new_name',    'new_name',    _('Rename Nodes'),      _('new_name=true'),                    true],
+            ['converter_expand',      'expand',      _('Expand'),            _('expand rulesets'),                  true],
+            ['converter_classic',     'classic',     _('Classic Rules'),     _('classic rule format'),              true],
+            ['converter_tls13',       'tls13',       _('TLS 1.3'),           _('tls13=true'),                       true],
+            // ['converter_list',        'list',        _('Node List Only'),    _('list=true'),                        true],
+            ['converter_insert',      'insert',      _('Insert Nodes'),      _('insert deployer-configured nodes'), true],
+            ['converter_prepend',     'prepend',     _('Prepend Inserted Nodes'), _('put inserted nodes before original ones'), true],
         ];
 
         for (const [name, param, title, desc, advanced = false] of converterFlags) {
             o = s.option(form.Flag, name, title, desc);
             o.modalonly = true;
-            o.rmempty = true;
-            o.default = '0';
-
+            o.default  = '0';
             if (advanced) o.depends('ad_option', '1');
             else o.depends('use_converter', '1');
         }
 
+        o = s.option(form.Value, 'converter_include', _('Include (regex)'),
+            _('Only keep nodes matching this regex'));
+        o.modalonly = true;
+        o.depends('use_converter', '1');
+
+        o = s.option(form.Value, 'converter_exclude', _('Exclude (regex)'),
+            _('Remove nodes matching this regex'));
+        o.modalonly = true;
+        o.depends('use_converter', '1');
+
+        o = s.option(form.Flag, 'ad_option', _('高级选项'),
+            _('显示更多订阅设置'));
+        o.modalonly = true; o.default = '0';
+        o.depends('use_converter', '1');
+
         o = s.option(form.Value, 'converter_group', _('Group Name'),
             _('Custom proxy-group name (group=)'));
-        o.modalonly = true; o.rmempty = true;
+        o.modalonly = true;
         o.depends('ad_option', '1');
 
         o = s.option(form.Value, 'converter_filename', _('Output Filename'),
             _('Content-Disposition filename (filename=)'));
-        o.modalonly = true; o.rmempty = true;
-        o.depends('ad_option', '1');
-
-        o = s.option(form.Value, 'converter_include', _('Include (regex)'),
-            _('Only keep nodes matching this regex'));
-        o.modalonly = true; o.rmempty = true;
-        o.depends('ad_option', '1');
-
-        o = s.option(form.Value, 'converter_exclude', _('Exclude (regex)'),
-            _('Remove nodes matching this regex'));
-        o.modalonly = true; o.rmempty = true;
+        o.modalonly = true;
         o.depends('ad_option', '1');
 
         o = s.option(form.Value, 'converter_rename', _('Rename Rules'),
             _('Format: old@new|old2@new2, applied to node names'));
-        o.modalonly = true; o.rmempty = true;
-        o.depends('ad_option', '1');
-
-        o = s.option(form.TextValue, 'converter_script', _('Filter Script (JS)'),
-            _('Custom JavaScript to filter/modify nodes (script=)'));
-        o.modalonly = true; o.rmempty = true; o.rows = 4;
+        o.modalonly = true;
         o.depends('ad_option', '1');
 
         o = s.option(form.Value, 'converter_extra', _('Converter Extra Params'),
             _('Raw query string appended as-is, e.g. new_name=true&insert=...'));
-        o.modalonly = true; o.rmempty = true;
+        o.modalonly = true;
         o.depends('ad_option', '1');
 
         o = s.option(form.Value, 'web_page_url', _('Panel URL'));

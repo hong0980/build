@@ -252,7 +252,7 @@ return view.extend({
                             E('button', {
                                 'class': 'btn cbi-button-remove',
                                 'click': ui.createHandlerFn(this, function (ev) {
-                                    options.forEach(opt => fs.remove(`${nikki.TEMP_DIR}/${opt.value}.cache`));
+                                    options.forEach(opt => fs.remove(`${nikki.TEMP_DIR}/cache_${opt.value}.list`));
                                 })
                             }, _('Flush Cache')),
                             E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Close'))

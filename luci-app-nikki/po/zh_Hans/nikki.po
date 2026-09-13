@@ -2551,8 +2551,8 @@ msgstr "自定义（使用转换器地址）"
 msgid "Converter URL"
 msgstr "自定义模板地址"
 
-msgid "Full endpoint for custom service, e.g. https://sub.example.com/sub"
-msgstr "自定义服务的完整接口地址，例如 https://sub.example.com/sub"
+msgid "Full endpoint for custom service"
+msgstr "自定义服务的完整接口地址"
 
 msgid "Access Token"
 msgstr "访问令牌"

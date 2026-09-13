@@ -33,6 +33,7 @@ ACL4SSR 规则 Online NoReject,ACL4SSR_Online_NoReject.ini,https://raw.githubuse
 ACL4SSR 规则 WithChinaIp,ACL4SSR_WithChinaIp.ini,https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_WithChinaIp.ini
 ACL4SSR 规则 WithChinaIp WithGFW,ACL4SSR_WithChinaIp_WithGFW.ini,https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_WithChinaIp_WithGFW.ini
 ACL4SSR 规则 WithGFW,ACL4SSR_WithGFW.ini,https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_WithGFW.ini
+ACL4SSR 规则 Online Mini Ai,ACL4SSR_Online_Mini_Ai.ini,https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Mini_Ai.ini
 eHpo1 规则,ehpo1_main.ini,https://gist.githubusercontent.com/tindy2013/1fa08640a9088ac8652dbd40c5d2715b/raw/ehpo1_main.ini
 Aethersailor 规则 标准版 Custom_Clash,Custom_Clash.ini,https://raw.githubusercontent.com/Aethersailor/Custom_OpenClash_Rules/refs/heads/main/cfg/Custom_Clash.ini
 Aethersailor 规则 标准版 故障转移,Custom_Clash_Fallback.ini,https://raw.githubusercontent.com/Aethersailor/Custom_OpenClash_Rules/refs/heads/main/cfg/Custom_Clash_Fallback.ini
@@ -42,3 +43,4 @@ Aethersailor 规则 极简版(GFW) Custom_Clash_GFW,Custom_Clash_GFW.ini,https:/
 Aethersailor 规则 极简版(GFW) 故障转移,Custom_Clash_GFW_Fallback.ini,https://raw.githubusercontent.com/Aethersailor/Custom_OpenClash_Rules/refs/heads/main/cfg/Custom_Clash_GFW_Fallback.ini
 Aethersailor 规则 重度分流版 Custom_Clash_Full,Custom_Clash_Full.ini,https://raw.githubusercontent.com/Aethersailor/Custom_OpenClash_Rules/refs/heads/main/cfg/Custom_Clash_Full.ini
 Aethersailor 规则 重度分流版 故障转移,Custom_Clash_Full_Fallback.ini,https://raw.githubusercontent.com/Aethersailor/Custom_OpenClash_Rules/refs/heads/main/cfg/Custom_Clash_Full_Fallback.ini
+Aethersailor 规则 全分组防 DNS 泄漏订阅,Custom_Clash_Mainland.ini,https://raw.githubusercontent.com/Aethersailor/Custom_OpenClash_Rules/refs/heads/main/cfg/Custom_Clash_Mainland.ini

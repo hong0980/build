@@ -66,15 +66,46 @@ _try_download() {
 	curl -sfL --max-time 120 --connect-timeout 15 --retry 2 \
 		-A "$ua" -D "$hdr" -o "$out" "$req_url" > /dev/null 2>&1 || return 1
 
-	[ "$(yq -r '(has("proxies") and has("proxy-groups")) // false' "$out" 2>/dev/null)" = "true" ]
+	[ "$(yq -r '(has("proxies") or has("proxy-groups") or has("proxy-providers")) // false' "$out" 2>/dev/null)" = "true" ]
 }
 
 build_converter_url() {
-	local sub_url="$1" base sep flag val
+	local sub_url="$1" base sep flag valconverter_url converter_template \
+		  converter_group converter_filename converter_include converter_exclude \
+		  converter_rename converter_emoji converter_udp converter_tfo converter_tls13 \
+		  converter_scv converter_sort converter_fdn converter_expand converter_new_name \
+		  converter_append_type converter_append_info converter_classic converter_list \
+		  converter_extra converter_add_emoji converter_remove_emoji converter_insert converter_prepend
+	config_get converter_url           "$section" converter_url           ""
+	config_get converter_template      "$section" converter_template      ""
+	config_get converter_group         "$section" converter_group         ""
+	config_get converter_filename      "$section" converter_filename      ""
+	config_get converter_include       "$section" converter_include       ""
+	config_get converter_exclude       "$section" converter_exclude       ""
+	config_get converter_rename        "$section" converter_rename        ""
+	config_get converter_extra         "$section" converter_extra         ""
+	config_get converter_emoji         "$section" converter_emoji         0
+	config_get converter_udp           "$section" converter_udp           1
+	config_get converter_tfo           "$section" converter_tfo           0
+	config_get converter_tls13         "$section" converter_tls13         0
+	config_get converter_scv           "$section" converter_scv           0
+	config_get converter_sort          "$section" converter_sort          1
+	config_get converter_fdn           "$section" converter_fdn           0
+	config_get converter_expand        "$section" converter_expand        0
+	config_get converter_new_name      "$section" converter_new_name      0
+	config_get converter_append_type   "$section" converter_append_type   1
+	config_get converter_append_info   "$section" converter_append_info   0
+	config_get converter_classic       "$section" converter_classic       0
+	config_get converter_list          "$section" converter_list          0
+	config_get converter_add_emoji     "$section" converter_add_emoji     0
+	config_get converter_remove_emoji  "$section" converter_remove_emoji  0
+	config_get converter_insert        "$section" converter_insert        0
+	config_get converter_prepend       "$section" converter_prepend       0
+
 	case "$converter_service" in
-		api.asailor.org)     base="https://api.asailor.org/sub?target=clash" ;;
-		api.wcc.best) base="https://api.wcc.best/sub?target=clash" ;;
-		custom)              base="$converter_url" ;;
+		custom)          base="$converter_url" ;;
+		sub.xeton.dev)    base="https://sub.xeton.dev/sub?target=clash" ;;
+		api.asailor.org) base="https://api.asailor.org/sub?target=clash" ;;
 		*) return 1 ;;
 	esac
 	[ -z "$base" ] && return 1
@@ -82,16 +113,14 @@ build_converter_url() {
 
 	local QS="url=$(urlencode "$sub_url")"
 	_conv_str config   "$converter_template"
-	_conv_str token    "$converter_token"
 	_conv_str group    "$converter_group"
 	_conv_str filename "$converter_filename"
 	_conv_str include  "$converter_include"
 	_conv_str exclude  "$converter_exclude"
 	_conv_str rename   "$converter_rename"
-	_conv_str script   "$converter_script"
 
 	for flag in emoji udp tfo tls13 scv fdn sort expand new_name \
-				append_type append_info classic list info; do
+				add_emoji remove_emoji insert prepend append_type append_info classic list ; do
 		eval "val=\$converter_$flag"
 		[ "$val" = "1" ] && QS="$QS&$flag=true"
 	done
@@ -107,59 +136,28 @@ update_subscription() {
 	[ -z "$section" ] && return
 	config_load nikki
 
-	local url name info_url user_agent detected_ua success=0 \
-		  header_tmpfile info_file used_ua ua
+	local url surl name info_url user_agent detected_ua success=0 used_ua ua \
+		  header_tmpfile info_file use_converter converter_service sub_url
 
 	config_get url         "$section" url
+	config_get surl        "$section" surl
 	config_get name        "$section" name
 	config_get info_url    "$section" info_url
 	config_get user_agent  "$section" user_agent
 	config_get detected_ua "$section" detected_user_agent
 
-	local use_converter converter_service converter_url converter_template \
-		  converter_token converter_group converter_filename \
-		  converter_include converter_exclude converter_rename converter_script \
-		  converter_emoji converter_udp converter_tfo converter_tls13 \
-		  converter_scv converter_sort converter_fdn converter_expand \
-		  converter_new_name converter_append_type converter_append_info \
-		  converter_classic converter_list converter_info_node \
-		  converter_extra
-	config_get use_converter           "$section" use_converter           0
-	config_get converter_service       "$section" converter_service       none
-	config_get converter_url           "$section" converter_url           ""
-	config_get converter_template      "$section" converter_template      ""
-	config_get converter_token         "$section" converter_token         ""
-	config_get converter_group         "$section" converter_group         ""
-	config_get converter_filename      "$section" converter_filename      ""
-	config_get converter_include       "$section" converter_include       ""
-	config_get converter_exclude       "$section" converter_exclude       ""
-	config_get converter_rename        "$section" converter_rename        ""
-	config_get converter_script        "$section" converter_script        ""
-	config_get converter_emoji         "$section" converter_emoji         0
-	config_get converter_udp           "$section" converter_udp           1
-	config_get converter_tfo           "$section" converter_tfo           0
-	config_get converter_tls13         "$section" converter_tls13         0
-	config_get converter_scv           "$section" converter_scv           0
-	config_get converter_sort          "$section" converter_sort          1
-	config_get converter_fdn           "$section" converter_fdn           0
-	config_get converter_expand        "$section" converter_expand        0
-	config_get converter_new_name      "$section" converter_new_name      0
-	config_get converter_append_type   "$section" converter_append_type   1
-	config_get converter_append_info   "$section" converter_append_info   0
-	config_get converter_classic       "$section" converter_classic       0
-	config_get converter_list          "$section" converter_list          0
-	config_get converter_info_node     "$section" converter_info_node     0
-	config_get converter_extra         "$section" converter_extra         ""
+	config_get      converter_service "$section" converter_service none
+	config_get_bool use_converter     "$section" use_converter     0
 
-	local req_url="$url" add_flag=1
-	if [ "$use_converter" = "1" ] && [ "$converter_service" != "none" ]; then
-		log "Profile" "Use online converter: %s." "$converter_service"
-		if req_url=$(build_converter_url "$url"); then
-			add_flag=0
-		else
-			log "Profile" "Converter misconfigured, fallback to direct download."
-			req_url="$url"
-		fi
+	sub_url="$url"
+	[ -n "$surl" ] && sub_url="${sub_url:+$sub_url|}$(echo "$surl" | tr ' ' '|')"
+
+	local req_url="$sub_url" add_flag=1
+	if [ "$use_converter" = "1" ]; then
+		req_url=$(build_converter_url "$sub_url")
+		add_flag=0
+	else
+		req_url="$sub_url"
 	fi
 
 	log "Profile" "Update subscription: %s." "${name:-<unnamed>}"
@@ -300,7 +298,7 @@ _Download() {
 
 github_api() {
 	local api_path="$1" task_id="$2" tag
-	local now=$(date +%s) cache_file="${TEMP_DIR}/${task_id}.cache"
+	local now=$(date +%s) cache_file="${TEMP_DIR}/cache_${task_id}.list"
 
 	if [ -f "$cache_file" ]; then
 		local age=$(( now - $(head -n1 "$cache_file" 2>/dev/null || echo 0) ))
@@ -335,7 +333,7 @@ github_api() {
 		printf '%s\n' "$now"
 		printf '%s\n' "$urls"
 		printf '%s\n' "$(utc_to_cst "$updated_at")"
-	} > "${cache_file}.tmp" && mv "${cache_file}.tmp" "$cache_file"
+	} > "$cache_file"
 
 	tail -n +2 "$cache_file"
 }
