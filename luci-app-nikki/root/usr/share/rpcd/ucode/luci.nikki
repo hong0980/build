@@ -141,7 +141,7 @@ const methods = {
 
 			const entries = map(data, (item) => ({
 					name: item.name, path: item.path, type: item.type,
-					size: item.size, url: item.download_url
+					size: item.size, url: item.download_url, html_url: item.html_url
 				})
 			);
 

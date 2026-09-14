@@ -126,7 +126,7 @@ function attachFileEditorButton(o, resolveTarget) {
 
                 const renderCrumbs = () => {
                     const parts = [
-                        E('a', { 'href': 'javascript:void(0)', 'click': () => loadPath(ROOT) }, ROOT || _('root'))
+                        E('a', { 'href': 'javascript:void(0)', 'click': ui.createHandlerFn(this, () => loadPath(ROOT)) }, ROOT || _('root'))
                     ];
                     if (state.path.startsWith(ROOT + '/')) {
                         let acc = ROOT;
@@ -134,7 +134,7 @@ function attachFileEditorButton(o, resolveTarget) {
                             acc += '/' + seg;
                             const p = acc;
                             parts.push(' / ');
-                            parts.push(E('a', { 'href': 'javascript:void(0)', 'click': () => loadPath(p) }, seg));
+                            parts.push(E('a', { 'href': 'javascript:void(0)', 'click': ui.createHandlerFn(this, () => loadPath(p)) }, seg));
                         });
                     }
                     crumbsEl.textContent = '';
@@ -145,48 +145,42 @@ function attachFileEditorButton(o, resolveTarget) {
 
                 const downloadFile = (entry) => nikki.download_file({
                     url: entry.url, path: nikki.profilesDir, filename: entry.name
-                }).then(() => {
-                    nikki.modalnotify(null, E('p', _('%s download successful').format(entry.name)), 3000, 'success');
-                }).catch((e) => {
-                    nikki.modalnotify(null, E('p', _('%s download failed: %s').format(entry.name, e.message || e)), 8000, 'error');
-                }).finally(() => loadPath(state.path));
+                }).then(() => nikki.modalnotify(null, E('p', _('%s download successful').format(entry.name)), 3000, 'success')
+                ).catch(e => nikki.modalnotify(null, E('p', _('%s download failed: %s').format(entry.name, e.message || e)), 8000, 'error')
+                ).finally(() => loadPath(state.path));
 
                 const previewFile = (entry) => {
-                    const tmpPath = '%s/%s'.format(nikki.TEMP_DIR, entry.name);
+                    const tmpPath = `/tmp/run/nikki/${entry.name}`;
                     const overlay = E('div', {
                         'style': 'z-index:100000;justify-content:center;background:rgba(0,0,0,0.7);' +
                             'display:flex;align-items:center;position:fixed;inset:0;'
                     });
-                    const aceDiv = E('div', { 'style': 'width:100%;height:400px;' },
-                        E('em', { 'class': 'spinning' }, _('Loading...')));
-
-                    const box = E('div', { 'class': 'modal', 'style': 'padding:.5em;max-width:700px' }, [
-                        E('h3', { 'style': 'margin-top:0;' }, entry.name), aceDiv,
-                        E('div', { 'class': 'right' }, [
-                            E('button', { 'class': 'btn cbi-button-negative', 'click': () => overlay.remove() }, _('Close'))
-                        ])
-                    ]);
-
-                    overlay.appendChild(box);
-                    document.body.appendChild(overlay);
-
+                    const aceDiv = E('div', { 'style': 'width:100%;height:400px;' });
                     const show = () => fs.read_direct(tmpPath).then(content => {
                         const isYaml = /\.ya?ml$/.test(entry.name);
                         return nikki.initAceEditor(aceDiv, content, isYaml ? 'yaml' : 'text', {
-                            readOnly: true, wrap: true
-                        }).then(ed => requestAnimationFrame(() => ed.resize(true)));
+                            readOnly: true
+                        }).then(ed => {
+                            overlay.appendChild(
+                                E('div', { 'class': 'modal', 'style': 'padding:.5em;max-width:700px' }, [
+                                    E('h5', { 'style': 'margin-top:0;' }, entry.name), aceDiv,
+                                    E('div', { 'class': 'right' }, [
+                                        E('button', { 'class': 'btn cbi-button-negative', 'click': ui.createHandlerFn(this, () => overlay.remove()) }, _('Close'))
+                                    ])
+                                ]));
+                            document.body.appendChild(overlay);
+                            requestAnimationFrame(() => ed.resize(true));
+                        });
                     });
 
-                    L.resolveDefault(fs.stat(tmpPath), null).then(st => {
-                        if (st && st.size === entry.size)
-                            return show();
-                        return nikki.download_file({
-                            url: entry.url, path: nikki.TEMP_DIR, filename: entry.name
-                        }).then(show);
-                    }).catch(e => {
-                        aceDiv.textContent = '';
-                        aceDiv.appendChild(E('p', { 'style': 'color:red;' }, e.message || e));
-                    });
+                    return L.resolveDefault(fs.stat(tmpPath), '')
+                        .then(st => {
+                            if (st && st.path) return show();
+                            return nikki.download_file({
+                                url: entry.url, path: nikki.TEMP_DIR, filename: entry.name
+                            }).then(show);
+                        })
+                        .catch(e => nikki.modalnotify(null, E('p', _('%s download failed: %s').format(entry.name, e.message || e)), 8000, 'error'));
                 };
 
                 const render = () => {
@@ -207,14 +201,16 @@ function attachFileEditorButton(o, resolveTarget) {
                                 : E('span', { 'class': 'label notice' }, _('Different size'));
 
                         const pvBtn = E('button', {
-                            'class': 'btn cbi-button-action', 'style': 'min-width:3.5rem;', 'click': () => previewFile(e)
+                            'class': 'btn cbi-button-action', 'style': 'min-width:3.5rem;', 'click': ui.createHandlerFn(this, () => previewFile(e))
                         }, _('Preview'));
 
                         const dlBtn = E('button', {
-                            'class': 'btn cbi-button-positive', 'style': 'min-width:3.5rem;', 'click': () => downloadFile(e)
+                            'class': 'btn cbi-button-positive', 'style': 'min-width:3.5rem;', 'click': ui.createHandlerFn(this, () => downloadFile(e))
                         }, local ? _('Re-download') : _('Download'));
 
-                        return [E('span', e.name), formatSize(e.size), status, E('span', [pvBtn, dlBtn])];
+                        return [E('a', {
+                            href: e.html_url ?? '', 'target': '_blank', 'rel': 'noreferrer', title: e.html_url ?? ''
+                        }, e.name), formatSize(e.size), status, E('span', [pvBtn, dlBtn])];
                     });
 
                     const hint = state.error || (state.loading ? _('Loading...') : _('Empty directory'));
@@ -248,7 +244,7 @@ function attachFileEditorButton(o, resolveTarget) {
                                 if (res.cache.hit) {
                                     cacheEl.textContent = _('Cached %s seconds ago, expires in %s seconds').format(res.cache.age, res.cache.expires_in);
                                     cacheEl.appendChild(E('a', {
-                                        'href': 'javascript:void(0)', 'style': 'margin-left:.5em;', 'click': () => loadPath(state.path, true)
+                                        'href': 'javascript:void(0)', 'style': 'margin-left:.5em;', 'click': ui.createHandlerFn(this, () => loadPath(state.path, true))
                                     }, _('Force Refresh')));
                                 } else {
                                     cacheEl.textContent = _('Refreshed (real-time data)');
