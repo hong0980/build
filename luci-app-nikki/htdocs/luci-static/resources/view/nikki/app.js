@@ -97,6 +97,7 @@ function attachFileEditorButton(o, resolveTarget) {
             'title': _('Configuration collection from https://github.com/HenryChiao/MIHOMO_YAMLS'),
             'click': ui.createHandlerFn(this, function (ev) {
                 const ROOT = 'THEYAMLS';
+                const EXCLUDE_DIRS = ['Mobile_Modules', 'Ayanami0-configs', 'From_clash_by_hako', 'Yiteei'];
                 let state = { path: ROOT, loading: true, error: null, entries: [], localStats: {} };
                 const crumbsEl = E('div', { 'style': 'margin-bottom:.5em;word-break:break-all;' });
                 const cacheEl = E('div', { 'style': 'color:#999;font-size:85%;margin-bottom:.5em;' });
@@ -109,7 +110,7 @@ function attachFileEditorButton(o, resolveTarget) {
                     ])
                 ]);
 
-                const md = ui.showModal(_('Remote Files'), [
+                ui.showModal(_('Remote Files'), [
                     crumbsEl, cacheEl, tableEl,
                     E('div', { 'class': 'right' }, [
                         E('button', { 'class': 'btn cbi-button-negative', 'click': ui.hideModal }, _('Close'))
@@ -160,8 +161,7 @@ function attachFileEditorButton(o, resolveTarget) {
                         E('em', { 'class': 'spinning' }, _('Loading...')));
 
                     const box = E('div', { 'class': 'modal', 'style': 'padding:.5em;max-width:700px' }, [
-                        E('h4', { 'style': 'margin-top:0;' }, entry.name),
-                        aceDiv,
+                        E('h3', { 'style': 'margin-top:0;' }, entry.name), aceDiv,
                         E('div', { 'class': 'right' }, [
                             E('button', { 'class': 'btn cbi-button-negative', 'click': () => overlay.remove() }, _('Close'))
                         ])
@@ -191,7 +191,8 @@ function attachFileEditorButton(o, resolveTarget) {
 
                 const render = () => {
                     renderCrumbs();
-                    const rows = state.entries.map(e => {
+                    const entries = state.entries.filter(e => !(e.type === 'dir' && EXCLUDE_DIRS.includes(e.name)))
+                    const rows = entries.map(e => {
                         if (e.type === 'dir') {
                             const link = E('a', { 'href': 'javascript:void(0)' }, '📁 %s'.format(e.name));
                             link.addEventListener('click', () => loadPath(e.path));
@@ -206,18 +207,14 @@ function attachFileEditorButton(o, resolveTarget) {
                                 : E('span', { 'class': 'label notice' }, _('Different size'));
 
                         const pvBtn = E('button', {
-                            'class': 'btn cbi-button-action',
-                            'style': 'min-width:5.5rem;',
-                            'click': () => previewFile(e)
+                            'class': 'btn cbi-button-action', 'style': 'min-width:3.5rem;', 'click': () => previewFile(e)
                         }, _('Preview'));
 
                         const dlBtn = E('button', {
-                            'class': 'btn cbi-button-positive',
-                            'style': 'min-width:5.5rem;',
-                            'click': () => downloadFile(e)
+                            'class': 'btn cbi-button-positive', 'style': 'min-width:3.5rem;', 'click': () => downloadFile(e)
                         }, local ? _('Re-download') : _('Download'));
 
-                        return [E('span', {}, e.name), formatSize(e.size), status, E('span', {}, [pvBtn, dlBtn])];
+                        return [E('span', e.name), formatSize(e.size), status, E('span', [pvBtn, dlBtn])];
                     });
 
                     const hint = state.error || (state.loading ? _('Loading...') : _('Empty directory'));
@@ -235,8 +232,7 @@ function attachFileEditorButton(o, resolveTarget) {
                             return render();
                         }
 
-                        const files = (res.entries || []).filter(e => e.type === 'file' && e.name !== 'Mobile_Modules');
-
+                        const files = (res.entries || []).filter(e => e.type === 'file');
                         return Promise.all(files.map(e =>
                             L.resolveDefault(fs.stat('%s/%s'.format(nikki.profilesDir, e.name)), null)
                                 .then(st => { state.localStats[e.name] = st; })
@@ -252,9 +248,7 @@ function attachFileEditorButton(o, resolveTarget) {
                                 if (res.cache.hit) {
                                     cacheEl.textContent = _('Cached %s seconds ago, expires in %s seconds').format(res.cache.age, res.cache.expires_in);
                                     cacheEl.appendChild(E('a', {
-                                        'href': 'javascript:void(0)',
-                                        'style': 'margin-left:.5em;',
-                                        'click': () => loadPath(state.path, true)
+                                        'href': 'javascript:void(0)', 'style': 'margin-left:.5em;', 'click': () => loadPath(state.path, true)
                                     }, _('Force Refresh')));
                                 } else {
                                     cacheEl.textContent = _('Refreshed (real-time data)');

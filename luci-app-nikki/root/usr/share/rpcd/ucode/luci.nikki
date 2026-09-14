@@ -12,7 +12,6 @@ const RUN_DIR      = '/etc/nikki/run';
 const CORE_DIR     = `${RUN_DIR}/core`;
 const CONFIG_PATH  = `${RUN_DIR}/config.yaml`;
 const CORE_SCRIPT  = '/etc/nikki/scripts/core.sh';
-const DEFAULT_UA   = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/125.0.0.0 Safari/537.36';
 const GITHUB_TOKEN = uci.get('nikki', 'config', 'github_token');
 const CACHE_DIR    = '/var/run/nikki/cache';
 const GHCACHE_TTL  = 3600;
@@ -81,72 +80,74 @@ const methods = {
 				return { status: 'error', message: 'invalid repo' };
 			if (match(path, /['"`$\\;&|<>(){}\n]/) || match(branch, /['"`$\\;&|<>(){}\n']/))
 				return { status: 'error', message: 'invalid path/branch' };
+			if (!access(CACHE_DIR)) system(['mkdir', '-p', CACHE_DIR]);
 
+			let data, msg, auth = '', now = time();
 			const safe = (s) => replace(s, /[^A-Za-z0-9_.-]/g, '_');
 			const cache_file = `${CACHE_DIR}/gh_${safe(repo)}_${safe(path) || 'root'}_${safe(branch)}.json`;
-			const now = time();
 
 			if (!refresh && access(cache_file)) {
 				const st = stat(cache_file);
-				if (st?.mtime && now - st.mtime < GHCACHE_TTL) {
+				if (st.mtime && now - st.mtime < GHCACHE_TTL) {
 					const cached = json(readfile(cache_file) || '');
 					if (cached?.entries)
 						return {
-							status: 'ok',
-							entries: cached.entries,
+							status: 'ok', entries: cached.entries,
 							cache: {
-								hit:         true,
-								cached_at:   st.mtime,
-								age:         now - st.mtime,
-								ttl:         GHCACHE_TTL,
-								expires_in:  GHCACHE_TTL - (now - st.mtime)
+								hit: true, cached_at: st.mtime,
+								age: now - st.mtime, ttl: GHCACHE_TTL,
+								expires_in: GHCACHE_TTL - (now - st.mtime)
 							}
 						};
 				}
 			}
 
+			const body_file = `${CACHE_DIR}/gh_body_tmp`;
+			const err_file  = `${CACHE_DIR}/gh_err_tmp`;
 			const api = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`;
-
-			let auth = '';
 			if (GITHUB_TOKEN)
 				auth = ` -H ${shellQuote(`Authorization: Bearer ${GITHUB_TOKEN}`)}`;
-
-			const out = run(`curl -sL --max-time 15`
+			const http_code = trim(run(`curl -sS --max-time 15`
+				+ ` -o ${shellQuote(body_file)}`
+				+ ` -w '%{http_code}'`
 				+ ` -H ${shellQuote('User-Agent: luci-app-nikki')}`
 				+ auth
 				+ ` -H ${shellQuote('Accept: application/vnd.github+json')}`
-				+ ` ${shellQuote(api)}`);
+				+ ` ${shellQuote(api)} 2>${shellQuote(err_file)}`));
 
-			if (!out)
-				return { status: 'error', message: 'request failed (timeout/network)' };
+			if (!http_code || !match(http_code, /^[0-9]{3}$/)) {
+				const err = trim(readfile(err_file) || '');
+				try { system(['rm', '-f', body_file, err_file]); } catch (e) {}
+				return { status: 'error', message: err || 'request failed (timeout/network)' };
+			}
 
-			let data;
-			try { data = json(out); }
-			catch (e) { return { status: 'error', message: 'invalid response: ' + substr(out, 0, 200) }; }
+			const body = readfile(body_file) || '';
+			try { system(['rm', '-f', body_file, err_file]); } catch (e) {}
+			if (http_code != '200') {
+				msg = `HTTP ${http_code}`;
+				try {
+					const data = json(body);
+					if (data?.message) msg = `HTTP ${http_code}: ${data.message}`;
+				} catch (e) {
+					if (body) msg = `HTTP ${http_code}: ${substr(trim(body), 0, 200)}`;
+				}
+				if (http_code == '403' && match(body, /rate limit/i) && !GITHUB_TOKEN)
+					msg += '（未认证限制 60 次/小时，请配置 GITHUB_TOKEN）';
+				return { status: 'error', message: msg };
+			}
 
-			if (!data || data.message)
-				return { status: 'error', message: data?.message || 'unknown error' };
+			try { data = json(body); }
+			catch (e) { return { status: 'error', message: 'invalid response: ' + substr(body, 0, 200) }; }
 
-			const entries = map(
-				filter(data, (item) => !(item.type === 'dir' && item.name === 'Mobile_Modules')),
-				(item) => ({
-					name: item.name,
-					path: item.path,
-					type: item.type,
-					size: item.size,
-					url: item.download_url
+			const entries = map(data, (item) => ({
+					name: item.name, path: item.path, type: item.type,
+					size: item.size, url: item.download_url
 				})
 			);
 
-			try {
-				if (!access(CACHE_DIR))
-					system(['mkdir', '-p', CACHE_DIR]);
-				writefile(cache_file, { entries });
-			} catch (e) { }
-
+			writefile(cache_file, { entries });
 			return {
-				status: 'ok',
-				entries,
+				status: 'ok', entries,
 				cache: { hit: false, cached_at: now, age: 0, ttl: GHCACHE_TTL, expires_in: GHCACHE_TTL }
 			};
 		}
