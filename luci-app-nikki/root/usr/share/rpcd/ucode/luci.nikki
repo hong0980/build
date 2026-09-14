@@ -2,17 +2,20 @@
 // https://ucode.mein.io/module-fs.html
 'use strict';
 import { cursor } from 'uci';
-import { access, popen, writefile, chmod, mkdir, readfile, unlink, lsdir } from 'fs';
+import { access, popen, writefile, chmod, mkdir, readfile, unlink, lsdir, stat } from 'fs';
 import {
 	get_users, get_groups, get_cgroups, shellQuote, run, mirrorGithubUrl, yqRead, yqReadFile, executeCommand
 } from '/etc/nikki/ucode/include.uc';
 
 const uci          = cursor();
 const RUN_DIR      = '/etc/nikki/run';
-const CACHE_DIR    = `${RUN_DIR}/core`;
+const CORE_DIR     = `${RUN_DIR}/core`;
 const CONFIG_PATH  = `${RUN_DIR}/config.yaml`;
 const CORE_SCRIPT  = '/etc/nikki/scripts/core.sh';
 const DEFAULT_UA   = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/125.0.0.0 Safari/537.36';
+const GITHUB_TOKEN = uci.get('nikki', 'config', 'github_token');
+const CACHE_DIR    = '/var/run/nikki/cache';
+const GHCACHE_TTL  = 3600;
 
 function load_profile(defaults) {
 	defaults = defaults ?? {};
@@ -42,7 +45,7 @@ function cache_core_call(req) {
 	if (!core_type || !arch)
 		return { status: 'error', message: 'missing params' };
 
-	const final_out = `${CACHE_DIR}/${core_type}-mihomo`;
+	const final_out = `${CORE_DIR}/${core_type}-mihomo`;
 	const cmd = `${shellQuote(CORE_SCRIPT)} do_cache ${shellQuote(core_type)}`;
 	return startDownloadTask(core_type, cmd, final_out);
 };
@@ -63,6 +66,89 @@ const methods = {
 			uci.set(config, section, option, value);
 			uci.commit(config);
 			return { status: 'ok' };
+		}
+	},
+
+	list_github: {
+		args: { repo: 'repo', path: 'path', branch: 'branch', refresh: false },
+		call: function (req) {
+			const repo    = req.args?.repo;
+			const path    = req.args?.path || '';
+			const branch  = req.args?.branch || 'main';
+			const refresh = req.args?.refresh;
+
+			if (!repo || !match(repo, /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/))
+				return { status: 'error', message: 'invalid repo' };
+			if (match(path, /['"`$\\;&|<>(){}\n]/) || match(branch, /['"`$\\;&|<>(){}\n']/))
+				return { status: 'error', message: 'invalid path/branch' };
+
+			const safe = (s) => replace(s, /[^A-Za-z0-9_.-]/g, '_');
+			const cache_file = `${CACHE_DIR}/gh_${safe(repo)}_${safe(path) || 'root'}_${safe(branch)}.json`;
+			const now = time();
+
+			if (!refresh && access(cache_file)) {
+				const st = stat(cache_file);
+				if (st?.mtime && now - st.mtime < GHCACHE_TTL) {
+					const cached = json(readfile(cache_file) || '');
+					if (cached?.entries)
+						return {
+							status: 'ok',
+							entries: cached.entries,
+							cache: {
+								hit:         true,
+								cached_at:   st.mtime,
+								age:         now - st.mtime,
+								ttl:         GHCACHE_TTL,
+								expires_in:  GHCACHE_TTL - (now - st.mtime)
+							}
+						};
+				}
+			}
+
+			const api = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`;
+
+			let auth = '';
+			if (GITHUB_TOKEN)
+				auth = ` -H ${shellQuote(`Authorization: Bearer ${GITHUB_TOKEN}`)}`;
+
+			const out = run(`curl -sL --max-time 15`
+				+ ` -H ${shellQuote('User-Agent: luci-app-nikki')}`
+				+ auth
+				+ ` -H ${shellQuote('Accept: application/vnd.github+json')}`
+				+ ` ${shellQuote(api)}`);
+
+			if (!out)
+				return { status: 'error', message: 'request failed (timeout/network)' };
+
+			let data;
+			try { data = json(out); }
+			catch (e) { return { status: 'error', message: 'invalid response: ' + substr(out, 0, 200) }; }
+
+			if (!data || data.message)
+				return { status: 'error', message: data?.message || 'unknown error' };
+
+			const entries = map(
+				filter(data, (item) => !(item.type === 'dir' && item.name === 'Mobile_Modules')),
+				(item) => ({
+					name: item.name,
+					path: item.path,
+					type: item.type,
+					size: item.size,
+					url: item.download_url
+				})
+			);
+
+			try {
+				if (!access(CACHE_DIR))
+					system(['mkdir', '-p', CACHE_DIR]);
+				writefile(cache_file, { entries });
+			} catch (e) { }
+
+			return {
+				status: 'ok',
+				entries,
+				cache: { hit: false, cached_at: now, age: 0, ttl: GHCACHE_TTL, expires_in: GHCACHE_TTL }
+			};
 		}
 	},
 
@@ -377,7 +463,7 @@ const methods = {
 			if (!core_type)
 				return { status: 'error', message: 'missing core_type' };
 
-			let final_out = `${CACHE_DIR}/${core_type}-mihomo`;
+			let final_out = `${CORE_DIR}/${core_type}-mihomo`;
 			if (core_type === 'meta' && !access(final_out) && access('/usr/bin/mihomo'))
 				final_out = '/usr/bin/mihomo';
 

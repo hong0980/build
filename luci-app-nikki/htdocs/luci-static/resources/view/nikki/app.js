@@ -21,6 +21,13 @@ const checkurls = [
 //     expect: { '': {} }
 // });
 
+const callListGithub = L.rpc.declare({
+    object: 'luci.nikki',
+    method: 'list_github',
+    params: ['repo', 'path', 'branch', 'refresh'],
+    expect: { '': {} }
+});
+
 function setStatus(element, running) {
     if (element) {
         element.style.color = running ? 'green' : 'red';
@@ -80,15 +87,195 @@ function attachFileEditorButton(o, resolveTarget) {
         }, _('Edit'));
 
         if (!cfgvalue) btn.style.display = 'none';
-
         select.addEventListener('change', function (ev) {
             const el = self.map.lookupOption('core_only', section_id)[0];
             el?.getUIElement(section_id).setValue('0');
             btn.style.display = this.value ? '' : 'none';
         });
+        const browseBtn = E('button', {
+            'class': 'btn cbi-button-action',
+            'title': _('Configuration collection from https://github.com/HenryChiao/MIHOMO_YAMLS'),
+            'click': ui.createHandlerFn(this, function (ev) {
+                const ROOT = 'THEYAMLS';
+                let state = { path: ROOT, loading: true, error: null, entries: [], localStats: {} };
+                const crumbsEl = E('div', { 'style': 'margin-bottom:.5em;word-break:break-all;' });
+                const cacheEl = E('div', { 'style': 'color:#999;font-size:85%;margin-bottom:.5em;' });
+                const tableEl = E('table', { 'class': 'table cbi-section-table' }, [
+                    E('tr', { 'class': 'tr table-titles' }, [
+                        E('th', { 'class': 'th' }, _('Name')),
+                        E('th', { 'class': 'th' }, _('Size')),
+                        E('th', { 'class': 'th' }, _('Local')),
+                        E('th', { 'class': 'th cbi-section-actions' })
+                    ])
+                ]);
 
+                const md = ui.showModal(_('Remote Files'), [
+                    crumbsEl, cacheEl, tableEl,
+                    E('div', { 'class': 'right' }, [
+                        E('button', { 'class': 'btn cbi-button-negative', 'click': ui.hideModal }, _('Close'))
+                    ])
+                ]);
+
+                const formatSize = (s) => {
+                    if (!s) return '-';
+                    if (s < 1024) return s + ' B';
+                    if (s < 1048576) return (s / 1024).toFixed(1) + ' KB';
+                    return (s / 1048576).toFixed(1) + ' MB';
+                };
+
+                const renderCrumbs = () => {
+                    const parts = [
+                        E('a', { 'href': 'javascript:void(0)', 'click': () => loadPath(ROOT) }, ROOT || _('root'))
+                    ];
+                    if (state.path.startsWith(ROOT + '/')) {
+                        let acc = ROOT;
+                        state.path.slice(ROOT.length + 1).split('/').forEach(seg => {
+                            acc += '/' + seg;
+                            const p = acc;
+                            parts.push(' / ');
+                            parts.push(E('a', { 'href': 'javascript:void(0)', 'click': () => loadPath(p) }, seg));
+                        });
+                    }
+                    crumbsEl.textContent = '';
+                    parts.forEach(x => crumbsEl.appendChild(
+                        typeof x === 'string' ? document.createTextNode(x) : x
+                    ));
+                };
+
+                const downloadFile = (entry) => nikki.download_file({
+                    url: entry.url, path: nikki.profilesDir, filename: entry.name
+                }).then(() => {
+                    nikki.modalnotify(null, E('p', _('%s download successful').format(entry.name)), 3000, 'success');
+                }).catch((e) => {
+                    nikki.modalnotify(null, E('p', _('%s download failed: %s').format(entry.name, e.message || e)), 8000, 'error');
+                }).finally(() => loadPath(state.path));
+
+                const previewFile = (entry) => {
+                    const tmpPath = '%s/%s'.format(nikki.TEMP_DIR, entry.name);
+                    const overlay = E('div', {
+                        'style': 'z-index:100000;justify-content:center;background:rgba(0,0,0,0.7);' +
+                            'display:flex;align-items:center;position:fixed;inset:0;'
+                    });
+                    const aceDiv = E('div', { 'style': 'width:100%;height:400px;' },
+                        E('em', { 'class': 'spinning' }, _('Loading...')));
+
+                    const box = E('div', { 'class': 'modal', 'style': 'padding:.5em;max-width:700px' }, [
+                        E('h4', { 'style': 'margin-top:0;' }, entry.name),
+                        aceDiv,
+                        E('div', { 'class': 'right' }, [
+                            E('button', { 'class': 'btn cbi-button-negative', 'click': () => overlay.remove() }, _('Close'))
+                        ])
+                    ]);
+
+                    overlay.appendChild(box);
+                    document.body.appendChild(overlay);
+
+                    const show = () => fs.read_direct(tmpPath).then(content => {
+                        const isYaml = /\.ya?ml$/.test(entry.name);
+                        return nikki.initAceEditor(aceDiv, content, isYaml ? 'yaml' : 'text', {
+                            readOnly: true, wrap: true
+                        }).then(ed => requestAnimationFrame(() => ed.resize(true)));
+                    });
+
+                    L.resolveDefault(fs.stat(tmpPath), null).then(st => {
+                        if (st && st.size === entry.size)
+                            return show();
+                        return nikki.download_file({
+                            url: entry.url, path: nikki.TEMP_DIR, filename: entry.name
+                        }).then(show);
+                    }).catch(e => {
+                        aceDiv.textContent = '';
+                        aceDiv.appendChild(E('p', { 'style': 'color:red;' }, e.message || e));
+                    });
+                };
+
+                const render = () => {
+                    renderCrumbs();
+                    const rows = state.entries.map(e => {
+                        if (e.type === 'dir') {
+                            const link = E('a', { 'href': 'javascript:void(0)' }, '📁 %s'.format(e.name));
+                            link.addEventListener('click', () => loadPath(e.path));
+                            return [link, '-', '', ''];
+                        }
+
+                        const local = state.localStats[e.name];
+                        const status = !local
+                            ? E('span', { 'class': 'label warning' }, _('Not downloaded'))
+                            : (local.size === e.size)
+                                ? E('span', { 'class': 'label success' }, _('Up to date'))
+                                : E('span', { 'class': 'label notice' }, _('Different size'));
+
+                        const pvBtn = E('button', {
+                            'class': 'btn cbi-button-action',
+                            'style': 'min-width:5.5rem;',
+                            'click': () => previewFile(e)
+                        }, _('Preview'));
+
+                        const dlBtn = E('button', {
+                            'class': 'btn cbi-button-positive',
+                            'style': 'min-width:5.5rem;',
+                            'click': () => downloadFile(e)
+                        }, local ? _('Re-download') : _('Download'));
+
+                        return [E('span', {}, e.name), formatSize(e.size), status, E('span', {}, [pvBtn, dlBtn])];
+                    });
+
+                    const hint = state.error || (state.loading ? _('Loading...') : _('Empty directory'));
+                    cbi_update_table(tableEl, state.loading || state.error ? [] : rows, hint);
+                };
+
+                const loadPath = (path, force) => {
+                    state = { path: path, loading: true, error: null, entries: [], localStats: {} };
+                    render();
+
+                    callListGithub('HenryChiao/MIHOMO_YAMLS', path, 'main', !!force).then(res => {
+                        if (!res || res.status !== 'ok') {
+                            state.loading = false;
+                            state.error = res?.message || _('Load failed');
+                            return render();
+                        }
+
+                        const files = (res.entries || []).filter(e => e.type === 'file' && e.name !== 'Mobile_Modules');
+
+                        return Promise.all(files.map(e =>
+                            L.resolveDefault(fs.stat('%s/%s'.format(nikki.profilesDir, e.name)), null)
+                                .then(st => { state.localStats[e.name] = st; })
+                        )).then(() => {
+                            state.loading = false;
+                            state.entries = (res.entries || []).slice().sort((a, b) => {
+                                if ((a.type === 'dir') !== (b.type === 'dir'))
+                                    return a.type === 'dir' ? -1 : 1;
+                                return a.name.localeCompare(b.name);
+                            });
+
+                            if (res.cache) {
+                                if (res.cache.hit) {
+                                    cacheEl.textContent = _('Cached %s seconds ago, expires in %s seconds').format(res.cache.age, res.cache.expires_in);
+                                    cacheEl.appendChild(E('a', {
+                                        'href': 'javascript:void(0)',
+                                        'style': 'margin-left:.5em;',
+                                        'click': () => loadPath(state.path, true)
+                                    }, _('Force Refresh')));
+                                } else {
+                                    cacheEl.textContent = _('Refreshed (real-time data)');
+                                }
+                            }
+
+                            render();
+                        });
+                    }).catch(e => {
+                        state.loading = false;
+                        state.error = _('Request failed: %s').format(e.message || e);
+                        render();
+                    });
+                };
+
+                loadPath(ROOT);
+            })
+        }, _('Get Remote Config'));
         node.classList.add('control-group');
         node.appendChild(btn);
+        if (option_index === 2) node.appendChild(browseBtn);
         return node;
     };
 }
@@ -255,7 +442,7 @@ return view.extend({
                                     options.forEach(opt => fs.remove(`${nikki.TEMP_DIR}/cache_${opt.value}.list`));
                                 })
                             }, _('Flush Cache')),
-                            E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Close'))
+                            E('button', { 'class': 'btn cbi-button-negative', 'click': ui.hideModal }, _('Close'))
                         ])
                     ], 'cbi-modal');
 
@@ -422,6 +609,41 @@ return view.extend({
             return node;
         };
 
+        o = s.option(form.ListValue, 'profile', _('Choose Profile'));
+        o.optional = true;
+        o.rmempty = false;
+
+        for (const p of profiles) o.value('file:' + p.name, _('File:') + p.name);
+        uci.sections('nikki', 'subscription', function (s, sid) {
+            if (subfiles.length > 0) o.value('subscription:' + s['.name'], _('Subscription:') + s.name);
+        });
+
+        attachFileEditorButton(o, (value) => {
+            const [type, id] = value.split(/:(.+)/);
+            if (type === 'file') {
+                const profile = profiles.find(p => p.name === id);
+                return profile ? profile.path : null;
+            }
+
+            const subName = uci.get('nikki', id, 'name');
+            if (!subName) return null;
+
+            const subfile = subfiles.find(p => p.path.includes(subName));
+            return subfile ? subfile.path : null;
+        });
+
+        o = s.option(form.ListValue, 'mixin_file', _('Select mixin file'), _('Select files to add to mixin'));
+        o.optional = true;
+        o.depends({ profile: 'subscription', '!contains': true });
+        for (const p of mixinfiles) o.value(p.name, _('Mixin:') + p.name);
+        attachFileEditorButton(o, (value) => {
+            const mixinfile = mixinfiles.find(p => p.name === value);
+            return mixinfile ? mixinfile.path : null;
+        });
+
+        o = s.option(form.Flag, 'url_enabled', _('Subscription'), _('为启动配置添加已经存在订阅的地址'));
+        o.depends({ profile: 'file', '!contains': true, core_only: 0 });
+
         o = s.option(form.Flag, 'uselightgbm', _('Enable LightGBM'));
         o.default = '0';
         o.rmempty = false;
@@ -514,41 +736,6 @@ return view.extend({
         o = s.option(form.Value, 'policy_priority', _('Policy Priority'));
         o.placeholder = 'Premium:0.9;SG:1.2;HK:1.1';
         o.depends('uselightgbm', '1');
-
-        o = s.option(form.ListValue, 'profile', _('Choose Profile'));
-        o.optional = true;
-        o.rmempty = false;
-
-        for (const p of profiles) o.value('file:' + p.name, _('File:') + p.name);
-        uci.sections('nikki', 'subscription', function (s, sid) {
-            if (subfiles.length > 0) o.value('subscription:' + s['.name'], _('Subscription:') + s.name);
-        });
-
-        attachFileEditorButton(o, (value) => {
-            const [type, id] = value.split(/:(.+)/);
-            if (type === 'file') {
-                const profile = profiles.find(p => p.name === id);
-                return profile ? profile.path : null;
-            }
-
-            const subName = uci.get('nikki', id, 'name');
-            if (!subName) return null;
-
-            const subfile = subfiles.find(p => p.path.includes(subName));
-            return subfile ? subfile.path : null;
-        });
-
-        o = s.option(form.ListValue, 'mixin_file', _('Select mixin file'), _('Select files to add to mixin'));
-        o.optional = true;
-        o.depends({ profile: 'subscription', '!contains': true });
-        for (const p of mixinfiles) o.value(p.name, _('Mixin:') + p.name);
-        attachFileEditorButton(o, (value) => {
-            const mixinfile = mixinfiles.find(p => p.name === value);
-            return mixinfile ? mixinfile.path : null;
-        });
-
-        o = s.option(form.Flag, 'url_enabled', _('Subscription'), _('为启动配置添加已经存在订阅的地址'));
-        o.depends({ profile: 'file', '!contains': true, core_only: 0 });
 
         o = s.option(form.Flag, 'core_only', _('Core Only'), _('When enabled, mixin configs will not be used; Mihomo will auto-configure instead'));
         o.depends({ profile: 'file', '!contains': true });

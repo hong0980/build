@@ -1558,9 +1558,6 @@ msgstr "多路径 TCP（MPTCP）"
 msgid "Remote"
 msgstr "远程"
 
-msgid "Local"
-msgstr "本地"
-
 msgid "Nodes"
 msgstr "节点"
 
@@ -2488,9 +2485,6 @@ msgstr "请求中..."
 msgid "Loading..."
 msgstr "加载中..."
 
-msgid "Request failed: %s"
-msgstr "请求失败: %s"
-
 msgid "Operation Successful"
 msgstr "操作成功"
 
@@ -2694,6 +2688,54 @@ msgstr "自定义参数"
 
 msgid "Raw query string appended as-is, e.g. new_name=true&insert=..."
 msgstr "原样追加的查询串，例如 new_name=true&insert=..."
+
+msgid "Cached %s seconds ago, expires in %s seconds"
+msgstr "缓存于 %s 秒前，%s 秒后过期"
+
+msgid "Configuration collection from https://github.com/HenryChiao/MIHOMO_YAMLS"
+msgstr "使用 https://github.com/HenryChiao/MIHOMO_YAMLS 的专用配置精选合集"
+
+msgid "Different size"
+msgstr "大小不同"
+
+msgid "Empty directory"
+msgstr "空目录"
+
+msgid "Force Refresh"
+msgstr "强制刷新"
+
+msgid "Get Remote Config"
+msgstr "获取远程配置"
+
+msgid "Load failed"
+msgstr "加载失败"
+
+msgid "Not downloaded"
+msgstr "未下载"
+
+msgid "Preview"
+msgstr "预览"
+
+msgid "Re-download"
+msgstr "重新下载"
+
+msgid "Refreshed (real-time data)"
+msgstr "已刷新（实时数据）"
+
+msgid "Remote Files"
+msgstr "远程文件"
+
+msgid "Request failed: %s"
+msgstr "请求失败：%s"
+
+msgid "Size"
+msgstr "大小"
+
+msgid "Up to date"
+msgstr "已是最新"
+
+msgid "root"
+msgstr "根目录"
 
 msgid ""
 msgstr ""

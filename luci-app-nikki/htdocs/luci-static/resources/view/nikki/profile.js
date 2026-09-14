@@ -1501,9 +1501,14 @@ return view.extend({
                 'class': 'btn cbi-button-positive',
                 'click': ui.createHandlerFn(this, function (ev) {
                     const path = '/etc/nikki/res/sub_ini.list';
-                    const aceDiv = E('div', { 'style': 'width:100%;height:350px;' });
                     return L.resolveDefault(fs.read_direct(path), '').then(content => {
-                        const md = ui.showModal(null, [
+                        const aceDiv = E('div', { 'style': 'width:100%;height:350px;' });
+                        const host = document.getElementById('modal_overlay');
+                        const overlay = E('div', {
+                            'style': 'position:fixed;top:0;left:0;right:0;bottom:0;' +
+                                'z-index:100000;background:rgba(0,0,0,0.7);align-items:center;'
+                        });
+                        const box = E('div', { 'class': 'modal cbi-modal' }, [
                             aceDiv,
                             E('div', { 'class': 'button-row' }, [
                                 E('button', {
@@ -1516,10 +1521,20 @@ return view.extend({
                                             .catch(e => nikki.modalnotify(null, E('p', e.message || e), 8000, 'error'));
                                     })
                                 }, _('Save')),
-                                E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Dismiss'))
-                            ])
-                        ], 'cbi-modal');
-                        md.style.setProperty('padding', '.5em');
+                                E('button', {
+                                    'class': 'btn cbi-button-action',
+                                    'click': ui.createHandlerFn(this, function (ev) {
+                                        if (!aceDiv._aceEditor) return;
+                                        const wrap = !aceDiv._aceEditor.getSession().getUseWrapMode();
+                                        aceDiv._aceEditor.getSession().setUseWrapMode(wrap);
+                                        ev.currentTarget.textContent = wrap ? _('换行') : _('不换行');
+                                    })
+                                }, _('换行')),
+                                E('button', { 'class': 'btn cbi-button', 'click': () => { overlay.remove(); } }, _('Dismiss'))
+                            ], 'cbi-modal')
+                        ]);
+                        overlay.appendChild(box);
+                        host.appendChild(overlay);
                         nikki.initAceEditor(aceDiv, content, null);
                     });
                 })
@@ -1552,7 +1567,7 @@ return view.extend({
         for (const [name, param, title, desc, advanced = false] of converterFlags) {
             o = s.option(form.Flag, name, title, desc);
             o.modalonly = true;
-            o.default  = '0';
+            o.default = '0';
             if (advanced) o.depends('ad_option', '1');
             else o.depends('use_converter', '1');
         }
