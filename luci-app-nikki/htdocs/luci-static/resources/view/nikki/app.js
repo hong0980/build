@@ -227,14 +227,14 @@ function attachFileEditorButton(o, resolveTarget) {
                         nikki.modalnotify(null, E('p', _('Request error: %s').format(state.error)), 8000, 'error');
                 };
 
-                const EXCLUDE_DIRS = ['Mobile_Modules', 'Ayanami0-configs', 'From_clash_by_hako', 'Yiteei', '.github', 'scripts', 'THEDOC'];
                 const EXCLUDE_FILES = ['LICENSE', '.gitignore'];
+                const EXCLUDE_DIRS = ['Mobile_Modules', 'Ayanami0-configs', 'From_clash_by_hako', 'Yiteei', '.github', 'scripts', 'THEDOC'];
                 const loadPath = (path, force) => {
                     state = { path: path, error: null, entries: [], localStats: {} };
                     render();
 
                     callListGithub('HenryChiao/MIHOMO_YAMLS', path, 'main', !!force).then(res => {
-                        if (!res || res.status !== 'ok') {
+                        if (res.status !== 'ok') {
                             state.error = res?.message || _('Load failed');
                             return render();
                         }
@@ -417,6 +417,7 @@ return view.extend({
             const coreBtn = E('button', {
                 'class': 'btn cbi-button-action',
                 'click': ui.createHandlerFn(this, function (ev) {
+                    const spinning = E('em', { 'class': 'spinning' }, _('Checking latest version...'));
                     const tableEl = E('table', { 'class': 'table cbi-section-table' }, [
                         E('tr', { 'class': 'tr table-titles' }, [
                             E('th', { 'class': 'th' }, _('Type')),
@@ -427,7 +428,6 @@ return view.extend({
                             E('th', { 'class': 'th cbi-section-actions' })
                         ])
                     ]);
-                    const spinning = E('em', { 'class': 'spinning' }, _('Checking latest version...'));
                     const options = Array.from(node.firstChild.options)
                         .filter(opt => opt.value)
                         .map(opt => ({ value: opt.value, text: opt.text }));
@@ -563,16 +563,14 @@ return view.extend({
                             renders();
                         });
                     };
-                    const md = ui.showModal(_('Core Version Management'), [
-                        tableEl,
-                        E('div', { 'class': 'button-row' }, [
+                    ui.showModal(_('Core Version Management'), [
+                        tableEl, E('div', { 'class': 'button-row' }, [
                             E('button', {
                                 'class': 'btn cbi-button-remove',
                                 'click': ui.createHandlerFn(this, function (ev) {
                                     cbi_update_table(tableEl, [], spinning);
-                                    return Promise.all(options.map(opt =>
-                                        fs.remove(`${nikki.TEMP_DIR}/cache_${opt.value}.list`)
-                                    )).then(render);
+                                    options.map(opt => fs.remove(`${nikki.TEMP_DIR}/cache_${opt.value}.list`));
+                                    return render();
                                 })
                             }, _('Force Refresh')),
                             E('button', { 'class': 'btn cbi-button-negative', 'click': ui.hideModal }, _('Close'))

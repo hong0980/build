@@ -83,11 +83,9 @@ start_service() {
 	elif [ "$type" = "subscription" ]; then
 		local name prefer section="${profile#*:}"
 		config_get name "$section" name
-		# config_get prefer "$section" "prefer" "remote"
-		local subscription_file; subscription_file="$(ls $SUBSCRIPTIONS_DIR/$name*)"
-		# if [ "$prefer" = "remote" -o ! -f "$subscription_file" ]; then
-		# 	update_subscription "$section"
-		# fi
+		local subscription_file;
+		set -- "${SUBSCRIPTIONS_DIR}/${name}"*
+		[ -f "$1" ] && subscription_file="$1"
 		if [ ! -f "$subscription_file" ]; then
 			log "Profile" "Subscription file not found."
 			log "App" "Exit."
@@ -193,11 +191,11 @@ start_service() {
 	fi
 
 	local core uselightgbm
-	config_get core        config core
+	config_get core        config core 'meta'
 	config_get uselightgbm config uselightgbm '0'
 
 	set -- "${RUN_DIR}/core/${core}-mihomo"
-	[ -x "$1" ] || set -- /usr/bin/mihomo
+	[ -x "$1" ] || set -- '/usr/bin/mihomo'
 	[ -x "$1" ] && ln -sf "$1" "$PROG"
 
 	[ "$core" = 'smart' -o "$core" = 'smart_oix' ] && [ "$uselightgbm" = '1' ] && {
@@ -318,11 +316,11 @@ start_service() {
 	auto_update() {
 		local cfg="$1" enable hour time week mode interval cmd
 		config_get_bool enable "$cfg" auto_update
-		[ "$enable" = '0' ] && return
-		config_get hour     "$cfg" hour 2
+		[ "$enable" = '1' ] || return
+		config_get hour     "$cfg" hour 10
 		config_get time     "$cfg" time 10
 		config_get week     "$cfg" week '*'
-		config_get mode     "$cfg" mode 0
+		config_get mode     "$cfg" mode 1
 		config_get interval "$cfg" interval 30
 		cmd="/etc/init.d/nikki update_subscription $cfg #nikki update_subscription"
 
