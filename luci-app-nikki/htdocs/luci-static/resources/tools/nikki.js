@@ -440,4 +440,41 @@ return baseclass.extend({
         });
     },
 
+    showNotification: function (message, timeout = 3000, type = 'info') {
+        if (!this._queue) this._queue = [];
+        const queue = this._queue;
+
+        const existing = document.querySelector('.alert-message[data-corner-notify]');
+        if (existing && existing.textContent === message) {
+            clearTimeout(existing._timer);
+            existing._timer = setTimeout(() => existing.remove(), timeout);
+            return;
+        }
+
+        const n = E('div', {
+            'class': 'alert-message %s'.format(type),
+            'data-corner-notify': '',
+            'style': 'position:fixed;top:%dpx;right:20px;z-index:20000;border:none;box-shadow:0 4px 12px rgba(0,0,0,.25);'
+                .format(20 + queue.length * 70)
+        }, message);
+
+        const remove = () => {
+            if (!n.parentNode) return;
+            clearTimeout(n._timer);
+            n.remove();
+            const i = queue.indexOf(n);
+            if (i > -1) queue.splice(i, 1);
+            queue.forEach((el, j) => {
+                el.style.top = '%dpx'.format(20 + j * 70);
+            });
+        };
+
+        n.addEventListener('click', remove);
+        document.body.appendChild(n);
+        queue.push(n);
+
+        const duration = (typeof timeout === 'number' && timeout > 0) ? timeout : 3000;
+        n._timer = setTimeout(remove, duration);
+    },
+
 });

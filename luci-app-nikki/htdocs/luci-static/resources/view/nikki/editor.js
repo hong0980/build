@@ -53,7 +53,7 @@ return view.extend({
             type: 'button', title: _('Toggle word wrap'),
             style: 'position:absolute;top:3px;right:55px;padding:3px 8px;font-size:12px;z-index:1000;background:#557ef1;color:#fff;border:none;cursor:pointer;border-radius:3px;line-height:1.4;display:none;',
             click: ui.createHandlerFn(this, function () {
-                const ed = this.aceEditor;
+                const ed = this.ed;
                 const on = ed.session.getUseWrapMode();
                 ed.setOption('wrap', on ? 'off' : 'free');
                 requestAnimationFrame(() => ed.resize(true));
@@ -62,7 +62,7 @@ return view.extend({
         }, _('Wrap: On'));
 
         nikki.initAceEditor(aceDiv, '', 'yaml')
-            .then(editor => this.aceEditor = editor);
+            .then(ed => this.ed = ed);
 
         return E('div', { class: 'cbi-map' }, [
             E('h3', _('Editor')),
@@ -74,7 +74,7 @@ return view.extend({
                             class: 'cbi-input-select',
                             change: L.bind(function (ev) {
                                 const value = ev.target.value;
-                                const ed = this.aceEditor;
+                                const ed = this.ed;
                                 if (!value) {
                                     wrapbtn.style.display = 'none';
                                     return ed.setValue('');
@@ -115,27 +115,18 @@ return view.extend({
 
     handleSave: function (ev) {
         if (!this.path) {
-            this._showTip(_('No file selected'), 'warning', 2000);
+            nikki.showNotification(_('No file selected'), 'warning', 2000);
             return Promise.resolve();
         }
 
-        const content = this.aceEditor.getValue().replace(/[ \t]+\r?$/gm, '');
+        const content = this.ed.getValue().replace(/[ \t]+\r?$/gm, '');
         if (content === this.content) {
-            this._showTip(_('File content unchanged'), 'warning', 2000);
+            nikki.showNotification(_('File content unchanged'), 'warning', 2000);
             return Promise.resolve();
         }
 
         return nikki.writefile(this.path, content)
-            .then(() => this._showTip(_('Config saved, files updated'), 'success', 2000));
-    },
-
-    _showTip: function (msg, type, ms) {
-        const tip = E('div', {
-            'class': 'alert-message ' + (type || 'info'),
-            'style': 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;white-space:nowrap;font-size:16px;font-weight:bold;padding:1em 2.5em;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.4);'
-        }, E('p', { 'style': 'margin:0' }, msg));
-        document.body.appendChild(tip);
-        setTimeout(() => tip.remove(), ms || 2000);
+            .then(() => nikki.showNotification(_('Config saved, files updated'), 'success', 2000));
     },
 
     handleReset: null,

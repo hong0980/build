@@ -7,14 +7,15 @@ import {
 	get_users, get_groups, get_cgroups, shellQuote, run, mirrorGithubUrl, yqRead, yqReadFile, executeCommand
 } from '/etc/nikki/ucode/include.uc';
 
+const GHCACHE_TTL  = 3600;
 const uci          = cursor();
 const RUN_DIR      = '/etc/nikki/run';
 const CORE_DIR     = `${RUN_DIR}/core`;
 const CONFIG_PATH  = `${RUN_DIR}/config.yaml`;
 const CORE_SCRIPT  = '/etc/nikki/scripts/core.sh';
-const GITHUB_TOKEN = uci.get('nikki', 'config', 'github_token');
 const CACHE_DIR    = '/var/run/nikki/cache';
-const GHCACHE_TTL  = 3600;
+uci.load('nikki');
+const GITHUB_TOKEN = uci.get('nikki', 'config', 'github_token');
 
 function load_profile(defaults) {
 	defaults = defaults ?? {};
@@ -240,7 +241,6 @@ const methods = {
 			if (!url || !name || !match(name, /^[A-Za-z0-9_-]+$/) || match(url, /['"`$\\;&|<>(){}\n']/))
 				return { status: 'error', message: 'invalid url/name' };
 
-			uci.load('nikki');
 			const ui_path    = uci.get('nikki', 'mixin', 'ui_path');
 			const target_dir = `${RUN_DIR}/${ui_path}/${name}`;
 
