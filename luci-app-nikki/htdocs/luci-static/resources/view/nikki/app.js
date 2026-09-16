@@ -227,8 +227,7 @@ function attachFileEditorButton(o, resolveTarget) {
                         nikki.modalnotify(null, E('p', _('Request error: %s').format(state.error)), 8000, 'error');
                 };
 
-                const EXCLUDE_FILES = ['LICENSE', '.gitignore'];
-                const EXCLUDE_DIRS = ['Mobile_Modules', 'Ayanami0-configs', 'From_clash_by_hako', 'Yiteei', '.github', 'scripts', 'THEDOC'];
+                const EXCLUDE_FILES = ['LICENSE', '.gitignore', 'Mobile_Modules', 'Ayanami0-configs', 'From_clash_by_hako', 'Yiteei', '.github', 'scripts', 'THEDOC'];
                 const loadPath = (path, force) => {
                     state = { path: path, error: null, entries: [], localStats: {} };
                     render();
@@ -244,10 +243,7 @@ function attachFileEditorButton(o, resolveTarget) {
                                 .then(st => { state.localStats[e.name] = st; })
                         )).then(() => {
                             state.entries = (res.entries || [])
-                                .filter(e => {
-                                    if (e.type === 'dir') return !EXCLUDE_DIRS.includes(e.path);
-                                    return !EXCLUDE_FILES.includes(e.name);
-                                })
+                                .filter(e => !EXCLUDE_FILES.includes(e.name))
                                 .slice().sort((a, b) => {
                                     if ((a.type === 'dir') !== (b.type === 'dir'))
                                         return a.type === 'dir' ? -1 : 1;
