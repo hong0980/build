@@ -83,7 +83,7 @@ const methods = {
 				return { status: 'error', message: 'invalid path/branch' };
 			if (!access(CACHE_DIR)) system(['mkdir', '-p', CACHE_DIR]);
 
-			let data, msg, auth = '', now = time();
+			let data, msg, now = time();
 			const safe = (s) => replace(s, /[^A-Za-z0-9_.-]/g, '_');
 			const cache_file = `${CACHE_DIR}/gh_${safe(repo)}_${safe(path) || 'root'}_${safe(branch)}.json`;
 
@@ -103,27 +103,22 @@ const methods = {
 				}
 			}
 
-			const body_file = `${CACHE_DIR}/gh_body_tmp`;
-			const err_file  = `${CACHE_DIR}/gh_err_tmp`;
-			const api = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`;
-			if (GITHUB_TOKEN)
-				auth = ` -H ${shellQuote(`Authorization: Bearer ${GITHUB_TOKEN}`)}`;
-			const http_code = trim(run(`curl -sS --max-time 15`
-				+ ` -o ${shellQuote(body_file)}`
-				+ ` -w '%{http_code}'`
-				+ ` -H ${shellQuote('User-Agent: luci-app-nikki')}`
-				+ auth
+			const marker = '__GH_HTTP_CODE__';
+			const api  = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`;
+			const auth = GITHUB_TOKEN ? ` -H ${shellQuote(`Authorization: Bearer ${GITHUB_TOKEN}`)}` : '';
+			const out  = trim(run(`curl -sS --max-time 15 ${auth}`
 				+ ` -H ${shellQuote('Accept: application/vnd.github+json')}`
-				+ ` ${shellQuote(api)} 2>${shellQuote(err_file)}`));
+				+ ` -w ${shellQuote(`\\n${marker}%{http_code}`)} ${shellQuote(api)} 2>/dev/null`));
 
-			if (!http_code || !match(http_code, /^[0-9]{3}$/)) {
-				const err = trim(readfile(err_file) || '');
-				try { system(['rm', '-f', body_file, err_file]); } catch (e) {}
-				return { status: 'error', message: err || 'request failed (timeout/network)' };
-			}
+			const pos = rindex(out, `\n${marker}`);
+			if (pos < 0)
+				return { status: 'error', message: 'request failed (timeout/network)' };
 
-			const body = readfile(body_file) || '';
-			try { system(['rm', '-f', body_file, err_file]); } catch (e) {}
+			const body = substr(out, 0, pos);
+			const http_code = substr(out, pos + length(`\n${marker}`));
+
+			if (!http_code || !match(http_code, /^[0-9]{3}$/))
+				return { status: 'error', message: 'request failed (timeout/network)' };
 			if (http_code != '200') {
 				msg = `HTTP ${http_code}`;
 				try {
