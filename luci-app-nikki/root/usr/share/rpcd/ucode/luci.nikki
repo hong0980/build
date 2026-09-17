@@ -14,8 +14,7 @@ const CORE_DIR     = `${RUN_DIR}/core`;
 const CONFIG_PATH  = `${RUN_DIR}/config.yaml`;
 const CORE_SCRIPT  = '/etc/nikki/scripts/core.sh';
 const CACHE_DIR    = '/var/run/nikki/cache';
-uci.load('nikki');
-const GITHUB_TOKEN = uci.get('nikki', 'config', 'github_token');
+const GITHUB_TOKEN = trim(run('uci -q get nikki.config.github_token'));
 
 function load_profile(defaults) {
 	defaults = defaults ?? {};
@@ -200,13 +199,10 @@ const methods = {
 	core_version: {
 		args: { mode: 'mode' },
 		call: function (req) {
-			let version = null;
 			const mode  = req.args?.mode;
-			let core  = `/etc/nikki/run/core/${mode}-mihomo`;
+			let core    = `/etc/nikki/run/core/${mode}-mihomo`;
 			if (mode === 'meta' && !access(core)) core = '/usr/bin/mihomo';
-			if (access(core))
-				version = trim(run(`${core} -v | grep Mihomo | cut -d " " -f 3`));
-
+			const version = access(core, 'x') ? trim(run(`${core} -v | grep Mihomo | cut -d " " -f 3`)) : null;
 			return { version };
 		}
 	},
@@ -214,8 +210,7 @@ const methods = {
 	connection_check: {
 		args: { url: 'url' },
 		call: function (req) {
-			if (!req.args?.url)
-				return { httpcode: null, error: 'illegal url' };
+			if (!req.args?.url) return { httpcode: null, error: 'illegal url' };
 
 			const out = run(`curl -s -o /dev/null -L -w '%{http_code} %{time_total}' --max-time 3 ${shellQuote(req.args.url)}`);
 			if (!out) return { httpcode: '-1', elapsed_ms: -1 };
@@ -236,6 +231,7 @@ const methods = {
 			if (!url || !name || !match(name, /^[A-Za-z0-9_-]+$/) || match(url, /['"`$\\;&|<>(){}\n']/))
 				return { status: 'error', message: 'invalid url/name' };
 
+			uci.load('nikki');
 			const ui_path    = uci.get('nikki', 'mixin', 'ui_path');
 			const target_dir = `${RUN_DIR}/${ui_path}/${name}`;
 
@@ -470,6 +466,7 @@ const methods = {
 				return cache;
 			}
 
+			uci.load('nikki');
 			uci.set('nikki', 'config', 'core', core_type);
 			uci.commit('nikki');
 			system(['service', 'nikki', 'restart']);

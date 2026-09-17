@@ -229,13 +229,13 @@ update_subscription() {
 			eval "val=\$$opt"
 			[ -n "$val" ] && uci_set nikki "$section" "$opt" "$(format_filesize "$val")"
 		done
-		[ -n "$expire" ]       && uci_set nikki "$section" expire       "$(date "+%Y-%m-%d %H:%M:%S" -d "@$expire")"
+		[ -n "$expire" ]       && uci_set nikki "$section" expire       "$(date "+%Y-%m-%d %H:%M" -d "@$expire")"
 		[ -n "$web_page_url" ] && uci_set nikki "$section" web_page_url "$web_page_url"
 	fi
 
 	[ "$name_changed" = 1 ] && uci_set nikki "$section" name "$name"
 	[ -n "$used_ua" ] && [ "$used_ua" != "$detected_ua" ] && uci_set nikki "$section" detected_user_agent "$used_ua"
-	uci_set nikki "$section" update "$(date "+%Y-%m-%d %H:%M:%S")"
+	uci_set nikki "$section" update "$(date "+%m-%d %H:%M")"
 	mv -f "$temp_config" "$SUBSCRIPTIONS_DIR/$name.yaml"
 	rm -f "$header_tmpfile"
 	uci_commit nikki
