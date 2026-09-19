@@ -14,7 +14,6 @@ const CORE_DIR     = `${RUN_DIR}/core`;
 const CONFIG_PATH  = `${RUN_DIR}/config.yaml`;
 const CORE_SCRIPT  = '/etc/nikki/scripts/core.sh';
 const CACHE_DIR    = '/var/run/nikki/cache';
-const GITHUB_TOKEN = trim(run('uci -q get nikki.config.github_token'));
 
 function load_profile(defaults) {
 	defaults = defaults ?? {};
@@ -104,6 +103,7 @@ const methods = {
 
 			const marker = '__GH_HTTP_CODE__';
 			const api  = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`;
+			const GITHUB_TOKEN = trim(run('uci -q get nikki.config.github_token'));
 			const auth = GITHUB_TOKEN ? ` -H ${shellQuote(`Authorization: Bearer ${GITHUB_TOKEN}`)}` : '';
 			const out  = trim(run(`curl -sS --max-time 15 ${auth}`
 				+ ` -H ${shellQuote('Accept: application/vnd.github+json')}`

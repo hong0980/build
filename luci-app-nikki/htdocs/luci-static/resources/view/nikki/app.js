@@ -413,6 +413,7 @@ return view.extend({
             const coreBtn = E('button', {
                 'class': 'btn cbi-button-action',
                 'click': ui.createHandlerFn(this, function (ev) {
+                    let core_mode = false;
                     const spinning = E('em', { 'class': 'spinning' }, _('Checking latest version...'));
                     const tableEl = E('table', { 'class': 'table cbi-section-table' }, [
                         E('tr', { 'class': 'tr table-titles' }, [
@@ -559,8 +560,8 @@ return view.extend({
                             renders();
                         });
                     };
-                    ui.showModal(_('Core Version Management'), [
-                        tableEl, E('div', { 'class': 'button-row' }, [
+                    ui.showModal(_('Core Version Management'), [tableEl,
+                        E('div', { 'style': 'display:flex;justify-content:space-around;' }, [
                             E('button', {
                                 'class': 'btn cbi-button-remove',
                                 'click': ui.createHandlerFn(this, function (ev) {
@@ -569,6 +570,13 @@ return view.extend({
                                     return render();
                                 })
                             }, _('Force Refresh')),
+                            // E('label', { 'style': 'padding-top:.5em' }, [
+                            //     E('input', {
+                            //         'class': 'cbi-checkbox', 'type': 'checkbox', //checked: true,
+                            //         'change': function (ev) { core_mode = ev.target.checked; }
+                            //     }),
+                            //     E('span', { 'style': 'margin-left:.5em;' }, _('单内核模式'))
+                            // ]),
                             E('button', { 'class': 'btn cbi-button-negative', 'click': ui.hideModal }, _('Close'))
                         ])
                     ], 'cbi-modal');
