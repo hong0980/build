@@ -64,7 +64,8 @@ start_service() {
 	config_get_bool ipv4_dns_hijack proxy "ipv4_dns_hijack" 0
 	config_get_bool ipv6_dns_hijack proxy "ipv6_dns_hijack" 0
 
-	local profile core_only test_profile profile_name
+	local profile core_only test_profile profile_name core
+	config_get      core         config core 'meta'
 	config_get      profile      config "profile"
 	config_get_bool core_only    config "core_only"         0
 	config_get_bool test_profile config "test_profile"      0
@@ -190,50 +191,12 @@ start_service() {
 		fi
 	fi
 
-	local core uselightgbm
-	config_get core        config core 'meta'
-	config_get uselightgbm config uselightgbm '0'
+	[ "$core_only" = '1' ] || \
+	profile_path="$temp_config" ucode -S "/etc/nikki/ucode/mirror.uc"
 
 	set -- "${RUN_DIR}/core/${core}-mihomo"
 	[ -x "$1" ] || set -- '/usr/bin/mihomo'
 	[ -x "$1" ] && ln -sf "$1" "$PROG"
-
-	[ "$core" = 'smart' -o "$core" = 'smart_oix' ] && [ "$uselightgbm" = '1' ] && {
-		local collectdata sample_rate prefer_asn smart_strategy policy_priority collector_size lgbm lgbm_url
-		config_get lgbm            config lgbm
-		config_get collectdata     config collectdata          '0'
-		config_get sample_rate     config sample_rate          '1.0'
-		config_get prefer_asn      config prefer_asn           '1'
-		config_get smart_strategy  config smart_strategy       'sticky-sessions'
-		config_get policy_priority config policy_priority
-		config_get collector_size  config smart_collector_size '100'
-		log "Smart" "Convert all url-test groups to smart + apply LightGBM settings."
-		[ -n "$lgbm" ] && lgbm_url="https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/$lgbm"
-		export uselightgbm collectdata sample_rate prefer_asn smart_strategy policy_priority lgbm_url collector_size
-		yq -Mi '
-			.profile = (.profile // {}) |
-			.profile["smart-collector-size"] = (strenv(collector_size) | tonumber) |
-			((select(strenv(lgbm_url) != "")     |
-				.["lgbm-url"] = strenv(lgbm_url) |
-				.["lgbm-auto-update"]     = true |
-				.["lgbm-update-interval"] = 72
-			) // .) |
-			(.proxy-groups // []) |= map(
-				select(.type == "url-test" or .type == "load-balance")  |= (
-					.type = "smart"                                     |
-					.strategy        = strenv(smart_strategy)           |
-					.uselightgbm     = (strenv(uselightgbm) == "1")     |
-					.collectdata     = (strenv(collectdata) == "1")     |
-					.["prefer-asn"]  = (strenv(prefer_asn)  == "1")     |
-					.["sample-rate"] = (strenv(sample_rate) | tonumber) |
-					((select(strenv(policy_priority) != "") | .["policy-priority"] = strenv(policy_priority)) // .)
-				)
-			)
-		' "$temp_config"
-	}
-
-	[ "$core_only" = 0 ] && \
-	profile_path="$temp_config" ucode -S "/etc/nikki/ucode/mirror.uc"
 
 	mv -f "$temp_config" "$RUN_PROFILE_PATH"
 
