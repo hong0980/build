@@ -260,13 +260,7 @@ return view.extend({
                         const aceDiv = E('div', { style: 'width:100%;height:300px;' });
                         content.appendChild(aceDiv);
 
-                        return nikki.initAceEditor(aceDiv, text, 'json', {
-                            readOnly: true, wrap: false, fontFamily: 'Consolas, monospace'
-                        }).catch(() => {
-                            Object.assign(textarea.style, {
-                                fontFamily: 'Consolas', background: '#1e1e1e', color: '#d4d4d4'
-                            });
-                        });
+                        return nikki.initAceEditor(aceDiv, text, 'json', { readOnly: true });
                     }).catch(function (err) {
                         ui.hideModal();
                         ui.addNotification(null, E('p', _('Request error: %s').format(err.message || err)), 'error');

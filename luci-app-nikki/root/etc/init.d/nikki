@@ -123,18 +123,19 @@ start_service() {
 			((select(env(comments) == 0) | ... comments = "") // .) |
 			.rules   = ((.rules    // []) + (.nikki-rules   // [])) |
 			.proxies = (((.proxies // []) + (.nikki-proxies // []) + (.node // [])) | reverse | unique_by(.name) | reverse) |
-			.proxy-providers = (.nikki-proxy-providers // .proxy-providers // {}) |
 			.proxy-groups = ((.proxy-groups // []) + (.nikki-proxy-groups // [])) |
 			.rule-providers |= ((. // {}) | sort_keys(.) | map_values(
 				(.url | capture("(?P<ext>\\.[^.]+)$").ext // "") as $q |
 				((.path | select(. != "")) // ("./rule_provider/" + key + $q)) as $p |
 				.path = (($p | select(test("/$")) | . + key + $q) // $p)
 			)) |
-			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups, .nikki-proxy-providers)
+			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups)
 		' "$temp_config" $mixin_extra_file - >/dev/null 2>&1
 
 		if [ "$proxy_enabled" = 1 ]; then
-			if yq 'has("tun")' "$temp_config" >/dev/null 2>&1; then
+			if yq -e '
+				(.tun.route-exclude-address-set // [] | length == 0) and (.tun.route-address-set // [] | length == 0)
+			' "$temp_config" >/dev/null 2>&1; then
 				yq -Mi '(.tun) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$temp_config"
 			fi
 			if yq 'has("listeners")' "$temp_config" >/dev/null 2>&1; then

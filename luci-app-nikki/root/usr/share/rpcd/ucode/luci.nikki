@@ -4,7 +4,7 @@
 import { cursor } from 'uci';
 import { access, popen, writefile, chmod, mkdir, readfile, unlink, lsdir, stat } from 'fs';
 import {
-	get_users, get_groups, get_cgroups, shellQuote, run, mirrorGithubUrl, yqRead, yqReadFile, executeCommand
+	get_users, get_groups, get_cgroups, shellQuote as sq, run, mirrorGithubUrl, yqRead, yqReadFile, executeCommand
 } from '/etc/nikki/ucode/include.uc';
 
 const GHCACHE_TTL  = 3600;
@@ -44,7 +44,7 @@ function cache_core_call(req) {
 		return { status: 'error', message: 'missing params' };
 
 	const final_out = `${CORE_DIR}/${core_type}-mihomo`;
-	const cmd = `${shellQuote(CORE_SCRIPT)} do_cache ${shellQuote(core_type)}`;
+	const cmd = `${sq(CORE_SCRIPT)} do_cache ${sq(core_type)}`;
 	return startDownloadTask(core_type, cmd, final_out);
 };
 
@@ -103,11 +103,12 @@ const methods = {
 
 			const marker = '__GH_HTTP_CODE__';
 			const api  = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`;
-			const GITHUB_TOKEN = trim(run('uci -q get nikki.config.github_token'));
-			const auth = GITHUB_TOKEN ? ` -H ${shellQuote(`Authorization: Bearer ${GITHUB_TOKEN}`)}` : '';
+			uci.load('nikki');
+			const GITHUB_TOKEN = uci.get('nikki', 'config', 'github_token');
+			const auth = GITHUB_TOKEN ? ` -H ${sq(`Authorization: Bearer ${GITHUB_TOKEN}`)}` : '';
 			const out  = trim(run(`curl -sS --max-time 15 ${auth}`
-				+ ` -H ${shellQuote('Accept: application/vnd.github+json')}`
-				+ ` -w ${shellQuote(`\\n${marker}%{http_code}`)} ${shellQuote(api)} 2>/dev/null`));
+				+ ` -H ${sq('Accept: application/vnd.github+json')}`
+				+ ` -w ${sq(`\\n${marker}%{http_code}`)} ${sq(api)} 2>/dev/null`));
 
 			const pos = rindex(out, `\n${marker}`);
 			if (pos < 0)
@@ -157,21 +158,21 @@ const methods = {
 				if (!url) return { status: 'error', message: 'missing url' };
 
 				const mirror_url = mirrorGithubUrl(url, target);
-				const cmd = `curl -sI -o /dev/null -L -w '%{http_code} %{time_total}' --max-time 10 --connect-timeout 5 ${shellQuote(mirror_url)}`;
+				const cmd = `curl -sI -o /dev/null -L -w '%{http_code} %{time_total}' --max-time 10 --connect-timeout 5 ${sq(mirror_url)}`;
 				const out = run(cmd);
 
 				if (!out)
-					return { status: 'error', message: 'curl returned empty (timeout or failed)', mirror_url, cmd };
+					return { status: 'error', message: 'curl returned empty (timeout or failed)' };
 
 				const parts = split(trim(out), ' ');
 				if (length(parts) < 2)
-					return { status: 'error', message: 'curl output invalid: [' + out + ']', mirror_url };
+					return { status: 'error', message: 'curl output invalid: [' + out + ']'};
 
 				const code = parts[0];
 				const ms   = int(+parts[1] * 1000);
 
 				if (code != '200')
-					return { status: 'error', message: 'HTTP ' + code, mirror_url, elapsed_ms: ms };
+					return { status: 'error', message: 'HTTP ' + code };
 
 				return { status: 'ok', httpcode: code, elapsed_ms: ms, url: mirror_url };
 
@@ -212,7 +213,7 @@ const methods = {
 		call: function (req) {
 			if (!req.args?.url) return { httpcode: null, error: 'illegal url' };
 
-			const out = run(`curl -s -o /dev/null -L -w '%{http_code} %{time_total}' --max-time 3 ${shellQuote(req.args.url)}`);
+			const out = run(`curl -s -o /dev/null -L -w '%{http_code} %{time_total}' --max-time 3 ${sq(req.args.url)}`);
 			if (!out) return { httpcode: '-1', elapsed_ms: -1 };
 
 			const parts      = split(out, ' ');
@@ -238,7 +239,7 @@ const methods = {
 			if (access(target_dir))
 				return { status: 'ok', path: target_dir, message: 'already exists' };
 
-			const cmd = `${shellQuote(CORE_SCRIPT)} update_ui ${shellQuote(name)} ${shellQuote(url)} ${shellQuote(target_dir)}`;
+			const cmd = `${sq(CORE_SCRIPT)} update_ui ${sq(name)} ${sq(url)} ${sq(target_dir)}`;
 			return startDownloadTask(name, cmd, target_dir);
 		}
 	},
@@ -251,12 +252,11 @@ const methods = {
 			let   task_id  = req.args?.task_id;
 			const filename = req.args?.filename;
 
-			if (!url)  return { status: 'error', message: 'missing url' };
-			if (!path) return { status: 'error', message: 'missing path' };
+			if (!url || !path) return { status: 'error', message: 'missing url/path' };
 			if (match(url, /['"`$\\;&|<>(){}\n']/))
 				return { status: 'error', message: 'invalid url' };
 			path = filename ? `${path}/${filename}` : path;
-			const cmd = `${shellQuote(CORE_SCRIPT)} download_file ${shellQuote(task_id)} ${shellQuote(url)} ${shellQuote(path)}`;
+			const cmd = `${sq(CORE_SCRIPT)} download_file ${sq(task_id)} ${sq(url)} ${sq(path)}`;
 			return startDownloadTask(task_id, cmd, path);
 		}
 	},
@@ -350,24 +350,18 @@ const methods = {
 
 			const protocol = https ? 'https' : 'http';
 			let url = (https || http) + (req.args?.path || '/');
-			if (req.args?.query)
-				url += (index(url, '?') !== -1 ? '&' : '?') + req.args.query;
+			const body   = req.args?.body;
+			const query  = req.args?.query;
+			const method = req.args?.method || 'GET';
 
-			let cmd = 'curl -sSk --max-time 10 --proto-default ' + shellQuote(protocol)
-				+ ' -X ' + shellQuote(req.args?.method || 'GET')
-				+ ' -H ' + shellQuote('Authorization: Bearer ' + secret);
+			if (query) url += (index(url, '?') !== -1 ? '&' : '?') + query;
+			let cmd = `curl -sSk --max-time 10 --proto-default ${protocol} -X ${method} -H ${sq(`Authorization: Bearer ${secret}`)}`;
 
-			if (req.args?.body)
-				cmd += ' -H ' + shellQuote('Content-Type: application/json')
-					+ ' -d ' + shellQuote(req.args.body);
-
-			cmd += ' -w ' + shellQuote('__HTTP_CODE__:%{http_code}')
-				+ ' ' + shellQuote(url) + ' 2>/dev/null';
+			if (body) cmd += ` -H ${sq('Content-Type: application/json')} -d ${sq(body)}`;
+			cmd += ` -w ${sq('__HTTP_CODE__:%{http_code}')} ${sq(url)} 2>/dev/null`;
 
 			const proc = popen(cmd, 'r');
-			if (!proc)
-				return { message: 'popen failed', status: 'error' };
-
+			if (!proc) return { message: 'popen failed', status: 'error' };
 			const out = proc.read('all') || '';
 			const code = proc.close();
 
@@ -442,7 +436,7 @@ const methods = {
 			const core_type = req.args?.core_type;
 
 			if (!core_type) return { status: 'error', message: 'missing params' };
-			return json(run(`${shellQuote(CORE_SCRIPT)} get_core_url ${shellQuote(core_type)}`));
+			return json(run(`${sq(CORE_SCRIPT)} get_core_url ${sq(core_type)}`));
 		}
 	},
 

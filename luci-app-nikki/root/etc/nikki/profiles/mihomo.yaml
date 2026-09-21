@@ -8,7 +8,7 @@ rule-anchor:
   S1: &S1 {type: select, proxies: [香港故转, 日本故转, 台湾故转, 狮城故转, 美国故转, 香港手动, 日本手动, 台湾手动, 狮城手动, 美国手动, 香港自动, 日本自动, 台湾自动, 狮城自动, 美国自动, 全部自动, 全部手动, 直连]}
   S2: &S2 {type: select, proxies: [日本故转, 香港故转, 台湾故转, 狮城故转, 美国故转, 香港手动, 日本手动, 台湾手动, 狮城手动, 美国手动, 香港自动, 日本自动, 台湾自动, 狮城自动, 美国自动, 全部自动, 全部手动, 直连]}
   S3: &S3 {type: select, proxies: [美国故转, 香港故转, 日本故转, 台湾故转, 狮城故转, 香港手动, 日本手动, 台湾手动, 狮城手动, 美国手动, 香港自动, 日本自动, 台湾自动, 狮城自动, 美国自动, 全部自动, 全部手动, 直连]}
-  S4: &S4 {type: select, proxies: [日本故转, 台湾故转, 狮城故转,美国故转, 香港故转,  香港手动, 日本手动, 台湾手动, 狮城手动, 美国手动, 香港自动, 日本自动, 台湾自动, 狮城自动, 美国自动, 全部自动, 全部手动, 直连]}
+  S4: &S4 {type: select, proxies: [狮城自动, 日本自动, 台湾自动, 美国自动, 全部自动, 全部手动]}
   S5: &S5 {type: url-test, proxies: [直连, DIRECT], interval: 3600, lazy: true, url: "http://connect.rom.miui.com/generate_204"}
   # 节点筛选
   HK: &HK "(?=.*(港|HK|(?i)Hong))^((?!(台|日|韩|新|深|美)).)*$"
@@ -133,6 +133,19 @@ dns:
 
 
 proxy-groups:
+  - {name: 香港故转,   <<: *FB, filter: *HK, icon: *Failover}
+  - {name: 日本故转,   <<: *FB, filter: *JP, icon: *Failover}
+  - {name: 台湾故转,   <<: *FB, filter: *TW, icon: *Failover}
+  - {name: 狮城故转,   <<: *FB, filter: *SG, icon: *Failover}
+  - {name: 美国故转,   <<: *FB, filter: *US, icon: *Failover}
+  - {name: 香港自动,   <<: *URL, filter: *HK, icon: *Auto}
+  - {name: 日本自动,   <<: *URL, filter: *JP, icon: *Auto}
+  - {name: 台湾自动,   <<: *URL, filter: *TW, icon: *Auto}
+  - {name: 狮城自动,   <<: *URL, filter: *SG, icon: *Auto}
+  - {name: 美国自动,   <<: *URL, filter: *US, icon: *Auto}
+  - {name: 全部手动,   <<: *SD, filter: *Exclude, icon: *All}
+  - {name: 全部自动,   <<: *URL, filter: *Exclude, icon: *Auto}
+  - {name: 延迟辅助,   <<: *S5, icon: *Auto}
   - {name: 默认代理,   <<: *S1, icon: "https://raw.githubusercontent.com/s0lnce/mofish-icon/refs/heads/main/mihomo/pure/corner/select.png"}
   - {name: AI,        <<: *S4, icon: "https://raw.githubusercontent.com/s0lnce/mofish-icon/refs/heads/main/mihomo/pure/corner/ai.png"}
   - {name: YouTube,   <<: *S1, icon: "https://raw.githubusercontent.com/s0lnce/mofish-icon/refs/heads/main/mihomo/pure/corner/youtube.png"}
@@ -153,19 +166,6 @@ proxy-groups:
   - {name: 台湾手动,   <<: *SD, filter: *TW, icon: "https://raw.githubusercontent.com/s0lnce/mofish-icon/refs/heads/main/mihomo/flag/corner/taiwan.png"}
   - {name: 狮城手动,   <<: *SD, filter: *SG, icon: "https://raw.githubusercontent.com/s0lnce/mofish-icon/refs/heads/main/mihomo/flag/corner/singapore.png"}
   - {name: 美国手动,   <<: *SD, filter: *US, icon: "https://raw.githubusercontent.com/s0lnce/mofish-icon/refs/heads/main/mihomo/flag/corner/usa.png"}
-  - {name: 香港故转,   <<: *FB, filter: *HK, icon: *Failover}
-  - {name: 日本故转,   <<: *FB, filter: *JP, icon: *Failover}
-  - {name: 台湾故转,   <<: *FB, filter: *TW, icon: *Failover}
-  - {name: 狮城故转,   <<: *FB, filter: *SG, icon: *Failover}
-  - {name: 美国故转,   <<: *FB, filter: *US, icon: *Failover}
-  - {name: 香港自动,   <<: *URL, filter: *HK, icon: *Auto}
-  - {name: 日本自动,   <<: *URL, filter: *JP, icon: *Auto}
-  - {name: 台湾自动,   <<: *URL, filter: *TW, icon: *Auto}
-  - {name: 狮城自动,   <<: *URL, filter: *SG, icon: *Auto}
-  - {name: 美国自动,   <<: *URL, filter: *US, icon: *Auto}
-  - {name: 全部手动,   <<: *SD, filter: *Exclude, icon: *All}
-  - {name: 全部自动,   <<: *URL, filter: *Exclude, icon: *Auto}
-  - {name: 延迟辅助,   <<: *S5, icon: *Auto}
 
 rules:
   - AND,((RULE-SET,Proxy),(DST-PORT,443),(NETWORK,UDP)),REJECT
@@ -174,16 +174,16 @@ rules:
   - RULE-SET,Download,直连
   - RULE-SET,China,直连
   - RULE-SET,ai_domain,AI
-  - RULE-SET,youtube_domain,YouTube
-  - RULE-SET,google_domain,Google
-  - RULE-SET,github_domain,GitHub
+  - RULE-SET,youtube_domain,全部自动
+  - RULE-SET,google_domain,全部自动
+  - RULE-SET,github_domain,全部自动
+  - RULE-SET,telegram_domain,全部自动
+  - RULE-SET,tiktok_domain,全部自动
   - RULE-SET,onedrive_domain,OneDrive
   # - RULE-SET,microsoftcn_domain,直连
   # - RULE-SET,microsoft_domain,Microsoft
   - RULE-SET,applecn_domain,直连
   - RULE-SET,apple_domain,Apple
-  - RULE-SET,telegram_domain,Telegram
-  - RULE-SET,tiktok_domain,TikTok
   - RULE-SET,netflix_domain,NETFLIX
   - RULE-SET,paypal_domain,Wallet
   - RULE-SET,binance_domain,Wallet

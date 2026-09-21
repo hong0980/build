@@ -508,9 +508,10 @@ return view.extend({
         o = s.taboption('tun', form.RichListValue, 'tun_stack', _('Stack'), _('stack'));
         o.optional = true;
         o.placeholder = _('Unmodified');
-        o.value('system', _('system'), _('System'));
-        o.value('gvisor', _('gvisor'), _('gVisor'));
-        o.value('mixed', _('mixed'), _('Mixed'));
+        o.value('system', _('System'), _('Less compatibility and sometimes better performance.'));
+        o.value('gvisor', _('gVisor'), _('Based on google/gvisor.'));
+        o.value('mixed', _('Mixed'), _('Mixed <code>system</code> TCP stack and <code>gVisor</code> UDP stack.'));
+        o.value('mips', _('mihomo IP stack (MIPS)'));
 
         o = s.taboption('tun', form.Value, 'tun_mtu', _('MTU'), _('mtu'));
         o.datatype = 'uinteger';

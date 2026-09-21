@@ -1,9 +1,8 @@
 import { readfile, popen, mkstemp } from 'fs';
 
 export function uci_bool(obj) {
-	if (obj == '1' || obj == 'true')  return true;
-	if (obj == '0' || obj == 'false') return false;
-	return obj;
+	if (obj == '1' || obj == 'true') return true;
+	return false;
 };
 
 export function uci_int(obj) {
