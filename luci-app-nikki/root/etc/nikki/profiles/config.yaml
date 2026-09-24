@@ -92,8 +92,9 @@ rules:
   - RULE-SET,reject,REJECT
   - RULE-SET,private,🎯国内
   - RULE-SET,cdn_cn,🎯国内
+  - RULE-SET,cpt,🎯国内
+  - RULE-SET,pt,🎯国内
   - RULE-SET,download,🎯国内
-  # - RULE-SET,pt,🎯国内
   - RULE-SET,apple,🎯国内
   - RULE-SET,China,🎯国内
   - RULE-SET,claude,🚀AI
@@ -106,8 +107,8 @@ rules:
   # - RULE-SET,disney,自动选择
   - RULE-SET,telegram,自动选择
   # - RULE-SET,paypal,自动选择
-  - RULE-SET,Proxy,自动选择
   - RULE-SET,gfw,自动选择
+  - RULE-SET,Proxy,自动选择
   - RULE-SET,ProxyIP,自动选择,no-resolve
   - RULE-SET,ChinaIP,🎯国内,no-resolve
   - MATCH,自动选择
@@ -116,9 +117,9 @@ proxies:
   - {name: 🎯国内, type: direct, udp: true, proxies: [DIRECT]}
 
 A: &select   {include-all: true, url: "https://www.gstatic.com/generate_204", type: select}
-B: &fallback {include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, url: "https://www.gstatic.com/generate_204", type: fallback, max-failed-times: 3}
-C: &balance  {include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, url: "https://www.gstatic.com/generate_204", type: load-balance, strategy: consistent-hashing}
-D: &urltest  {include-all: true, interval: 300, lazy: true, timeout: 2000, hidden: false, url: "https://www.gstatic.com/generate_204", type: url-test, tolerance: 50, max-failed-times: 3}
+B: &fallback {include-all: true, interval: 300, lazy: true, timeout: 2000, url: "https://www.gstatic.com/generate_204", type: fallback, max-failed-times: 3}
+C: &balance  {include-all: true, interval: 300, lazy: true, timeout: 2000, url: "https://www.gstatic.com/generate_204", type: load-balance, strategy: consistent-hashing}
+D: &urltest  {include-all: true, url: "https://www.gstatic.com/generate_204", type: url-test}
 
 proxy-groups:
   # - {name: 故障转移, <<: *fallback, filter: "(?i)^(?!.*(国内)).*$", icon: https://testingcf.jsdelivr.net/gh/Seven1echo/Yaml@main/icons/Rocket.png}
@@ -139,25 +140,26 @@ Ct: &Ct {type: http, behavior: classical, format: text, interval: 86400}
 Cy: &Cy {type: http, behavior: classical, format: yaml, interval: 3600, proxy: DIRECT}
 
 rule-providers:
-  gfw:      {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/gfw.mrs"}
-  apple:    {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/apple.mrs"}
-  # bybit:    {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/bybit.mrs"}
-  # disney:   {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/disney.mrs"}
-  # paypal:   {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/paypal.mrs"}
-  tiktok:   {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/tiktok.mrs"}
-  github:   {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/github.mrs"}
-  private:  {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/private.mrs"}
-  youtube:  {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/youtube.mrs"}
-  netflix:  {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/netflix.mrs"}
-  telegram: {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/telegram.mrs"}
-  claude:   {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/anthropic.mrs"}
-  # pt:       {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/category-pt.mrs"}
-  ai:       {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/category-ai-!cn.mrs"}
-  cdn_cn:   {<<: *Dm, url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/category-cdn-cn.mrs"}
-  reject:   {<<: *Dm, url: "https://github.com/wwqgtxx/clash-rules/raw/release/reject.mrs"}
-  Proxy:    {<<: *Dm, url: "https://github.com/666OS/rules/raw/release/mihomo/domain/Proxy.mrs"}
-  China:    {<<: *Dm, url: "https://github.com/666OS/rules/raw/release/mihomo/domain/China.mrs"}
-  download: {<<: *Dm, url: "https://github.com/666OS/rules/raw/release/mihomo/domain/Download.mrs"}
-  ProxyIP:  {<<: *Im, url: "https://github.com/666OS/rules/raw/release/mihomo/ip/Proxy.mrs"}
-  ChinaIP:  {<<: *Im, url: "https://github.com/666OS/rules/raw/release/mihomo/ip/China.mrs"}
-  Fifilter: {<<: *Dy, url: "https://github.com/DustinWin/ShellCrash/raw/dev/public/fake_ip_filter.list"}
+  gfw:      {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/gfw.mrs}
+  apple:    {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/apple.mrs}
+  cpt:      {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-public-tracker.mrs}
+  # bybit:    {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/bybit.mrs}
+  # disney:   {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/disney.mrs}
+  # paypal:   {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/paypal.mrs}
+  tiktok:   {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/tiktok.mrs}
+  github:   {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/github.mrs}
+  private:  {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/private.mrs}
+  youtube:  {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/youtube.mrs}
+  netflix:  {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/netflix.mrs}
+  telegram: {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/telegram.mrs}
+  claude:   {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/anthropic.mrs}
+  pt:       {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/category-pt.mrs}
+  ai:       {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/category-ai-!cn.mrs}
+  cdn_cn:   {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/category-cdn-cn.mrs}
+  reject:   {<<: *Dm, url: https://github.com/wwqgtxx/clash-rules/raw/release/reject.mrs}
+  Proxy:    {<<: *Dm, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Proxy.mrs}
+  China:    {<<: *Dm, url: https://github.com/666OS/rules/raw/release/mihomo/domain/China.mrs}
+  download: {<<: *Dm, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Download.mrs}
+  ProxyIP:  {<<: *Im, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Proxy.mrs}
+  ChinaIP:  {<<: *Im, url: https://github.com/666OS/rules/raw/release/mihomo/ip/China.mrs}
+  Fifilter: {<<: *Dy, url: https://github.com/DustinWin/ShellCrash/raw/dev/public/fake_ip_filter.list}

@@ -1,8 +1,9 @@
 import { readfile, popen, mkstemp } from 'fs';
 
 export function uci_bool(obj) {
-	if (obj == '1' || obj == 'true') return true;
-	return false;
+	if (obj == '1' || obj == 'true')  return true;
+	if (obj == '0' || obj == 'false') return false;
+	return obj;
 };
 
 export function uci_int(obj) {
@@ -156,13 +157,13 @@ function restoreFromJsdelivr(url) {
 };
 
 const GITHUB_PATTERNS = [
-	/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/([^\/]+)\/(.+)$/,
-	/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)$/,
 	/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/refs\/tags\/([^\/]+)\/(.+)$/,
 	/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/refs\/heads\/([^\/]+)\/(.+)$/,
-	/^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)$/,
+	/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/raw\/([^\/]+)\/(.+)$/,
+	/^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)$/,
 	/^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/refs\/tags\/([^\/]+)\/(.+)$/,
 	/^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/refs\/heads\/([^\/]+)\/(.+)$/,
+	/^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)$/,
 ];
 
 function toJsdelivr(m, domain) {

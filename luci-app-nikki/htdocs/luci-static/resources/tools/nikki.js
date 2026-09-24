@@ -19,6 +19,20 @@ const callServiceStatus = rpc.declare({
     }
 });
 
+const callListGithub = rpc.declare({
+    object: 'luci.nikki',
+    method: 'list_github',
+    params: ['repo', 'path', 'branch', 'refresh'],
+    expect: { '': {} }
+});
+
+const callTestMirror = rpc.declare({
+    object: 'luci.nikki',
+    method: 'test_mirror',
+    params: ['url', 'target'],
+    expect: { '': {} }
+});
+
 const callRCInit = rpc.declare({
     object: 'rc',
     method: 'init',
@@ -45,13 +59,6 @@ const callNikkiProfile = rpc.declare({
     expect: { '': {} }
 });
 
-const callNikkiUpdateSubscription = rpc.declare({
-    object: 'luci.nikki',
-    method: 'update_subscription',
-    params: ['section_id'],
-    expect: { '': {} }
-});
-
 const callNikkiAPI = rpc.declare({
     object: 'luci.nikki',
     method: 'api',
@@ -59,7 +66,7 @@ const callNikkiAPI = rpc.declare({
     expect: { '': {} }
 });
 
-const callNikkiGetIdentifiers = rpc.declare({
+const getIdentifiers = rpc.declare({
     object: 'luci.nikki',
     method: 'get_identifiers',
     expect: { '': {} }
@@ -75,13 +82,6 @@ const callUpdateUI = rpc.declare({
     object: 'luci.nikki',
     method: 'update_ui',
     params: ['url', 'name'],
-    expect: { '': {} }
-});
-
-const callConnStat = rpc.declare({
-    object: 'luci.nikki',
-    method: 'connection_check',
-    params: ['url'],
     expect: { '': {} }
 });
 
@@ -134,6 +134,48 @@ const callversion = rpc.declare({
     expect: { '': {} }
 });
 
+function callConnStat(url) {
+    const callConnStat = rpc.declare({
+        object: 'luci.nikki',
+        method: 'connection_check',
+        params: ['url'],
+        expect: { '': {} }
+    });
+    return callConnStat(url);
+};
+
+function updateSubscription(section_id) {
+    const callNikkiUpdateSubscription = rpc.declare({
+        object: 'luci.nikki',
+        method: 'update_subscription',
+        params: ['section_id'],
+        expect: { '': {} }
+    });
+    return callNikkiUpdateSubscription(section_id);
+};
+
+function writefile(path, data, mode) {
+    data = (data != null) ? String(data) : '';
+    mode = (mode != null) ? mode : 0o644;
+    const encoder   = new TextEncoder();
+    const decoder   = new TextDecoder();
+    const chunkSize = 8 * 1024;
+    const bytes     = encoder.encode(data);
+    if (bytes.length <= chunkSize) {
+        return callFileWrite(path, data, false, mode);
+    }
+    let promise = Promise.resolve();
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        const end        = Math.min(offset + chunkSize, bytes.length);
+        const chunkBytes = bytes.slice(offset, end);
+        const isLast     = end >= bytes.length;
+        const chunk      = decoder.decode(chunkBytes, { stream: !isLast });
+        const append     = offset > 0;
+        promise          = promise.then(() => callFileWrite(path, chunk, append, mode));
+    }
+    return promise;
+};
+
 function waitForTask(task_id, path, onProgress, maxRetries) {
     maxRetries = maxRetries || 80;
     return new Promise(function (resolve, reject) {
@@ -164,7 +206,6 @@ return baseclass.extend({
     homeDir:           '/etc/nikki',
     TEMP_DIR:          '/var/run/nikki',
     profilesDir:       '/etc/nikki/profiles',
-    mixinFilePath:     '/etc/nikki/mixin.yaml',
     subscriptionsDir:  '/etc/nikki/subscriptions',
     runDir:            '/etc/nikki/run',
     PROG:              '/etc/nikki/run/mihomo',
@@ -183,48 +224,6 @@ return baseclass.extend({
         ["https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip", "YACD"],
         ["https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip", "Razord"]
     ],
-
-    get_core_version: function (mode) {
-        return callversion(mode);
-    },
-
-    status: function (name) {
-        return callServiceStatus(name);
-    },
-
-    mihomoAPI: function (method, path, query, body) {
-        return callNikkiAPI(method, path, query || '', body || '');
-    },
-
-    service: function (name, command) {
-        return callRCInit(name || 'nikki', command);
-    },
-
-    uciCommit: function (config, section, option, value) {
-        return calluciCommit(config, section, option, value);
-    },
-
-    writefile: function (path, data, mode) {
-        data = (data != null) ? String(data) : '';
-        mode = (mode != null) ? mode : 0o644;
-        const encoder   = new TextEncoder();
-        const decoder   = new TextDecoder();
-        const chunkSize = 8 * 1024;
-        const bytes     = encoder.encode(data);
-        if (bytes.length <= chunkSize) {
-            return callFileWrite(path, data, false, mode);
-        }
-        let promise = Promise.resolve();
-        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-            const end        = Math.min(offset + chunkSize, bytes.length);
-            const chunkBytes = bytes.slice(offset, end);
-            const isLast     = end >= bytes.length;
-            const chunk      = decoder.decode(chunkBytes, { stream: !isLast });
-            const append     = offset > 0;
-            promise          = promise.then(() => callFileWrite(path, chunk, append, mode));
-        }
-        return promise;
-    },
 
     cache_core: function (core_type, arch, onProgress) {
         return callCacheCore(core_type, arch).then(function (res) {
@@ -245,56 +244,6 @@ return baseclass.extend({
             });
         };
         return attempt();
-    },
-
-    modalnotify: function(title, children, timeout, ...classes) {
-        // info/success/warning/danger/error
-        if (typeof timeout !== 'number') {
-            if (timeout != null)
-                classes.unshift(timeout);
-            timeout = null;
-        };
-
-        function fadeOut(element) {
-            element?.classList.replace('fade-in', 'fade-out');
-            setTimeout(() => element?.remove());
-        };
-
-        const modalContainer = document.querySelector('#modal_overlay .modal');
-        if (!modalContainer) return;
-        const msg = E('div', {
-            'class': 'alert-message fade-in',
-            'style': 'display:flex; margin: 10px 0;',
-            transitionend: function (ev) {
-                const node = ev.currentTarget;
-                if (node.parentNode && node.classList.contains('fade-out')) {
-                    node.parentNode.removeChild(node);
-                };
-            }
-        }, [
-            E('div', { 'style': 'flex:10' }),
-            E('div', { 'style': 'flex:1 1 auto; display:flex' }, [
-                E('button', {
-                    'class': 'btn', 'style': 'margin-left:auto; margin-top:auto',
-                    'click': () => fadeOut(msg)
-                }, _('Dismiss'))
-            ])
-        ]);
-
-        if (title != null)
-            L.dom.append(msg.firstElementChild, E('h4', {}, title));
-
-        L.dom.append(msg.firstElementChild, children);
-        msg.classList.add(...classes);
-        modalContainer.insertBefore(msg, modalContainer.firstChild);
-        if (typeof timeout === 'number' && timeout > 0) {
-            setTimeout(() => fadeOut(msg), timeout);
-        };
-        return msg;
-    },
-
-    get_core_url: function (core_type, arch) {
-        return callGetCoreUrl(core_type, arch);
     },
 
     download_file: function (opts) {
@@ -322,55 +271,34 @@ return baseclass.extend({
         return attempt();
     },
 
-    version: function () {
-        return callNikkiVersion();
-    },
-
-    profile: function (defaults) {
-        return callNikkiProfile(defaults);
-    },
-
-    updateSubscription: function (section_id) {
-        return callNikkiUpdateSubscription(section_id);
-    },
-
-    openDashboard: async function (overrideUiName) {
-        const profile = await callNikkiProfile({
+    openDashboard: function (overrideUiName) {
+        return callNikkiProfile({
             'secret':                  null,
             'external-ui-name':        null,
             'external-controller':     null,
             'external-controller-tls': null
+        }).then(profile => {
+            const uiName = overrideUiName ?? profile['external-ui-name'] ?? '';
+            const secret = profile['secret'] ?? '';
+            const https    = profile['external-controller-tls'];
+            const endpoint = https ?? profile['external-controller'];
+            if (!endpoint && !uiName)
+                throw new Error('API has not been configured');
+
+            const port = endpoint.slice(endpoint.lastIndexOf(':') + 1);
+            const host = window.location.hostname;
+            const { hash = '', hostKey = 'host' } = ({
+                'Razord':     { hash: '#/',      hostKey: 'host' },
+                'YACD':       { hash: '',        hostKey: 'hostname' },
+                'Zashboard':  { hash: '#/setup', hostKey: 'hostname' },
+                'MetaCubeXD': { hash: '#/setup', hostKey: 'hostname' },
+            })[uiName] ?? {};
+
+            const query = new URLSearchParams({ [hostKey]: host, port, secret });
+            const url = `${https ? 'https' : 'http'}://${host}:${port}/ui${uiName ? `/${uiName}` : ''}/${hash}?${query}`;
+
+            window.open(url, '_blank');
         });
-
-        const uiName = overrideUiName ?? profile['external-ui-name'] ?? '';
-        const secret = profile['secret'] ?? '';
-        const http   = profile['external-controller'];
-        const https  = profile['external-controller-tls'];
-
-        if (!http && !https)
-            return Promise.reject('API has not been configured');
-
-        const protocol =  https ? 'https' : 'http';
-        const endpoint =  https ?? http;
-        const port     =  endpoint.substring(endpoint.lastIndexOf(':') + 1);
-        const host     =  window.location.hostname;
-        const uiMap    =  {
-            'Razord':     { hash: '#/',      hostKey: 'host' },
-            'YACD':       { hash: '',        hostKey: 'hostname' },
-            'Zashboard':  { hash: '#/setup', hostKey: 'hostname' },
-            'MetaCubeXD': { hash: '#/setup', hostKey: 'hostname' },
-        };
-        const cfg      = uiMap[uiName] ?? { hash: '', hostKey: 'host' };
-        const query    = new URLSearchParams({ [cfg.hostKey]: host, port, secret }).toString();
-        const base     = `${protocol}://${host}:${port}/ui${uiName ? '/' + uiName : ''}/`;
-        const finalUrl = cfg.hash ? `${base}${cfg.hash}?${query}` : `${base}?${query}`;
-
-        setTimeout(() => window.open(finalUrl, '_blank'), 0);
-        return Promise.resolve();
-    },
-
-    getIdentifiers: function () {
-        return callNikkiGetIdentifiers();
     },
 
     listfiles: function (dir) {
@@ -379,18 +307,6 @@ return baseclass.extend({
                 path: `${dir}/${f.name}`
             }));
         });
-    },
-
-    clearLog: function (path) {
-        return this.writefile(path, '');
-    },
-
-    debug: function () {
-        return callNikkiDebug();
-    },
-
-    callConnStat: function (url) {
-        return callConnStat(url);
     },
 
     update_ui: function (url, name, onProgress) {
@@ -440,6 +356,52 @@ return baseclass.extend({
         });
     },
 
+    modalnotify: function(title, children, timeout, ...classes) {
+        // info/success/warning/danger/error
+        if (typeof timeout !== 'number') {
+            if (timeout != null)
+                classes.unshift(timeout);
+            timeout = null;
+        };
+
+        function fadeOut(element) {
+            element?.classList.replace('fade-in', 'fade-out');
+            setTimeout(() => element?.remove());
+        };
+
+        const modalContainer = document.querySelector('#modal_overlay .modal');
+        if (!modalContainer) return;
+        const msg = E('div', {
+            'class': 'alert-message fade-in',
+            'style': 'display:flex; margin: 10px 0;',
+            transitionend: function (ev) {
+                const node = ev.currentTarget;
+                if (node.parentNode && node.classList.contains('fade-out')) {
+                    node.parentNode.removeChild(node);
+                };
+            }
+        }, [
+            E('div', { 'style': 'flex:10' }),
+            E('div', { 'style': 'flex:1 1 auto; display:flex' }, [
+                E('button', {
+                    'class': 'btn', 'style': 'margin-left:auto; margin-top:auto',
+                    'click': () => fadeOut(msg)
+                }, _('Dismiss'))
+            ])
+        ]);
+
+        if (title != null)
+            L.dom.append(msg.firstElementChild, E('h4', {}, title));
+
+        L.dom.append(msg.firstElementChild, children);
+        msg.classList.add(...classes);
+        modalContainer.insertBefore(msg, modalContainer.firstChild);
+        if (typeof timeout === 'number' && timeout > 0) {
+            setTimeout(() => fadeOut(msg), timeout);
+        };
+        return msg;
+    },
+
     showNotification: function (message, timeout = 3000, type = 'info') {
         if (!this._queue) this._queue = [];
         const queue = this._queue;
@@ -476,5 +438,23 @@ return baseclass.extend({
         const duration = (typeof timeout === 'number' && timeout > 0) ? timeout : 3000;
         n._timer = setTimeout(remove, duration);
     },
+
+    debug: () => callNikkiDebug(),
+    clearLog: (path) => writefile(path, ''),
+    status: (name) => callServiceStatus(name),
+    get_core_version: (mode) => callversion(mode),
+    service: (name, command) => callRCInit(name || 'nikki', command),
+    mihomoAPI: (method, path, query, body) =>callNikkiAPI(method, path, query || '', body || ''),
+    uciCommit: (config, section, option, value) => calluciCommit(config, section, option, value),
+    get_core_url: (core_type, arch) => callGetCoreUrl(core_type, arch),
+    profile: (defaults) => callNikkiProfile(defaults),
+    version: () => callNikkiVersion(),
+
+    callConnStat,
+    getIdentifiers,
+    callListGithub,
+    callTestMirror,
+    updateSubscription,
+    writefile,
 
 });

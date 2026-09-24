@@ -14,20 +14,6 @@ const checkurls = [
     ['https://www.youtube.com', _('YouTube')]
 ];
 
-// const callTestMirror = L.rpc.declare({
-//     object: 'luci.nikki',
-//     method: 'test_mirror',
-//     params: ['url', 'target'],
-//     expect: { '': {} }
-// });
-
-const callListGithub = L.rpc.declare({
-    object: 'luci.nikki',
-    method: 'list_github',
-    params: ['repo', 'path', 'branch', 'refresh'],
-    expect: { '': {} }
-});
-
 function setStatus(element, running) {
     if (element) {
         element.style.color = running ? 'green' : 'red';
@@ -232,7 +218,7 @@ function attachFileEditorButton(o, resolveTarget) {
                     state = { path: path, error: null, entries: [], localStats: {} };
                     render();
 
-                    callListGithub('HenryChiao/MIHOMO_YAMLS', path, 'main', !!force).then(res => {
+                    nikki.callListGithub('HenryChiao/MIHOMO_YAMLS', path, 'main', !!force).then(res => {
                         if (res.status !== 'ok') {
                             state.error = res?.message || _('Load failed');
                             return render();
@@ -533,7 +519,7 @@ return view.extend({
                                     // const TestBtn = E('button', {
                                     //     'class': 'btn cbi-button-action',
                                     //     'click': ui.createHandlerFn(this, function (ev) {
-                                    //         return callTestMirror(hasurl, '')
+                                    //         return nikki.callTestMirror(hasurl, '')
                                     //             .then(function (res) {
                                     //                 if (res?.status !== 'ok') {
                                     //                     const msg = res.message === 'HTTP 000'
@@ -804,51 +790,51 @@ return view.extend({
         o = s.taboption('general', form.Flag, 'fast_reload', _('Fast Reload'));
         o.rmempty = false;
 
-        o = s.taboption('rlimit', form.Value, 'rlimit_nproc_soft', _('Number of Processes Soft Limit'));
+        o = s.taboption('rlimit', form.Value, 'nproc_soft', _('Number of Processes Soft Limit'));
         o.datatype = 'uinteger';
 
-        o = s.taboption('rlimit', form.Value, 'rlimit_nproc_hard', _('Number of Processes Hard Limit'));
+        o = s.taboption('rlimit', form.Value, 'nproc_hard', _('Number of Processes Hard Limit'));
         o.datatype = 'uinteger';
 
-        o = s.taboption('rlimit', form.Value, 'rlimit_address_space_soft', _('Address Space Size Soft Limit'));
-        o.datatype = 'uinteger';
-        o.placeholder = _('Unlimited');
-
-        o = s.taboption('rlimit', form.Value, 'rlimit_address_space_hard', _('Address Space Size Hard Limit'));
+        o = s.taboption('rlimit', form.Value, 'address_space_soft', _('Address Space Size Soft Limit'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unlimited');
 
-        o = s.taboption('rlimit', form.Value, 'rlimit_data_soft', _('Heap Size Soft Limit'));
+        o = s.taboption('rlimit', form.Value, 'address_space_hard', _('Address Space Size Hard Limit'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unlimited');
 
-        o = s.taboption('rlimit', form.Value, 'rlimit_data_hard', _('Heap Size Hard Limit'));
+        o = s.taboption('rlimit', form.Value, 'data_soft', _('Heap Size Soft Limit'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unlimited');
 
-        o = s.taboption('rlimit', form.Value, 'rlimit_stack_soft', _('Stack Size Soft Limit'));
+        o = s.taboption('rlimit', form.Value, 'data_hard', _('Heap Size Hard Limit'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unlimited');
 
-        o = s.taboption('rlimit', form.Value, 'rlimit_stack_hard', _('Stack Size Hard Limit'));
+        o = s.taboption('rlimit', form.Value, 'stack_soft', _('Stack Size Soft Limit'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unlimited');
 
-        o = s.taboption('rlimit', form.Value, 'rlimit_nofile_soft', _('Number of Open Files Soft Limit'));
-        o.datatype = 'uinteger';
-
-        o = s.taboption('rlimit', form.Value, 'rlimit_nofile_hard', _('Number of Open Files Hard Limit'));
-        o.datatype = 'uinteger';
-
-        o = s.taboption('environment_variable', form.Value, 'env_go_max_procs', 'GOMAXPROCS');
+        o = s.taboption('rlimit', form.Value, 'stack_hard', _('Stack Size Hard Limit'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unlimited');
 
-        o = s.taboption('environment_variable', form.Value, 'env_go_mem_limit', 'GOMEMLIMIT');
+        o = s.taboption('rlimit', form.Value, 'nofile_soft', _('Number of Open Files Soft Limit'));
+        o.datatype = 'uinteger';
+
+        o = s.taboption('rlimit', form.Value, 'nofile_hard', _('Number of Open Files Hard Limit'));
+        o.datatype = 'uinteger';
+
+        o = s.taboption('environment_variable', form.Value, 'go_max_procs', 'GOMAXPROCS');
         o.datatype = 'uinteger';
         o.placeholder = _('Unlimited');
 
-        o = s.taboption('environment_variable', form.DynamicList, 'env_safe_paths', _('Safe Paths'));
+        o = s.taboption('environment_variable', form.Value, 'go_mem_limit', 'GOMEMLIMIT');
+        o.datatype = 'uinteger';
+        o.placeholder = _('Unlimited');
+
+        o = s.taboption('environment_variable', form.DynamicList, 'safe_paths', _('Safe Paths'));
         o.load = function (section_id) {
             return this.super('load', section_id)?.split(':');
         };
@@ -856,16 +842,16 @@ return view.extend({
             this.super('write', section_id, formvalue?.join(':'));
         };
 
-        o = s.taboption('environment_variable', form.Flag, 'env_disable_loopback_detector', _('Disable Loopback Detector'));
+        o = s.taboption('environment_variable', form.Flag, 'disable_loopback_detector', _('Disable Loopback Detector'));
         o.rmempty = false;
 
-        o = s.taboption('environment_variable', form.Flag, 'env_disable_quic_go_gso', _('Disable GSO of quic-go'));
+        o = s.taboption('environment_variable', form.Flag, 'disable_quic_go_gso', _('Disable GSO of quic-go'));
         o.rmempty = false;
 
-        o = s.taboption('environment_variable', form.Flag, 'env_disable_quic_go_ecn', _('Disable ECN of quic-go'));
+        o = s.taboption('environment_variable', form.Flag, 'disable_quic_go_ecn', _('Disable ECN of quic-go'));
         o.rmempty = false;
 
-        o = s.taboption('environment_variable', form.Flag, 'env_skip_system_ipv6_check', _('Skip System IPv6 Check'));
+        o = s.taboption('environment_variable', form.Flag, 'skip_system_ipv6_check', _('Skip System IPv6 Check'));
         o.rmempty = false;
 
         return m.render().then(L.bind(function (m, nodes) {

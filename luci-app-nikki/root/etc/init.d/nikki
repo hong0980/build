@@ -245,13 +245,13 @@ start_service() {
 	procd_set_param stderr 1
 	procd_set_param no_new_privs 1
 
-	procd_append_param env SAFE_PATHS="$safe_paths"
-	procd_append_param env GOMAXPROCS="$go_max_procs"
-	procd_append_param env GOMEMLIMIT="$go_mem_limit"
-	procd_append_param env QUIC_GO_DISABLE_GSO="$disable_quic_go_gso"
-	procd_append_param env QUIC_GO_DISABLE_ECN="$disable_quic_go_ecn"
-	procd_append_param env SKIP_SYSTEM_IPV6_CHECK="$skip_system_ipv6_check"
-	procd_append_param env DISABLE_LOOPBACK_DETECTOR="$disable_loopback_detector"
+	[ -n "$safe_paths" ]   && procd_append_param env SAFE_PATHS="$safe_paths"
+	[ -n "$go_max_procs" ] && procd_append_param env GOMAXPROCS="$go_max_procs"
+	[ -n "$go_mem_limit" ] && procd_append_param env GOMEMLIMIT="$go_mem_limit"
+	[ "$disable_quic_go_gso" = 1 ]       && procd_append_param env QUIC_GO_DISABLE_GSO=1
+	[ "$disable_quic_go_ecn" = 1 ]       && procd_append_param env QUIC_GO_DISABLE_ECN=1
+	[ "$skip_system_ipv6_check" = 1 ]    && procd_append_param env SKIP_SYSTEM_IPV6_CHECK=1
+	[ "$disable_loopback_detector" = 1 ] && procd_append_param env DISABLE_LOOPBACK_DETECTOR=1
 
 	procd_append_param limits nproc="${nproc_soft} ${nproc_hard}"
 	procd_append_param limits nofile="${nofile_soft} ${nofile_hard}"

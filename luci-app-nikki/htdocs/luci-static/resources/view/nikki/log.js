@@ -50,8 +50,9 @@ return view.extend({
             opt.renderWidget = function (section_id, option_index, cfgvalue) {
                 let el = form.TextValue.prototype.renderWidget.apply(this, arguments);
                 const textareaEl = el.firstElementChild;
-                textareaEl.style.cssText = 'width: 100%; font-family: Consolas;';
+                textareaEl.style.cssText = 'width:100%;font-family:Consolas;';
                 textareaEl.wrap = 'off';
+                textareaEl.readOnly = true;
                 const state = { raw: cfgvalue || '', reversed: true, level: 'all' };
                 const renderText = () => {
                     let items = parseFn
