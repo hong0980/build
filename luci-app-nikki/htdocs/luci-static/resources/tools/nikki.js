@@ -278,8 +278,8 @@ return baseclass.extend({
             'external-controller':     null,
             'external-controller-tls': null
         }).then(profile => {
-            const uiName = overrideUiName ?? profile['external-ui-name'] ?? '';
-            const secret = profile['secret'] ?? '';
+            const uiName   = overrideUiName ?? profile['external-ui-name'] ?? '';
+            const secret   = profile['secret'] ?? '';
             const https    = profile['external-controller-tls'];
             const endpoint = https ?? profile['external-controller'];
             if (!endpoint && !uiName)
@@ -295,8 +295,7 @@ return baseclass.extend({
             })[uiName] ?? {};
 
             const query = new URLSearchParams({ [hostKey]: host, port, secret });
-            const url = `${https ? 'https' : 'http'}://${host}:${port}/ui${uiName ? `/${uiName}` : ''}/${hash}?${query}`;
-
+            const url   = `${https ? 'https' : 'http'}://${host}:${port}/ui${uiName ? `/${uiName}` : ''}/${hash}?${query}`;
             window.open(url, '_blank');
         });
     },
@@ -356,7 +355,7 @@ return baseclass.extend({
         });
     },
 
-    modalnotify: function(title, children, timeout, ...classes) {
+    modalnotify: function (title, children, timeout, ...classes) {
         // info/success/warning/danger/error
         if (typeof timeout !== 'number') {
             if (timeout != null)
@@ -444,7 +443,7 @@ return baseclass.extend({
     status: (name) => callServiceStatus(name),
     get_core_version: (mode) => callversion(mode),
     service: (name, command) => callRCInit(name || 'nikki', command),
-    mihomoAPI: (method, path, query, body) =>callNikkiAPI(method, path, query || '', body || ''),
+    mihomoAPI: (method, path, query, body) => callNikkiAPI(method, path, query || '', body || ''),
     uciCommit: (config, section, option, value) => calluciCommit(config, section, option, value),
     get_core_url: (core_type, arch) => callGetCoreUrl(core_type, arch),
     profile: (defaults) => callNikkiProfile(defaults),

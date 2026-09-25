@@ -141,7 +141,7 @@ const methods = {
 				})
 			);
 
-			writefile(cache_file, { entries });
+			writefile(cache_file, sprintf("%.J", { entries }));
 			return {
 				status: 'ok', entries,
 				cache: { hit: false, cached_at: now, age: 0, ttl: GHCACHE_TTL, expires_in: GHCACHE_TTL }
