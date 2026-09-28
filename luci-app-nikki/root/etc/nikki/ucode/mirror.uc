@@ -10,10 +10,9 @@ const im = (o) => uci_int(gm(o));
 
 const file = getenv('profile_path');
 if (!access(file)) exit(1);
-const config = load_profile(file);
-if (!config) exit(1);
 
 const exprs = [];
+const config = load_profile(file);
 const target = gm('github_mirror');
 
 function addMirror(path, val) {
@@ -32,9 +31,13 @@ function pgs(k) {
 };
 
 push(exprs, `
-	.dns |= (
-		(select(.respect-rules == true and (has("proxy-server-nameserver") | not)) |
-		.["proxy-server-nameserver"] = ["https://dns.alidns.com/dns-query", "https://doh.pub/dns-query"]
+	.rule-providers |= ((. // {}) | sort_keys(.) | map_values(
+		(.url | capture("(?P<ext>\\.[^.]+)$").ext // "") as $q |
+		(.path // "./rule_provider/" + key + $q) as $p |
+		((select($p != "") | .path = $p) // .)
+	) // .) |
+	.dns |= ((select(.respect-rules == true or (has("proxy-server-nameserver") | not)) |
+		.proxy-server-nameserver = ["https://doh.pub/dns-query", "https://dns.alidns.com/dns-query"]
 	) // .)
 `);
 
@@ -130,8 +133,7 @@ if (bc('url_enabled')) {
 
 	for (let j = 0; j < length(providers); j++) {
 		const k = providers[j];
-		if (!used[k])
-			push(exprs, `del(.proxy-providers[${qs(k)}])`);
+		if (!used[k]) push(exprs, `del(.proxy-providers[${qs(k)}])`);
 	}
 };
 

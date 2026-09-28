@@ -122,13 +122,9 @@ start_service() {
 			((select(env(explode)  == 0) | explode(.))        // .) |
 			((select(env(comments) == 0) | ... comments = "") // .) |
 			.rules   = ((.rules    // []) + (.nikki-rules   // [])) |
-			.proxies = (((.proxies // []) + (.nikki-proxies // []) + (.node // [])) | reverse | unique_by(.name) | reverse) |
+			.proxies = (((.proxies // []) + (.nikki-proxies // []) + (.node // [])) |
+				reverse | unique_by(.name) | reverse) |
 			.proxy-groups = ((.proxy-groups // []) + (.nikki-proxy-groups // [])) |
-			.rule-providers |= ((. // {}) | sort_keys(.) | map_values(
-				(.url | capture("(?P<ext>\\.[^.]+)$").ext // "") as $q |
-				((.path | select(. != "")) // ("./rule_provider/" + key + $q)) as $p |
-				.path = (($p | select(test("/$")) | . + key + $q) // $p)
-			)) |
 			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups)
 		' "$temp_config" $mixin_extra_file - >/dev/null 2>&1
 
