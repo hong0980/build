@@ -23,13 +23,14 @@ boot() {
 
 start_service() {
 	config_load nikki
-	local enabled temp_config="$(mktemp)"
+	local core enabled temp_config="$(mktemp)"
 	config_get_bool enabled config enabled 0
-	if [ "$enabled" = 0 ]; then
-		log "App" "Disabled."
-		log "App" "Exit."
-		return
-	fi
+	[ "$enabled" = 1 ] || return
+
+	config_get core config core 'meta'
+	set -- "${RUN_DIR}/core/${core}-mihomo"
+	[ -x "$1" ] || set -- '/usr/bin/mihomo'
+	[ -x "$1" ] && ln -sf "$1" "$PROG"
 
 	if [ ! -x $PROG ]; then
 		log "App" "Core is not executable."
@@ -37,63 +38,37 @@ start_service() {
 		return
 	fi
 
-	log "App" "Enabled."
 	log "App" "Start."
 
-	local hosts sniffer_sniff authentication tun_dns_hijack fake_ip_filter \
-		  dns_nameserver dns_nameserver_policy comments explode
-	config_get_bool hosts                 mixin "hosts"                 0
-	config_get_bool explode               mixin "explode"               0
-	config_get_bool comments              mixin "comments"              0
-	config_get_bool sniffer_sniff         mixin "sniffer_sniff"         0
-	config_get_bool authentication        mixin "authentication"        0
-	config_get_bool tun_dns_hijack        mixin "tun_dns_hijack"        0
-	config_get_bool fake_ip_filter        mixin "fake_ip_filter"        0
-	config_get_bool dns_nameserver        mixin "dns_nameserver"        0
-	config_get_bool dns_nameserver_policy mixin "dns_nameserver_policy" 0
+	local profile core_only test_profile proxy_enabled
+	config_get      profile       config profile
+	config_get_bool core_only     config core_only    0
+	config_get_bool test_profile  config test_profile 0
+	config_get_bool proxy_enabled proxy  enabled      0
 
-	local tun_listener_name tproxy_listener_name redirect_listener_name
-	config_get tun_listener_name      core "tun_listener_name"
-	config_get tproxy_listener_name   core "tproxy_listener_name"
-	config_get redirect_listener_name core "redirect_listener_name"
-
-	local tcp_mode udp_mode proxy_enabled ipv4_dns_hijack ipv6_dns_hijack
-	config_get      tcp_mode        proxy "tcp_mode"
-	config_get      udp_mode        proxy "udp_mode"
-	config_get_bool proxy_enabled   proxy "enabled"         0
-	config_get_bool ipv4_dns_hijack proxy "ipv4_dns_hijack" 0
-	config_get_bool ipv6_dns_hijack proxy "ipv6_dns_hijack" 0
-
-	local profile core_only test_profile profile_name core
-	config_get      core         config core 'meta'
-	config_get      profile      config "profile"
-	config_get_bool core_only    config "core_only"         0
-	config_get_bool test_profile config "test_profile"      0
-
-	local type="${profile%%:*}"
+	local file="" type="${profile%%:*}" section="${profile#*:}"
 	if [ "$type" = "file" ]; then
-		profile_name="${profile#*:}"
-		local profile_file; profile_file="$PROFILES_DIR/$profile_name"
-		if [ ! -f "$profile_file" ]; then
+		set -- "$PROFILES_DIR/$section"
+		file="$1"
+		if [ ! -f "$file" ]; then
 			log "Profile" "File not found."
 			log "App" "Exit."
 			return
 		fi
-		cp -f "$profile_file" "$temp_config"
-		log "Profile" "Use file: %s." "$profile_file"
+		cp -f "$file" "$temp_config"
+		log "Profile" "Use file: %s." "$file"
 	elif [ "$type" = "subscription" ]; then
-		local name prefer section="${profile#*:}"
+		local name
 		config_get name "$section" name
-		local subscription_file;
 		set -- "${SUBSCRIPTIONS_DIR}/${name}"*
-		[ -f "$1" ] && subscription_file="$1"
-		if [ ! -f "$subscription_file" ]; then
+		file="$1"
+		if [ ! -f "$file" ]; then
 			log "Profile" "Subscription file not found."
 			log "App" "Exit."
 			return
 		fi
-		cp -f "$subscription_file" "$temp_config"
-		log "Profile" "Use subscription: %s." "$subscription_file"
+		cp -f "$file" "$temp_config"
+		log "Profile" "Use subscription: %s." "$file"
 	else
 		log "Profile" "No profile/subscription selected."
 		log "App" "Exit."
@@ -101,8 +76,15 @@ start_service() {
 	fi
 
 	if [ "$core_only" = 0 ]; then
-		local mixin_file mixin_extra_file="" del_expr=""
-		config_get mixin_file config mixin_file
+		local hosts sniffer_sniff authentication tun_dns_hijack fake_ip_filter \
+			  dns_nameserver dns_nameserver_policy del_expr=""
+		config_get_bool hosts                 mixin "hosts"                 0
+		config_get_bool sniffer_sniff         mixin "sniffer_sniff"         0
+		config_get_bool authentication        mixin "authentication"        0
+		config_get_bool tun_dns_hijack        mixin "tun_dns_hijack"        0
+		config_get_bool fake_ip_filter        mixin "fake_ip_filter"        0
+		config_get_bool dns_nameserver        mixin "dns_nameserver"        0
+		config_get_bool dns_nameserver_policy mixin "dns_nameserver_policy" 0
 		[ "$hosts"                 = 1 ] && del_expr="$del_expr|del(.hosts)"
 		[ "$sniffer_sniff"         = 1 ] && del_expr="$del_expr|del(.sniffer.sniff)"
 		[ "$authentication"        = 1 ] && del_expr="$del_expr|del(.authentication)"
@@ -110,10 +92,16 @@ start_service() {
 		[ "$fake_ip_filter"        = 1 ] && del_expr="$del_expr|del(.dns.fake-ip-filter)"
 		[ "$dns_nameserver_policy" = 1 ] && del_expr="$del_expr|del(.dns.nameserver-policy)"
 		[ "$dns_nameserver"        = 1 ] && del_expr="$del_expr|del(.dns.default-nameserver,.dns.fallback,.dns.proxy-server-nameserver,.dns.direct-nameserver,.dns.nameserver)"
-		[ -n "$del_expr" ] && yq -Mi "${del_expr#|}" "$temp_config"
-		[ -n "$mixin_file" ] && {
+		# [ -n "$del_expr" ] && yq -Mi "${del_expr#|}" "$temp_config"
+
+		local comments explode mixin_file mixin_extra_file=""
+		config_get mixin_file config mixin_file
+		config_get_bool explode  mixin "explode"  0
+		config_get_bool comments mixin "comments" 0
+		set -- "$MIXIN_FILE_DIR/$mixin_file"
+		[ -f "$1" ] && {
+			mixin_extra_file="$1"
 			log "Mixin" "%s Mixin config." "$mixin_file"
-			mixin_extra_file="/etc/nikki/mixin/$mixin_file"
 		}
 
 		export comments explode
@@ -121,11 +109,11 @@ start_service() {
 			. as $item ireduce ({}; . * $item ) |
 			((select(env(explode)  == 0) | explode(.))        // .) |
 			((select(env(comments) == 0) | ... comments = "") // .) |
-			.rules   = ((.rules    // []) + (.nikki-rules   // [])) |
-			.proxies = (((.proxies // []) + (.nikki-proxies // []) + (.node // [])) |
-				reverse | unique_by(.name) | reverse) |
-			.proxy-groups = ((.proxy-groups // []) + (.nikki-proxy-groups // [])) |
-			del(.node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups)
+			.rules        += (.nikki-rules // []) |
+			.proxies      += ((.nikki-proxies // []) + (.nikki-node // [])) |
+			.proxy-groups += (.nikki-proxy-groups // []) |
+			.proxies |= (reverse | unique_by(.name) | sort_by(.name)) |
+			del(.nikki-node, .nikki-proxies, .nikki-rules, .nikki-proxy-groups)
 		' "$temp_config" $mixin_extra_file - >/dev/null 2>&1
 
 		if [ "$proxy_enabled" = 1 ]; then
@@ -149,6 +137,20 @@ start_service() {
 			.tun["auto-detect-interface"] = true
 		' "$temp_config"
 	fi
+
+	[ "$core_only" = 1 ] || \
+	profile_path="$temp_config" ucode -S "/etc/nikki/ucode/mirror.uc"
+
+	local tcp_mode udp_mode ipv4_dns_hijack ipv6_dns_hijack
+	config_get      tcp_mode        proxy "tcp_mode"
+	config_get      udp_mode        proxy "udp_mode"
+	config_get_bool ipv4_dns_hijack proxy "ipv4_dns_hijack" 0
+	config_get_bool ipv6_dns_hijack proxy "ipv6_dns_hijack" 0
+
+	local tun_listener_name tproxy_listener_name redirect_listener_name
+	config_get tun_listener_name      core "tun_listener_name"
+	config_get tproxy_listener_name   core "tproxy_listener_name"
+	config_get redirect_listener_name core "redirect_listener_name"
 
 	if [ "$core_only" = 0 -a "$proxy_enabled" = 1 ]; then
 		if [ "$ipv4_dns_hijack" = 1 -o "$ipv6_dns_hijack" = 1 ]; then
@@ -188,15 +190,7 @@ start_service() {
 		fi
 	fi
 
-	[ "$core_only" = '1' ] || \
-	profile_path="$temp_config" ucode -S "/etc/nikki/ucode/mirror.uc"
-
-	set -- "${RUN_DIR}/core/${core}-mihomo"
-	[ -x "$1" ] || set -- '/usr/bin/mihomo'
-	[ -x "$1" ] && ln -sf "$1" "$PROG"
-
 	mv -f "$temp_config" "$RUN_PROFILE_PATH"
-
 	if [ "$test_profile" = 1 ]; then
 		log "Profile" "Testing..."
 		if $PROG -d "$RUN_DIR" -t >> "$CORE_LOG_PATH" 2>&1; then
@@ -257,7 +251,7 @@ start_service() {
 
 	procd_close_instance
 
-	local log_scheduled_clear log_scheduled_clear_cron scheduled_restart scheduled_restart_cron  reload_cron=0
+	local log_scheduled_clear log_scheduled_clear_cron scheduled_restart scheduled_restart_cron reload_cron=0
 	config_get      log_scheduled_clear_cron log "scheduled_clear_cron"
 	config_get_bool log_scheduled_clear      log "scheduled_clear" 0
 	config_get      scheduled_restart_cron config "scheduled_restart_cron"
@@ -277,8 +271,9 @@ start_service() {
 
 	auto_update() {
 		local cfg="$1" enable hour time week mode interval cmd
-		config_get_bool enable "$cfg" auto_update
+		config_get_bool enable "$cfg" auto_update 0
 		[ "$enable" = '1' ] || return
+		reload_cron=1
 		config_get hour     "$cfg" hour 10
 		config_get time     "$cfg" time 10
 		config_get week     "$cfg" week '*'
@@ -314,7 +309,6 @@ start_service() {
 		fi
 	}
 	config_foreach auto_update subscription
-
 	[ "$reload_cron" = 1 ] && /etc/init.d/cron restart
 	touch "$STARTED_FLAG_PATH"
 }

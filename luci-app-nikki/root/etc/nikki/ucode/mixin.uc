@@ -15,7 +15,6 @@ function a(o) { return ua(g(o)); };
 const st   = ubus.call('network.interface', 'status', {'interface': g('outbound_interface')});
 const cfg  = {
 	'interface-name':          st?.l3_device ?? st?.device ?? '',
-	'node':                    build_proxies(),
 	'mode':                    g('mode'),
 	'external-ui':             g('ui_path'),
 	'external-ui-url':         g('ui_url'),
@@ -45,6 +44,7 @@ const cfg  = {
 	'lan-allowed-ips':         a('lan_allowed_ips'),
 	'lan-disallowed-ips':      a('lan_disallowed_ips'),
 	'skip-auth-prefixes':      a('skip_auth_prefixes'),
+	'nikki-node':              build_proxies(),
 	'profile': {
 		"store-fake-ip":       b('fake_ip_cache'),
 		"store-selected":      b('selection_cache')
@@ -64,18 +64,18 @@ const cfg  = {
 		"enable":              b('tun_enabled'),
 		"gso":                 b('tun_gso'),
 		"mtu":                 i('tun_mtu'),
-		"gso-max-size":        i('tun_gso_max_size'),
 		"stack":               g('tun_stack'),
 		"device":              g('tun_device'),
+		"gso-max-size":        i('tun_gso_max_size'),
 		"dns-hijack":          b('tun_dns_hijack') ? a('tun_dns_hijacks') : ''
 	},
 	'sniffer': {
+		"sniff":               {},
 		"enable":              b('sniffer'),
 		"skip-src-address":    a('skip_src_address'),
 		"skip-dst-address":    a('skip_dst_address'),
 		"parse-pure-ip":       b('sniffer_sniff_pure_ip'),
 		"force-dns-mapping":   b('sniffer_sniff_dns_mapping'),
-		"sniff":               {},
 		"skip-domain":         b('sidm') ? a('sidms') : '',
 		"force-domain":        b('sfdm') ? a('sfdms') : ''
 	},
@@ -95,15 +95,14 @@ const cfg  = {
 		"fake-ip-filter-mode": g('fake_ip_filter_mode'),
 		"fake-ip-filter":      b('fake_ip_filter') ? a('fake_ip_filters') : '',
 		"direct-nameserver-follow-policy": b('dns_direct_nameserver_follow_policy'),
-		'proxy-server-nameserver-policy': {},
-		'fallback':            {},
 		'fallback-filter':     {},
-		'nameserver-policy':   {}
+		'nameserver-policy':   {},
+		'proxy-server-nameserver-policy': {}
 	},
 };
 
 if (b('sniffer_sniff')) {
-	uci.foreach('nikki', 'sniff', (s) => {
+	uci.foreach('nikki', 'sniff', s => {
 		if (!ub(s.enabled)) return;
 		cfg.sniffer.sniff[s.protocol] = {
 			"port":                 ua(s.port),
@@ -113,20 +112,18 @@ if (b('sniffer_sniff')) {
 };
 
 if (b('dns_nameserver')) {
-	map(['default-nameserver', 'proxy-server-nameserver', 'direct-nameserver', 'nameserver', 'fallback'], (k) => cfg.dns[k] = []);
-	uci.foreach('nikki', 'nameserver', (s) => {
-		if (!ub(s.enabled)) return;
-		push(cfg.dns[s.type], ...ua(s.nameserver));
+	map(['default-nameserver', 'proxy-server-nameserver', 'direct-nameserver', 'nameserver', 'fallback'], k => cfg.dns[k] = []);
+	uci.foreach('nikki', 'nameserver', s => {
+		if (ub(s.enabled)) push(cfg.dns[s.type], ...ua(s.nameserver));
 	});
 };
 
 if (b('dns_proxy_server_nameserver_policy')) {
-	uci.foreach('nikki', 'proxy_server_nameserver_policy', (s) => {
+	uci.foreach('nikki', 'proxy_server_nameserver_policy', s => {
 		if (!ub(s.enabled)) return;
 		if (s.type == 'fallback-filter') {
-			if (s.nameserver) {
-				cfg.dns['fallback-filter'][s.matcher] = ua(s.nameserver);
-			} else if (s.matcher) {
+			if (s.nameserver) cfg.dns['fallback-filter'][s.matcher] = ua(s.nameserver);
+			else if (s.matcher) {
 				let pos = index(s.matcher, ':');
 				if (pos > 0) {
 					let key = trim(substr(s.matcher, 0, pos));
@@ -134,18 +131,14 @@ if (b('dns_proxy_server_nameserver_policy')) {
 					map([['true', true], ['false', false]], (p) => { if (val == p[0]) val = p[1]; });
 					if (match(val, /^[0-9]+$/)) val = int(val);
 					cfg.dns['fallback-filter'][key] = val;
-				} else {
-					cfg.dns['fallback-filter'][s.matcher] = true;
-				}
+				} else cfg.dns['fallback-filter'][s.matcher] = true;
 			}
-		} else {
-			if (s.nameserver) cfg.dns[s.type][s.matcher] = ua(s.nameserver);
-		}
+		} else if (s.nameserver) cfg.dns[s.type][s.matcher] = ua(s.nameserver);
 	});
 };
 
 if (b('dns_nameserver_policy')) {
-	uci.foreach('nikki', 'nameserver_policy', (s) => {
+	uci.foreach('nikki', 'nameserver_policy', s => {
 		if (!ub(s.enabled)) return;
 		let ns = ua(s.nameserver);
 		cfg.dns['nameserver-policy'][s.matcher] = length(ns) == 1 ? ns[0] : ns;
@@ -159,23 +152,21 @@ if (b('wanDns')) {
 
 if (b('authentication')) {
 	cfg['authentication'] = [];
-	uci.foreach('nikki', 'authentication', (s) => {
-		if (!ub(s.enabled)) return;
-		push(cfg['authentication'], `${s.username}:${s.password}`);
+	uci.foreach('nikki', 'authentication', s => {
+		if (ub(s.enabled)) push(cfg['authentication'], `${s.username}:${s.password}`);
 	});
 };
 
 if (b('hosts')) {
 	cfg['hosts'] = {};
-	uci.foreach('nikki', 'hosts', (s) => {
-		if (!ub(s.enabled)) return;
-		cfg['hosts'][s.domain_name] = ua(s.ip);
+	uci.foreach('nikki', 'hosts', s => {
+		if (ub(s.enabled)) cfg['hosts'][s.domain_name] = ua(s.ip);
 	});
 };
 
 if (b('rule_provider')) {
 	cfg['rule-providers'] = {};
-	uci.foreach('nikki', 'rule_provider', (s) => {
+	uci.foreach('nikki', 'rule_provider', s => {
 		if (!ub(s.enabled)) return;
 		cfg['rule-providers'][s.name] = {
 			proxy:      s.node,
@@ -192,11 +183,11 @@ if (b('rule_provider')) {
 
 if (b('rule')) {
 	cfg['nikki-rules'] = [];
-	uci.foreach('nikki', 'rule', (s) => {
+	uci.foreach('nikki', 'rule', s => {
 		if (!ub(s.enabled)) return;
 		const rule = filter([s.type, s.matcher, s.node, ub(s.no_resolve) ? 'no-resolve' : null], (item) => item != null && item != '');
 		push(cfg['nikki-rules'], join(',', rule));
 	});
 };
 
-print(sprintf("%J", trim_all(cfg)));
+print(sprintf("%.J", trim_all(cfg)));

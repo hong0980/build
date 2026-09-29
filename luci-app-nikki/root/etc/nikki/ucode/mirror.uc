@@ -36,7 +36,7 @@ push(exprs, `
 		(.path // "./rule_provider/" + key + $q) as $p |
 		((select($p != "") | .path = $p) // .)
 	) // .) |
-	.dns |= ((select(.respect-rules == true or (has("proxy-server-nameserver") | not)) |
+	.dns |= ((select(.respect-rules == true and (has("proxy-server-nameserver") | not)) |
 		.proxy-server-nameserver = ["https://doh.pub/dns-query", "https://dns.alidns.com/dns-query"]
 	) // .)
 `);
@@ -62,8 +62,8 @@ if (match(core, /smart/) && ugbm) {
 				.type        = "smart"               |
 				.uselightgbm = ${ugbm}               |
 				.strategy    = ${qs(smart_strategy)} |
-				.collectdata = ${collectdata}    |
-				.prefer-asn  = ${prefer_asn}     |
+				.collectdata = ${collectdata}  |
+				.prefer-asn  = ${prefer_asn}   |
 				.sample-rate = (${sample_rate} | tonumber) |
 				((select(${qs(policy_priority)} != "") | .policy-priority = ${qs(policy_priority)}) // .)
 			)
@@ -81,8 +81,7 @@ if (match(core, /smart/) && ugbm) {
 if (target) {
 	addMirror('.external-ui-url', config['external-ui-url']);
 	let geox = config['geox-url'];
-	for (let k in keys(geox))
-		addMirror(`.geox-url["${k}"]`, geox[k]);
+	for (let k in keys(geox)) addMirror(`.geox-url["${k}"]`, geox[k]);
 
 	let groups = config['proxy-groups'];
 	for (let i = 0; i < length(groups); i++) {

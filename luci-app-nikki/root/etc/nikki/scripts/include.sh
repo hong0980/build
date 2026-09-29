@@ -2,16 +2,16 @@
 
 # paths
 HOME_DIR="/etc/nikki"
+RUN_DIR="$HOME_DIR/run"
+PROG="$RUN_DIR/mihomo"
+MIXIN_FILE_DIR="$HOME_DIR/mixin"
 PROFILES_DIR="$HOME_DIR/profiles"
 SUBSCRIPTIONS_DIR="$HOME_DIR/subscriptions"
-MIXIN_FILE_PATH="$HOME_DIR/mixin.yaml"
-RUN_DIR="$HOME_DIR/run"
 RUN_PROFILE_PATH="$RUN_DIR/config.yaml"
 PROVIDERS_DIR="$RUN_DIR/providers"
 RULE_PROVIDERS_DIR="$PROVIDERS_DIR/rule"
 PROXY_PROVIDERS_DIR="$PROVIDERS_DIR/proxy"
 
-PROG="$RUN_DIR/mihomo"
 ARCH="$(uci -q get nikki.config.core_version)"
 GITHUB_TOKEN="$(uci -q get nikki.config.github_token)"
 UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
