@@ -325,7 +325,7 @@ github_api() {
 	[ -n "$msg" ] && { printf '{"status":"error","message":"github api error: %s"}\n' "$msg"; return 1; }
 
 	local urls=$(printf '%s' "$api_out" | jsonfilter -qe '@.assets[*].browser_download_url' | \
-		grep "/mihomo-${ARCH}-[^/]*\.gz$" | grep -v '\-go[0-9]')
+		grep "/mihomo-linux-${ARCH}-[^/]*\.gz$" | grep -v '\-go[0-9]')
 
 	local updated_at=$(printf '%s' "$api_out" | jsonfilter -qe '@.updated_at' 2>/dev/null)
 
@@ -352,9 +352,7 @@ get_core_url() {
 	updated_at=$(printf '%s\n' "$api_out" | tail -n 1)
 	urls_only=$(printf '%s\n' "$api_out" | sed '$d')
 
-	found_url=$(printf '%s\n' "$urls_only" | grep "compatible" | head -n 1)
-	[ -z "$found_url" ] && found_url=$(printf '%s\n' "$urls_only" | grep "\-v1-" | head -n 1)
-	[ -z "$found_url" ] && found_url=$(printf '%s\n' "$urls_only" | head -n 1)
+	found_url=$(printf '%s\n' "$urls_only" | head -n 1)
 	[ -z "$found_url" ] && { printf '{"status":"error","message":"no matching asset for %s"}\n' "$ARCH"; return 1; }
 
 	printf '{"status":"ok","url":"%s","updated_at":"%s"}\n' "$found_url" "$updated_at"

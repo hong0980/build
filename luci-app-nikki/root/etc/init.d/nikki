@@ -30,7 +30,8 @@ start_service() {
 	config_get core config core 'meta'
 	set -- "${RUN_DIR}/core/${core}-mihomo"
 	[ -x "$1" ] || set -- '/usr/bin/mihomo'
-	[ -x "$1" ] && ln -sf "$1" "$PROG"
+	[ -x "$1" ] || set -- '/usr/libexec/mihomo'*
+	[ -x "$1" ] && ! [ "$1" -ef "$PROG" ] && ln -sf "$1" "$PROG"
 
 	if [ ! -x $PROG ]; then
 		log "App" "Core is not executable."

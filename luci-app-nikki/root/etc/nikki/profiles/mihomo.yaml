@@ -197,11 +197,14 @@ rule-providers:
   netflix:     {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/netflix.mrs}
   steamcn:     {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/steam@cn.mrs}
   steam:       {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/steam.mrs}
+  cn:          {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/cn.mrs}
+  cn!:         {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/geolocation-!cn.mrs}
 
   ProxyIP:     {<<: *Im, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Proxy.mrs}
   ChinaIP:     {<<: *Im, url: https://github.com/666OS/rules/raw/release/mihomo/ip/China.mrs}
   PrivateIP:   {<<: *Im, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Private.mrs}
   StreamingIP: {<<: *Im, url: https://github.com/666OS/rules/raw/release/mihomo/ip/Streaming.mrs}
+  cnIP:        {<<: *Im, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geoip/cn.mrs}
   apple_ip:    {<<: *Im, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo-lite/geoip/apple.mrs}
   google_ip:   {<<: *Im, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geoip/google.mrs}
   netflix_ip:  {<<: *Im, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geoip/netflix.mrs}

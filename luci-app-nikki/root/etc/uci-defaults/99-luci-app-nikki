@@ -34,46 +34,24 @@ config_get init config init
 	uci -q set nikki.@authentication[0].password="$random"
 }
 
-source "/etc/openwrt_release"
-case "${DISTRIB_ARCH}" in
-	amd64-v3)
-		core_arch="linux-amd64-v3" ;;
-	amd64-v2)
-		core_arch="linux-amd64-v2" ;;
-	amd64-v1)
-		core_arch="linux-amd64-v1" ;;
-	x86_64*)
-		core_arch="linux-amd64" ;;
-	arm64|aarch64*)
-		core_arch="linux-arm64" ;;
-	armv7|arm_cortex-a[5-9]*|arm_cortex-a1[0-9]*)
-		core_arch="linux-armv7" ;;
-	armv6|arm_arm1176*)
-		core_arch="linux-armv6" ;;
-	armv5|arm_arm926*|arm_fa526*)
-		core_arch="linux-armv5" ;;
-	i386_*|i686_*)
-		core_arch="linux-386" ;;
-	mips64el_*)
-		core_arch="linux-mips64le" ;;
-	mips64_*)
-		core_arch="linux-mips64" ;;
-	mipsel_*)
-		core_arch="linux-mipsle-softfloat" ;;
-	mips_*)
-		core_arch="linux-mips-softfloat" ;;
-	riscv64_*)
-		core_arch="linux-riscv64" ;;
-	loongarch64_*|loong64_*)
-		core_arch="linux-loong64-abi2" ;;
-	s390x_*)
-		core_arch="linux-s390x" ;;
-	ppc64le_*)
-		core_arch="linux-ppc64le" ;;
-	*)
-		core_arch="linux-amd64" ;;
+raw="$(uname -m 2>/dev/null)"
+[ -n "$raw" ] || raw="$(apk --print-arch 2>/dev/null)"
+[ -n "$raw" ] || raw="$(opkg status libc 2>/dev/null | awk -F': ' '/^Architecture/{print $2; exit}')"
+
+case "$raw" in
+	x86_64|amd64)          arch="amd64-compatible" ;;
+	aarch64*|arm64)        arch="arm64" ;;
+	armv7*|arm_cortex-a[7-9]*|arm_cortex-a1[0-9]*) arch="armv7" ;;
+	armv6*|arm_cortex-a[56]*) arch="armv6" ;;
+	arm*)                  arch="armv5" ;;
+	i[3-6]86)              arch="386" ;;
+	mips64el*)             arch="mips64le" ;;
+	mips64*)               arch="mips64" ;;
+	mipsel*)               arch="mipsle" ;;
+	mips*)                 arch="mips" ;;
+	*)                     arch="amd64" ;;
 esac
-uci -q set nikki.config.core_version="$core_arch"
+uci -q set nikki.config.core_version="$arch"
 
 uci -q batch <<-EOF > /dev/null
 	del firewall.nikki
