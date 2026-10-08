@@ -61,11 +61,15 @@ dns:
   fake-ip-filter-mode: blacklist
   default-nameserver: [223.5.5.5, 223.6.6.6]
   nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
+  nameserver-policy:
+    "rule-set:ads": rcode://success
+    "rule-set:cn,private": [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
+    "rule-set:cn!": [https://cloudflare-dns.com/dns-query, https://dns.google/dns-query]
   fake-ip-filter:
-    - "*"
-    - "+.lan"
-    - "+.local"
-    - "+.market.xiaomi.com"
+    - RULE-SET,Fifilter
+    - RULE-SET,private
+    - RULE-SET,applecn
+    - RULE-SET,microsoftcn
 
 # 出站策略，根据自己情况调整每个策略里分组排序，增删都可以，比如把美国自动放到第一个，比如删除香港故转，注意别漏掉表情逗号等。
 # 如果相应分组没有筛选到对应的国家，请根据自己节点名字调整筛选关键字。
@@ -105,11 +109,15 @@ proxy-groups:
 
 # 规则匹配
 rules:
+  - RULE-SET,Tracking,REJECT
+  - RULE-SET,ads,REJECT
   - AND,((RULE-SET,cn!),(DST-PORT,443),(NETWORK,UDP)),REJECT
   - RULE-SET,private_ip,直连,no-resolve
   - RULE-SET,private,直连
   - RULE-SET,Download,直连
   - RULE-SET,ai,🤖AI
+  - RULE-SET,Dev,🚀默认代理
+  - RULE-SET,Streaming,📹YouTube
   - RULE-SET,youtube,📹YouTube
   - RULE-SET,google,🍀Google
   - RULE-SET,github,👨🏿‍💻GitHub
@@ -127,12 +135,13 @@ rules:
   - RULE-SET,usd,💶Wallet
   - RULE-SET,steamcn,直连
   - RULE-SET,steam,🎮Steam
+  - RULE-SET,cn,直连
   - RULE-SET,cn!,🚀默认代理
-  - RULE-SET,google_ip,🍀Google
-  - RULE-SET,apple_ip,🍎Apple
-  - RULE-SET,telegram_ip,📲Telegram
-  - RULE-SET,netflix_ip,🎥NETFLIX
-  - RULE-SET,cn_ip,直连
+  - RULE-SET,google_ip,🍀Google,no-resolve
+  - RULE-SET,apple_ip,🍎Apple,no-resolve
+  - RULE-SET,telegram_ip,📲Telegram,no-resolve
+  - RULE-SET,netflix_ip,🎥NETFLIX,no-resolve
+  - RULE-SET,cn_ip,直连,no-resolve
   - MATCH,🐟漏网之鱼
 
 Im: &Im {type: http, interval: 86400, behavior: ipcidr,    format: mrs}
@@ -144,7 +153,9 @@ Cy: &Cy {type: http, interval: 86400, behavior: classical, format: yaml}
 
 rule-providers:
   Download:    {<<: *Dm, url: https://github.com/666OS/rules/raw/release/mihomo/domain/Download.mrs}
+  Dev:         {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/category-dev.mrs}
   private:     {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/private.mrs}
+  ads:         {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/category-ads-all.mrs}
   ai:          {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/category-ai-!cn.mrs}
   youtube:     {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/youtube.mrs}
   google:      {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/google.mrs}
@@ -165,6 +176,8 @@ rule-providers:
   steam:       {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/steam.mrs}
   cn!:         {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/geolocation-!cn.mrs}
   cn:          {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/cn.mrs}
+  Streaming:   {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/category-entertainment.mrs}
+  Tracking:    {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/category-public-tracker.mrs}
 
   cn_ip:       {<<: *Im, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geoip/cn.mrs}
   google_ip:   {<<: *Im, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geoip/google.mrs}
@@ -173,5 +186,4 @@ rule-providers:
   telegram_ip: {<<: *Im, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geoip/telegram.mrs}
   apple_ip:    {<<: *Im, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo-lite/geoip/apple.mrs}
 
-  # fakeipfilter_cn:  {<<: *Dt, url: https://github.com/qichiyuhub/rule/raw/main/rules/fakeipfilter-cn.list}
-  # fakeipfilter_!cn: {<<: *Dt, url: https://github.com/qichiyuhub/rule/raw/main/rules/fakeipfilter-!cn.list}
+  Fifilter:    {<<: *Dy, url: https://github.com/DustinWin/ShellCrash/raw/dev/public/fake_ip_filter.list}
