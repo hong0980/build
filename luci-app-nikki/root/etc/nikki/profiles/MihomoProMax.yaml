@@ -130,7 +130,10 @@ dns:
     - +.docker.io
     - +.market.xiaomi.com
     - +.push.apple.com
-
+  nameserver-policy:
+    "rule-set:Advertising": rcode://success
+    "rule-set:China,Direct,Private": [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
+    "rule-set:Proxy,Dev,Streaming": ['https://cloudflare-dns.com/dns-query', 'https://dns.google/dns-query']
 # ==================== 代理策略组 ====================
 proxy-groups:
   # ==================== 主要策略组 ====================
@@ -223,6 +226,7 @@ rules:
   - DOMAIN-KEYWORD,speedtest,网络测试
   - RULE-SET,Speedtest,网络测试
   - RULE-SET,Dev,开发服务
+  - RULE-SET,Streaming,国际媒体
   - RULE-SET,Twitter,推特社交
   - RULE-SET,Telegram,电报消息
   - RULE-SET,SocialMedia,社交平台
@@ -232,7 +236,6 @@ rules:
   - RULE-SET,Emby,Emby服
   - RULE-SET,Netflix,奈飞视频
   - RULE-SET,YouTube,油管视频
-  - RULE-SET,Streaming,国际媒体
   - RULE-SET,Apple,苹果服务
   - RULE-SET,Google,谷歌服务
   - RULE-SET,Microsoft,微软服务

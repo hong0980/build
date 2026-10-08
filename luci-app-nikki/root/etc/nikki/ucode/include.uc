@@ -29,24 +29,27 @@ export function trim_all(obj) {
 	return length(keys(obj)) == 0 ? null : obj;
 };
 
-export function isBinary(str) {
-	for (let off = 0, byte = ord(str); off < length(str); byte = ord(str, ++off))
-		if (byte <= 8 || (byte >= 14 && byte <= 31))
-			return true;
-
-	return false;
+export function run(cmd) {
+	const p = popen(cmd);
+	if (!p) return null;
+	const out = trim(p.read('all'));
+	p.close();
+	return out;
 };
 
 export function shellQuote(s) {
 	return `'${replace(s, "'", "'\\''")}'`;
 };
 
-export function executeCommand(infd, ...args) {
-	let outfd = mkstemp();
-	let errfd = mkstemp();
+export function isBinary(str) {
+	for (let off = 0, byte = ord(str); off < length(str); byte = ord(str, ++off))
+		if (byte <= 8 || (byte >= 14 && byte <= 31)) return true;
+	return false;
+};
 
-	if (infd)
-		push(args, `<&${infd.fileno()}`);
+export function executeCommand(infd, ...args) {
+	let outfd = mkstemp(), errfd = mkstemp();
+	if (infd) push(args, `<&${infd.fileno()}`);
 
 	const exitcode = system(`${join(' ', args)} >&${outfd.fileno()} 2>&${errfd.fileno()}`);
 
@@ -76,8 +79,7 @@ export function yqRead(flags, command, content) {
 	if (content) {
 		content = trim(content);
 		content = replace(content, /\r\n?/g, '\n');
-		if (!match(content, /\n$/))
-			content += '\n';
+		if (!match(content, /\n$/)) content += '\n';
 	}
 	infd.write(content);
 
@@ -90,7 +92,6 @@ export function yqRead(flags, command, content) {
 
 export function yqReadFile(flags, command, filepath) {
 	const out = executeCommand(null, 'yq', flags, shellQuote(command), shellQuote(filepath));
-
 	return out.stdout;
 };
 
@@ -106,14 +107,6 @@ export function get_groups() {
 	return map(split(readfile('/etc/group'), '\n'), (x) => split(x, ':')[0]);
 };
 
-export function run(cmd) {
-	const p = popen(cmd);
-	if (!p) return null;
-	const out = trim(p.read('all'));
-	p.close();
-	return out;
-};
-
 export function get_cgroups() {
 	const result = [];
 	if (get_cgroups_version() == 2) {
@@ -124,8 +117,7 @@ export function get_cgroups() {
 			const lines = split(out, '\n');
 			for (let i = 0; i < length(lines); i++) {
 				const line = trim(lines[i]);
-				if (length(line))
-					push(result, substr(line, length(cgroup_path)));
+				if (length(line)) push(result, substr(line, length(cgroup_path)));
 			}
 		}
 	}
@@ -133,7 +125,7 @@ export function get_cgroups() {
 };
 
 export function load_profile(o) {
-	let out = yqReadFile('-o json', '.', o || '/etc/nikki/run/config.yaml');
+	let out = yqReadFile('-oj', '.', o || '/etc/nikki/run/config.yaml');
 	return out ? json(out) : {};
 };
 
@@ -180,8 +172,7 @@ function convertToJsdelivr(url, domain) {
 };
 
 export function mirrorGithubUrl(url, target) {
-	if (!url)    return url;
-	if (!target) return url;
+	if (!url || !target) return url;
 
 	url = stripProxyPrefix(url);
 	url = restoreFromJsdelivr(url);
@@ -192,9 +183,9 @@ export function mirrorGithubUrl(url, target) {
 	};
 	if (target === 'raw' || target === 'github')   return url;
 	if (target === 'jsdelivr' || target === 'cdn') return convertToJsdelivr(url);
+	if (target === 'gcore')     return convertToJsdelivr(url, 'gcore.jsdelivr.net');
 	if (target === 'fastly')    return convertToJsdelivr(url, 'fastly.jsdelivr.net');
 	if (target === 'testingcf') return convertToJsdelivr(url, 'testingcf.jsdelivr.net');
-	if (target === 'gcore')     return convertToJsdelivr(url, 'gcore.jsdelivr.net');
 
 	return url;
 };
