@@ -7,13 +7,13 @@ import {
 	get_users, get_groups, get_cgroups, shellQuote as sq, run, mirrorGithubUrl, yqRead, yqReadFile, executeCommand
 } from '/etc/nikki/ucode/include.uc';
 
-const GHCACHE_TTL  = 3600;
-const uci          = cursor();
-const RUN_DIR      = '/etc/nikki/run';
-const CORE_DIR     = `${RUN_DIR}/core`;
-const CONFIG_PATH  = `${RUN_DIR}/config.yaml`;
-const CORE_SCRIPT  = '/etc/nikki/scripts/core.sh';
-const CACHE_DIR    = '/var/run/nikki/cache';
+const GHCACHE_TTL = 3600;
+const uci         = cursor();
+const RUN_DIR     = '/etc/nikki/run';
+const CORE_DIR    = `${RUN_DIR}/core`;
+const CONFIG_PATH = `${RUN_DIR}/config.yaml`;
+const CORE_SCRIPT = '/etc/nikki/scripts/core.sh';
+const CACHE_DIR   = '/var/run/nikki/cache';
 
 function load_profile(defaults) {
 	defaults = defaults ?? {};
@@ -37,8 +37,8 @@ function startDownloadTask(task_id, cmd, path) {
 };
 
 function cache_core_call(req) {
-	const core_type = req.args?.core_type;
 	const arch      = req.args?.arch;
+	const core_type = req.args?.core_type;
 
 	if (!core_type || !arch)
 		return { status: 'error', message: 'missing params' };
@@ -102,7 +102,7 @@ const methods = {
 			}
 
 			const marker = '__GH_HTTP_CODE__';
-			const api  = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`;
+			const api    = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`;
 			uci.load('nikki');
 			const GITHUB_TOKEN = uci.get('nikki', 'config', 'github_token');
 			const auth = GITHUB_TOKEN ? ` -H ${sq(`Authorization: Bearer ${GITHUB_TOKEN}`)}` : '';
@@ -114,7 +114,7 @@ const methods = {
 			if (pos < 0)
 				return { status: 'error', message: 'request failed (timeout/network)' };
 
-			const body = substr(out, 0, pos);
+			const body      = substr(out, 0, pos);
 			const http_code = substr(out, pos + length(`\n${marker}`));
 
 			if (!http_code || !match(http_code, /^[0-9]{3}$/))
@@ -136,9 +136,9 @@ const methods = {
 			catch (e) { return { status: 'error', message: 'invalid response: ' + substr(body, 0, 200) }; }
 
 			const entries = map(data, (item) => ({
-					name: item.name, path: item.path, type: item.type,
-					size: item.size, url: item.download_url, html_url: item.html_url
-				})
+				name: item.name, path: item.path, type: item.type,
+				size: item.size, url: item.download_url, html_url: item.html_url
+			})
 			);
 
 			writefile(cache_file, sprintf("%.J", { entries }));
@@ -151,7 +151,7 @@ const methods = {
 
 	test_mirror: {
 		args: { url: 'url', target: 'target' },
-		call: function(req) {
+		call: function (req) {
 			try {
 				const url    = req.args?.url;
 				const target = req.args?.target;
@@ -166,7 +166,7 @@ const methods = {
 
 				const parts = split(trim(out), ' ');
 				if (length(parts) < 2)
-					return { status: 'error', message: 'curl output invalid: [' + out + ']'};
+					return { status: 'error', message: 'curl output invalid: [' + out + ']' };
 
 				const code = parts[0];
 				const ms   = int(+parts[1] * 1000);
@@ -184,15 +184,15 @@ const methods = {
 
 	version: {
 		call: function () {
-			let app  = null, core = null;
+			let app = null, core = null;
 
 			if (access('/usr/bin/apk', 'x')) {
-				app = run(`apk list -I luci-app-nikki | sed -nr 's/.*nikki-(.*)-.*noarch.*/\\1/p'`);
+				app = trim(run(`apk list -I luci-app-nikki | sed -nr 's/.*nikki-(.*)-.*noarch.*/\\1/p'`));
 			} else if (access('/bin/opkg', 'x')) {
-				app = run(`opkg list-installed luci-app-nikki | sed -nr 's/.*nikki - (.*)-.*/\\1/p'`);
+				app = trim(run(`opkg list-installed luci-app-nikki | sed -nr 's/.*nikki - (.*)-.*/\\1/p'`));
 			};
 
-			core = run(`/etc/nikki/run/mihomo -v | grep Mihomo | cut -d " " -f 3`);
+			core = trim(run(`/etc/nikki/run/mihomo -v | grep Mihomo | cut -d " " -f 3`));
 			return { app, core };
 		}
 	},
@@ -200,9 +200,9 @@ const methods = {
 	core_version: {
 		args: { mode: 'mode' },
 		call: function (req) {
-			const mode  = req.args?.mode;
-			let core    = `/etc/nikki/run/core/${mode}-mihomo`;
-			if (mode === 'meta' && !access(core)) core = '/usr/bin/mihomo';
+			const mode = req.args?.mode;
+			let core   = `${CORE_DIR}/${mode}-mihomo`;
+			if (mode == 'meta' && !access(core)) core = '/usr/bin/mihomo';
 			const version = access(core, 'x') ? trim(run(`${core} -v | grep Mihomo | cut -d " " -f 3`)) : null;
 			return { version };
 		}
@@ -248,8 +248,8 @@ const methods = {
 		args: { url: 'url', path: 'path', filename: 'filename', task_id: 'task_id' },
 		call: function (req) {
 			const url      = req.args?.url;
-			let   path     = req.args?.path;
-			let   task_id  = req.args?.task_id;
+			let path       = req.args?.path;
+			let task_id    = req.args?.task_id;
 			const filename = req.args?.filename;
 
 			if (!url || !path) return { status: 'error', message: 'missing url/path' };
@@ -263,7 +263,7 @@ const methods = {
 
 	check_download: {
 		args: { task_id: 'task_id', path: 'path' },
-		call: function(req) {
+		call: function (req) {
 			const task_id   = req.args?.task_id;
 			const final_out = req.args?.path;
 
@@ -335,8 +335,8 @@ const methods = {
 
 	api: {
 		args: { method: 'method', path: 'path', query: 'query', body: 'body' },
-		call: function(req) {
-			const profile   = load_profile({
+		call: function (req) {
+			const profile = load_profile({
 				'secret':                  null,
 				'external-controller':     null,
 				'external-controller-tls': null
@@ -349,7 +349,7 @@ const methods = {
 				return { message: 'not found: listen', status: 'error' };
 
 			const protocol = https ? 'https' : 'http';
-			let url = (https || http) + (req.args?.path || '/');
+			let url      = (https || http) + (req.args?.path || '/');
 			const body   = req.args?.body;
 			const query  = req.args?.query;
 			const method = req.args?.method || 'GET';
@@ -362,7 +362,7 @@ const methods = {
 
 			const proc = popen(cmd, 'r');
 			if (!proc) return { message: 'popen failed', status: 'error' };
-			const out = proc.read('all') || '';
+			const out  = proc.read('all') || '';
 			const code = proc.close();
 
 			if (code == 28)
@@ -372,8 +372,7 @@ const methods = {
 				return { message: 'curl failed (exit ' + code + ')', status: 'error' };
 
 			const marker = '__HTTP_CODE__:';
-			const idx = index(out, marker, true);
-
+			const idx    = index(out, marker, true);
 			let bodyText = out, httpCode = 0;
 
 			if (idx !== -1) {
@@ -412,7 +411,7 @@ const methods = {
 
 	json2yaml: {
 		args: { content: 'content' },
-		call: function(req) {
+		call: function (req) {
 			const content = req.args?.content;
 			if (!content) return { result: '' };
 			const out = trim(yqRead('-Poy', '.', content));
@@ -422,7 +421,7 @@ const methods = {
 
 	yaml2json: {
 		args: { content: 'content' },
-		call: function(req) {
+		call: function (req) {
 			const content = req.args?.content;
 			if (!content) return { result: {} };
 			const out = trim(yqRead('-Poj', '.', content));
@@ -441,7 +440,7 @@ const methods = {
 	},
 
 	switch_core: {
-		args: { core_type: 'core_type', arch: 'arch'},
+		args: { core_type: 'core_type', arch: 'arch' },
 		call: function (req) {
 			const arch      = req.args?.arch;
 			const core_type = req.args?.core_type;
@@ -454,7 +453,7 @@ const methods = {
 				final_out = '/usr/bin/mihomo';
 
 			if (!access(final_out)) {
-				const cache = cache_core_call({ args: { core_type, arch} });
+				const cache = cache_core_call({ args: { core_type, arch } });
 				if (!cache || cache.status == 'error')
 					return { status: 'error', message: cache?.message || `cached binary not found: ${final_out}` };
 				return cache;
@@ -470,7 +469,7 @@ const methods = {
 	},
 
 	cache_core: {
-		args: { core_type: 'core_type', arch: 'arch'},
+		args: { core_type: 'core_type', arch: 'arch' },
 		call: cache_core_call
 	}
 };

@@ -3,21 +3,20 @@ import { cursor } from 'uci';
 import { qs, uci_bool, uci_int, load_profile, mirrorGithubUrl, yqReadFile } from '/etc/nikki/ucode/include.uc';
 
 const uci = cursor();
-const gc = (o) => uci.get('nikki', 'config', o);
-const gm = (o) => uci.get('nikki', 'mixin', o);
-const bc = (o) => uci_bool(gc(o));
-const im = (o) => uci_int(gm(o));
+const gc = o => uci.get('nikki', 'config', o);
+const gm = o => uci.get('nikki', 'mixin', o);
+const bc = o => uci_bool(gc(o));
+const im = o => uci_int(gm(o));
 
 const file = getenv('profile_path');
 if (!access(file)) exit(1);
 
-const exprs = [];
+const exprs  = [];
 const config = load_profile(file);
 const target = gm('github_mirror');
 
 function addMirror(path, val) {
-	if (val && type(val) == 'string')
-		push(exprs, `${path} = "${mirrorGithubUrl(val, target)}"`);
+	if (val && type(val) == 'string') push(exprs, `${path} = "${mirrorGithubUrl(val, target)}"`);
 };
 
 function pgs(k) {
@@ -29,17 +28,6 @@ function pgs(k) {
 			((select($t != "" and ${k}) | .tolerance = ($t | tonumber)) // .) |
 			((select($m != "" and ${k}) | .["max-failed-times"] = ($m | tonumber)) // .)`;
 };
-
-push(exprs, `
-	.rule-providers |= ((. // {}) | sort_keys(.) | map_values(
-		(.url | capture("(?P<ext>\\.[^.]+)$").ext // "") as $q |
-		(.path // "./rule_provider/" + key + $q) as $p |
-		((select($p != "") | .path = $p) // .)
-	) // .) |
-	.dns |= ((select(.respect-rules == true and (has("proxy-server-nameserver") | not)) |
-		.proxy-server-nameserver = ["https://doh.pub/dns-query", "https://dns.alidns.com/dns-query"]
-	) // .)
-`);
 
 const core = gc('core');
 const ugbm = bc('uselightgbm');
@@ -69,32 +57,52 @@ if (match(core, /smart/) && ugbm) {
 			)
 		)
 	`);
-} else {
-	push(exprs, `
-		(${gm('lazy')}     // "") as $l | (${gm('tolerance')}        // "") as $t |
-		(${gm('timeout')}  // "") as $o | (${qs(gm('urltest_url'))}  // "") as $u |
-		(${gm('interval')} // "") as $i | (${gm('max_failed_times')} // "") as $m |
-		(.. | select(tag == "!!map")) |= (${pgs('$x')}) | .["proxy-groups"] |= map(${pgs('$y')})
-	`);
 };
 
 if (target) {
 	addMirror('.external-ui-url', config['external-ui-url']);
-	let geox = config['geox-url'];
+	const geox = config['geox-url'];
 	for (let k in keys(geox)) addMirror(`.geox-url["${k}"]`, geox[k]);
 
-	let groups = config['proxy-groups'];
+	const groups = config['proxy-groups'];
 	for (let i = 0; i < length(groups); i++) {
 		let g = groups[i];
 		if (g) addMirror(`.proxy-groups[${i}].icon`, g.icon);
-	}
+	};
 
-	let providers = config['rule-providers'];
+	const providers = config['rule-providers'];
 	for (let k in keys(providers)) {
 		let p = providers[k];
 		if (p) addMirror(`.rule-providers["${k}"].url`, p.url);
-	}
+	};
 };
+
+if (gm('fake_ip_filter_mode') == 'rule') {
+	const filter = config.dns['fake-ip-filter'];
+	if (filter) {
+		for (let i = 0; i < length(filter); i++) {
+			const g = filter[i];
+			if (match(g, /,(fake-ip|real-ip)$/i)) continue;
+			const action = match(g, /^MATCH/i) ? 'fake-ip' : 'real-ip';
+			push(exprs, `.dns.fake-ip-filter[${i}] = ${qs(`${g},${action}`)}`);
+		};
+	} else push(exprs, `.dns.fake-ip-filter-mode = ${qs('blacklist')}`);
+};
+
+push(exprs, `
+	.rule-providers |= ((. // {}) | sort_keys(.) | map_values(
+		(.url | capture("(?P<ext>\\.[^.]+)$").ext // "") as $q |
+		(.path // "./rule_provider/" + key + $q) as $p |
+		((select($p != "") | .path = $p) // .)
+	) // .) |
+	.dns |= ((select(.respect-rules == true and (has("proxy-server-nameserver") | not)) |
+		.proxy-server-nameserver = ["https://doh.pub/dns-query", "https://dns.alidns.com/dns-query"]
+	) // .) |
+	(${gm('lazy')}     // "") as $l | (${gm('tolerance')}        // "") as $t |
+	(${gm('timeout')}  // "") as $o | (${qs(gm('urltest_url'))}  // "") as $u |
+	(${gm('interval')} // "") as $i | (${gm('max_failed_times')} // "") as $m |
+	(.. | select(tag == "!!map")) |= (${pgs('$x')}) | .["proxy-groups"] |= map(${pgs('$y')})
+`);
 
 if (bc('url_enabled')) {
 	let idx = 0;
@@ -103,7 +111,7 @@ if (bc('url_enabled')) {
 	const hc_url = gm('urltest_url') || 'https://cp.cloudflare.com/generate_204';
 	const filter = '^(?!.*(群|邀请|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|备用|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|国内|地址|频道|无法|说明|使用|提示|特别|访问|支持|教程|关注|更新|作者|加入|剩余|套餐|重置|域名|USE|USED|TOTAL|EXPIRE|EMAIL|Panel|Channel|Author))';
 	const providers = keys(config['proxy-providers'] || {});
-	uci.foreach('nikki', 'subscription', (s) => {
+	uci.foreach('nikki', 'subscription', s => {
 		if (!uci_bool(s.enabled)) return;
 		const k = providers[idx++];
 		const name = s.name || split(split(s.url, '/')[2] ?? '', '.')[0] || `provider${idx}`;
@@ -133,8 +141,8 @@ if (bc('url_enabled')) {
 	for (let j = 0; j < length(providers); j++) {
 		const k = providers[j];
 		if (!used[k]) push(exprs, `del(.proxy-providers[${qs(k)}])`);
-	}
+	};
 };
 
-let yqExpr = join(' | ', exprs);
+const yqExpr = join(' | ', exprs);
 yqReadFile('-i', yqExpr, file);
