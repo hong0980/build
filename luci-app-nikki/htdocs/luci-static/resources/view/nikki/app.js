@@ -607,7 +607,7 @@ return view.extend({
 
         for (const p of profiles) o.value('file:' + p.name, _('File:') + p.name);
         uci.sections('nikki', 'subscription', function (s, sid) {
-            if (subfiles.length > 0) o.value('subscription:' + s['.name'], _('Subscription:') + s.name);
+            if (subfiles.length > 0 && s.update) o.value('subscription:' + s['.name'], _('Subscription:') + s.name);
         });
 
         attachFileEditorButton(o, (value) => {
