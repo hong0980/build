@@ -2,10 +2,11 @@
 	"luci-app-miaplus": {
 		"description": "Grant UCI access for luci-app-miaplus",
 		"read": {
-				"file": {
-					"/usr/sbin/nft": [ "exec"],
-					"/usr/sbin/iptables": [ "exec"]
-				},
+			"file": {
+				"/usr/sbin/nft": [ "exec"],
+				"/usr/sbin/iptables": [ "exec"],
+				"/usr/sbin/ip6tables": [ "exec"]
+			},
 			"uci": [ "miaplus" ]
 		},
 		"write": {
