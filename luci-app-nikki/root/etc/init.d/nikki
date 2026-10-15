@@ -4,7 +4,6 @@ START=99
 STOP=10
 USE_PROCD=1
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
-CR=/etc/crontabs/root
 
 extra_command 'clear_logs' 'Clear logs if size exceeds the limit'
 extra_command 'update_subscription' 'Update subscription by section id'
@@ -119,10 +118,10 @@ start_service() {
 			if yq -e '
 				(.tun.route-exclude-address-set // [] | length == 0) and (.tun.route-address-set // [] | length == 0)
 			' "$temp_config" >/dev/null 2>&1; then
-				yq -Mi '(.tun) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$temp_config"
+				yq -Mi '(.tun) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false)' "$temp_config"
 			fi
 			if yq 'has("listeners")' "$temp_config" >/dev/null 2>&1; then
-				yq -Mi '(.listeners[] | select(.type == "tun")) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false | .disable-icmp-forwarding = true)' "$temp_config"
+				yq -Mi '(.listeners[] | select(.type == "tun")) |= (.auto-route = false | .auto-redirect = false | .auto-detect-interface = false)' "$temp_config"
 			fi
 
 			local tcp_mode udp_mode ipv4_dns_hijack ipv6_dns_hijack
@@ -244,7 +243,7 @@ start_service() {
 
 	procd_close_instance
 
-	local log_scheduled_clear log_scheduled_clear_cron scheduled_restart scheduled_restart_cron reload_cron=0
+	local log_scheduled_clear log_scheduled_clear_cron scheduled_restart scheduled_restart_cron
 	config_get      log_scheduled_clear_cron  log scheduled_clear_cron
 	config_get_bool log_scheduled_clear       log scheduled_clear 0
 	config_get      scheduled_restart_cron config scheduled_restart_cron
@@ -253,26 +252,23 @@ start_service() {
 	grep -q "#nikki" "$CR" && sed -i '/#nikki/d' "$CR"
 	if [ "$scheduled_restart" = 1 -a -n "$scheduled_restart_cron" ]; then
 		log "App" "Set scheduled restart."
-		echo "$scheduled_restart_cron /etc/init.d/nikki restart #nikki scheduled restart" >> "$CR"
-		reload_cron=1
+		echo "$scheduled_restart_cron /etc/init.d/nikki restart #nikki_restart" >> "$CR"
 	fi
 	if [ "$log_scheduled_clear" = 1 -a -n "$log_scheduled_clear_cron" ]; then
 		log "App" "Set log scheduled clear."
-		echo "$log_scheduled_clear_cron /etc/init.d/nikki clear_logs #nikki log scheduled clear" >> "$CR"
-		reload_cron=1
+		echo "$log_scheduled_clear_cron /etc/init.d/nikki clear_logs #nikki_log_clear" >> "$CR"
 	fi
 
 	auto_update() {
 		local cfg="$1" enable hour time week mode interval cmd
 		config_get_bool enable "$cfg" auto_update 0
 		[ "$enable" = '1' ] || return
-		reload_cron=1
 		config_get hour     "$cfg" hour 10
 		config_get time     "$cfg" time 10
 		config_get week     "$cfg" week '*'
 		config_get mode     "$cfg" mode 1
 		config_get interval "$cfg" interval 30
-		cmd="/etc/init.d/nikki update_subscription $cfg #nikki update_subscription"
+		cmd="/etc/init.d/nikki update_subscription $cfg #nikki_update_subscription"
 
 		if [ "$mode" = '1' ]; then
 			echo "$time $hour $week * * $cmd" >> "$CR"
@@ -302,7 +298,6 @@ start_service() {
 		fi
 	}
 	config_foreach auto_update subscription
-	[ "$reload_cron" = 1 ] && /etc/init.d/cron restart
 	touch "$STARTED_FLAG_PATH"
 }
 
@@ -487,11 +482,6 @@ cleanup() {
 	if rm "$BRIDGE_NF_CALL_IP6TABLES_FLAG_PATH" > /dev/null 2>&1; then
 		sysctl -q -w net.bridge.bridge-nf-call-ip6tables=1
 	fi
-
-	grep -q "#nikki" "$CR" && {
-		sed -i "/#nikki/d" "$CR" > /dev/null 2>&1
-		/etc/init.d/cron restart
-	}
 }
 
 clear_logs() {

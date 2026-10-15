@@ -61,13 +61,16 @@ const cfg  = {
 		"ech-key":             g('api_tls_ech_key')
 	},
 	'tun': {
-		"enable":              b('tun_enabled'),
-		"gso":                 b('tun_gso'),
 		"mtu":                 i('tun_mtu'),
+		"gso":                 b('tun_gso'),
 		"stack":               g('tun_stack'),
 		"device":              g('tun_device'),
+		"enable":              b('tun_enabled'),
 		"gso-max-size":        i('tun_gso_max_size'),
-		"dns-hijack":          b('tun_dns_hijack') ? a('tun_dns_hijacks') : ''
+		"strict-route":        b('strict_route'),
+		"dns-hijack":          b('tun_dns_hijack') ? a('tun_dns_hijacks') : '',
+		"disable-icmp-forwarding":  b('tun_disable_icmp_forwarding'),
+		"endpoint-independent-nat": b('tun_endpoint_independent_nat')
 	},
 	'sniffer': {
 		"sniff":               {},

@@ -504,6 +504,7 @@ return view.extend({
 
         o = s.taboption('tun', form.Value, 'tun_device', _('Device Name'));
         o.placeholder = _('Unmodified');
+        o.depends('tun_enabled', '1');
 
         o = s.taboption('tun', form.RichListValue, 'tun_stack', _('Stack'), _('stack'));
         o.optional = true;
@@ -512,30 +513,59 @@ return view.extend({
         o.value('gvisor', _('gVisor'), _('Based on google/gvisor.'));
         o.value('mixed', _('Mixed'), _('Mixed <code>system</code> TCP stack and <code>gVisor</code> UDP stack.'));
         o.value('mips', _('mihomo IP stack (MIPS)'));
+        o.depends('tun_enabled', '1');
 
         o = s.taboption('tun', form.Value, 'tun_mtu', _('MTU'), _('mtu'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
+        o.depends('tun_enabled', '1');
 
         o = s.taboption('tun', form.ListValue, 'tun_gso', _('GSO'), _('gso'));
         o.optional = true;
         o.placeholder = _('Unmodified');
         o.value('0', _('Disable'));
         o.value('1', _('Enable'));
+        o.depends('tun_enabled', '1');
 
         o = s.taboption('tun', form.Value, 'tun_gso_max_size', _('GSO Max Size'), _('gso-max-size'));
         o.datatype = 'uinteger';
         o.placeholder = _('Unmodified');
+        o.depends('tun_enabled', '1');
+
+        o = s.taboption('tun', form.ListValue, 'tun_endpoint_independent_nat',
+            _('启用独立于端点的 NAT'));
+        o.optional = true;
+        o.placeholder = _('Unmodified');
+        o.value('0', _('Disable'));
+        o.value('1', _('Enable'));
+        o.depends('tun_enabled', '1');
+
+        o = s.taboption('tun', form.ListValue, 'tun_disable_icmp_forwarding', _('ICMP 转发'),
+            _('防止某些情况下的 ICMP 环回问题，ping 将不会显示真实的延迟'));
+        o.optional = true;
+        o.placeholder = _('Unmodified');
+        o.value('0', _('Disable'));
+        o.value('1', _('Enable'));
+        o.depends('tun_enabled', '1');
+
+        o = s.taboption('tun', form.ListValue, 'strict_route', _('连接 tun '),
+            _('将所有连接路由到 tun 来防止泄漏，但你的设备将无法其他设备被访问'));
+        o.optional = true;
+        o.placeholder = _('Unmodified');
+        o.value('0', _('Disable'));
+        o.value('1', _('Enable'));
+        o.depends('tun_enabled', '1');
 
         o = s.taboption('tun', form.Flag, 'tun_dns_hijack', _('Overwrite DNS Hijack'));
         o.rmempty = false;
+        o.depends('tun_enabled', '1');
 
         o = s.taboption('tun', form.DynamicList, 'tun_dns_hijacks', _('Edit DNS Hijacks'), _('dns-hijack'));
         o.retain = true;
         o.depends('tun_dns_hijack', '1');
         o.value('tcp://any:53');
         o.value('any:53');
-
+        o.depends('tun_enabled', '1');
 
         o = s.taboption('dns', form.ListValue, 'dns_enabled', _('Enable'));
         o.optional = true;

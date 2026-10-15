@@ -89,21 +89,6 @@ if (gm('fake_ip_filter_mode') == 'rule') {
 	} else push(exprs, `.dns.fake-ip-filter-mode = ${qs('blacklist')}`);
 };
 
-push(exprs, `
-	.rule-providers |= ((. // {}) | sort_keys(.) | map_values(
-		(.url | capture("(?P<ext>\\.[^.]+)$").ext // "") as $q |
-		(.path // "./rule_provider/" + key + $q) as $p |
-		((select($p != "") | .path = $p) // .)
-	) // .) |
-	.dns |= ((select(.respect-rules == true and (has("proxy-server-nameserver") | not)) |
-		.proxy-server-nameserver = ["https://doh.pub/dns-query", "https://dns.alidns.com/dns-query"]
-	) // .) |
-	(${gm('lazy')}     // "") as $l | (${gm('tolerance')}        // "") as $t |
-	(${gm('timeout')}  // "") as $o | (${qs(gm('urltest_url'))}  // "") as $u |
-	(${gm('interval')} // "") as $i | (${gm('max_failed_times')} // "") as $m |
-	(.. | select(tag == "!!map")) |= (${pgs('$x')}) | .["proxy-groups"] |= map(${pgs('$y')})
-`);
-
 if (bc('url_enabled')) {
 	let idx = 0;
 	const used = {};
@@ -143,6 +128,23 @@ if (bc('url_enabled')) {
 		if (!used[k]) push(exprs, `del(.proxy-providers[${qs(k)}])`);
 	};
 };
+
+push(exprs, `
+	.rule-providers |= ((. // {}) | sort_keys(.) | map_values(
+		(.url | capture("(?P<ext>\\.[^.]+)$").ext // "") as $q |
+		(.path // "./rule_provider/" + key + $q) as $p |
+		((select($p != "") | .path = $p) // .)
+	) // .) |
+	.dns |= ((select(.respect-rules == true and (has("proxy-server-nameserver") | not)) |
+		.proxy-server-nameserver = ["https://doh.pub/dns-query", "https://dns.alidns.com/dns-query"]
+	) // .) |
+	(${gm('lazy')}     // "") as $l | (${gm('tolerance')}        // "") as $t |
+	(${gm('timeout')}  // "") as $o | (${qs(gm('urltest_url'))}  // "") as $u |
+	(${gm('interval')} // "") as $i | (${gm('max_failed_times')} // "") as $m |
+	(.. | select(tag == "!!map")) |= (${pgs('$x')}) | .["proxy-groups"] |= map(${pgs('$y')}) |
+	(.. | select(tag == "!!str")) style="double" |
+	 .. |= map_values(key |= (select(tag == "!!str" and test("[.,:]")) | . style="double") // .)
+`);
 
 const yqExpr = join(' | ', exprs);
 yqReadFile('-i', yqExpr, file);
