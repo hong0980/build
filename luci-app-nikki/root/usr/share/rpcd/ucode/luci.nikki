@@ -347,15 +347,14 @@ const methods = {
 
 			if (!http && !https)
 				return { message: 'not found: listen', status: 'error' };
-
-			const protocol = https ? 'https' : 'http';
-			let url      = (https || http) + (req.args?.path || '/');
+			const base   = replace(https || http, /(0\.0\.0\.0|\[::\]|::|localhost)/, '127.0.0.1');
+			let url      = base + (req.args?.path || '/');
 			const body   = req.args?.body;
 			const query  = req.args?.query;
 			const method = req.args?.method || 'GET';
 
 			if (query) url += (index(url, '?') !== -1 ? '&' : '?') + query;
-			let cmd = `curl -sSk --max-time 10 --proto-default ${protocol} -X ${method} -H ${sq(`Authorization: Bearer ${secret}`)}`;
+			let cmd = `curl -sSkg --noproxy '*' --max-time 10 -X ${method} -H ${sq('Authorization: Bearer ' + secret)} --interface lo`;
 
 			if (body) cmd += ` -H ${sq('Content-Type: application/json')} -d ${sq(body)}`;
 			cmd += ` -w ${sq('__HTTP_CODE__:%{http_code}')} ${sq(url)} 2>/dev/null`;
@@ -367,14 +366,12 @@ const methods = {
 
 			if (code == 28)
 				return { message: 'Request timeout', status: 'error' };
-
 			if (!out && code != 0)
 				return { message: 'curl failed (exit ' + code + ')', status: 'error' };
 
 			const marker = '__HTTP_CODE__:';
 			const idx    = index(out, marker, true);
 			let bodyText = out, httpCode = 0;
-
 			if (idx !== -1) {
 				bodyText = trim(substr(out, 0, idx));
 				httpCode = +trim(substr(out, idx + length(marker))) || 0;
@@ -388,7 +385,6 @@ const methods = {
 				try { data = json(bodyText); }
 				catch (e) { data = bodyText; }
 			}
-
 			return { success: true, status: httpCode, data, message: null };
 		}
 	},

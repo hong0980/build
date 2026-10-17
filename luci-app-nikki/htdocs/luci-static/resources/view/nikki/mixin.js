@@ -565,7 +565,6 @@ return view.extend({
         o.depends('tun_dns_hijack', '1');
         o.value('tcp://any:53');
         o.value('any:53');
-        o.depends('tun_enabled', '1');
 
         o = s.taboption('dns', form.ListValue, 'dns_enabled', _('Enable'));
         o.optional = true;

@@ -77,15 +77,18 @@ if (target) {
 	};
 };
 
-if (gm('fake_ip_filter_mode') == 'rule') {
+if (config.dns['fake-ip-filter-mode'] == 'rule') {
 	const filter = config.dns['fake-ip-filter'];
 	if (filter) {
+		let hasMatch;
 		for (let i = 0; i < length(filter); i++) {
 			const g = filter[i];
+			hasMatch = match(g, /^MATCH/i);
 			if (match(g, /,(fake-ip|real-ip)$/i)) continue;
-			const action = match(g, /^MATCH/i) ? 'fake-ip' : 'real-ip';
+			const action = hasMatch ? 'fake-ip' : 'real-ip';
 			push(exprs, `.dns.fake-ip-filter[${i}] = ${qs(`${g},${action}`)}`);
 		};
+		if (!hasMatch) push(exprs, `.dns.fake-ip-filter[${length(filter)}] = ${qs('MATCH,fake-ip')}`);
 	} else push(exprs, `.dns.fake-ip-filter-mode = ${qs('blacklist')}`);
 };
 

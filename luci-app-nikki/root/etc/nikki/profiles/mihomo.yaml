@@ -34,6 +34,8 @@ rule-anchor:
   Dy: &Dy {type: http, interval: 86400, behavior: domain,    format: yaml}
   Ct: &Ct {type: http, interval: 86400, behavior: classical, format: text}
   Cy: &Cy {type: http, interval: 86400, behavior: classical, format: yaml}
+  pu: &pu [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
+  go: &go [https://cloudflare-dns.com/dns-query, https://dns.google/dns-query]
 
 proxy-providers:
   HH: {<<: *P, url: "订阅URL"}
@@ -82,8 +84,7 @@ tun:
   auto-route: true
   auto-redirect: true
   auto-detect-interface: true
-  # route-exclude-address-set:
-  #   - cn_ip
+  route-exclude-address-set: [cnIP]
 
 sniffer:
   enable: true
@@ -103,14 +104,14 @@ dns:
   fake-ip-range: 198.18.0.0/16
   fake-ip-filter-mode: rule
   default-nameserver: [223.5.5.5, 223.6.6.6]
-  direct-nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
-  proxy-server-nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
+  direct-nameserver: *pu
+  proxy-server-nameserver: *pu
   nameserver-policy:
     "rule-set:ads": rcode://success
-    "rule-set:cn,Private,Direct": [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
-    "rule-set:cn!": [https://cloudflare-dns.com/dns-query, https://dns.google/dns-query]
-  nameserver: [https://cloudflare-dns.com/dns-query, https://dns.google/dns-query]
-  fallback: [https://cloudflare-dns.com/dns-query, https://dns.google/dns-query]
+    "rule-set:cn,Private,Direct": *pu
+    "rule-set:cn!": *go
+  nameserver: *go
+  fallback: *go
   fallback-filter:
     geoip: true
     geoip-code: CN

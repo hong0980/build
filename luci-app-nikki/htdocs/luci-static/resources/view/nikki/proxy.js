@@ -3,32 +3,34 @@
 'require view';
 'require uci';
 'require network';
-'require tools.widgets as widgets';
+'require tools.firewall as fwtool';
 'require tools.nikki as nikki';
 
 return view.extend({
     load: function () {
         return Promise.all([
-            uci.load('nikki'),
             network.getHostHints(),
             network.getNetworks(),
             nikki.getIdentifiers(),
+            uci.load('nikki'),
         ]);
     },
     render: function (data) {
-        const hosts = data[1].hosts;
-        const networks = data[2];
-        const users = data[3]?.users ?? [];
-        const groups = data[3]?.groups ?? [];
-        const cgroups = data[3]?.cgroups ?? [];
-
         let m, s, o, so;
+        const hosts    = data[0].hosts;
+        const networks = data[1];
+        const users    = data[2]?.users ?? [];
+        const groups   = data[2]?.groups ?? [];
+        const cgroups  = data[2]?.cgroups ?? [];
 
         m = new form.Map('nikki');
-
         s = m.section(form.NamedSection, 'proxy', 'proxy', _('Proxy Config'));
 
         s.tab('proxy', _('Proxy Config'));
+        s.tab('router', _('Router Proxy'));
+        s.tab('lan', _('LAN Proxy'));
+        s.tab('bypass', _('Bypass'));
+        s.tab('misc', _('Misc'));
 
         o = s.taboption('proxy', form.Flag, 'enabled', _('Enable'));
         o.rmempty = false;
@@ -61,8 +63,6 @@ return view.extend({
         o = s.taboption('proxy', form.Flag, 'fake_ip_ping_hijack', _('Fake-IP Ping Hijack'));
         o.rmempty = false;
 
-        s.tab('router', _('Router Proxy'));
-
         o = s.taboption('router', form.Flag, 'router_proxy', _('Enable'));
         o.rmempty = false;
 
@@ -79,30 +79,19 @@ return view.extend({
         so.rmempty = false;
 
         so = o.subsection.option(form.DynamicList, 'user', _('User'));
-
-        for (const user of users) {
-            so.value(user);
-        };
+        for (const user of users) so.value(user);
 
         so = o.subsection.option(form.DynamicList, 'group', _('Group'));
-
-        for (const group of groups) {
-            so.value(group);
-        };
+        for (const group of groups) so.value(group);
 
         so = o.subsection.option(form.DynamicList, 'cgroup', _('CGroup'));
-
-        for (const cgroup of cgroups) {
-            so.value(cgroup);
-        };
+        for (const cgroup of cgroups) so.value(cgroup);
 
         so = o.subsection.option(form.Flag, 'dns', _('DNS'));
         so.rmempty = false;
 
         so = o.subsection.option(form.Flag, 'proxy', _('Proxy'));
         so.rmempty = false;
-
-        s.tab('lan', _('LAN Proxy'));
 
         o = s.taboption('lan', form.Flag, 'lan_proxy', _('Enable'));
         o.rmempty = false;
@@ -111,11 +100,8 @@ return view.extend({
         o.retain = true;
         o.rmempty = false;
         o.depends('lan_proxy', '1');
-
         for (const network of networks) {
-            if (network.getName() === 'loopback') {
-                continue;
-            }
+            if (network.getName() === 'loopback') continue;
             o.value(network.getName());
         }
 
@@ -131,44 +117,32 @@ return view.extend({
         so.default = '1';
         so.rmempty = false;
 
-        so = o.subsection.option(form.DynamicList, 'ip', 'IP');
-        so.datatype = 'ip4addr';
+        so = o.subsection.option(form.DynamicList, 'mac', 'MAC');
+        so.datatype = 'macaddr';
+        L.sortedKeys(hosts).forEach(function(mac) {
+            so.value(mac, E([], [ mac, ' (', E('strong', {}, [
+                hosts[mac].name ||
+                L.toArray(hosts[mac].ipaddrs  || hosts[mac].ipv4)[0] ||
+                L.toArray(hosts[mac].ip6addrs || hosts[mac].ipv6)[0] ||
+                '?'
+            ]), ')' ]));
+        });
 
-        for (const mac in hosts) {
-            const host = hosts[mac];
-            for (const ip of host.ipaddrs) {
-                const hint = host.name ?? mac;
-                so.value(ip, hint ? '%s (%s)'.format(ip, hint) : ip);
-            };
-        };
+        so = o.subsection.option(form.DynamicList, 'ip', 'IP4');
+        so.datatype = 'ip4addr';
+        const [ipv4Addrs, ipv4Labels] = fwtool.transformHostHints('ipv4', hosts);
+        ipv4Addrs.forEach(ip => so.value(ip, ipv4Labels[ip]));
 
         so = o.subsection.option(form.DynamicList, 'ip6', 'IP6');
         so.datatype = 'ip6addr';
-
-        for (const mac in hosts) {
-            const host = hosts[mac];
-            for (const ip of host.ip6addrs) {
-                const hint = host.name ?? mac;
-                so.value(ip, hint ? '%s (%s)'.format(ip, hint) : ip);
-            };
-        };
-
-        so = o.subsection.option(form.DynamicList, 'mac', 'MAC');
-        so.datatype = 'macaddr';
-
-        for (const mac in hosts) {
-            const host = hosts[mac];
-            const hint = host.name ?? host.ipaddrs[0];
-            so.value(mac, hint ? '%s (%s)'.format(mac, hint) : mac);
-        };
+        const [ipv6Addrs, ipv6Labels] = fwtool.transformHostHints('ipv6', hosts);
+        ipv6Addrs.forEach(ip => so.value(ip, ipv6Labels[ip]));
 
         so = o.subsection.option(form.Flag, 'dns', _('DNS'));
         so.rmempty = false;
 
         so = o.subsection.option(form.Flag, 'proxy', _('Proxy'));
         so.rmempty = false;
-
-        s.tab('bypass', _('Bypass'));
 
         o = s.taboption('bypass', form.Flag, 'bypass_china_mainland_ip', _('Bypass China Mainland IP'));
         o.rmempty = false;
@@ -191,14 +165,6 @@ return view.extend({
 
         o = s.taboption('bypass', form.DynamicList, 'bypass_fwmark', _('Bypass FWMark'));
 
-        s.tab('misc', _('Misc'));
-
-        o = s.taboption('misc', form.DynamicList, 'reserved_ip', _('Reserved IP'));
-        o.datatype = 'ip4addr';
-
-        o = s.taboption('misc', form.DynamicList, 'reserved_ip6', _('Reserved IP6'));
-        o.datatype = 'ip6addr';
-
         o = s.taboption('misc', form.Value, 'tun_timeout', _('TUN Timeout'));
         o.datatype = 'uinteger';
         o.rmempty = false;
@@ -206,6 +172,12 @@ return view.extend({
         o = s.taboption('misc', form.Value, 'tun_interval', _('TUN Interval'));
         o.datatype = 'uinteger';
         o.rmempty = false;
+
+        o = s.taboption('misc', form.DynamicList, 'reserved_ip', _('Reserved IP'));
+        o.datatype = 'ip4addr';
+
+        o = s.taboption('misc', form.DynamicList, 'reserved_ip6', _('Reserved IP6'));
+        o.datatype = 'ip6addr';
 
         return m.render();
     }
