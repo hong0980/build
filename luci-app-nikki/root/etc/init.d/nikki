@@ -57,7 +57,7 @@ start_service() {
 		log "Profile" "Use file: %s." "$file"
 	elif [ "$type" = "subscription" ]; then
 		config_get name "$section" name
-		set -- "${SUBSCRIPTIONS_DIR}/${name}"*
+		set -- "$SUBSCRIPTIONS_DIR/$name"*
 		file="$1"
 		if [ ! -f "$file" ]; then
 			log "Profile" "Subscription file not found."
@@ -174,12 +174,13 @@ start_service() {
 	else
 		yq -Mi '
 			... comments="" | explode(.) |
-			.tun = (.tun // {})          |
-			.tun.enable = true           |
-			.tun.stack = "mixed"         |
-			.tun["auto-route"] = true    |
-			.tun["auto-redirect"] = true |
-			.tun["auto-detect-interface"] = true
+			.tun |= (
+				.enable = true        |
+				.stack = "mixed"      |
+				.auto-route = true    |
+				.auto-redirect = true |
+				.auto-detect-interface = true
+			)
 		' "$temp_config"
 	fi
 
