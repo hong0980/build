@@ -76,35 +76,48 @@
 	const cgroup_id       = uci.get('nikki', 'routing', 'cgroup_id')      ?? '0x12061206';
 	const tun_fw_umask    = fw4.hex(~tun_fw_mask    & 0xFFFFFFFF);
 	const tproxy_fw_umask = fw4.hex(~tproxy_fw_mask & 0xFFFFFFFF);
+	const lan_default    = { proxy: true, dns: true };
+	const router_default = { proxy: true, dns: true };
 
 	uci.foreach('nikki', 'router_access_control', ac => {
 		if (!ub(ac['enabled'])) return;
-		push(router_ac, {
+		const rule = {
 			dns:    ub(ac['dns']),
 			proxy:  ub(ac['proxy']),
 			user:   filter(ua(ac['user']),   x => index(users,   x) >= 0),
 			group:  filter(ua(ac['group']),  x => index(groups,  x) >= 0),
-			cgroup: filter(ua(ac['cgroup']), x => index(cgroups, x) >= 0),
-		});
+			cgroup: filter(ua(ac['cgroup']), x => index(cgroups, x) >= 0)
+		};
+		if (!length(rule.user) && !length(rule.group) && !length(rule.cgroup)) {
+			router_default.dns   = rule.dns;
+			router_default.proxy = rule.proxy;
+			return;
+		}
+		push(router_ac, rule);
 	});
-	push(router_ac, { user: [], group: [], cgroup: [], proxy: true, dns: true });
+
+	uci.foreach('nikki', 'lan_access_control', ac => {
+		if (!ub(ac['enabled'])) return;
+		const rule = {
+			ip:    ua(ac['ip']),
+			ip6:   ua(ac['ip6']),
+			mac:   ua(ac['mac']),
+			dns:   ub(ac['dns']),
+			proxy: ub(ac['proxy'])
+		};
+		if (!length(rule.ip) && !length(rule.ip6) && !length(rule.mac)) {
+			lan_default.dns   = rule.dns;
+			lan_default.proxy = rule.proxy;
+			return;
+		}
+		push(lan_ac, rule);
+	});
 
 	for (let interface in lan_inbound_interface) {
 		const status = ubus.call('network.interface', 'status', { 'interface': interface });
 		const device = status?.l3_device ?? status?.device ?? '';
 		if (device != '') push(lan_inbound_device, device);
 	};
-	uci.foreach('nikki', 'lan_access_control', ac => {
-		if (!ub(ac['enabled'])) return;
-		push(lan_ac, {
-			ip:    ua(ac['ip']),
-			ip6:   ua(ac['ip6']),
-			mac:   ua(ac['mac']),
-			dns:   ub(ac['dns']),
-			proxy: ub(ac['proxy'])
-		});
-	});
-	push(lan_ac, { ip: [], ip6: [], mac: [], proxy: true, dns: true });
 
 	for (let fwmark in bypass_fwmarks) {
 		let mark, mask = '0xFFFFFFFF';
@@ -200,112 +213,100 @@ table inet nikki {
 		{% if (length(dns_hijack_nfproto) > 0): %}
 			chain router_dns_hijack {
 				{% for (let ac in router_ac): %}
-					{% if (length(ac['user']) == 0 && length(ac['group']) == 0 && length(ac['cgroup']) == 0): %}
-						meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
-					{% else %}
-						{% if (length(ac['user']) > 0): %}
-							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } meta skuid { {{ join(', ', ac['user']) }} } th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
-						{% endif %}
-						{% if (length(ac['group']) > 0): %}
-							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } meta skgid { {{ join(', ', ac['group']) }} } th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
-						{% endif %}
-						{% if (c_version == 2 && length(ac['cgroup']) > 0): %}
-							{% for (let cgroup in ac['cgroup']): %}
-								meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } socket cgroupv2 level {{ length(split(cgroup, '/')) }} "{{ cgroup }}" th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
-							{% endfor %}
-						{% endif %}
+					{% if (length(ac['user']) > 0): %}
+						meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } meta skuid { {{ join(', ', ac['user']) }} } th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
+					{% endif %}
+					{% if (length(ac['group']) > 0): %}
+						meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } meta skgid { {{ join(', ', ac['group']) }} } th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
+					{% endif %}
+					{% if (c_version == 2 && length(ac['cgroup']) > 0): %}
+						{% for (let cgroup in ac['cgroup']): %}
+							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } socket cgroupv2 level {{ length(split(cgroup, '/')) }} "{{ cgroup }}" th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
+						{% endfor %}
 					{% endif %}
 				{% endfor %}
+				meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } th dport 53 counter {% if (router_default['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
 			}
 		{% endif %}
 
 		{% if (tcp_mode == 'redirect'): %}
 			chain router_redirect {
 				{% for (let ac in router_ac): %}
-					{% if (length(ac['user']) == 0 && length(ac['group']) == 0 && length(ac['cgroup']) == 0): %}
-						meta nfproto @proxy_nfproto meta l4proto tcp counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
-					{% else %}
-						{% if (length(ac['user']) > 0): %}
-							meta nfproto @proxy_nfproto meta l4proto tcp meta skuid { {{ join(', ', ac['user']) }} } counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
-						{% endif %}
-						{% if (length(ac['group']) > 0): %}
-							meta nfproto @proxy_nfproto meta l4proto tcp meta skgid { {{ join(', ', ac['group']) }} } counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
-						{% endif %}
-						{% if (c_version == 2 && length(ac['cgroup']) > 0): %}
-							{% for (let cgroup in ac['cgroup']): %}
-								meta nfproto @proxy_nfproto meta l4proto tcp socket cgroupv2 level {{ length(split(cgroup, '/')) }} "{{ cgroup }}" counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
-							{% endfor %}
-						{% endif %}
+					{% if (length(ac['user']) > 0): %}
+						meta nfproto @proxy_nfproto meta l4proto tcp meta skuid { {{ join(', ', ac['user']) }} } counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
+					{% endif %}
+					{% if (length(ac['group']) > 0): %}
+						meta nfproto @proxy_nfproto meta l4proto tcp meta skgid { {{ join(', ', ac['group']) }} } counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
+					{% endif %}
+					{% if (c_version == 2 && length(ac['cgroup']) > 0): %}
+						{% for (let cgroup in ac['cgroup']): %}
+							meta nfproto @proxy_nfproto meta l4proto tcp socket cgroupv2 level {{ length(split(cgroup, '/')) }} "{{ cgroup }}" counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
+						{% endfor %}
 					{% endif %}
 				{% endfor %}
+				meta nfproto @proxy_nfproto meta l4proto tcp counter {% if (router_default['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
 			}
 		{% endif %}
 
 		{% if (tcp_mode == 'tproxy' || udp_mode == 'tproxy'): %}
 			chain router_tproxy {
 				{% for (let ac in router_ac): %}
-					{% if (length(ac['user']) == 0 && length(ac['group']) == 0 && length(ac['cgroup']) == 0): %}
+					{% if (length(ac['user']) > 0): %}
 						{% if (ac['dns']): %}
-							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } th dport 53 counter return #
+							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } meta skuid { {{ join(', ', ac['user']) }} } th dport 53 counter return #
 						{% endif %}
-						meta nfproto @proxy_nfproto meta l4proto { tcp, udp } {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} counter accept {% else %} counter return {% endif %} #
-					{% else %}
-						{% if (length(ac['user']) > 0): %}
+						meta nfproto @proxy_nfproto meta l4proto { tcp, udp } meta skuid { {{ join(', ', ac['user']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} counter accept {% else %} counter return {% endif %} #
+					{% endif %}
+					{% if (length(ac['group']) > 0): %}
+						{% if (ac['dns']): %}
+							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } meta skgid { {{ join(', ', ac['group']) }} } th dport 53 counter return #
+						{% endif %}
+						meta nfproto @proxy_nfproto meta l4proto { tcp, udp } meta skgid { {{ join(', ', ac['group']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} counter accept {% else %} counter return {% endif %} #
+					{% endif %}
+					{% if (c_version == 2 && length(ac['cgroup']) > 0): %}
+						{% for (let cgroup in ac['cgroup']): %}
 							{% if (ac['dns']): %}
-								meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } meta skuid { {{ join(', ', ac['user']) }} } th dport 53 counter return #
+								meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } socket cgroupv2 level {{ length(split(cgroup, '/')) }} "{{ cgroup }}" th dport 53 counter return #
 							{% endif %}
-							meta nfproto @proxy_nfproto meta l4proto { tcp, udp } meta skuid { {{ join(', ', ac['user']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} counter accept {% else %} counter return {% endif %} #
-						{% endif %}
-						{% if (length(ac['group']) > 0): %}
-							{% if (ac['dns']): %}
-								meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } meta skgid { {{ join(', ', ac['group']) }} } th dport 53 counter return #
-							{% endif %}
-							meta nfproto @proxy_nfproto meta l4proto { tcp, udp } meta skgid { {{ join(', ', ac['group']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} counter accept {% else %} counter return {% endif %} #
-						{% endif %}
-						{% if (c_version == 2 && length(ac['cgroup']) > 0): %}
-							{% for (let cgroup in ac['cgroup']): %}
-								{% if (ac['dns']): %}
-									meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } socket cgroupv2 level {{ length(split(cgroup, '/')) }} "{{ cgroup }}" th dport 53 counter return #
-								{% endif %}
-								meta nfproto @proxy_nfproto meta l4proto { tcp, udp } socket cgroupv2 level {{ length(split(cgroup, '/')) }} "{{ cgroup }}" {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} counter accept {% else %} counter return {% endif %} #
-							{% endfor %}
-						{% endif %}
+							meta nfproto @proxy_nfproto meta l4proto { tcp, udp } socket cgroupv2 level {{ length(split(cgroup, '/')) }} "{{ cgroup }}" {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} counter accept {% else %} counter return {% endif %} #
+						{% endfor %}
 					{% endif %}
 				{% endfor %}
+				{% if (router_default['dns']): %}
+					meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } th dport 53 counter return #
+				{% endif %}
+				meta nfproto @proxy_nfproto meta l4proto { tcp, udp } {% if (router_default['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} counter accept {% else %} counter return {% endif %} #
 			}
 		{% endif %}
 
 		{% if (tcp_mode == 'tun' || udp_mode == 'tun'): %}
 			chain router_tun {
 				{% for (let ac in router_ac): %}
-					{% if (length(ac['user']) == 0 && length(ac['group']) == 0 && length(ac['cgroup']) == 0): %}
+					{% if (length(ac['user']) > 0): %}
 						{% if (ac['dns']): %}
-							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } th dport 53 counter return #
+							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } meta skuid { {{ join(', ', ac['user']) }} } th dport 53 counter return #
 						{% endif %}
-						meta nfproto @proxy_nfproto meta l4proto { tcp, udp } {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
-					{% else %}
-						{% if (length(ac['user']) > 0): %}
+						meta nfproto @proxy_nfproto meta l4proto { tcp, udp } meta skuid { {{ join(', ', ac['user']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
+					{% endif %}
+					{% if (length(ac['group']) > 0): %}
+						{% if (ac['dns']): %}
+							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } meta skgid { {{ join(', ', ac['group']) }} } th dport 53 counter return #
+						{% endif %}
+						meta nfproto @proxy_nfproto meta l4proto { tcp, udp } meta skgid { {{ join(', ', ac['group']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
+					{% endif %}
+					{% if (c_version == 2 && length(ac['cgroup']) > 0): %}
+						{% for (let cgroup in ac['cgroup']): %}
 							{% if (ac['dns']): %}
-								meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } meta skuid { {{ join(', ', ac['user']) }} } th dport 53 counter return #
+								meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } socket cgroupv2 level {{ length(split(cgroup, '/')) }} "{{ cgroup }}" th dport 53 counter return #
 							{% endif %}
-							meta nfproto @proxy_nfproto meta l4proto { tcp, udp } meta skuid { {{ join(', ', ac['user']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
-						{% endif %}
-						{% if (length(ac['group']) > 0): %}
-							{% if (ac['dns']): %}
-								meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } meta skgid { {{ join(', ', ac['group']) }} } th dport 53 counter return #
-							{% endif %}
-							meta nfproto @proxy_nfproto meta l4proto { tcp, udp } meta skgid { {{ join(', ', ac['group']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
-						{% endif %}
-						{% if (c_version == 2 && length(ac['cgroup']) > 0): %}
-							{% for (let cgroup in ac['cgroup']): %}
-								{% if (ac['dns']): %}
-									meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } socket cgroupv2 level {{ length(split(cgroup, '/')) }} "{{ cgroup }}" th dport 53 counter return #
-								{% endif %}
-								meta nfproto @proxy_nfproto meta l4proto { tcp, udp } socket cgroupv2 level {{ length(split(cgroup, '/')) }} "{{ cgroup }}" {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
-							{% endfor %}
-						{% endif %}
+							meta nfproto @proxy_nfproto meta l4proto { tcp, udp } socket cgroupv2 level {{ length(split(cgroup, '/')) }} "{{ cgroup }}" {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
+						{% endfor %}
 					{% endif %}
 				{% endfor %}
+				{% if (router_default['dns']): %}
+					meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } th dport 53 counter return #
+				{% endif %}
+				meta nfproto @proxy_nfproto meta l4proto { tcp, udp } {% if (router_default['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
 			}
 		{% endif %}
 	{% endif %}
@@ -314,128 +315,116 @@ table inet nikki {
 		{% if (length(dns_hijack_nfproto) > 0): %}
 			chain lan_dns_hijack {
 				{% for (let ac in lan_ac): %}
-					{% if (length(ac['ip']) == 0 && length(ac['ip6']) == 0 && length(ac['mac']) == 0): %}
-						meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
-					{% else %}
-						{% if (length(ac['ip']) > 0): %}
-							{% if (ipv4_dns_hijack): %}
-								meta l4proto { tcp, udp } ip saddr { {{ join(', ', ac['ip']) }} } th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
-							{% endif %}
-						{% endif %}
-						{% if (length(ac['ip6']) > 0): %}
-							{% if (ipv6_dns_hijack): %}
-								meta l4proto { tcp, udp } ip6 saddr { {{ join(', ', ac['ip6']) }} } th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
-							{% endif %}
-						{% endif %}
-						{% if (length(ac['mac']) > 0): %}
-							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } ether saddr { {{ join(', ', ac['mac']) }} } th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
+					{% if (length(ac['ip']) > 0): %}
+						{% if (ipv4_dns_hijack): %}
+							meta l4proto { tcp, udp } ip saddr { {{ join(', ', ac['ip']) }} } th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
 						{% endif %}
 					{% endif %}
+					{% if (length(ac['ip6']) > 0): %}
+						{% if (ipv6_dns_hijack): %}
+							meta l4proto { tcp, udp } ip6 saddr { {{ join(', ', ac['ip6']) }} } th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
+						{% endif %}
+					{% endif %}
+					{% if (length(ac['mac']) > 0): %}
+						meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } ether saddr { {{ join(', ', ac['mac']) }} } th dport 53 counter {% if (ac['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
+					{% endif %}
 				{% endfor %}
+				meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } th dport 53 counter {% if (lan_default['dns']): %} redirect to :{{ dns_port }} {% else %} return {% endif %} #
 			}
 		{% endif %}
 
 		{% if (tcp_mode == 'redirect'): %}
 			chain lan_redirect {
 				{% for (let ac in lan_ac): %}
-					{% if (length(ac['ip']) == 0 && length(ac['ip6']) == 0 && length(ac['mac']) == 0): %}
-						meta nfproto @proxy_nfproto meta l4proto tcp counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} counter return {% endif %} #
-					{% else %}
-						{% if (length(ac['ip']) > 0): %}
-							{% if (ipv4_proxy): %}
-								meta l4proto tcp ip saddr { {{ join(', ', ac['ip']) }} } counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
-							{% endif %}
-						{% endif %}
-						{% if (length(ac['ip6']) > 0): %}
-							{% if (ipv6_proxy): %}
-								meta l4proto tcp ip6 saddr { {{ join(', ', ac['ip6']) }} } counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
-							{% endif %}
-						{% endif %}
-						{% if (length(ac['mac']) > 0): %}
-							meta nfproto @proxy_nfproto meta l4proto tcp ether saddr { {{ join(', ', ac['mac']) }} } counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
+					{% if (length(ac['ip']) > 0): %}
+						{% if (ipv4_proxy): %}
+							meta l4proto tcp ip saddr { {{ join(', ', ac['ip']) }} } counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
 						{% endif %}
 					{% endif %}
+					{% if (length(ac['ip6']) > 0): %}
+						{% if (ipv6_proxy): %}
+							meta l4proto tcp ip6 saddr { {{ join(', ', ac['ip6']) }} } counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
+						{% endif %}
+					{% endif %}
+					{% if (length(ac['mac']) > 0): %}
+						meta nfproto @proxy_nfproto meta l4proto tcp ether saddr { {{ join(', ', ac['mac']) }} } counter {% if (ac['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
+					{% endif %}
 				{% endfor %}
+				meta nfproto @proxy_nfproto meta l4proto tcp counter {% if (lan_default['proxy']): %} redirect to :{{ redir_port }} {% else %} return {% endif %} #
 			}
 		{% endif %}
 
 		{% if (tcp_mode == 'tproxy' || udp_mode == 'tproxy'): %}
 			chain lan_tproxy {
 				{% for (let ac in lan_ac): %}
-					{% if (length(ac['ip']) == 0 && length(ac['ip6']) == 0 && length(ac['mac']) == 0): %}
+					{% if (length(ac['ip']) > 0): %}
 						{% if (ac['dns']): %}
-							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } th dport 53 counter return #
-						{% endif %}
-						meta nfproto @proxy_nfproto meta l4proto { tcp, udp } {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} tproxy to :{{ tproxy_port }} counter accept {% else %} counter return {% endif %} #
-					{% else %}
-						{% if (length(ac['ip']) > 0): %}
-							{% if (ac['dns']): %}
-								{% if (ipv4_dns_hijack): %}
-									meta l4proto { tcp, udp } ip saddr { {{ join(', ', ac['ip']) }} } th dport 53 counter return #
-								{% endif %}
-							{% endif %}
-							{% if (ipv4_proxy): %}
-								meta l4proto { tcp, udp } ip saddr { {{ join(', ', ac['ip']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} tproxy ip to :{{ tproxy_port }} counter accept {% else %} counter return {% endif %} #
+							{% if (ipv4_dns_hijack): %}
+								meta l4proto { tcp, udp } ip saddr { {{ join(', ', ac['ip']) }} } th dport 53 counter return #
 							{% endif %}
 						{% endif %}
-						{% if (length(ac['ip6']) > 0): %}
-							{% if (ac['dns']): %}
-								{% if (ipv6_dns_hijack): %}
-									meta l4proto { tcp, udp } ip6 saddr { {{ join(', ', ac['ip6']) }} } th dport 53 counter return #
-								{% endif %}
-							{% endif %}
-							{% if (ipv6_proxy): %}
-								meta l4proto { tcp, udp } ip6 saddr { {{ join(', ', ac['ip6']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} tproxy ip6 to :{{ tproxy_port }} counter accept {% else %} counter return {% endif %} #
-							{% endif %}
-						{% endif %}
-						{% if (length(ac['mac']) > 0): %}
-							{% if (ac['dns']): %}
-								meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } ether saddr { {{ join(', ', ac['mac']) }} } th dport 53 counter return #
-							{% endif %}
-							meta nfproto @proxy_nfproto meta l4proto { tcp, udp } ether saddr { {{ join(', ', ac['mac']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} tproxy to :{{ tproxy_port }} counter accept {% else %} counter return {% endif %} #
+						{% if (ipv4_proxy): %}
+							meta l4proto { tcp, udp } ip saddr { {{ join(', ', ac['ip']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} tproxy ip to :{{ tproxy_port }} counter accept {% else %} counter return {% endif %} #
 						{% endif %}
 					{% endif %}
+					{% if (length(ac['ip6']) > 0): %}
+						{% if (ac['dns']): %}
+							{% if (ipv6_dns_hijack): %}
+								meta l4proto { tcp, udp } ip6 saddr { {{ join(', ', ac['ip6']) }} } th dport 53 counter return #
+							{% endif %}
+						{% endif %}
+						{% if (ipv6_proxy): %}
+							meta l4proto { tcp, udp } ip6 saddr { {{ join(', ', ac['ip6']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} tproxy ip6 to :{{ tproxy_port }} counter accept {% else %} counter return {% endif %} #
+						{% endif %}
+					{% endif %}
+					{% if (length(ac['mac']) > 0): %}
+						{% if (ac['dns']): %}
+							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } ether saddr { {{ join(', ', ac['mac']) }} } th dport 53 counter return #
+						{% endif %}
+						meta nfproto @proxy_nfproto meta l4proto { tcp, udp } ether saddr { {{ join(', ', ac['mac']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} tproxy to :{{ tproxy_port }} counter accept {% else %} counter return {% endif %} #
+					{% endif %}
 				{% endfor %}
+				{% if (lan_default['dns']): %}
+					meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } th dport 53 counter return #
+				{% endif %}
+				meta nfproto @proxy_nfproto meta l4proto { tcp, udp } {% if (lan_default['proxy']): %} meta mark set meta mark & {{ tproxy_fw_umask }} | {{ tproxy_fw_mark }} tproxy to :{{ tproxy_port }} counter accept {% else %} counter return {% endif %} #
 			}
 		{% endif %}
 
 		{% if (tcp_mode == 'tun' || udp_mode == 'tun'): %}
 			chain lan_tun {
 				{% for (let ac in lan_ac): %}
-					{% if (length(ac['ip']) == 0 && length(ac['ip6']) == 0 && length(ac['mac']) == 0): %}
+					{% if (length(ac['ip']) > 0): %}
 						{% if (ac['dns']): %}
-							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } th dport 53 counter return #
-						{% endif %}
-						meta nfproto @proxy_nfproto meta l4proto { tcp, udp } {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
-					{% else %}
-						{% if (length(ac['ip']) > 0): %}
-							{% if (ac['dns']): %}
-								{% if (ipv4_dns_hijack): %}
-									meta l4proto { tcp, udp } ip saddr { {{ join(', ', ac['ip']) }} } th dport 53 counter return #
-								{% endif %}
-							{% endif %}
-							{% if (ipv4_proxy): %}
-								meta l4proto { tcp, udp } ip saddr { {{ join(', ', ac['ip']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
+							{% if (ipv4_dns_hijack): %}
+								meta l4proto { tcp, udp } ip saddr { {{ join(', ', ac['ip']) }} } th dport 53 counter return #
 							{% endif %}
 						{% endif %}
-						{% if (length(ac['ip6']) > 0): %}
-							{% if (ac['dns']): %}
-								{% if (ipv6_dns_hijack): %}
-									meta l4proto { tcp, udp } ip6 saddr { {{ join(', ', ac['ip6']) }} } th dport 53 counter return #
-								{% endif %}
-							{% endif %}
-							{% if (ipv6_proxy): %}
-								meta l4proto { tcp, udp } ip6 saddr { {{ join(', ', ac['ip6']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
-							{% endif %}
-						{% endif %}
-						{% if (length(ac['mac']) > 0): %}
-							{% if (ac['dns']): %}
-								meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } ether saddr { {{ join(', ', ac['mac']) }} } th dport 53 counter return #
-							{% endif %}
-							meta nfproto @proxy_nfproto meta l4proto { tcp, udp } ether saddr { {{ join(', ', ac['mac']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
+						{% if (ipv4_proxy): %}
+							meta l4proto { tcp, udp } ip saddr { {{ join(', ', ac['ip']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
 						{% endif %}
 					{% endif %}
+					{% if (length(ac['ip6']) > 0): %}
+						{% if (ac['dns']): %}
+							{% if (ipv6_dns_hijack): %}
+								meta l4proto { tcp, udp } ip6 saddr { {{ join(', ', ac['ip6']) }} } th dport 53 counter return #
+							{% endif %}
+						{% endif %}
+						{% if (ipv6_proxy): %}
+							meta l4proto { tcp, udp } ip6 saddr { {{ join(', ', ac['ip6']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
+						{% endif %}
+					{% endif %}
+					{% if (length(ac['mac']) > 0): %}
+						{% if (ac['dns']): %}
+							meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } ether saddr { {{ join(', ', ac['mac']) }} } th dport 53 counter return #
+						{% endif %}
+						meta nfproto @proxy_nfproto meta l4proto { tcp, udp } ether saddr { {{ join(', ', ac['mac']) }} } {% if (ac['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
+					{% endif %}
 				{% endfor %}
+				{% if (lan_default['dns']): %}
+					meta nfproto @dns_hijack_nfproto meta l4proto { tcp, udp } th dport 53 counter return #
+				{% endif %}
+				meta nfproto @proxy_nfproto meta l4proto { tcp, udp } {% if (lan_default['proxy']): %} meta mark set meta mark & {{ tun_fw_umask }} | {{ tun_fw_mark }} counter accept {% else %} counter return {% endif %} #
 			}
 		{% endif %}
 	{% endif %}
