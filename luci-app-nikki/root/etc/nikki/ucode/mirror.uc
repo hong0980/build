@@ -115,6 +115,7 @@ if (bc('url_enabled')) {
 		const np = `.proxy-providers[${qs(name)}]`;
 		push(exprs, ...map([
 			['type',                       '"http"'],
+			['proxy',                      '"DIRECT"'],
 			['interval',                   86400],
 			['url',                        qs(s.url)],
 			['filter',                     qs(filter)],
