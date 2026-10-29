@@ -2,43 +2,40 @@
 'require fs';
 'require ui';
 'require uci';
-'require rpc';
 'require form';
 'require view';
 
-const callServiceList = rpc.declare({
+const callServiceStatus = L.rpc.declare({
 	object: 'service',
 	method: 'list',
 	params: ['name'],
-	expect: { '': {} },
-	filter: (data, { name }, extra) =>
-		extra.reduce((res, key) =>
-			(res && typeof res === 'object' ? res[key] : null),
-			data[name] || null
-		)
+	filter: function (data) {
+		for (const svcName in data) {
+			const svc = data[svcName];
+			if (!svc || !svc.instances) continue;
+			for (const instName in svc.instances) {
+				return !!svc.instances[instName].running;
+			}
+		}
+		return false;
+	}
 });
 
 return view.extend({
-	status: () => Promise.all([
-		callServiceList('qbittorrent', ['instances', 'instance1', 'running']).then(Boolean),
-		fs.exec_direct('/sbin/logread', ['-e', 'qbittorrent-nox'])
-			.then(r => (r.match(/(?:临时密码：|password[^\n]*:\s*)(\w{9})/g) || []).pop()?.match(/\w{9}$/)?.[0] || null),
-		uci.load('qbittorrent')
-			.then(() => uci.get('qbittorrent', 'main', 'RootProfilePath') + '/qBittorrent/config/qBittorrent.conf')
-			.then(confPath => fs.trimmed(confPath)
-				.then(content => /^WebUI\\Password_PBKDF2=\s*$/m.test(content)))
-	]),
-
 	load: function () {
 		return Promise.all([
 			fs.exec_direct('/bin/df', ['-h']),
-			fs.exec_direct('/usr/bin/env', ['HOME=/var/run/qbittorrent', '/usr/bin/qbittorrent-nox', '-v'])
-				.then(r => r.trim().split('v').pop()),
-			L.resolveDefault(this.status(), '').then(res => res),
-		])
+			uci.load('qbittorrent')
+				.then(() => uci.get('qbittorrent', 'main', 'BinaryLocation'))
+				.then(c =>
+					fs.exec_direct('/usr/bin/env', ['HOME=/var/run/qbittorrent', c || '/usr/bin/qbittorrent-nox', '-v'])
+						.then(r => r.trim().split('v').pop()),
+				),
+			callServiceStatus('qbittorrent'),
+		]);
 	},
 
-	render([diskList, version, [running, tempPassword, hasPersistentPassword]]) {
+	render([diskList, version, running]) {
 		let m, s, o;
 		const port = uci.get('qbittorrent', 'main', 'port') || '8080';
 		const statusEl = E('b', { style: `color:${running ? 'green' : 'red'}` }, [
@@ -51,22 +48,6 @@ return view.extend({
 				click: ui.createHandlerFn(this, () => open(`${location.origin}:${port}`))
 			}, _('Open Web Interface'))
 		]);
-
-		const temppasswordEL = E('div', {
-			class: 'btn cbi-button-apply', style: 'margin-left: 10px;',
-			title: _("Log in to WebUI with temporary password %s").format(tempPassword),
-			click: ui.createHandlerFn(this, () => {
-				const textarea = document.createElement('textarea');
-				textarea.value = tempPassword;
-				textarea.style.position = 'fixed';
-				textarea.style.opacity = '0';
-				document.body.appendChild(textarea);
-				textarea.select();
-				const success = document.execCommand('copy');
-				document.body.removeChild(textarea);
-				success && L.bind(ui.addTimeLimitedNotification || ui.addNotification, ui)(null, E('p', _('Password %s Copyed to clipboard').format(tempPassword)), 3000, 'info');
-			})
-		}, _("Copy <b style='color:red'>%s</b> temporary password").format(tempPassword));
 
 		m = new form.Map('qbittorrent', _('qBittorrent'),
 			'%s  %s'.format(
@@ -85,11 +66,11 @@ return view.extend({
 		s.tab("basic", _("Basic Settings"));
 		s.tab("advanced", _("Advanced Settings"));
 
-		o = s.taboption("basic", form.Flag, "EnableService", _("Enabled"))
+		o = s.taboption("basic", form.Flag, "EnableService", _("Enabled"));
 
 		o = s.taboption("basic", form.Value, "RootProfilePath", _("Root Path of the Profile"),
 			_("Specify the root path of all profiles"))
-		o.default = '/etc/qb';
+		o.default = '/etc';
 		o.rmempty = false;
 
 		o = s.taboption("basic", form.Value, "DefaultSavePath", _("Save Path"),
@@ -117,23 +98,29 @@ return view.extend({
 		o.default = '8080';
 		o.rmempty = false;
 
-		o = s.taboption("basic", form.Flag, "PasswordEnabled", _("Enable"),
-			_("Enable first login default login Username: admin Password: password"));
+		o = s.taboption("basic", form.Value, "webuser", _("web 用户名"),
+			_("如果在 WebUI 端修改过这个值并且不一致，在这里不能修改"));
+		o.default = "admin";
 		o.rmempty = false;
 
-		o = s.taboption("advanced", form.Flag, "AuthSubnetWhitelistEnabled", _("Subnet Whitelist"),
+		o = s.taboption("basic", form.Value, "webpass", _("web 密码"),
+			_("如果在 WebUI 端修改过这个值并且不一致，在这里不能修改"));
+		o.default = "adminadmin";
+		o.rmempty = false;
+
+		o = s.taboption("advanced", form.Flag, "ASWEnabled", _("Subnet Whitelist"),
 			_("Bypass authentication for clients in Whitelisted IP Subnets."));
 		o.enabled = "true";
 		o.disabled = "false";
 		o.default = o.disabled;
 		o.rmempty = false;
 
-		o = s.taboption("advanced", form.DynamicList, "AuthSubnetWhitelist", _("Whitelisted Subnets"))
+		o = s.taboption("advanced", form.DynamicList, "ASWlist", _("Whitelisted Subnets"))
 		o.placeholder = _('Example: 172.17.32.0/24, fdff:ffff:c8::/40');
 		o.datatype = "ipaddr";
-		o.depends("AuthSubnetWhitelistEnabled", "true");
+		o.depends("ASWEnabled", "true");
 
-		o = s.taboption("advanced", form.Flag, "PortForwardingEnabled", _("Use UPnP for WebUI"),
+		o = s.taboption("advanced", form.Flag, "PFEnabled", _("Use UPnP for WebUI"),
 			_("Using the UPnP / NAT-PMP port of the router for connecting to WebUI."));
 		o.enabled = "true";
 		o.disabled = "false";
@@ -147,7 +134,7 @@ return view.extend({
 		o.default = o.enabled;
 		o.rmempty = false;
 
-		o = s.taboption('advanced', form.Flag, 'Enabled', _('Enable Log'),
+		o = s.taboption('advanced', form.Flag, 'logEnabled', _('Enable Log'),
 			_('Enable logger to log file.'));
 		o.enabled = 'true';
 		o.disabled = 'false';
@@ -156,22 +143,19 @@ return view.extend({
 
 		o = s.taboption('advanced', form.Value, 'Path', _('Log Path'),
 			_("Modify the path to save log files"));
-		o.depends('Enabled', 'true');
+		o.depends('logEnabled', 'true');
 
-		o = s.taboption("advanced", form.Value, "BinaryLocation",
+		o = s.taboption("advanced", form.FileUpload, "BinaryLocation",
 			_("Enable additional qBittorrent"),
 			_("Specify the binary location of qBittorrent."));
-		o.placeholder = "/usr/sbin/qbittorrent-nox";
+		o.root_directory = '/usr/libexec/';
+		o.enable_remove = false;
+		o.enable_upload = true;
 
-		L.Poll.add(L.bind(() => this.status().then((data) => {
-			[running, tempPassword, hasPersistentPassword] = data || [];
-			if (statusEl) {
-				statusEl.style.color = running ? 'green' : 'red';
-				statusEl.textContent = 'qBittorrent ' + (running ? _('RUNNING') : _('NOT RUNNING'));
-			};
-			if (btnEl) btnEl.style.display = running ? '' : 'none';
-			if (running && tempPassword && hasPersistentPassword) btnEl.appendChild(temppasswordEL)
-			if (!hasPersistentPassword && btnEl.contains(temppasswordEL)) btnEl.removeChild(temppasswordEL)
+		L.Poll.add(L.bind(() => callServiceStatus('qbittorrent').then(running => {
+			statusEl.style.color = running ? 'green' : 'red';
+			statusEl.textContent = 'qBittorrent ' + (running ? _('RUNNING') : _('NOT RUNNING'));
+			btnEl.style.display = running ? '' : 'none';
 		}), this));
 
 		return m.render();
