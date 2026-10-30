@@ -5,6 +5,8 @@ STOP=10
 USE_PROCD=1
 . "$IPKG_INSTROOT/usr/share/libubox/jshn.sh"
 
+log_msg() { logger -t "qBittorrent" "$1"; }
+
 bool_val() { [ "$1" = "true" ] && echo 1 || echo 0; }
 
 create_directory() {
@@ -19,25 +21,27 @@ get_config() {
 	done
 }
 
+get_qb_tag() {
+	local prog_path="$1"
+	[ -x "$prog_path" ] || return 1
+
+	local tag; tag=$("$prog_path" --version 2>/dev/null | grep -ioE 'qbittorrent v[0-9]+(\.[0-9]+)+' | tr ' ' '-')
+	[ -n "$tag" ] || return 1
+	echo "$tag"
+	return 0
+}
+
 start_service() {
 	config_load qbittorrent
 	get_config Locale EnableService RootProfilePath logEnabled port \
-			   DefaultSavePath ASWEnabled ASWlist webuser BinaryLocation \
+			   DefaultSavePath ASWEnabled ASWlist webuser BinaryFiles \
 			   CSRFProtection PasswordEnabled Path PFEnabled oldBL
 	[ "$EnableService" = 1 ] || return
 
 	create_directory "$Path" "$DefaultSavePath" "$RootProfilePath/qBittorrent/config/"
 	local qb_conf="$RootProfilePath/qBittorrent/config/qBittorrent.conf"
 
-	if [ "$BinaryLocation" != "$oldBL" ]; then
-		> "$qb_conf"
-		uci -q set qbittorrent.main.oldBL="$BinaryLocation"
-		uci -q set qbittorrent.main.olduser="$webuser"
-		uci -q set qbittorrent.main.oldpass="qbittorrent_nox"
-		uci -q commit qbittorrent
-	fi
-
-	if [ ! -s "$qb_conf" ]; then
+	if [ ! -s "$qb_conf" ] || [ "$BinaryFiles" != "$oldBL" ]; then
 		local Password="@ByteArray(lp3H/oqnSYXj73Llw1iZXA==:lUIJYPbvLDlgOu9EJXjWtuuYVoaLKmjUMZKeYG/hK9mqXEix02t6tQD5VUf8fYJlHSiEOB1r8Zbw9H17JMUFqw==)"
 		cat <<-EOF > "$qb_conf"
 		[Application]
@@ -55,32 +59,44 @@ start_service() {
 		WebUI\LocalHostAuth=false
 		WebUI\CSRFProtection="$CSRFProtection"
 		WebUI\AuthSubnetWhitelistEnabled="$ASWEnabled"
-		WebUI\AuthSubnetWhitelist="${ASWlist:+$ASWlist/32}"
+		WebUI\AuthSubnetWhitelist="${ASWlist}"
 		WebUI\Username="${webuser:-admin}"
 		WebUI\Password_PBKDF2="$Password"
 		[WebUI]
 		LocalHostAuth=false
 		CSRFProtection="$CSRFProtection"
 		AuthSubnetWhitelistEnabled="$ASWEnabled"
-		AuthSubnetWhitelist="${ASWlist:+$ASWlist/32}"
+		AuthSubnetWhitelist="${ASWlist}"
 		Username="${webuser:-admin}"
 		Password_PBKDF2="$Password"
 		EOF
+		uci -q set qbittorrent.main.oldBL="$BinaryFiles"
+		uci -q set qbittorrent.main.olduser="$webuser"
+		uci -q set qbittorrent.main.oldpass="qbittorrent_nox"
+		uci -q commit qbittorrent
 	fi
 
-	local PROG="${BinaryLocation:-/usr/bin/qbittorrent-nox}"
-	[ -x "$PROG" ] || chmod 755 "$PROG"
-	if ! { [ -x "$PROG" ] && "$PROG" --version 2>/dev/null | grep -qi 'qBittorrent'; }; then
-		PROG="/usr/bin/qbittorrent-nox"
+	local REAL_PROG="${BinaryFiles:-/usr/bin/qbittorrent-nox}"
+	[ -x "$REAL_PROG" ] || chmod 755 "$REAL_PROG" 2>/dev/null
+
+	local QB_TAG; QB_TAG=$(get_qb_tag "$REAL_PROG")
+	if [ -z "$QB_TAG" ]; then
+		REAL_PROG="/usr/bin/qbittorrent-nox"
+		QB_TAG=$(get_qb_tag "$REAL_PROG")
 	fi
+
+	local PROG="/var/run/${QB_TAG:-qBittorrent-unknown}"
+	ln -sf "$REAL_PROG" "$PROG"
+
 	procd_open_instance
 	procd_set_param command "$PROG" --webui-port="$port" --profile="$RootProfilePath" --confirm-legal-notice
-	procd_set_param env TZ="$(cat /etc/TZ)"
+	procd_set_param env TZ="$(cat /etc/TZ 2>/dev/null || echo UTC)"
 	procd_set_param user "root"
 	procd_set_param pidfile /var/run/qbittorrent_nox.pid
-	procd_set_param term_timeout 60
+	procd_set_param term_timeout 30
 	procd_set_param reload_signal HUP
-	procd_set_param respawn 300 5 3
+	procd_set_param respawn 3600 5 0
+	procd_set_param limits core="unlimited"
 	procd_set_param stdout 1
 	procd_set_param stderr 1
 	procd_close_instance
@@ -93,25 +109,39 @@ service_started() {
 			   CSRFProtection ASWEnabled ASWlist Path Locale
 	[ "$EnableService" = 1 ] || return
 
-	local COOKIE=$(mktemp)
+	local COOKIE=$(mktemp 2>/dev/null || echo "/tmp/qb_cookie_$$")
 	local REFERER="http://127.0.0.1:${port}"
 	local BASE="${REFERER}/api/v2"
-	trap 'rm -f "$COOKIE"' EXIT
 
-	for i in $(seq 1 15); do
-		curl -fsS "${BASE}/app/version" >/dev/null 2>&1 && break
+	local ready=0
+	for i in $(seq 1 60); do
+		if curl -fsS --connect-timeout 2 -m 3 "${BASE}/app/version" >/dev/null 2>&1; then
+			ready=1
+			break
+		fi
 		sleep 1
 	done
 
+	if [ "$ready" -ne 1 ]; then
+		log_msg "警告: qBittorrent 启动探测超时 (60s)，API 配置同步已推迟"
+		rm -f "$COOKIE" 2>/dev/null
+		return 0
+	fi
+
 	local HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
 		-c "$COOKIE" \
-		--header "Referer: ${REFERER}" \
+		-H "Origin: ${REFERER}" \
+		-H "Host: 127.0.0.1:${port}" \
+		-H "Referer: ${REFERER}/" \
 		--data-urlencode "username=${olduser:-$webuser}" \
 		--data-urlencode "password=${oldpass:-"qbittorrent_nox"}" \
-		"${BASE}/auth/login")
+		"${BASE}/auth/login" 2>/dev/null)
 
-	{ [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "204" ]; } && \
-	grep -q "SID" "$COOKIE" || return 1
+	if ! { [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "204" ]; } && ! grep -qi "SID" "$COOKIE" 2>/dev/null; then
+		log_msg "提示: WebUI API 认证未通过（可能是用户在界面单独设置了新密码或开启了严格局域网白名单），跳过 API 覆盖"
+		rm -f "$COOKIE" 2>/dev/null
+		return 0
+	fi
 
 	json_init
 	json_add_string  "locale" "$Locale"
@@ -125,9 +155,12 @@ service_started() {
 	json_add_boolean "bypass_auth_subnet_whitelist_enabled" "$(bool_val "$ASWEnabled")"
 	[ -n "$ASWlist" ] && json_add_string  "bypass_auth_subnet_whitelist" "$ASWlist"
 
+	local dump_data=$(json_dump)
 	curl -s -b "$COOKIE" \
-		--header "Referer: ${REFERER}" \
-		--data-urlencode "json=$(json_dump)" \
+		-H "Origin: ${REFERER}" \
+		-H "Host: 127.0.0.1:${port}" \
+		-H "Referer: ${REFERER}/" \
+		--data-urlencode "json=${dump_data}" \
 		"${BASE}/app/setPreferences" >/dev/null 2>&1
 
 	if [ "${webuser}" != "$olduser" ] || [ "${webpass}" != "$oldpass" ]; then

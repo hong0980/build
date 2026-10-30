@@ -100,11 +100,11 @@ msgstr "日志路径"
 msgid "Modify the path to save log files"
 msgstr "修改保存日志文件的路径"
 
-msgid "Enable additional qBittorrent"
-msgstr "启用附加qBittorrent"
+msgid "Custom Binary File"
+msgstr "自定义二进制文件"
 
-msgid "Specify the binary location of qBittorrent."
-msgstr "指定qBittorrent的二进制文件位置"
+msgid "Upload and select the static binary. <a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'> userdocs GitHub</a>"
+msgstr "上传并选中静态编译的二进制文件。 <a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'> userdocs GitHub</a>"
 
 msgid "%s/download (size: %s) (used: %s/%s)"
 msgstr "%s/下载 (大小: %s) (已用: %s/%s)"
@@ -186,3 +186,12 @@ msgstr "无可用日志数据"
 
 msgid "System log: (no data available)"
 msgstr "系统日志：(无数据)"
+
+msgid "WebUI Username"
+msgstr "WebUI 用户名"
+
+msgid "If you have changed this value in the WebUI and it is inconsistent, it cannot be modified here."
+msgstr "如果在 WebUI 端修改过这个值并且不一致，在这里不能修改"
+
+msgid "WebUI Password"
+msgstr "WebUI 密码"

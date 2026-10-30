@@ -26,10 +26,13 @@ return view.extend({
 		return Promise.all([
 			fs.exec_direct('/bin/df', ['-h']),
 			uci.load('qbittorrent')
-				.then(() => uci.get('qbittorrent', 'main', 'BinaryLocation'))
+				.then(() => uci.get('qbittorrent', 'main', 'BinaryFiles'))
 				.then(c =>
 					fs.exec_direct('/usr/bin/env', ['HOME=/var/run/qbittorrent', c || '/usr/bin/qbittorrent-nox', '-v'])
-						.then(r => r.trim().split('v').pop()),
+						.then(r => {
+							const match = r.trim().match(/v[0-9]+(\.[0-9]+)+/);
+							return match ? match[0] : _('Unknown');
+						}),
 				),
 			callServiceStatus('qbittorrent'),
 		]);
@@ -45,7 +48,7 @@ return view.extend({
 		const btnEl = E('div', [
 			E('div', {
 				class: 'btn cbi-button-apply', style: running ? '' : 'display:none',
-				click: ui.createHandlerFn(this, () => open(`${location.origin}:${port}`))
+				click: ui.createHandlerFn(this, () => window.open(`http://${window.location.hostname}:${port}`, '_blank'))
 			}, _('Open Web Interface'))
 		]);
 
@@ -78,7 +81,8 @@ return view.extend({
 		var devMap = {};
 		diskList.trim().split('\n').slice(1).forEach(line => {
 			var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
-			if (!dev?.includes('dev') || !mount?.startsWith('/mnt') || devMap[dev]) return;
+			const isExternalDev = dev && (dev.startsWith('/dev/sd') || dev.startsWith('/dev/nvme') || dev.startsWith('/dev/mmcblk'));
+			if (!isExternalDev || !mount?.startsWith('/mnt') || devMap[dev]) return;
 			devMap[dev] = true;
 			o.value(mount + '/download',
 				_('%s/download (size: %s) (used: %s/%s)').format(mount, size, used, usedPct));
@@ -98,13 +102,13 @@ return view.extend({
 		o.default = '8080';
 		o.rmempty = false;
 
-		o = s.taboption("basic", form.Value, "webuser", _("web 用户名"),
-			_("如果在 WebUI 端修改过这个值并且不一致，在这里不能修改"));
+		o = s.taboption("basic", form.Value, "webuser", _("WebUI Username"),
+			_("If you have changed this value in the WebUI and it is inconsistent, it cannot be modified here."));
 		o.default = "admin";
 		o.rmempty = false;
 
-		o = s.taboption("basic", form.Value, "webpass", _("web 密码"),
-			_("如果在 WebUI 端修改过这个值并且不一致，在这里不能修改"));
+		o = s.taboption("basic", form.Value, "webpass", _("WebUI Password"),
+			_("If you have changed this value in the WebUI and it is inconsistent, it cannot be modified here."));
 		o.default = "adminadmin";
 		o.rmempty = false;
 
@@ -145,10 +149,9 @@ return view.extend({
 			_("Modify the path to save log files"));
 		o.depends('logEnabled', 'true');
 
-		o = s.taboption("advanced", form.FileUpload, "BinaryLocation",
-			_("Enable additional qBittorrent"),
-			_("Specify the binary location of qBittorrent."));
-		o.root_directory = '/usr/libexec/';
+		o = s.taboption("advanced", form.FileUpload, "BinaryFiles", _("Custom Binary File"),
+			_("Upload and select the static binary. <a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'> userdocs GitHub</a>"));
+		o.root_directory = '/usr/libexec';
 		o.enable_remove = false;
 		o.enable_upload = true;
 

@@ -23,7 +23,7 @@ return view.extend({
 		};
 
 		return Promise.all([
-			L.resolveDefault(fs.exec_direct('/sbin/logread', ['-e', 'qbittorrent-nox']), '')
+			L.resolveDefault(fs.exec_direct('/sbin/logread', ['-e', 'qBittorrent']), '')
 				.then(content => formatLog(content.trim())),
 			fs.stat(log_path)
 				.then((stat) => fs.read_direct(log_path)
