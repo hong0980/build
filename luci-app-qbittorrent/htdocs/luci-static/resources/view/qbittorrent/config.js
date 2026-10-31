@@ -112,6 +112,40 @@ return view.extend({
 		o.default = "adminadmin";
 		o.rmempty = false;
 
+		o = s.taboption('basic', form.Value, 'api_key', _('API 密钥'),
+			_('留空则由 qBittorrent 服务端自动生成（需 ≥ 5.2.0）并自动回填；自定义密钥在保存并重启服务后生效。'));
+		o.password = true;
+
+		o.validate = function(section_id, value) {
+			if (value && !/^qbt_[A-Za-z0-9]{28}$/.test(value))
+				return _('格式错误：必须以 qbt_ 开头，后面为 28 位字母或数字，总长 32 位');
+			return true;
+		};
+
+		o.renderWidget = function(section_id, option_index, cfgvalue) {
+			const node = form.Value.prototype.renderWidget.apply(this, arguments);
+			const input = node.querySelector('input');
+
+			node.classList.add('control-group');
+			node.appendChild(E('button', {
+				'class': 'btn cbi-button cbi-button-action',
+				'click': ui.createHandlerFn(this, function(ev) {
+					if (!window.crypto || !window.crypto.getRandomValues) {
+						ui.addNotification(null, E('p', _('浏览器不支持安全随机数生成')), 'error');
+						return;
+					}
+
+					const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+					const bytes = new Uint8Array(28);
+					window.crypto.getRandomValues(bytes);
+
+					input.value = 'qbt_' + Array.from(bytes, b => chars[b % chars.length]).join('');
+					input.dispatchEvent(new Event('change', { bubbles: true }));
+				})
+			}, _('生成密钥')));
+			return node;
+		};
+
 		o = s.taboption("advanced", form.Flag, "ASWEnabled", _("Subnet Whitelist"),
 			_("Bypass authentication for clients in Whitelisted IP Subnets."));
 		o.enabled = "true";
@@ -130,6 +164,11 @@ return view.extend({
 		o.disabled = "false";
 		o.default = o.enabled;
 		o.rmempty = false;
+
+		o = s.taboption("advanced", form.Value, "listen_port", _("用于传入连接的端口"),
+			_('留空自动获取'));
+		o.datatype = "port";
+		o.depends("PFEnabled", "true");
 
 		o = s.taboption("advanced", form.Flag, "CSRFProtection", _("CSRF Protection"),
 			_("Disable Cross-Site Request Forgery (CSRF) protection"));
