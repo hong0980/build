@@ -112,11 +112,14 @@ msgstr "日志路径"
 msgid "Modify the path to save log files"
 msgstr "修改保存日志文件的路径"
 
-msgid "Custom Binary File"
-msgstr "自定义二进制文件"
+msgid "Must be an absolute path"
+msgstr "必须是绝对路径"
 
-msgid "Upload and select the static binary. <a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'> userdocs GitHub</a>"
-msgstr "上传并选中静态编译的二进制文件。 <a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'> userdocs GitHub</a>"
+msgid "qBittorrent Binary"
+msgstr "qBittorrent 主程序"
+
+msgid "Upload and select the static binary.<br /><a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'>Official (userdocs) GitHub</a> | <a href='https://github.com/c0re100/qBittorrent-Enhanced-Edition/releases' target='_blank'>Enhanced Edition (EE) GitHub</a>"
+msgstr "上传并选中静态编译的二进制文件。<br /><a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'>官方静态版 (userdocs) GitHub</a> | <a href='https://github.com/c0re100/qBittorrent-Enhanced-Edition/releases' target='_blank'>增强版 (EE) GitHub</a>"
 
 msgid "%s/download (size: %s) (used: %s/%s)"
 msgstr "%s/下载 (大小: %s) (已用: %s/%s)"
@@ -211,8 +214,8 @@ msgstr "WebUI 密码"
 msgid "API Key"
 msgstr "API 密钥"
 
-msgid "Leave empty to let qBittorrent auto-generate (requires ≥ 5.2.0) and auto-fill; a custom key only takes effect on first configuration."
-msgstr "留空则由 qBittorrent 自动生成（需 ≥ 5.2.0）并自动回填；自定义密钥只能在首次配置时生效。"
+msgid "Leave empty to let qBittorrent auto-generate and auto-fill; a custom key only takes effect on first configuration."
+msgstr "留空则由 qBittorrent 自动生成并自动回填；自定义密钥只能在首次配置时生效。"
 
 msgid "Invalid format: must start with \"qbt_\" followed by 28 alphanumeric characters (32 characters total)."
 msgstr "格式错误：必须以 qbt_ 开头，后面为 28 位字母或数字，总长 32 位。"

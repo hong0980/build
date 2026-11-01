@@ -114,7 +114,7 @@ return view.extend({
 		const v = version.split('.').map(Number);
 		if (v[0] > 5 || (v[0] === 5 && v[1] > 2) || (v[0] === 5 && v[1] === 2 && (v[2] || 0) >= 0)) {
 			o = s.taboption('basic', form.Value, 'api_key', _('API Key'),
-				_('Leave empty to let qBittorrent auto-generate (requires ≥ 5.2.0) and auto-fill; a custom key only takes effect on first configuration.'));
+				_('Leave empty to let qBittorrent auto-generate and auto-fill; a custom key only takes effect on first configuration.'));
 			// o.password = true;
 			o.validate = function(section_id, value) {
 				if (value && !/^qbt_[A-Za-z0-9]{28}$/.test(value))
@@ -201,12 +201,12 @@ return view.extend({
 			_("Modify the path to save log files"));
 		o.depends('log_Enabled', 'true');
 		o.validate = function(section_id, value) {
-			if (value && !/^\//.test(value)) return _('必须是绝对路径');
+			if (value && !/^\//.test(value)) return _('Must be an absolute path');
 			return true;
 		};
 
-		o = s.taboption("advanced", form.FileUpload, "BinaryFiles", _("Custom Binary File"),
-			_("Upload and select the static binary. <a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'> userdocs GitHub</a>"));
+		o = s.taboption("advanced", form.FileUpload, "BinaryFiles", _("qBittorrent Binary"),
+			_("Upload and select the static binary.<br /><a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'>Official (userdocs) GitHub</a> | <a href='https://github.com/c0re100/qBittorrent-Enhanced-Edition/releases' target='_blank'>Enhanced Edition (EE) GitHub</a>"));
 		o.root_directory = '/usr/libexec';
 		o.enable_remove  = false;
 		o.enable_upload  = true;
