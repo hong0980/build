@@ -95,7 +95,7 @@ return view.extend({
 		]);
 
 		if (sysText || appText) body.appendChild(
-			E('div', { style: 'display: flex; align-items: center; gap: 15px;' }, [
+			E('div', { style: 'display: flex; flex-wrap: wrap; align-items: center; gap: 15px;' }, [
 				E('div', _('Lines:')),
 				E('select', {
 					class: 'cbi-input-select', style: 'width: 60px;',
@@ -116,7 +116,7 @@ return view.extend({
 				}, [0, 5, 10, 30, 60].map((opt) =>
 					E('option', { value: opt, selected: opt === 10 ? '' : null }, opt !== 0 ? opt : _('Paused')))),
 				E('div', {
-					class: 'btn cbi-button-apply',
+					class: 'btn cbi-button-apply', style: 'white-space: normal;',
 					click: ui.createHandlerFn(this, (ev) => {
 						isreverse = !isreverse;
 						updateLogsDisplay(syslog, applog);

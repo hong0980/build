@@ -28,11 +28,8 @@ return view.extend({
 			uci.load('qbittorrent')
 				.then(() => uci.get('qbittorrent', 'main', 'BinaryFiles'))
 				.then(c =>
-					fs.exec_direct('/usr/bin/env', ['HOME=/var/run/qbittorrent', c || '/usr/bin/qbittorrent-nox', '-v'])
-						.then(r => {
-							const match = r.trim().match(/v[0-9]+(\.[0-9]+)+/);
-							return match ? match[0] : _('Unknown');
-						}),
+					fs.exec_direct('/usr/bin/env', ['HOME=/tmp/qb', c || '/usr/bin/qbittorrent-nox', '-v'])
+						.then(r => r.trim().split('v').pop()),
 				),
 			callServiceStatus('qbittorrent'),
 		]);
@@ -40,7 +37,7 @@ return view.extend({
 
 	render([diskList, version, running]) {
 		let m, s, o;
-		const port = uci.get('qbittorrent', 'main', 'port') || '8080';
+		const port = uci.get('qbittorrent', 'main', 'webui_port') || '8080';
 		const statusEl = E('b', { style: `color:${running ? 'green' : 'red'}` }, [
 			'qBittorrent ' + (running ? _('RUNNING') : _('NOT RUNNING')),
 		]);
@@ -69,10 +66,10 @@ return view.extend({
 		s.tab("basic", _("Basic Settings"));
 		s.tab("advanced", _("Advanced Settings"));
 
-		o = s.taboption("basic", form.Flag, "EnableService", _("Enabled"));
+		o = s.taboption("basic", form.Flag, "Enabled", _("Enabled"));
 
 		o = s.taboption("basic", form.Value, "RootProfilePath", _("Root Path of the Profile"),
-			_("Specify the root path of all profiles"))
+			_("Specify the root path of all profiles"));
 		o.default = '/etc';
 		o.rmempty = false;
 
@@ -96,103 +93,123 @@ return view.extend({
 		o.default = "zh_CN";
 		o.rmempty = false;
 
-		o = s.taboption("basic", form.Value, "port", _("Listening Port"),
+		o = s.taboption("basic", form.Value, "webui_port", _("Listening Port"),
 			_("The listening port for WebUI."));
 		o.datatype = "port";
-		o.default = '8080';
-		o.rmempty = false;
+		o.default  = '8080';
+		o.rmempty  = false;
 
 		o = s.taboption("basic", form.Value, "webuser", _("WebUI Username"),
-			_("If you have changed this value in the WebUI and it is inconsistent, it cannot be modified here."));
-		o.default = "admin";
-		o.rmempty = false;
+			_("If you have changed this value in the WebUI and it is inconsistent, please synchronize it."));
+		o.default  = "admin";
+		o.datatype = 'minlength(3)';
+		o.rmempty  = false;
 
 		o = s.taboption("basic", form.Value, "webpass", _("WebUI Password"),
-			_("If you have changed this value in the WebUI and it is inconsistent, it cannot be modified here."));
-		o.default = "adminadmin";
-		o.rmempty = false;
+			_("If you have changed this value in the WebUI and it is inconsistent, please synchronize it."));
+		o.default  = "password";
+		o.datatype = 'minlength(6)';
+		o.rmempty  = false;
 
-		o = s.taboption('basic', form.Value, 'api_key', _('API 密钥'),
-			_('留空则由 qBittorrent 服务端自动生成（需 ≥ 5.2.0）并自动回填；自定义密钥在保存并重启服务后生效。'));
-		o.password = true;
+		const v = version.split('.').map(Number);
+		if (v[0] > 5 || (v[0] === 5 && v[1] > 2) || (v[0] === 5 && v[1] === 2 && (v[2] || 0) >= 0)) {
+			o = s.taboption('basic', form.Value, 'api_key', _('API Key'),
+				_('Leave empty to let qBittorrent auto-generate (requires ≥ 5.2.0) and auto-fill; a custom key only takes effect on first configuration.'));
+			// o.password = true;
+			o.validate = function(section_id, value) {
+				if (value && !/^qbt_[A-Za-z0-9]{28}$/.test(value))
+					return _('Invalid format: must start with "qbt_" followed by 28 alphanumeric characters (32 characters total).');
+				return true;
+			};
+			o.renderWidget = function(section_id, option_index, cfgvalue) {
+				const node = form.Value.prototype.renderWidget.apply(this, arguments);
+				const input = node.querySelector('input');
+				node.classList.add('control-group');
+				node.appendChild(E('button', {
+					'class': 'btn cbi-button-add',
+					'click': ui.createHandlerFn(this, function(ev) {
+						if (!window.crypto || !window.crypto.getRandomValues) {
+							ui.addNotification(null, E('p', _('Browser does not support secure random number generation.')), 'error');
+							return;
+						}
 
-		o.validate = function(section_id, value) {
-			if (value && !/^qbt_[A-Za-z0-9]{28}$/.test(value))
-				return _('格式错误：必须以 qbt_ 开头，后面为 28 位字母或数字，总长 32 位');
-			return true;
-		};
+						const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+						const bytes = new Uint8Array(28);
+						window.crypto.getRandomValues(bytes);
 
-		o.renderWidget = function(section_id, option_index, cfgvalue) {
-			const node = form.Value.prototype.renderWidget.apply(this, arguments);
-			const input = node.querySelector('input');
-
-			node.classList.add('control-group');
-			node.appendChild(E('button', {
-				'class': 'btn cbi-button cbi-button-action',
-				'click': ui.createHandlerFn(this, function(ev) {
-					if (!window.crypto || !window.crypto.getRandomValues) {
-						ui.addNotification(null, E('p', _('浏览器不支持安全随机数生成')), 'error');
-						return;
-					}
-
-					const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-					const bytes = new Uint8Array(28);
-					window.crypto.getRandomValues(bytes);
-
-					input.value = 'qbt_' + Array.from(bytes, b => chars[b % chars.length]).join('');
-					input.dispatchEvent(new Event('change', { bubbles: true }));
-				})
-			}, _('生成密钥')));
-			return node;
+						input.value = 'qbt_' + Array.from(bytes, b => chars[b % chars.length]).join('');
+						input.dispatchEvent(new Event('change', { bubbles: true }));
+					})
+				}, _('Generate Randomly')));
+				return node;
+			};
 		};
 
 		o = s.taboption("advanced", form.Flag, "ASWEnabled", _("Subnet Whitelist"),
 			_("Bypass authentication for clients in Whitelisted IP Subnets."));
-		o.enabled = "true";
+		o.enabled  = "true";
 		o.disabled = "false";
-		o.default = o.disabled;
-		o.rmempty = false;
+		o.default  = o.disabled;
+		o.rmempty  = false;
 
 		o = s.taboption("advanced", form.DynamicList, "ASWlist", _("Whitelisted Subnets"))
 		o.placeholder = _('Example: 172.17.32.0/24, fdff:ffff:c8::/40');
 		o.datatype = "ipaddr";
 		o.depends("ASWEnabled", "true");
 
-		o = s.taboption("advanced", form.Flag, "PFEnabled", _("Use UPnP for WebUI"),
-			_("Using the UPnP / NAT-PMP port of the router for connecting to WebUI."));
-		o.enabled = "true";
+		o = s.taboption("advanced", form.Flag, "PFEnabled", _("UPnP / NAT-PMP"),
+			_("Use UPnP / NAT-PMP to forward the listening port on the router."));
+		o.enabled  = "true";
 		o.disabled = "false";
-		o.default = o.enabled;
-		o.rmempty = false;
+		o.default  = o.enabled;
+		o.rmempty  = false;
 
-		o = s.taboption("advanced", form.Value, "listen_port", _("用于传入连接的端口"),
-			_('留空自动获取'));
+		o = s.taboption("advanced", form.Flag, "PreallocateAll", _("Preallocate disk space"),
+			_("Preallocate all files when adding torrents."));
+		o.enabled  = "true";
+		o.disabled = "false";
+		o.default  = o.enabled;
+		o.rmempty  = false;
+
+		o = s.taboption("advanced", form.Flag, "IncompleteFilesExt", _("Incomplete file extension"),
+			_("Append .!qB to files that are not yet complete."));
+		o.enabled  = "true";
+		o.disabled = "false";
+		o.default  = o.enabled;
+		o.rmempty  = false;
+
+		o = s.taboption("advanced", form.Value, "listen_port", _("Port used for incoming connections"));
 		o.datatype = "port";
+		o.default  = "10899";
 		o.depends("PFEnabled", "true");
 
 		o = s.taboption("advanced", form.Flag, "CSRFProtection", _("CSRF Protection"),
 			_("Disable Cross-Site Request Forgery (CSRF) protection"));
-		o.enabled = "false";
+		o.enabled  = "false";
 		o.disabled = "true";
-		o.default = o.enabled;
-		o.rmempty = false;
+		o.default  = o.enabled;
+		o.rmempty  = false;
 
-		o = s.taboption('advanced', form.Flag, 'logEnabled', _('Enable Log'),
+		o = s.taboption('advanced', form.Flag, 'log_Enabled', _('Enable Log'),
 			_('Enable logger to log file.'));
-		o.enabled = 'true';
+		o.enabled  = 'true';
 		o.disabled = 'false';
-		o.default = o.enabled;
-		o.rmempty = false;
+		o.default  = o.enabled;
+		o.rmempty  = false;
 
-		o = s.taboption('advanced', form.Value, 'Path', _('Log Path'),
+		o = s.taboption('advanced', form.Value, 'Log_Path', _('Log Path'),
 			_("Modify the path to save log files"));
-		o.depends('logEnabled', 'true');
+		o.depends('log_Enabled', 'true');
+		o.validate = function(section_id, value) {
+			if (value && !/^\//.test(value)) return _('必须是绝对路径');
+			return true;
+		};
 
 		o = s.taboption("advanced", form.FileUpload, "BinaryFiles", _("Custom Binary File"),
 			_("Upload and select the static binary. <a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'> userdocs GitHub</a>"));
 		o.root_directory = '/usr/libexec';
-		o.enable_remove = false;
-		o.enable_upload = true;
+		o.enable_remove  = false;
+		o.enable_upload  = true;
 
 		L.Poll.add(L.bind(() => callServiceStatus('qbittorrent').then(running => {
 			statusEl.style.color = running ? 'green' : 'red';

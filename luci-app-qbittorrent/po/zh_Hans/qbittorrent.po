@@ -76,11 +76,23 @@ msgstr "白名单子网"
 msgid "Example: 172.17.32.0/24, fdff:ffff:c8::/40"
 msgstr "例如: 172.17.32.0/24, fdff:ffff:c8::/40"
 
-msgid "Use UPnP for WebUI"
-msgstr "为WebUI使用UPnP"
+msgid "UPnP / NAT-PMP"
+msgstr "UPnP / NAT-PMP"
 
-msgid "Using the UPnP / NAT-PMP port of the router for connecting to WebUI."
-msgstr "使用路由器的UPnP/NAT-PMP端口连接WebUI"
+msgid "Use UPnP / NAT-PMP to forward the listening port on the router."
+msgstr "使用 UPnP / NAT-PMP 在路由器上转发监听端口。"
+
+msgid "Preallocate disk space"
+msgstr "预分配磁盘空间"
+
+msgid "Preallocate all files when adding torrents."
+msgstr "添加种子时预分配所有文件。"
+
+msgid "Incomplete file extension"
+msgstr "未完成文件扩展名"
+
+msgid "Append .!qB to files that are not yet complete."
+msgstr "为尚未完成的文件追加 .!qB 扩展名。"
 
 msgid "CSRF Protection"
 msgstr "CSRF保护"
@@ -190,8 +202,26 @@ msgstr "系统日志：(无数据)"
 msgid "WebUI Username"
 msgstr "WebUI 用户名"
 
-msgid "If you have changed this value in the WebUI and it is inconsistent, it cannot be modified here."
-msgstr "如果在 WebUI 端修改过这个值并且不一致，在这里不能修改"
+msgid "If you have changed this value in the WebUI and it is inconsistent, please synchronize it."
+msgstr "如果您在 WebUI 中更改了该值且不一致，请同步。"
 
 msgid "WebUI Password"
 msgstr "WebUI 密码"
+
+msgid "API Key"
+msgstr "API 密钥"
+
+msgid "Leave empty to let qBittorrent auto-generate (requires ≥ 5.2.0) and auto-fill; a custom key only takes effect on first configuration."
+msgstr "留空则由 qBittorrent 自动生成（需 ≥ 5.2.0）并自动回填；自定义密钥只能在首次配置时生效。"
+
+msgid "Invalid format: must start with \"qbt_\" followed by 28 alphanumeric characters (32 characters total)."
+msgstr "格式错误：必须以 qbt_ 开头，后面为 28 位字母或数字，总长 32 位。"
+
+msgid "Browser does not support secure random number generation."
+msgstr "浏览器不支持安全随机数生成。"
+
+msgid "Generate Randomly"
+msgstr "随机生成"
+
+msgid "Port used for incoming connections"
+msgstr "用于传入连接的端口"
