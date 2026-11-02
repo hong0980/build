@@ -79,11 +79,14 @@ msgstr "子网白名单"
 msgid "Bypass authentication for clients in Whitelisted IP Subnets."
 msgstr "对白名单IP子网中的客户端绕过认证"
 
-msgid "Whitelisted Subnets"
-msgstr "白名单子网"
+msgid "Whitelisted IPs / Subnets"
+msgstr "白名单 IP / 子网"
 
-msgid "Example: 172.17.32.0/24, fdff:ffff:c8::/40"
-msgstr "例如: 172.17.32.0/24, fdff:ffff:c8::/40"
+msgid "Enter a plain IP (e.g. 192.168.2.100) to whitelist a single device; CIDR like 192.168.2.0/24 is also accepted."
+msgstr "输入纯 IP 地址（如 192.168.2.100）可放行单台设备；也支持 CIDR 网段格式（如 192.168.2.0/24）。"
+
+msgid "e.g. 192.168.2.100"
+msgstr "例如 192.168.2.100"
 
 msgid "UPnP / NAT-PMP"
 msgstr "UPnP / NAT-PMP"

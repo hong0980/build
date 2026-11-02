@@ -63,14 +63,11 @@ start_service() {
 			   PreallocateAll IncompleteFilesExt user group
 	[ "$Enabled" = 1 ] || return
 
+	local USER="${user:-root}" GROUP="${group}"
+	[ -n "$GROUP" ] || GROUP="$(id -gn "$USER" 2>/dev/null || echo "$USER")"
+
 	create_directory "$Log_Path" "$DefaultSavePath" "$RootProfilePath/qBittorrent/config/"
 	QB_CONF="$RootProfilePath/qBittorrent/config/qBittorrent.conf"
-
-	if [ "$user" != "root" ]; then
-		chown "$user:$group" "$Log_Path" 2>/dev/null
-		chown "$user:$group" "$DefaultSavePath" 2>/dev/null
-		chown -R "$user:$group" "$RootProfilePath/qBittorrent" 2>/dev/null
-	fi
 
 	local REAL_PROG="${BinaryFiles:-/usr/bin/qbittorrent-nox}"
 	[ -x "$REAL_PROG" ] || chmod 755 "$REAL_PROG" 2>/dev/null
@@ -83,7 +80,6 @@ start_service() {
 
 	QB_VER=$(ver_of_tag "$QB_TAG")
 	local PROG="/var/run/${QB_TAG:-qBittorrent}"
-
 	[ "$REAL_PROG" -ef "$PROG" ] || ln -sf "$REAL_PROG" "$PROG"
 	[ "$Locale" = 'zh_CN' ] && qbv -lt 4.5.1 && Locale='zh'
 
@@ -108,19 +104,24 @@ start_service() {
 		uci -q set qbittorrent.main.oldBL="$BinaryFiles"
 	fi
 
+	if [ "$USER" != "root" ]; then
+		chown "$USER:$GROUP"    "$Log_Path" 2>/dev/null
+		chown "$USER:$GROUP"    "$DefaultSavePath" 2>/dev/null
+		chown -R "$USER:$GROUP" "$RootProfilePath/qBittorrent" 2>/dev/null
+	fi
+
 	procd_open_instance
 	procd_set_param command "$PROG" --webui-port="${webui_port:-8080}" --profile="$RootProfilePath"
 	if [ -z "$QB_VER" ] || qbv -ge 5.0.0; then
 		procd_append_param command --confirm-legal-notice
 	fi
 	procd_set_param env TZ="$(cat /etc/TZ 2>/dev/null || echo UTC)"
-	procd_set_param user "$user"
-	procd_set_param group "$group"
+	procd_set_param user  "$USER"
+	procd_set_param group "$GROUP"
 	procd_set_param pidfile /var/run/qBittorrent.pid
 	procd_set_param term_timeout 30
 	procd_set_param reload_signal HUP
 	procd_set_param respawn 3600 5 0
-	procd_set_param limits core="unlimited"
 	procd_set_param stdout 1
 	procd_set_param stderr 1
 	procd_close_instance
@@ -128,10 +129,11 @@ start_service() {
 
 service_started() {
 	[ "$Enabled" = 1 ] || return
+	local COOKIE="/tmp/qb_cookie"
 	local REFERER="http://127.0.0.1:${webui_port:-8080}"
-	local BASE="${REFERER}/api/v2" i ready=''
-	local COOKIE="/tmp/qb_cookie" SUPPORT_KEY=0
+	local BASE="${REFERER}/api/v2"
 	local QB_PID="$QB_TAG[$(cat /var/run/qBittorrent.pid)]"
+	local i ready='' SUPPORT_KEY=''
 	qbv -ge 5.2.0 && SUPPORT_KEY=1
 
 	for i in $(seq 60); do
@@ -157,18 +159,31 @@ service_started() {
 	local dump_data=$(json_dump)
 
 	qb_req() { curl -sf -m 5 -H "Origin: $REFERER" -H "Referer: $REFERER" "$@"; }
-	{ [ -n "$api_key" ] && qb_req -X POST -H "Authorization: Bearer $api_key" \
-			--data-urlencode "json=$dump_data" "$BASE/app/setPreferences" >/dev/null 2>&1; } || \
-	{ [ -f "$COOKIE" ] && grep -qi "SID" "$COOKIE" 2>/dev/null && qb_req -b "$COOKIE" \
-			--data-urlencode "json=$dump_data" "$BASE/app/setPreferences" >/dev/null 2>&1; } || \
-	{ rm -f "$COOKIE"
-	  qb_req -c "$COOKIE" --data-urlencode "username=${olduser:-$webuser}" --data-urlencode "password=${oldpass:-password}" "$BASE/auth/login" >/dev/null 2>&1 || \
-	  qb_req -c "$COOKIE" --data-urlencode "username=$webuser" --data-urlencode "password=$webpass" "$BASE/auth/login" >/dev/null 2>&1
-	  grep -qi "SID" "$COOKIE" 2>/dev/null && qb_req -b "$COOKIE" \
-			--data-urlencode "json=$dump_data" "$BASE/app/setPreferences" >/dev/null 2>&1
+	{ [ -n "$api_key" ] && \
+		qb_req -X POST \
+			-H "Authorization: Bearer $api_key" \
+			--data-urlencode "json=$dump_data" \
+			"$BASE/app/setPreferences" >/dev/null 2>&1; } || \
+	{ [ -f "$COOKIE" ] && \
+		grep -qi "SID" "$COOKIE" 2>/dev/null && \
+		qb_req -b "$COOKIE" \
+			--data-urlencode "json=$dump_data" \
+			"$BASE/app/setPreferences" >/dev/null 2>&1; } || \
+	{   rm -f "$COOKIE"
+		qb_req -c "$COOKIE" \
+			--data-urlencode "username=${olduser:-$webuser}&password=${oldpass:-password}" \
+			"$BASE/auth/login" >/dev/null 2>&1 || \
+		qb_req -c "$COOKIE" \
+			--data-urlencode "username=$webuser&password=$webpass" \
+			"$BASE/auth/login" >/dev/null 2>&1
+
+		grep -qi "SID" "$COOKIE" 2>/dev/null && \
+			qb_req -b "$COOKIE" \
+			--data-urlencode "json=$dump_data" \
+			"$BASE/app/setPreferences" >/dev/null 2>&1
 	} || log_msg "$QB_PID" "❌ 警告: 认证未通过！请同步 WebUI 的用户名和密码配置。"
 
-	if [ -z "$api_key" ] && [ "$SUPPORT_KEY" -eq 1 ] && grep -qi "SID" "$COOKIE" 2>/dev/null; then
+	if [ -z "$api_key" ] && [ -n "$SUPPORT_KEY" ] && grep -qi "SID" "$COOKIE" 2>/dev/null; then
 		local APIKey=$(qb_req -b "$COOKIE" -X POST "$BASE/app/rotateAPIKey" | jsonfilter -qe '@.apiKey')
 		uci -q set qbittorrent.main.api_key="$APIKey"
 	fi
@@ -176,7 +191,7 @@ service_started() {
 		uci -q set qbittorrent.main.olduser="$webuser"
 		uci -q set qbittorrent.main.oldpass="$webpass"
 	fi
-	[ "$SUPPORT_KEY" -eq 1 ] || uci -q delete qbittorrent.main.api_key
+	[ -n "$SUPPORT_KEY" ] || uci -q delete qbittorrent.main.api_key
 	uci -q commit qbittorrent
 }
 

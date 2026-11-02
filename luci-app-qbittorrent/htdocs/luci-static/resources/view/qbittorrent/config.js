@@ -163,10 +163,17 @@ return view.extend({
 		o.default  = o.disabled;
 		o.rmempty  = false;
 
-		o = s.taboption("advanced", form.DynamicList, "ASWlist", _("Whitelisted Subnets"))
-		o.placeholder = _('Example: 172.17.32.0/24, fdff:ffff:c8::/40');
+		o = s.taboption("advanced", form.DynamicList, "ASWlist", _("Whitelisted IPs / Subnets"),
+			_("Enter a plain IP (e.g. 192.168.2.100) to whitelist a single device; CIDR like 192.168.2.0/24 is also accepted."));
+		o.placeholder = _('e.g. 192.168.2.100');
 		o.datatype = "ipaddr";
 		o.depends("ASWEnabled", "true");
+		o.load = function (section_id) {
+			return this.super('load', section_id)?.split(',');
+		};
+		o.write = function (section_id, formvalue) {
+			return this.super('write', section_id, formvalue.join(','));
+		};
 
 		o = s.taboption("advanced", form.Flag, "PFEnabled", _("UPnP / NAT-PMP"),
 			_("Use UPnP / NAT-PMP to forward the listening port on the router."));
