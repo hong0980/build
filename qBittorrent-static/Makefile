@@ -44,7 +44,7 @@ define Package/qBittorrent-static
 	TITLE:=bittorrent client programmed in C++ / Qt
 	URL:=https://github.com/userdocs/qbittorrent-nox-static
 	PROVIDES:=qBittorrent
-	USERID:=qBittorrent=456:qBittorrent=456
+	USERID:=qbittorrent=456:qbittorrent=456
 endef
 
 define Package/qBittorrent-static/description
