@@ -4,6 +4,7 @@
 'require uci';
 'require form';
 'require view';
+'require tools.widgets as widgets';
 
 const callServiceStatus = L.rpc.declare({
 	object: 'service',
@@ -70,6 +71,12 @@ return view.extend({
 
 		o = s.taboption("basic", form.Flag, "Enabled", _("Enabled"),
 			_("All plugin configurations take precedence over WebUI settings."));
+
+		o = s.taboption("basic", widgets.UserSelect, 'user', _('Run daemon as user'));
+		o.default = 'root';
+
+		o = s.taboption("basic", widgets.GroupSelect, 'group', _('Run daemon as group'));
+		o.default = 'root';
 
 		o = s.taboption("basic", form.Value, "RootProfilePath", _("Root Path of the Profile"),
 			_("Specify the root path of all profiles"));

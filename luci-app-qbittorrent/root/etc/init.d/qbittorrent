@@ -60,11 +60,17 @@ start_service() {
 	config_load qbittorrent
 	get_config ASWEnabled ASWlist BinaryFiles CSRFProtection DefaultSavePath Enabled Locale PFEnabled Log_Path \
 			   RootProfilePath api_key webui_port log_Enabled oldBL olduser oldpass listen_port webuser webpass \
-			   PreallocateAll IncompleteFilesExt
+			   PreallocateAll IncompleteFilesExt user group
 	[ "$Enabled" = 1 ] || return
 
 	create_directory "$Log_Path" "$DefaultSavePath" "$RootProfilePath/qBittorrent/config/"
 	QB_CONF="$RootProfilePath/qBittorrent/config/qBittorrent.conf"
+
+	if [ "$user" != "root" ]; then
+		chown "$user:$group" "$Log_Path" 2>/dev/null
+		chown "$user:$group" "$DefaultSavePath" 2>/dev/null
+		chown -R "$user:$group" "$RootProfilePath/qBittorrent" 2>/dev/null
+	fi
 
 	local REAL_PROG="${BinaryFiles:-/usr/bin/qbittorrent-nox}"
 	[ -x "$REAL_PROG" ] || chmod 755 "$REAL_PROG" 2>/dev/null
@@ -77,6 +83,7 @@ start_service() {
 
 	QB_VER=$(ver_of_tag "$QB_TAG")
 	local PROG="/var/run/${QB_TAG:-qBittorrent}"
+
 	[ "$REAL_PROG" -ef "$PROG" ] || ln -sf "$REAL_PROG" "$PROG"
 	[ "$Locale" = 'zh_CN' ] && qbv -lt 4.5.1 && Locale='zh'
 
@@ -107,10 +114,8 @@ start_service() {
 		procd_append_param command --confirm-legal-notice
 	fi
 	procd_set_param env TZ="$(cat /etc/TZ 2>/dev/null || echo UTC)"
-	procd_set_param env HOME="/tmp/qb"
-	procd_set_param env LANG="C.UTF-8"
-	procd_set_param env LC_ALL="C.UTF-8"
-	procd_set_param user "root"
+	procd_set_param user "$user"
+	procd_set_param group "$group"
 	procd_set_param pidfile /var/run/qBittorrent.pid
 	procd_set_param term_timeout 30
 	procd_set_param reload_signal HUP

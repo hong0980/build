@@ -31,6 +31,12 @@ msgstr "高级设置"
 msgid "Enabled"
 msgstr "启用"
 
+msgid "Run daemon as group"
+msgstr "以此组权限运行"
+
+msgid "Run daemon as user"
+msgstr "以此用户权限运行"
+
 msgid "All plugin configurations take precedence over WebUI settings."
 msgstr "本插件的所有配置权限高于 WebUI 的设置。"
 

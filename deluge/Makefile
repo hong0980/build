@@ -20,6 +20,9 @@ endef
 
 define Package/$(PKG_NAME)
 	$(call Package/deluge/Default)
+	SECTION:=net
+	CATEGORY:=Network
+	SUBMENU:=BitTorrent
 	TITLE+= (console UI & daemon)
 	DEPENDS:= \
 		+python3-chardet \

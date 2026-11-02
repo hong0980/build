@@ -39,11 +39,12 @@ include $(INCLUDE_DIR)/package.mk
 define Package/qBittorrent-static
 	SECTION:=net
 	CATEGORY:=Network
-	DEPENDS:=@(arm||aarch64||arm64||i386||x86_64)
 	SUBMENU:=BitTorrent
+	DEPENDS:=@(arm||aarch64||arm64||i386||x86_64)
 	TITLE:=bittorrent client programmed in C++ / Qt
 	URL:=https://github.com/userdocs/qbittorrent-nox-static
 	PROVIDES:=qBittorrent
+	USERID:=qBittorrent=456:qBittorrent=456
 endef
 
 define Package/qBittorrent-static/description
