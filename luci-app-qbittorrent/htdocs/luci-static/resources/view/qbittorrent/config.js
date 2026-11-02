@@ -38,6 +38,8 @@ return view.extend({
 	render([diskList, version, running]) {
 		let m, s, o;
 		const port = uci.get('qbittorrent', 'main', 'webui_port') || '8080';
+		const v = version.split('.').map(Number);
+		const hasApiKeySupport = v[0] > 5 || (v[0] === 5 && v[1] > 2) || (v[0] === 5 && v[1] === 2 && (v[2] || 0) >= 0);
 		const statusEl = E('b', { style: `color:${running ? 'green' : 'red'}` }, [
 			'qBittorrent ' + (running ? _('RUNNING') : _('NOT RUNNING')),
 		]);
@@ -66,7 +68,8 @@ return view.extend({
 		s.tab("basic", _("Basic Settings"));
 		s.tab("advanced", _("Advanced Settings"));
 
-		o = s.taboption("basic", form.Flag, "Enabled", _("Enabled"));
+		o = s.taboption("basic", form.Flag, "Enabled", _("Enabled"),
+			_("All plugin configurations take precedence over WebUI settings."));
 
 		o = s.taboption("basic", form.Value, "RootProfilePath", _("Root Path of the Profile"),
 			_("Specify the root path of all profiles"));
@@ -99,20 +102,21 @@ return view.extend({
 		o.default  = '8080';
 		o.rmempty  = false;
 
-		o = s.taboption("basic", form.Value, "webuser", _("WebUI Username"),
-			_("If you have changed this value in the WebUI and it is inconsistent, please synchronize it."));
+		const webAuthDesc = !hasApiKeySupport
+			? _("If you change the settings in the WebUI, please sync them here, otherwise qBittorrent configurations cannot be synced.")
+			: '';
+
+		o = s.taboption("basic", form.Value, "webuser", _("WebUI Username"), webAuthDesc);
 		o.default  = "admin";
 		o.datatype = 'minlength(3)';
 		o.rmempty  = false;
 
-		o = s.taboption("basic", form.Value, "webpass", _("WebUI Password"),
-			_("If you have changed this value in the WebUI and it is inconsistent, please synchronize it."));
+		o = s.taboption("basic", form.Value, "webpass", _("WebUI Password"), webAuthDesc);
 		o.default  = "password";
 		o.datatype = 'minlength(6)';
 		o.rmempty  = false;
 
-		const v = version.split('.').map(Number);
-		if (v[0] > 5 || (v[0] === 5 && v[1] > 2) || (v[0] === 5 && v[1] === 2 && (v[2] || 0) >= 0)) {
+		if (hasApiKeySupport) {
 			o = s.taboption('basic', form.Value, 'api_key', _('API Key'),
 				_('Leave empty to let qBittorrent auto-generate and auto-fill; a custom key only takes effect on first configuration.'));
 			// o.password = true;
@@ -164,6 +168,11 @@ return view.extend({
 		o.default  = o.enabled;
 		o.rmempty  = false;
 
+		o = s.taboption("advanced", form.Value, "listen_port", _("Port used for incoming connections"));
+		o.datatype = "port";
+		o.default  = "8999";
+		o.depends("PFEnabled", "true");
+
 		o = s.taboption("advanced", form.Flag, "PreallocateAll", _("Preallocate disk space"),
 			_("Preallocate all files when adding torrents."));
 		o.enabled  = "true";
@@ -177,11 +186,6 @@ return view.extend({
 		o.disabled = "false";
 		o.default  = o.enabled;
 		o.rmempty  = false;
-
-		o = s.taboption("advanced", form.Value, "listen_port", _("Port used for incoming connections"));
-		o.datatype = "port";
-		o.default  = "10899";
-		o.depends("PFEnabled", "true");
 
 		o = s.taboption("advanced", form.Flag, "CSRFProtection", _("CSRF Protection"),
 			_("Disable Cross-Site Request Forgery (CSRF) protection"));

@@ -31,6 +31,9 @@ msgstr "高级设置"
 msgid "Enabled"
 msgstr "启用"
 
+msgid "All plugin configurations take precedence over WebUI settings."
+msgstr "本插件的所有配置权限高于 WebUI 的设置。"
+
 msgid "Root Path of the Profile"
 msgstr "配置文件根路径"
 
@@ -205,17 +208,17 @@ msgstr "系统日志：(无数据)"
 msgid "WebUI Username"
 msgstr "WebUI 用户名"
 
-msgid "If you have changed this value in the WebUI and it is inconsistent, please synchronize it."
-msgstr "如果您在 WebUI 中更改了该值且不一致，请同步。"
-
 msgid "WebUI Password"
 msgstr "WebUI 密码"
+
+msgid "If you change the settings in the WebUI, please sync them here, otherwise qBittorrent configurations cannot be synced."
+msgstr "如果在 WebUI 修改了配置请在此同步，否则无法同步 qBittorrent 配置。"
 
 msgid "API Key"
 msgstr "API 密钥"
 
 msgid "Leave empty to let qBittorrent auto-generate and auto-fill; a custom key only takes effect on first configuration."
-msgstr "留空则由 qBittorrent 自动生成并自动回填；自定义密钥只能在首次配置时生效。"
+msgstr "留空则由 qBittorrent 自动生成并自动回填；自定义密钥只能在首次配置时有效。"
 
 msgid "Invalid format: must start with \"qbt_\" followed by 28 alphanumeric characters (32 characters total)."
 msgstr "格式错误：必须以 qbt_ 开头，后面为 28 位字母或数字，总长 32 位。"
