@@ -66,25 +66,29 @@ return view.extend({
 
 		s = m.section(form.NamedSection, 'main');
 
-		s.tab("basic", _("Basic Settings"));
-		s.tab("advanced", _("Advanced Settings"));
+		s.tab('basic', _('Basic Settings'));
+		s.tab('advanced', _('Advanced Settings'));
 
-		o = s.taboption("basic", form.Flag, "Enabled", _("Enabled"),
-			_("All plugin configurations take precedence over WebUI settings."));
+		o = s.taboption('basic', form.Flag, 'Enabled', _('Enabled'));
+		o.rmempty = false;
 
-		o = s.taboption("basic", widgets.UserSelect, 'user', _('Run daemon as user'));
+		o = s.taboption('basic', form.Flag, 'overwrite', _('Overwrite the settings'),
+			_('If enabled, settings in the Advanced Configuration will override the settings in the WebUI.'));
+		o.rmempty = false;
+
+		o = s.taboption('basic', widgets.UserSelect, 'user', _('Run daemon as user'));
 		o.default = 'root';
 
-		o = s.taboption("basic", widgets.GroupSelect, 'group', _('Run daemon as group'));
+		o = s.taboption('basic', widgets.GroupSelect, 'group', _('Run daemon as group'));
 		o.default = 'root';
 
-		o = s.taboption("basic", form.Value, "RootProfilePath", _("Root Path of the Profile"),
-			_("Specify the root path of all profiles"));
+		o = s.taboption('basic', form.Value, 'RootProfilePath', _('Root Path of the Profile'),
+			_('Specify the root path of all profiles'));
 		o.default = '/etc';
 		o.rmempty = false;
 
-		o = s.taboption("basic", form.Value, "DefaultSavePath", _("Save Path"),
-			_("The files are stored in the download directory automatically created under the selected mounted disk"))
+		o = s.taboption('basic', form.Value, 'DefaultSavePath', _('Save Path'),
+			_('The files are stored in the download directory automatically created under the selected mounted disk'))
 		var devMap = {};
 		diskList.trim().split('\n').slice(1).forEach(line => {
 			var [dev, size, used, , usedPct, mount] = line.trim().split(/\s+/);
@@ -96,31 +100,31 @@ return view.extend({
 		});
 		o.rmempty = false;
 
-		o = s.taboption("basic", form.Value, "Locale", _("Locale Language"),
-			_("The supported language codes can be used to customize the setting."));
-		o.value("zh_CN", _("Simplified Chinese"));
-		o.value("en", _("English"));
-		o.default = "zh_CN";
-		o.rmempty = false;
-
-		o = s.taboption("basic", form.Value, "webui_port", _("Listening Port"),
-			_("The listening port for WebUI."));
-		o.datatype = "port";
-		o.default  = '8080';
-		o.rmempty  = false;
-
 		const webAuthDesc = !hasApiKeySupport
-			? _("If you change the settings in the WebUI, please sync them here, otherwise qBittorrent configurations cannot be synced.")
+			? _('If you change the settings in the WebUI, please sync them here, otherwise qBittorrent configurations cannot be synced.')
 			: '';
 
-		o = s.taboption("basic", form.Value, "webuser", _("WebUI Username"), webAuthDesc);
-		o.default  = "admin";
+		o = s.taboption('basic', form.Value, 'webuser', _('WebUI Username'), webAuthDesc);
+		o.default  = 'admin';
 		o.datatype = 'minlength(3)';
 		o.rmempty  = false;
 
-		o = s.taboption("basic", form.Value, "webpass", _("WebUI Password"), webAuthDesc);
-		o.default  = "password";
+		o = s.taboption('basic', form.Value, 'webpass', _('WebUI Password'), webAuthDesc);
+		o.default  = 'password';
 		o.datatype = 'minlength(6)';
+		o.rmempty  = false;
+
+		o = s.taboption('basic', form.Value, 'Locale', _('Locale Language'),
+			_('The supported language codes can be used to customize the setting.'));
+		o.value('zh_CN', _('Simplified Chinese'));
+		o.value('en', _('English'));
+		o.default = 'zh_CN';
+		o.rmempty = false;
+
+		o = s.taboption('basic', form.Value, 'webui_port', _('Listening Port'),
+			_('The listening port for WebUI.'));
+		o.datatype = 'port';
+		o.default  = '8080';
 		o.rmempty  = false;
 
 		if (hasApiKeySupport) {
@@ -156,18 +160,25 @@ return view.extend({
 			};
 		};
 
-		o = s.taboption("advanced", form.Flag, "ASWEnabled", _("Subnet Whitelist"),
-			_("Bypass authentication for clients in Whitelisted IP Subnets."));
-		o.enabled  = "true";
-		o.disabled = "false";
+		o = s.taboption('basic', form.FileUpload, 'BinaryFiles', _('qBittorrent Binary'),
+			_("Uploading and selecting a statically compiled binary will replace the current program.<br /><a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'>Official (userdocs) GitHub</a> | <a href='https://github.com/c0re100/qBittorrent-Enhanced-Edition/releases' target='_blank'>Enhanced Edition (EE) GitHub</a>"));
+		o.root_directory = '/usr/libexec';
+		o.enable_remove  = false;
+		o.enable_upload  = true;
+
+		o = s.taboption('advanced', form.Flag, 'ASWEnabled', _('Subnet Whitelist'),
+			_('Bypass authentication for clients in Whitelisted IP Subnets.'));
+		o.enabled  = 'true';
+		o.disabled = 'false';
 		o.default  = o.disabled;
 		o.rmempty  = false;
+		o.depends('qbittorrent.main.overwrite', '1');
 
-		o = s.taboption("advanced", form.DynamicList, "ASWlist", _("Whitelisted IPs / Subnets"),
-			_("Enter a plain IP (e.g. 192.168.2.100) to whitelist a single device; CIDR like 192.168.2.0/24 is also accepted."));
+		o = s.taboption('advanced', form.DynamicList, 'ASWlist', _('Whitelisted IPs / Subnets'),
+			_('Enter a plain IP (e.g. 192.168.2.100) to whitelist a single device; CIDR like 192.168.2.0/24 is also accepted.'));
 		o.placeholder = _('e.g. 192.168.2.100');
-		o.datatype = "ipaddr";
-		o.depends("ASWEnabled", "true");
+		o.datatype = 'ipaddr';
+		o.depends({ 'ASWEnabled': 'true', 'qbittorrent.main.overwrite': '1' });
 		o.load = function (section_id) {
 			return this.super('load', section_id)?.split(',');
 		};
@@ -175,38 +186,42 @@ return view.extend({
 			return this.super('write', section_id, formvalue.join(','));
 		};
 
-		o = s.taboption("advanced", form.Flag, "PFEnabled", _("UPnP / NAT-PMP"),
-			_("Use UPnP / NAT-PMP to forward the listening port on the router."));
-		o.enabled  = "true";
-		o.disabled = "false";
+		o = s.taboption('advanced', form.Flag, 'PFEnabled', _('UPnP / NAT-PMP'),
+			_('Use UPnP / NAT-PMP to forward the listening port on the router.'));
+		o.enabled  = 'true';
+		o.disabled = 'false';
 		o.default  = o.enabled;
 		o.rmempty  = false;
+		o.depends('qbittorrent.main.overwrite', '1');
 
-		o = s.taboption("advanced", form.Value, "listen_port", _("Port used for incoming connections"));
-		o.datatype = "port";
-		o.default  = "8999";
-		o.depends("PFEnabled", "true");
+		o = s.taboption('advanced', form.Value, 'listen_port', _('Port used for incoming connections'));
+		o.depends({ 'PFEnabled': 'true', 'qbittorrent.main.overwrite': '1' });
+		o.datatype = 'port';
+		o.default  = '8999';
 
-		o = s.taboption("advanced", form.Flag, "PreallocateAll", _("Preallocate disk space"),
-			_("Preallocate all files when adding torrents."));
-		o.enabled  = "true";
-		o.disabled = "false";
+		o = s.taboption('advanced', form.Flag, 'PreallocateAll', _('Preallocate disk space'),
+			_('Preallocate all files when adding torrents.'));
+		o.enabled  = 'true';
+		o.disabled = 'false';
 		o.default  = o.enabled;
 		o.rmempty  = false;
+		o.depends('qbittorrent.main.overwrite', '1');
 
-		o = s.taboption("advanced", form.Flag, "IncompleteFilesExt", _("Incomplete file extension"),
-			_("Append .!qB to files that are not yet complete."));
-		o.enabled  = "true";
-		o.disabled = "false";
+		o = s.taboption('advanced', form.Flag, 'IncompleteFilesExt', _('Incomplete file extension'),
+			_('Append .!qB to files that are not yet complete.'));
+		o.enabled  = 'true';
+		o.disabled = 'false';
 		o.default  = o.enabled;
 		o.rmempty  = false;
+		o.depends('qbittorrent.main.overwrite', '1');
 
-		o = s.taboption("advanced", form.Flag, "CSRFProtection", _("CSRF Protection"),
-			_("Disable Cross-Site Request Forgery (CSRF) protection"));
-		o.enabled  = "false";
-		o.disabled = "true";
+		o = s.taboption('advanced', form.Flag, 'CSRFProtection', _('CSRF Protection'),
+			_('Disable Cross-Site Request Forgery (CSRF) protection'));
+		o.enabled  = 'false';
+		o.disabled = 'true';
 		o.default  = o.enabled;
 		o.rmempty  = false;
+		o.depends('qbittorrent.main.overwrite', '1');
 
 		o = s.taboption('advanced', form.Flag, 'log_Enabled', _('Enable Log'),
 			_('Enable logger to log file.'));
@@ -214,20 +229,16 @@ return view.extend({
 		o.disabled = 'false';
 		o.default  = o.enabled;
 		o.rmempty  = false;
+		o.depends('qbittorrent.main.overwrite', '1');
 
 		o = s.taboption('advanced', form.Value, 'Log_Path', _('Log Path'),
-			_("Modify the path to save log files"));
+			_('Modify the path to save log files'));
 		o.depends('log_Enabled', 'true');
 		o.validate = function(section_id, value) {
 			if (value && !/^\//.test(value)) return _('Must be an absolute path');
 			return true;
 		};
-
-		o = s.taboption("advanced", form.FileUpload, "BinaryFiles", _("qBittorrent Binary"),
-			_("Upload and select the static binary.<br /><a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'>Official (userdocs) GitHub</a> | <a href='https://github.com/c0re100/qBittorrent-Enhanced-Edition/releases' target='_blank'>Enhanced Edition (EE) GitHub</a>"));
-		o.root_directory = '/usr/libexec';
-		o.enable_remove  = false;
-		o.enable_upload  = true;
+		o.depends('qbittorrent.main.overwrite', '1');
 
 		L.Poll.add(L.bind(() => callServiceStatus('qbittorrent').then(running => {
 			statusEl.style.color = running ? 'green' : 'red';

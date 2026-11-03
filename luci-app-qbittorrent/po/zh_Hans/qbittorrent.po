@@ -7,15 +7,6 @@ msgstr "当前版本: <b style='color:red'>%s</b>"
 msgid "Open Web Interface"
 msgstr "打开 Web 管理界面"
 
-msgid "Log in to WebUI with temporary password %s"
-msgstr "用临时密码 %s 登录 WebUI"
-
-msgid "Copy <b style='color:red'>%s</b> temporary password"
-msgstr "复制 <b style='color:red'>%s</b> 临时密码"
-
-msgid "Password %s Copyed to clipboard"
-msgstr "密码 %s 已复制到剪贴板"
-
 msgid "RUNNING"
 msgstr "运行中"
 
@@ -37,9 +28,6 @@ msgstr "以此组权限运行"
 msgid "Run daemon as user"
 msgstr "以此用户权限运行"
 
-msgid "All plugin configurations take precedence over WebUI settings."
-msgstr "本插件的所有配置权限高于 WebUI 的设置。"
-
 msgid "Root Path of the Profile"
 msgstr "配置文件根路径"
 
@@ -51,6 +39,30 @@ msgstr "保存路径"
 
 msgid "The files are stored in the download directory automatically created under the selected mounted disk"
 msgstr "文件将存储在所选挂载磁盘下自动创建的download目录中"
+
+msgid "WebUI Username"
+msgstr "WebUI 用户名"
+
+msgid "WebUI Password"
+msgstr "WebUI 密码"
+
+msgid "If you change the settings in the WebUI, please sync them here, otherwise qBittorrent configurations cannot be synced."
+msgstr "如果在 WebUI 修改了配置请在此同步，否则无法同步 qBittorrent 配置。"
+
+msgid "API Key"
+msgstr "API 密钥"
+
+msgid "Leave empty to let qBittorrent auto-generate and auto-fill; a custom key only takes effect on first configuration."
+msgstr "留空则由 qBittorrent 自动生成并自动回填；自定义密钥只能在首次配置时有效。"
+
+msgid "Invalid format: must start with \"qbt_\" followed by 28 alphanumeric characters (32 characters total)."
+msgstr "格式错误：必须以 qbt_ 开头，后面为 28 位字母或数字，总长 32 位。"
+
+msgid "Browser does not support secure random number generation."
+msgstr "浏览器不支持安全随机数生成。"
+
+msgid "Generate Randomly"
+msgstr "随机生成"
 
 msgid "Locale Language"
 msgstr "界面语言"
@@ -70,8 +82,17 @@ msgstr "监听端口"
 msgid "The listening port for WebUI."
 msgstr "WebUI的监听端口"
 
-msgid "Enable first login default login Username: admin Password: password"
-msgstr "启用首次登录默认登录 用户名：admin 密码：password"
+msgid "qBittorrent Binary"
+msgstr "qBittorrent 主程序"
+
+msgid "Upload and select the static binary.<br /><a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'>Official (userdocs) GitHub</a> | <a href='https://github.com/c0re100/qBittorrent-Enhanced-Edition/releases' target='_blank'>Enhanced Edition (EE) GitHub</a>"
+msgstr "上传并选中静态编译的二进制文件可以替换现在的程序。<br /><a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'>官方静态版 (userdocs) GitHub</a> | <a href='https://github.com/c0re100/qBittorrent-Enhanced-Edition/releases' target='_blank'>增强版 (EE) GitHub</a>"
+
+msgid "Overwrite the settings"
+msgstr "覆盖设置"
+
+msgid "If enabled, settings in the Advanced Configuration will override the settings in the WebUI."
+msgstr "如果启用此选项，高级配置里面的设置权限高于 WebUI 的设置。"
 
 msgid "Subnet Whitelist"
 msgstr "子网白名单"
@@ -127,14 +148,11 @@ msgstr "修改保存日志文件的路径"
 msgid "Must be an absolute path"
 msgstr "必须是绝对路径"
 
-msgid "qBittorrent Binary"
-msgstr "qBittorrent 主程序"
-
-msgid "Upload and select the static binary.<br /><a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'>Official (userdocs) GitHub</a> | <a href='https://github.com/c0re100/qBittorrent-Enhanced-Edition/releases' target='_blank'>Enhanced Edition (EE) GitHub</a>"
-msgstr "上传并选中静态编译的二进制文件。<br /><a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'>官方静态版 (userdocs) GitHub</a> | <a href='https://github.com/c0re100/qBittorrent-Enhanced-Edition/releases' target='_blank'>增强版 (EE) GitHub</a>"
-
 msgid "%s/download (size: %s) (used: %s/%s)"
 msgstr "%s/下载 (大小: %s) (已用: %s/%s)"
+
+msgid "Port used for incoming connections"
+msgstr "用于传入连接的端口"
 
 msgid "Files"
 msgstr "文件"
@@ -145,14 +163,8 @@ msgstr "本页是 %s 使用的配置文件内容。"
 msgid "This is the content of the configuration file under <code>%s</code>:"
 msgstr "以下是<code>%s</code>路径下的配置文件内容："
 
-msgid "Loading..."
-msgstr "加载中..."
-
 msgid "Last modified: %s, Size: %s bytes"
 msgstr "最后修改: %s, 大小: %s 字节"
-
-msgid "File not found %s"
-msgstr "未找到 %s 文件"
 
 msgid "year"
 msgstr "年"
@@ -163,20 +175,17 @@ msgstr "月"
 msgid "day"
 msgstr "日"
 
-msgid "Failed to read log file"
-msgstr "读取日志文件失败"
-
-msgid "qBittorrent - Logs"
-msgstr "qBittorrent - 日志"
-
-msgid "System Log"
-msgstr "系统日志"
-
-msgid "Application Log"
-msgstr "应用日志"
+msgid "Logs"
+msgstr "日志"
 
 msgid "Lines:"
 msgstr "显示行数："
+
+msgid "Refresh time:"
+msgstr "刷新时间："
+
+msgid "Paused"
+msgstr "已暂停"
 
 msgid "Wrap text"
 msgstr "自动换行"
@@ -190,8 +199,11 @@ msgstr "▽ 正序显示(旧在前)"
 msgid "△ Show Newest First"
 msgstr "△ 倒序显示(新在前)"
 
-msgid "⟳ Refresh Now"
-msgstr "⟳ 立即刷新"
+msgid "Clear Log"
+msgstr "清空日志"
+
+msgid "Failed to clear log: %s"
+msgstr "清空日志失败：%s"
 
 msgid "Last %s lines of syslog (%s):"
 msgstr "系统日志 (最近%s行, %s):"
@@ -205,38 +217,5 @@ msgstr "新在前"
 msgid "oldest first"
 msgstr "旧在前"
 
-msgid "No log data."
-msgstr "没有日志数据"
-
 msgid "No log data available"
 msgstr "无可用日志数据"
-
-msgid "System log: (no data available)"
-msgstr "系统日志：(无数据)"
-
-msgid "WebUI Username"
-msgstr "WebUI 用户名"
-
-msgid "WebUI Password"
-msgstr "WebUI 密码"
-
-msgid "If you change the settings in the WebUI, please sync them here, otherwise qBittorrent configurations cannot be synced."
-msgstr "如果在 WebUI 修改了配置请在此同步，否则无法同步 qBittorrent 配置。"
-
-msgid "API Key"
-msgstr "API 密钥"
-
-msgid "Leave empty to let qBittorrent auto-generate and auto-fill; a custom key only takes effect on first configuration."
-msgstr "留空则由 qBittorrent 自动生成并自动回填；自定义密钥只能在首次配置时有效。"
-
-msgid "Invalid format: must start with \"qbt_\" followed by 28 alphanumeric characters (32 characters total)."
-msgstr "格式错误：必须以 qbt_ 开头，后面为 28 位字母或数字，总长 32 位。"
-
-msgid "Browser does not support secure random number generation."
-msgstr "浏览器不支持安全随机数生成。"
-
-msgid "Generate Randomly"
-msgstr "随机生成"
-
-msgid "Port used for incoming connections"
-msgstr "用于传入连接的端口"
