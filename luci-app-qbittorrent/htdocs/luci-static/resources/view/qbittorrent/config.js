@@ -52,11 +52,9 @@ return view.extend({
 			}, _('Open Web Interface'))
 		]);
 
-		m = new form.Map('qbittorrent', _('qBittorrent'),
-			'%s  %s'.format(
+		m = new form.Map('qbittorrent', _('qBittorrent'), '%s %s'.format(
 				_('A cross-platform open source BitTorrent client based on QT.'),
-				_("Current version: <b style='color:red'>%s</b>").format(version)
-			));
+				_("Current version: <b style='color:red'>%s</b>").format(version)));
 
 		s = m.section(form.TypedSection);
 		s.render = () =>
@@ -100,9 +98,8 @@ return view.extend({
 		});
 		o.rmempty = false;
 
-		const webAuthDesc = !hasApiKeySupport
-			? _('If you change the settings in the WebUI, please sync them here, otherwise qBittorrent configurations cannot be synced.')
-			: '';
+		const webAuthDesc = hasApiKeySupport ? '' :
+			_('If you change the settings in the WebUI, please sync them here, otherwise qBittorrent configurations cannot be synced.');
 
 		o = s.taboption('basic', form.Value, 'webuser', _('WebUI Username'), webAuthDesc);
 		o.default  = 'admin';
@@ -161,7 +158,7 @@ return view.extend({
 		};
 
 		o = s.taboption('basic', form.FileUpload, 'BinaryFiles', _('qBittorrent Binary'),
-			_("Uploading and selecting a statically compiled binary will replace the current program.<br /><a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'>Official (userdocs) GitHub</a> | <a href='https://github.com/c0re100/qBittorrent-Enhanced-Edition/releases' target='_blank'>Enhanced Edition (EE) GitHub</a>"));
+			_("Upload and select the static binary.<br /><a href='https://github.com/userdocs/qbittorrent-nox-static/releases' target='_blank'>Official (userdocs) GitHub</a> | <a href='https://github.com/c0re100/qBittorrent-Enhanced-Edition/releases' target='_blank'>Enhanced Edition (EE) GitHub</a>"));
 		o.root_directory = '/usr/libexec';
 		o.enable_remove  = false;
 		o.enable_upload  = true;

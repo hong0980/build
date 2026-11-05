@@ -59,7 +59,7 @@ qbv() {
 start_service() {
 	config_load qbittorrent
 	get_config ASWEnabled ASWlist BinaryFiles CSRFProtection DefaultSavePath Enabled Locale PFEnabled Log_Path \
-			   RootProfilePath api_key webui_port log_Enabled oldBL olduser oldpass listen_port webuser webpass \
+			   RootProfilePath api_key webui_port log_Enabled oldBF olduser oldpass listen_port webuser webpass \
 			   PreallocateAll IncompleteFilesExt user group overwrite
 	[ "$Enabled" = 1 ] || return
 
@@ -83,7 +83,7 @@ start_service() {
 	[ "$REAL_PROG" -ef "$PROG" ] || ln -sf "$REAL_PROG" "$PROG"
 	[ "$Locale" = 'zh_CN' ] && qbv -lt 4.5.1 && Locale='zh'
 
-	if [ ! -s "$QB_CONF" ] || [ "$BinaryFiles" != "$oldBL" ]; then
+	if [ ! -s "$QB_CONF" ] || [ "$BinaryFiles" != "$oldBF" ]; then
 		local Password="@ByteArray(iqdmCO2viX4Z3usDcoVReQ==:yh0o9/aSBv8bxK+ny9i7PF7/zgKh3ASv4Rcogl0GjcDQoxlWQSKUNaKLpNxy/ubnMqPYD2U4sgtGIFXABHNxgQ==)"
 		cat <<-EOF > "$QB_CONF"
 			[Preferences]
@@ -92,13 +92,15 @@ start_service() {
 			WebUI\LocalHostAuth=false
 			WebUI\Username="${webuser:-admin}"
 			WebUI\Password_PBKDF2="$Password"
+			WebUI\APIKey="$api_key"
 			[WebUI]
+			APIKey="$api_key"
 			CSRFProtection=false
 			LocalHostAuth=false
 			Username="${webuser:-admin}"
 			Password_PBKDF2="$Password"
 		EOF
-		uci -q set qbittorrent.main.oldBL="$BinaryFiles"
+		uci -q set qbittorrent.main.oldBF="$BinaryFiles"
 	fi
 
 	if [ "$USER" != "root" ]; then
@@ -119,7 +121,7 @@ start_service() {
 	procd_set_param term_timeout 30
 	procd_set_param reload_signal HUP
 	procd_set_param respawn 3600 5 0
-	procd_set_param stdout 1
+	# procd_set_param stdout 1
 	procd_set_param stderr 1
 	procd_close_instance
 }
