@@ -93,48 +93,52 @@ if (config.dns['fake-ip-filter-mode'] == 'rule') {
 };
 
 if (bc('url_enabled')) {
-	let idx = 0;
-	const used = {};
 	const hc_int = im('interval') || 600;
 	const hc_url = gm('urltest_url') || 'https://cp.cloudflare.com/generate_204';
 	const filter = '^(?!.*(群|邀请|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|备用|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|国内|地址|频道|无法|说明|使用|提示|特别|访问|支持|教程|关注|更新|作者|加入|剩余|套餐|重置|域名|USE|USED|TOTAL|EXPIRE|EMAIL|Panel|Channel|Author))';
-	const providers = keys(config['proxy-providers'] || {});
+
+	const pp = config['proxy-providers'] || {};
+	const ppq = n => `.proxy-providers[${qs(n)}]`;
+	let idx = 0, sp = 0;
+	const subs = [], in_subs = {}, spare = [];
+
 	uci.foreach('nikki', 'subscription', s => {
 		if (!uci_bool(s.enabled)) return;
-		const k = providers[idx++];
-		const name = s.name || split(split(s.url, '/')[2] ?? '', '.')[0] || `provider${idx}`;
-		if (k) {
-			used[k] = true;
-			return push(exprs,
-				`.proxy-providers[${qs(k)}].url  = ${qs(s.url)}`,
-				`.proxy-providers[${qs(k)}].path = ${qs(`./proxies/${name}.yaml`)}`,
-				`.proxy-providers[${qs(k)}].override.additional-prefix = ${qs(`[${name}] `)}`
-			);
-		};
-
-		const np = `.proxy-providers[${qs(name)}]`;
-		push(exprs, ...map([
-			['type',                       '"http"'],
-			['proxy',                      '"DIRECT"'],
-			['interval',                   86400],
-			['url',                        qs(s.url)],
-			['filter',                     qs(filter)],
-			['health-check.enable',        true],
-			['health-check.interval',      hc_int],
-			['health-check.url',           qs(hc_url)],
-			['path',                       qs(`./proxies/${name}.yaml`)],
-			['override.additional-prefix', qs(`[${name}] `)]
-		], (kv) => `${np}.${kv[0]} = ${kv[1]}`));
+		const name = s.name || split(split(s.url, '/')[2] ?? '', '.')[0] || `provider${++idx}`;
+		push(subs, [name, s.url]);
 	});
 
-	for (let j = 0; j < length(providers); j++) {
-		const k = providers[j];
-		if (!used[k]) push(exprs, `del(.proxy-providers[${qs(k)}])`);
-	};
+	for (let i = 0; i < length(subs); i++) in_subs[subs[i][0]] = true;
+	for (let k in keys(pp)) if (!in_subs[k]) push(spare, k);
+	for (let i = 0; i < length(subs); i++) {
+		const name = subs[i][0];
+		const url_q = qs(subs[i][1]);
+		const path_q = qs(`./proxies/${name}.yaml`);
+		const prefix_q = qs(`[${name}] `);
+
+		let init = null, old = null;
+		if (!pp[name]) {
+			if (sp < length(spare)) {
+				old = spare[sp++];
+				init = ppq(old);
+			} else {
+				init = `{"type":"http","proxy":"DIRECT","interval":86400,"url":${url_q},"filter":${qs(filter)},"health-check":{"enable":true,"interval":${hc_int},"url":${qs(hc_url)}},"path":${path_q},"override":{"additional-prefix":${prefix_q}}}`;
+			}
+		}
+
+		if (init) push(exprs, `${ppq(name)} = ${init}`);
+		push(exprs, `${ppq(name)} |= (.url = ${url_q} | .path = ${path_q} | .override.additional-prefix = ${prefix_q})`);
+		if (old) push(exprs, `del(${ppq(old)})`);
+	}
+
+	for (let j = sp; j < length(spare); j++) push(exprs, `del(${ppq(spare[j])})`);
 };
 
 push(exprs, `
-	.rule-providers |= ((. // {}) | sort_keys(.) | map_values(
+	(${gm('lazy')}     // "") as $l | (${gm('tolerance')}        // "") as $t |
+	(${gm('timeout')}  // "") as $o | (${qs(gm('urltest_url'))}  // "") as $u |
+	(${gm('interval')} // "") as $i | (${gm('max_failed_times')} // "") as $m |
+	.rule-providers |= (. // {} | sort_keys(.) | map_values(
 		(.url | capture("(?P<ext>\\.[^.]+)$").ext // "") as $q |
 		(.path // "./rule_provider/" + key + $q) as $p |
 		((select($p != "") | .path = $p) // .)
@@ -142,9 +146,7 @@ push(exprs, `
 	.dns |= ((select(.respect-rules == true and (has("proxy-server-nameserver") | not)) |
 		.proxy-server-nameserver = ["https://doh.pub/dns-query", "https://dns.alidns.com/dns-query"]
 	) // .) |
-	(${gm('lazy')}     // "") as $l | (${gm('tolerance')}        // "") as $t |
-	(${gm('timeout')}  // "") as $o | (${qs(gm('urltest_url'))}  // "") as $u |
-	(${gm('interval')} // "") as $i | (${gm('max_failed_times')} // "") as $m |
+	.proxy-providers |= (. // {} | (select($u != "") | map_values(.["health-check"].url = $u)) // .) |
 	(.. | select(tag == "!!map")) |= (${pgs('$x')}) | .["proxy-groups"] |= map(${pgs('$y')}) |
 	(.. | select(tag == "!!str")) style="double" |
 	 .. |= map_values(key |= (select(tag == "!!str" and test("[.,:]")) | . style="double") // .)

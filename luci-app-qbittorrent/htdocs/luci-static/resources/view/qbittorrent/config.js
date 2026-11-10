@@ -228,6 +228,11 @@ return view.extend({
 		o.rmempty  = false;
 		o.depends('qbittorrent.main.overwrite', '1');
 
+		// o = s.taboption('advanced', form.Flag, 'sys_log_Enabled', _('sys Log'),
+		// 	_('Enable sys logger to log file.'));
+		// o.rmempty  = false;
+		// o.depends('qbittorrent.main.overwrite', '1');
+
 		o = s.taboption('advanced', form.Value, 'Log_Path', _('Log Path'),
 			_('Modify the path to save log files'));
 		o.depends('log_Enabled', 'true');
