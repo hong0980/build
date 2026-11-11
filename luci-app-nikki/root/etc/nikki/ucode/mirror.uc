@@ -122,12 +122,14 @@ if (bc('url_enabled')) {
 				old = spare[sp++];
 				init = ppq(old);
 			} else {
-				init = `{"type":"http","proxy":"DIRECT","interval":86400,"url":${url_q},"filter":${qs(filter)},"health-check":{"enable":true,"interval":${hc_int},"url":${qs(hc_url)}},"path":${path_q},"override":{"additional-prefix":${prefix_q}}}`;
+				init = `{"type":"http","proxy":"DIRECT","interval":43200,"url":${url_q},"filter":${qs(filter)},"health-check":{"enable":true,"interval":${hc_int},"expected-status": 204,"url":${qs(hc_url)}},"path":${path_q},"override":{"additional-prefix":${prefix_q}}}`;
 			}
 		}
 
 		if (init) push(exprs, `${ppq(name)} = ${init}`);
-		push(exprs, `${ppq(name)} |= (.url = ${url_q} | .path = ${path_q} | .override.additional-prefix = ${prefix_q})`);
+		push(exprs, `${ppq(name)} |= (
+					.url = ${url_q} | .interval = 43200 | .path = ${path_q} | .override.additional-prefix = ${prefix_q} | .health-check.expected-status = 204
+				)`);
 		if (old) push(exprs, `del(${ppq(old)})`);
 	}
 

@@ -35,7 +35,7 @@ rule-anchor:
   Cy: &Cy {type: http, interval: 86400, behavior: classical, format: yaml}
   pu: &pu [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
   go: &go [https://cloudflare-dns.com/dns-query, https://dns.google/dns-query]
-  P: &P {type: http, interval: 86400, health-check: {enable: true, url: 'https://www.gstatic.com/generate_204', interval: 300}, filter: *El, proxy: 国内流量}
+  P: &P {type: http, interval: 21600, health-check: {enable: true, url: 'https://www.gstatic.com/generate_204', interval: 300}, filter: *El, proxy: 国内流量}
 
 proxy-providers:
   订阅1: {<<: *P, url: "订阅URL"}
@@ -88,9 +88,7 @@ sniffer:
     TLS:  {ports: [443, 8443]}
     QUIC: {ports: [443, 8443]}
     HTTP: {ports: [80, 8080-8880], override-destination: true}
-  skip-domain:
-    - "Mijia Cloud"
-    - "+.push.apple.com"
+  skip-domain: ["Mijia Cloud", "+.push.apple.com"]
 
 dns:
   enable: true
@@ -126,8 +124,6 @@ proxy-groups:
   - {name: Google,   <<: *S1, icon: https://github.com/s0lnce/mofish-icon/raw/main/mihomo/pure/corner/google.png}
   - {name: NETFLIX,  <<: *S3, icon: https://github.com/s0lnce/mofish-icon/raw/main/mihomo/pure/corner/netflix.png}
   - {name: AI,       <<: *S2, icon: https://github.com/s0lnce/mofish-icon/raw/main/mihomo/pure/corner/ai.png}
-  - {name: GLOBAL,   <<: *G1, icon: https://github.com/s0lnce/mofish-icon/raw/main/mihomo/pure/corner/all.png}
-  - {name: 漏网之鱼,  <<: *G1, icon: https://github.com/s0lnce/mofish-icon/raw/main/mihomo/pure/corner/final.png}
   - {name: 国际媒体,  <<: *S4, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/DomesticMedia.png}
   - {name: 香港手动,  <<: *SD, filter: *HK, icon: https://github.com/s0lnce/mofish-icon/raw/main/mihomo/flag/corner/hongkong.png}
   - {name: 日本手动,  <<: *SD, filter: *JP, icon: https://github.com/s0lnce/mofish-icon/raw/main/mihomo/flag/corner/japan.png}
@@ -174,7 +170,7 @@ rules:
   - RULE-SET,StreamingIP,国际媒体,no-resolve
   - RULE-SET,cnIP,国内流量,no-resolve
   - RULE-SET,ProxyIP,默认代理,no-resolve
-  - MATCH,漏网之鱼
+  - MATCH,默认代理
 
 rule-providers:
   cn:          {<<: *Dm, url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/cn.mrs}
