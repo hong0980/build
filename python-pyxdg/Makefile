@@ -16,7 +16,7 @@ PKG_HASH:=3267bb3074e934df202af2ee0868575484108581e6f3cb006af1da35395e88b4
 
 PKG_LICENSE:=LGPL-2.0-only
 PKG_LICENSE_FILES:=COPYING
-
+HOST_BUILD_DEPENDS:=python3-setuptools/host
 include $(TOPDIR)/feeds/packages/lang/python/pypi.mk
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/python/python3-package.mk
