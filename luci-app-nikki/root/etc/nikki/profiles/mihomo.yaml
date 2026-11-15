@@ -105,9 +105,7 @@ dns:
     "rule-set:cn!": *go
   nameserver: *go
   fallback: *go
-  fallback-filter:
-    geoip: true
-    geoip-code: CN
+  fallback-filter: {geoip: true, geoip-code: CN}
   fake-ip-filter-mode: rule
   fake-ip-filter:
     - RULE-SET,google,fake-ip

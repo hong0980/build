@@ -122,13 +122,14 @@ dns:
   fake-ip-range: 198.18.0.1/16
   default-nameserver: [119.29.29.29, 180.184.1.1, 223.5.5.5]
   nameserver: [https://dns.alidns.com/dns-query, https://doh.pub/dns-query]
-  fake-ip-filter-mode: rule
   fake-ip-filter:
-    - RULE-SET,Google,fake-ip
-    - RULE-SET,Direct,real-ip
-    - RULE-SET,Private,real-ip
-    - RULE-SET,China,real-ip
-    - MATCH,fake-ip
+    - rule-set:Direct
+    - rule-set:Private
+    - rule-set:China
+    - +.miwifi.com
+    - +.docker.io
+    - +.market.xiaomi.com
+    - +.push.apple.com
   nameserver-policy:
     "rule-set:Advertising": rcode://success
     "rule-set:China,Direct,Private": [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
