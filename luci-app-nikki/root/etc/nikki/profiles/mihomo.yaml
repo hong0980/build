@@ -96,7 +96,6 @@ dns:
   cache-algorithm: arc
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.0/16
-  fake-ip-filter-mode: rule
   default-nameserver: [223.5.5.5, 223.6.6.6]
   direct-nameserver: *pu
   proxy-server-nameserver: *pu
@@ -109,7 +108,9 @@ dns:
   fallback-filter:
     geoip: true
     geoip-code: CN
+  fake-ip-filter-mode: rule
   fake-ip-filter:
+    - RULE-SET,google,fake-ip
     - RULE-SET,Private,real-ip
     - RULE-SET,cn,real-ip
     - RULE-SET,Fifilter,real-ip

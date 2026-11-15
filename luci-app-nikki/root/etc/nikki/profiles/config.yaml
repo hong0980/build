@@ -51,14 +51,15 @@ dns:
   cache-algorithm: arc
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.0/16
-  fake-ip-filter-mode: rule
   default-nameserver: [223.5.5.5, 223.6.6.6]
   nameserver: [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
   nameserver-policy:
     "rule-set:ads": rcode://success
     "rule-set:cn,private": [https://doh.pub/dns-query, https://dns.alidns.com/dns-query]
     "rule-set:cn!": [https://cloudflare-dns.com/dns-query, https://dns.google/dns-query]
+  fake-ip-filter-mode: rule
   fake-ip-filter:
+    - RULE-SET,google,fake-ip
     - RULE-SET,Fifilter,real-ip
     - RULE-SET,private,real-ip
     - RULE-SET,applecn,real-ip
