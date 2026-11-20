@@ -63,6 +63,9 @@ return view.extend({
         o = s.taboption('proxy', form.Flag, 'fake_ip_ping_hijack', _('Fake-IP Ping Hijack'));
         o.rmempty = false;
 
+        o = s.taboption('proxy', form.Flag, 'natmap', _('NATMap'));
+        o.rmempty = false;
+
         o = s.taboption('router', form.Flag, 'router_proxy', _('Enable'));
         o.rmempty = false;
 

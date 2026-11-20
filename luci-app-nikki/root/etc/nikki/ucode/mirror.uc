@@ -1,6 +1,6 @@
 import { access } from 'fs';
 import { cursor } from 'uci';
-import { qs, uci_bool, uci_int, load_profile, mirrorGithubUrl, yqReadFile } from '/etc/nikki/ucode/include.uc';
+import { qs, uci_bool, uci_int, uci_array, load_profile, mirrorGithubUrl, yqReadFile } from '/etc/nikki/ucode/include.uc';
 
 const uci = cursor();
 const gc = o => uci.get('nikki', 'config', o);
@@ -134,6 +134,78 @@ if (bc('url_enabled')) {
 	}
 
 	for (let j = sp; j < length(spare); j++) push(exprs, `del(${ppq(spare[j])})`);
+};
+
+if (uci_bool(uci.get('nikki', 'proxy', 'natmap'))) {
+	const fw_list = uci_array(uci.get('nikki', 'proxy', 'bypass_fwmark'));
+	const mk = v => (v = trim(`${v ?? ''}`)) ? (match(v, /^0x/i) ? hex(v) : uci_int(v)) : null;
+	const seen = {}, marks = [];
+	for (let x in fw_list) seen[mk(split(`${x}`, '/')[0])] = true;
+
+	let def_fw = null;
+	uci.foreach('natmap', 'global', g => {
+		if (uci_bool(g.enable) && g.def_fwmark_value) push(marks, def_fw = g.def_fwmark_value);
+	});
+	uci.foreach('natmap', 'natmap', n => {
+		if (uci_bool(n.enable)) push(marks, n.fwmark_value || def_fw);
+	});
+
+	let changed = false;
+	for (let v in marks) {
+		const n = mk(v);
+		if (n && !seen[n]) {
+			seen[n] = true;
+			push(fw_list, sprintf('0x%x', n));
+			changed = true;
+		}
+	}
+	if (changed) {
+		uci.set('nikki', 'proxy', 'bypass_fwmark', fw_list);
+		uci.save('nikki');
+		uci.commit('nikki');
+	}
+
+	push(exprs, `(.tun | select(. != null)) |= (.["auto-route"] = false | .["auto-redirect"] = false)`);
+
+	if (config.dns && config.dns['enhanced-mode'] == 'fake-ip') {
+		const domains = ['qq.com'];
+		const addDom = raw => {
+			let h = replace(trim(`${raw ?? ''}`), /^https?:\/\//i, '');
+			h = split(h, '/')[0] ?? '';
+			if (!h || match(h, /^\[/)) return;
+			h = trim(split(h, ':')[0] ?? '');
+			if (h && !match(h, /^[0-9.]+$/)) push(domains, h);
+		};
+
+		uci.foreach('natmap', 'global', g => {
+			if (!uci_bool(g.enable)) return;
+			addDom(g.def_tcp_stun); addDom(g.def_udp_stun); addDom(g.def_http_server);
+		});
+		uci.foreach('natmap', 'natmap', n => {
+			if (!uci_bool(n.enable)) return;
+			addDom(n.stun_server); addDom(n.http_server);
+		});
+
+		const raw_mode = lc(config.dns['fake-ip-filter-mode'] ?? 'blacklist');
+		const mode = (raw_mode == 'rule' && !length(config.dns['fake-ip-filter'])) ? 'blacklist' : raw_mode;
+		const items = mode == 'rule' ? ['DOMAIN-REGEX,^stun[0-9]*\\.,real-ip'] : ['stun.*', 'stun.*.*', 'stun.*.*.*'];
+
+		for (let d in uniq(domains)) {
+			if (mode == 'rule') {
+				if (!match(d, /^stun[0-9]*\./i)) push(items, `DOMAIN-SUFFIX,${d},real-ip`);
+			} else if (mode == 'whitelist') {
+				push(items, d, `*.${d}`, `+.${d}`);
+			} else if (!match(d, /^stun\./i)) {
+				push(items, `+.${d}`);
+			}
+		}
+
+		const cond = join(' and ', map(items, x => `. != ${qs(x)}`));
+		push(exprs, mode == 'whitelist'
+			? `(.dns["fake-ip-filter"] | select(. != null)) |= map(select(${cond}))`
+			: `(.dns["fake-ip-filter"] // []) as $cur | .dns["fake-ip-filter"] = (${sprintf('%J', items)} + ($cur | map(select(${cond}))))`
+		);
+	}
 };
 
 push(exprs, `
