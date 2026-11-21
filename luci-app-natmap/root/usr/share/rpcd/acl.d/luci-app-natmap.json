@@ -1,0 +1,26 @@
+{
+	"luci-app-natmap": {
+		"description": "Grant access to LuCI app natmap",
+		"read": {
+			"file": {
+				"/etc/natmap/ddns": [ "list" ],
+				"/etc/natmap/client": [ "list" ],
+				"/etc/natmap/notify": [ "list" ],
+				"/var/run/natmap/*": [ "read" ],
+				"/tmp/run/natmap/*": [ "read" ],
+				"/tmp/natmap-natBehavior": [ "read" ],
+				"/bin/sh": [ "exec" ],
+				"/etc/init.d/natmap reload *": [ "exec" ],
+				"/usr/libexec/natmap/natcheck.sh": [ "exec" ]
+			},
+			"ubus": {
+				"service": [ "list" ],
+				"luci.natmap": [ "*" ]
+			},
+			"uci": ["natmap"]
+		},
+		"write": {
+			"uci": ["natmap"]
+		}
+	}
+}

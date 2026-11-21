@@ -1,0 +1,12 @@
+#!/bin/sh
+
+chmod -R +x \
+	/etc/natmap/* \
+	/usr/lib/natmap/* \
+	/etc/init.d/natmap \
+	/usr/libexec/natmap/natcheck.sh 2>/dev/null || true
+
+[ -x "/etc/natmap/client/qBittorrent" ] && ln -sf "/etc/natmap/client/qBittorrent" "/etc/natmap/client/qBittorrent-announce_port"
+rm -f /tmp/luci-*
+
+exit 0
