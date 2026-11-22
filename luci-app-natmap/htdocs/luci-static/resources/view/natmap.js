@@ -9,10 +9,11 @@
 'require tools.widgets as widgets';
 
 const conf = 'natmap';
-const natmap_instance = 'natmap';
+const etc_path = '/etc/natmap';
+const tcp_list = etc_path + '/tcp.list';
+const udp_list = etc_path + '/udp.list';
 const nattest_fw_rulename = 'natmap-natest';
 const nattest_result_path = '/tmp/natmap-natBehavior';
-const etc_path = '/etc/natmap';
 
 const callServiceList = rpc.declare({
 	object: 'service',
@@ -53,7 +54,7 @@ function getStatus() {
 				((k) => {
 					promises.push(fs.read(f).then((res) => {
 						status[k] = JSON.parse(res);
-					}).catch((e) =>{}));
+					}).catch((e) => {}));
 				})(key);
 			}
 		}
@@ -104,85 +105,109 @@ function parseServerList(text) {
 	let out = [];
 	(text || '').split('\n').forEach((line) => {
 		line = line.trim();
-		if (!line || line.charAt(0) === '#')
-			return;
-		out.push(line);
+		if (line) out.push(line);
 	});
 	return out;
 }
 
-function renderStunDownloadBtn(o, url, path) {
-	const btnLabel = _('Download Server List');
-	o.renderWidget = function (section_id, option_index, cfgvalue) {
-		const node = form.Value.prototype.renderWidget.apply(this, arguments);
-		// const addServers = (servers) => {
-		// 	if (!servers.length) return 0;
-		// 	const elem = this.getUIElement(section_id);
-		// 	if (elem && typeof elem.addChoices === 'function') {
-		// 		elem.addChoices(servers, {});
-		// 		return servers.length;
-		// 	}
-		// 	return 0;
-		// };
+const StunListValue = form.ListValue.extend({
+	downloadUrl: '', listPath: '',
+	renderWidget(section_id, option_index, cfgvalue) {
+		if (cfgvalue != null && cfgvalue !== '' &&
+		    (this.keylist || []).indexOf(cfgvalue) < 0) {
+			this.value(cfgvalue, cfgvalue);
+		}
 
-		// fs.stat(path).then(p => {
-		// 	fs.read_direct(p.path).then((text) => {
-		// 		text.trim() && addServers(parseServerList(text));
-		// 	}).catch(() => {});
-		// })
-		// .catch(() => {});
+		const node = this.super('renderWidget', arguments);
+		const customInput = E('input', {
+			'class': 'cbi-input-text',
+			'placeholder': _('Custom server')
+		});
+		const addCustomBtn = E('button', {
+			'class': 'btn cbi-button-add',
+			'click': ui.createHandlerFn(this, function () {
+				const val = (customInput.value || '').trim();
+				if (!val) return;
 
-		const btn = E('button', {
+				if ((this.keylist || []).indexOf(val) < 0) this.value(val, val);
+
+				const selectEl = node.querySelector('select');
+				if (selectEl) {
+					let opt = Array.from(selectEl.options).find(item => item.value === val);
+					if (!opt) {
+						opt = E('option', { 'value': val }, val);
+						selectEl.appendChild(opt);
+					}
+					selectEl.value = val;
+					selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+				}
+				customInput.value = '';
+			})
+		}, _('Add'));
+
+		const downloadBtn = E('button', {
 			'class': 'btn cbi-button-action',
-			'click': ui.createHandlerFn(this, async function (ev) {
-				ev.preventDefault();
-				btn.disabled = true;
-				btn.textContent = _('Downloading...');
+			'click': ui.createHandlerFn(this, async function () {
+				if (!this.downloadUrl || !this.listPath) return;
+
 				try {
-					const text = await fs.exec_direct('/bin/sh', [
-						'-c',
-						"curl -fsSL --connect-timeout 10 '%s' 2>/dev/null || wget -qO- --timeout=10 '%s' 2>/dev/null".format(url, url)
+					const text = await fs.exec_direct('/bin/sh', [ '-c',
+						 "curl -fsSL --connect-timeout 10 --retry 3 --retry-delay 1 '%s' 2>/dev/null || wget -qO- --timeout=10 --tries=3 '%s' 2>/dev/null".format(this.downloadUrl, this.downloadUrl)
 					]);
-					if (!text || !text.trim())
-						throw new Error('empty response');
+					if (!text || !text.trim()) throw new Error(_('empty response'));
+					await fs.write(this.listPath, text);
 
-					await fs.write(path, text);
+					const selectEl = node.querySelector('select');
+					let added = 1;
+					(parseServerList(text) || []).forEach((line) => {
+						if ((this.keylist || []).indexOf(line) < 0) {
+							this.value(line, line);
+							if (selectEl) selectEl.appendChild(E('option', { 'value': line }, line));
+							added++;
+						}
+					});
 
-					const servers = parseServerList(text);
-					// const count = addServers(servers);
-					ui.addNotification(null, E('p', _('Downloaded %d servers to %s').format(servers.length, path)), 'info');
+					ui.addTimeLimitedNotification(null, E('p', _('Downloaded %d servers to %s').format(added, this.listPath)), 2000, 'info');
 				} catch (e) {
 					ui.addNotification(null, E('p', _('Download failed: %s').format(e.message)), 'error');
-				} finally {
-					btn.disabled = false;
-					btn.textContent = btnLabel;
 				}
 			})
-		}, btnLabel);
+		}, _('Download Server List'));
 
 		node.classList.add('control-group');
-		node.appendChild(btn);
+		node.appendChild(downloadBtn);
+
+		const extraBar = E('div', {
+			'style': 'display: flex; gap: 6px; margin-top: 6px;'
+		}, [ customInput, addCustomBtn ]);
+
+		requestAnimationFrame(() => {
+			if (node.parentNode && extraBar.parentNode !== node.parentNode) {
+				node.insertAdjacentElement('afterend', extraBar);
+			}
+		});
+
 		return node;
-	};
-}
+	}
+});
 
 return view.extend({
 	load() {
-	return Promise.all([
-		getStatus(),
-		network.getWANNetworks(),
-		L.resolveDefault(fs.stat('/usr/bin/stunclient'), null),
-		L.resolveDefault(fs.read(nattest_result_path), null),
-		callHostHints(),
-		L.resolveDefault(fs.list(etc_path + '/client'), []),
-		L.resolveDefault(fs.list(etc_path + '/notify'), []),
-		L.resolveDefault(fs.list(etc_path + '/ddns'), []),
-		callGetCongestions().then((res) => { return res.algorithm }),
-		L.resolveDefault(fs.read(etc_path + '/valid_hosts_rfc5780_tcp.txt'), null),
-		L.resolveDefault(fs.read(etc_path + '/valid_hosts_rfc5780.txt'), null),
-		uci.load('firewall'),
-		uci.load('natmap')
-	]);
+		return Promise.all([
+			getStatus(),
+			network.getWANNetworks(),
+			L.resolveDefault(fs.stat('/usr/bin/stunclient'), null),
+			L.resolveDefault(fs.read(nattest_result_path), null),
+			callHostHints(),
+			L.resolveDefault(fs.list(etc_path + '/client'), []),
+			L.resolveDefault(fs.list(etc_path + '/notify'), []),
+			L.resolveDefault(fs.list(etc_path + '/ddns'), []),
+			callGetCongestions().then((res) => { return res.algorithm; }),
+			L.resolveDefault(fs.read(tcp_list), null),
+			L.resolveDefault(fs.read(udp_list), null),
+			uci.load('firewall'),
+			uci.load('natmap')
+		]);
 	},
 
 	render(res) {
@@ -194,7 +219,7 @@ return view.extend({
 		const scripts_client = res[5] ? res[5] : [];
 		const scripts_notify = res[6] ? res[6] : [];
 		const scripts_ddns = res[7] ? res[7] : [];
-		const congestions = res[8];
+		const congestions = res[8] || [];
 		const stun_list_tcp = parseServerList(res[9]);
 		const stun_list_udp = parseServerList(res[10]);
 
@@ -210,8 +235,8 @@ return view.extend({
 		o.inputstyle = 'apply';
 		o.onclick = function() {
 			return fs.exec('/etc/init.d/natmap', ['reload', ''])
-				.then((res) => { return window.location = window.location.href.split('#')[0] })
-				.catch((e) => { ui.addNotification(null, E('p', e.message), 'error') });
+				.then(() => { window.location = window.location.href.split('#')[0]; })
+				.catch((e) => { ui.addNotification(null, E('p', e.message), 'error'); });
 		};
 
 		o = s.option(form.Flag, 'enable', _('Enable'));
@@ -222,31 +247,27 @@ return view.extend({
 			_('Delay in seconds before starting the service.'));
 		o.datatype = 'uinteger';
 
-		o = s.option(form.Value, 'def_tcp_stun', _('Default ') + _('TCP STUN ') + _('Server'),
+		o = s.option(StunListValue, 'def_tcp_stun', _('Default ') + _('TCP STUN ') + _('Server'),
 			_('Available server <a href="%s" target="_blank">references</a>')
 				.format(_('https://github.com/muink/rfc5780-stun-server/blob/master/valid_hosts_rfc5780_tcp.txt')));
-		o.datatype = 'or(hostname, hostport)';
 		o.rmempty = false;
+		o.downloadUrl = 'https://raw.githubusercontent.com/muink/rfc5780-stun-server/master/valid_hosts_rfc5780_tcp.txt';
+		o.listPath = tcp_list;
 		stun_list_tcp.forEach((srv) => srv && o.value(srv));
-		renderStunDownloadBtn(o,
-			'https://raw.githubusercontent.com/muink/rfc5780-stun-server/master/valid_hosts_rfc5780_tcp.txt',
-			etc_path + '/valid_hosts_rfc5780_tcp.txt');
 
-		o = s.option(form.Value, 'def_udp_stun', _('Default ') + _('UDP STUN ') + _('Server'),
+		o = s.option(StunListValue, 'def_udp_stun', _('Default ') + _('UDP STUN ') + _('Server'),
 			_('Available server <a href="%s" target="_blank">references</a>')
 				.format(_('https://github.com/muink/rfc5780-stun-server/blob/master/valid_hosts_rfc5780.txt')));
-		o.datatype = 'or(hostname, hostport)';
 		o.rmempty = false;
+		o.downloadUrl = 'https://raw.githubusercontent.com/muink/rfc5780-stun-server/master/valid_hosts_rfc5780.txt';
+		o.listPath = udp_list;
 		stun_list_udp.forEach((srv) => srv && o.value(srv));
-		renderStunDownloadBtn(o,
-			'https://raw.githubusercontent.com/muink/rfc5780-stun-server/master/valid_hosts_rfc5780.txt',
-			etc_path + '/valid_hosts_rfc5780.txt');
 
 		o = s.option(form.Value, 'def_http_server', _('Default ') + _('HTTP keep-alive ') + _('Server'));
 		o.datatype = 'or(hostname, hostport)';
-        o.value('qq.com');
-        o.value('163.com');
-        o.value('baidu.com');
+		o.value('qq.com');
+		o.value('163.com');
+		o.value('baidu.com');
 		o.rmempty = false;
 
 		o = s.option(form.Value, 'def_fwmark_value', _('Default ') + _('Fwmark value'));
@@ -266,35 +287,33 @@ return view.extend({
 		o.default = 5;
 		o.rmempty = false;
 
-		o = s.option(form.Value, 'test_port', _('NATBehavior-Test port open on'), _('Please check <a href="%s"><b>Firewall Rules</b></a> to avoid port conflicts.</br>')
-			.format(L.url('admin', 'network', 'firewall'))
+		o = s.option(form.Value, 'test_port', _('NATBehavior-Test port open on'),
+			_('Please check <a href="%s"><b>Firewall Rules</b></a> to avoid port conflicts.</br>')
+				.format(L.url('admin', 'network', 'firewall'))
 			+ _('luci check may not detect all conflicts.'));
 		o.datatype = "and(port, min(1))";
 		o.placeholder = 3445;
 		o.rmempty = false;
 		o.validate = function(section_id, value) {
-			let conf = 'firewall';
-			let fw_forwards = uci.sections(conf, 'redirect');
-			let fw_rules = uci.sections(conf, 'rule');
+			let fwcfg = 'firewall';
+			let fw_forwards = uci.sections(fwcfg, 'redirect');
+			let fw_rules = uci.sections(fwcfg, 'rule');
 
 			for (let i = 0; i < fw_forwards.length; i++) {
 				let sid = fw_forwards[i]['.name'];
-				if (value == uci.get(conf, sid, 'src_dport'))
+				if (value == uci.get(fwcfg, sid, 'src_dport'))
 					return _('This port is already used');
-			};
+			}
 
 			for (let i = 0; i < fw_rules.length; i++) {
 				let sid = fw_rules[i]['.name'];
-				if (uci.get(conf, sid, 'name') == nattest_fw_rulename)
+				if (uci.get(fwcfg, sid, 'name') == nattest_fw_rulename)
 					continue;
-				if ( (uci.get(conf, sid, 'dest') || '') == '' ) {
-					if (value == uci.get(conf, sid, 'dest_port'))
+				if ((uci.get(fwcfg, sid, 'dest') || '') == '') {
+					if (value == uci.get(fwcfg, sid, 'dest_port'))
 						return _('This port is already used');
-				} else {
-					// dest not this device
-					continue;
 				}
-			};
+			}
 
 			return true;
 		};
@@ -310,11 +329,10 @@ return view.extend({
 					found = sid;
 					break;
 				}
-			};
+			}
 
 			let wan_zone = 'wan';
-			if(wans) {
-				let def_wan = wans[0].getName();
+			if (Array.isArray(wans) && wans.length > 0) {
 				let zones = uci.sections(fwcfg, 'zone');
 				for (let i = 0; i < zones.length; i++) {
 					let sid = zones[i]['.name'];
@@ -331,50 +349,55 @@ return view.extend({
 						break;
 					}
 				}
-			};
+			}
 
-			if(found) {
+			if (found) {
 				if (value != uci.get(fwcfg, found, 'dest_port'))
 					uci.set(fwcfg, found, 'dest_port', value);
-					//fs.exec('/etc/init.d/firewall', ['reload']); // reload on init.d/natmap:service_triggers
 			} else {
 				let sid = uci.add(fwcfg, 'rule');
 				uci.set(fwcfg, sid, 'name', nattest_fw_rulename);
 				uci.set(fwcfg, sid, 'src', wan_zone);
 				uci.set(fwcfg, sid, 'dest_port', value);
 				uci.set(fwcfg, sid, 'target', 'ACCEPT');
-				//fs.exec('/etc/init.d/firewall', ['reload']); // reload on init.d/natmap:service_triggers
 			}
+
+			uci.save(fwcfg);
 		};
 
 		o = s.option(form.Button, '_nattest', _('Check NAT Behavior'));
 		o.inputtitle = _('Check');
 		o.inputstyle = 'apply';
-		if (! has_stunclient) {
+		if (!has_stunclient) {
 			o.description = _('To check NAT Behavior you need to install <a href="%s"><b>stuntman-client</b></a> first')
 				.format('https://github.com/muink/openwrt-stuntman');
 			o.readonly = true;
 		}
 		o.onclick = function() {
-			let test_port = uci.get_first(conf, 'global', 'test_port');
-			let udp_stun_host = uci.get_first(conf, 'global', 'def_udp_stun');
-			let tcp_stun_host = uci.get_first(conf, 'global', 'def_tcp_stun');
+			let test_port = uci.get_first(conf, 'global', 'test_port') || '';
+			let udp_stun_host = uci.get_first(conf, 'global', 'def_udp_stun') || '';
+			let tcp_stun_host = uci.get_first(conf, 'global', 'def_tcp_stun') || '';
+
+			if (!test_port || !udp_stun_host || !tcp_stun_host) {
+				ui.addNotification(null, E('p', _('Please save settings first.')), 'warning');
+				return;
+			}
 
 			return fs.exec('/usr/libexec/natmap/natcheck.sh', [
 				udp_stun_host + (udp_stun_host.match(/:\d+$/) ? '' : ':3478'),
 				tcp_stun_host + (tcp_stun_host.match(/:\d+$/) ? '' : ':3478'),
 				test_port, nattest_result_path])
-				.then((res) => { return window.location = window.location.href.split('#')[0] })
-				.catch((e) => { ui.addNotification(null, E('p', e.message), 'error') });
+				.then(() => { window.location = window.location.href.split('#')[0]; })
+				.catch((e) => { ui.addNotification(null, E('p', e.message), 'error'); });
 		};
 
 		if (nattest_result.length) {
-			o = s.option(form.DummyValue, '_nattest_result', '　');
+			o = s.option(form.DummyValue, '_nattest_result', ' ');
 			o.rawhtml = true;
-			o.cfgvalue = function(section_id) {
+			o.cfgvalue = function() {
 				return '<details><summary>' + _('Expand/Collapse result') + '</summary>' + nattest_result + '</details>';
-			}
-		};
+			};
+		}
 
 		s = m.section(form.GridSection, 'natmap');
 		s.sortable  = true;
@@ -392,25 +415,6 @@ return view.extend({
 		o.default = o.disabled;
 		o.editable = true;
 		o.modalonly = false;
-
-		o = s.taboption('general', form.Value, 'interval', _('Keep-alive interval'));
-		o.datatype = "and(uinteger, min(1))";
-		o.modalonly = true;
-
-		o = s.taboption('general', form.Value, 'stun_cycle', _('STUN check cycle (once every n intervals)'), _('For UDP mode'));
-		o.datatype = 'uinteger';
-		o.modalonly = true;
-
-		o = s.taboption('general', form.Value, 'stun_server', _('STUN server'));
-		o.datatype = 'or(hostname, hostport)';
-		o.modalonly = true;
-
-		o = s.taboption('general', form.Value, 'http_server', _('HTTP server'), _('For TCP mode'));
-		o.datatype = 'or(hostname, hostport)';
-		o.modalonly = true;
-
-		o = s.taboption('general', form.Value, 'fwmark_value', _('Fwmark value'), _('Mark fwmark for STUN/HTTP outbound traffic'));
-		o.modalonly = true;
 
 		o = s.taboption('general', form.Value, 'comment', _('Comment'));
 
@@ -435,8 +439,7 @@ return view.extend({
 		};
 		o.validate = function(section_id, value) {
 			let opt = this.section.getOption('forward_target').getUIElement(section_id),
-			choices = transformHostHints(value, hosts, true);
-
+				choices = transformHostHints(value, hosts, true);
 			opt.clearChoices();
 			opt.addChoices([
 				'127.0.0.1',
@@ -463,18 +466,35 @@ return view.extend({
 		o.datatype = "or(port, portrange)";
 		o.rmempty = false;
 		o.validate = function(section_id, value) {
-			let regexp = new RegExp(/^([1-9]\d*)(-([1-9]\d*))?$/)
-
+			let regexp = new RegExp(/^([1-9]\d*)(-([1-9]\d*))?$/);
 			if (!regexp.test(value))
 				return _('Expecting: %s').format(_('Non-0 port'));
-
 			return true;
 		};
 
 		o = s.taboption('general', form.Flag, 'port_pointer', _('Randomly allocation ports'),
 			_('Allocation ports randomly instead of sequentially.'));
 		o.default = o.disabled;
-		o.depends({port: /^[1-9]\d*-[1-9]\d*$/});
+		o.depends({ port: /^[1-9]\d*-[1-9]\d*$/ });
+		o.modalonly = true;
+
+		o = s.taboption('general', form.Value, 'interval', _('Keep-alive interval'));
+		o.datatype = "and(uinteger, min(1))";
+		o.modalonly = true;
+
+		o = s.taboption('general', form.Value, 'stun_cycle', _('STUN check cycle (once every n intervals)'), _('For UDP mode'));
+		o.datatype = 'uinteger';
+		o.modalonly = true;
+
+		o = s.taboption('general', form.Value, 'stun_server', _('STUN server'));
+		o.datatype = 'or(hostname, hostport)';
+		o.modalonly = true;
+
+		o = s.taboption('general', form.Value, 'http_server', _('HTTP server'), _('For TCP mode'));
+		o.datatype = 'or(hostname, hostport)';
+		o.modalonly = true;
+
+		o = s.taboption('general', form.Value, 'fwmark_value', _('Fwmark value'), _('Mark fwmark for STUN/HTTP outbound traffic'));
 		o.modalonly = true;
 
 		o = s.taboption('forward', form.Flag, 'forward', _('Forward mode'));
@@ -483,13 +503,13 @@ return view.extend({
 		o.textvalue = function(section_id) {
 			let cval = this.cfgvalue(section_id) || this.default;
 			let mode = function() {
-				let cval = this.cfgvalue(section_id) || this.default;
-				let i = this.keylist.indexOf(cval);
-				return [this.vallist[i], cval];
+				let v = this.cfgvalue(section_id) || this.default;
+				let i = this.keylist.indexOf(v);
+				return [this.vallist[i], v];
 			}.call(this.section.getOption('forward_mode'));
 			let loopback = function() {
-				let cval = this.cfgvalue(section_id) || this.default;
-				return (cval == this.enabled) ? ' L' : '';
+				let v = this.cfgvalue(section_id) || this.default;
+				return (v == this.enabled) ? ' L' : '';
 			}.call(this.section.getOption('natloopback'));
 			return (cval == this.enabled) ? mode[0] + (mode[1] === 'dnat' ? loopback : '') : _('No');
 		};
@@ -504,9 +524,9 @@ return view.extend({
 		o.modalonly = true;
 		o.validate = function(section_id, value) {
 			let family = function() {
-				let E = document.getElementById('widget.' + this.cbid(section_id).match(/.+\./) + 'family');
-				let i = E ? E.selectedIndex : null;
-				return E ? E.options[i].value : null;
+				let el = document.getElementById('widget.' + this.cbid(section_id).match(/.+\./) + 'family');
+				let i = el ? el.selectedIndex : -1;
+				return (el && i >= 0 && el.options[i]) ? el.options[i].value : null;
 			}.call(this.section.getOption('family'));
 
 			if (value == 'dnat' && family == 'ipv6')
@@ -525,7 +545,7 @@ return view.extend({
 		o.value('', _('Default'));
 		congestions.forEach((res) => {
 			o.value.apply(o, [res]);
-		})
+		});
 		o.depends('forward_mode', 'via');
 		o.modalonly = true;
 
@@ -543,11 +563,13 @@ return view.extend({
 		o.validate = function(section_id, value) {
 			const forward_mode = this.section.getUIElement(section_id, 'forward_mode').getValue();
 
-			if (new RegExp(/^[a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})*\.?$/).test(value) && !new RegExp(/^[0-9]+(\.[0-9]+){3}$/).test(value) && forward_mode === 'dnat')
+			if (new RegExp(/^[a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})*\.?$/).test(value) &&
+				!new RegExp(/^[0-9]+(\.[0-9]+){3}$/).test(value) &&
+				forward_mode === 'dnat')
 				return _('Expecting: %s').format(_('The hostname not support under DNAT mode'));
 
 			return true;
-		}
+		};
 		o.rmempty = false;
 		o.retain = true;
 		o.depends('forward', '1');
@@ -561,10 +583,10 @@ return view.extend({
 			let cval = this.cfgvalue(section_id);
 			let i = this.keylist.indexOf(cval);
 			let enforward = function() {
-				let cval = this.cfgvalue(section_id) || this.default;
-				return (cval == this.enabled) ? true : false;
+				let v = this.cfgvalue(section_id) || this.default;
+				return (v == this.enabled);
 			}.call(this.section.getOption('forward'));
-			return enforward ? this.vallist[i] ?? cval : _('No');
+			return enforward ? (this.vallist[i] ?? cval) : _('No');
 		};
 
 		o = s.taboption('forward', form.Value, 'forward_port', _('Forward target port'), _('Set 0 will follow Public port'));
@@ -575,17 +597,17 @@ return view.extend({
 		o.textvalue = function(section_id) {
 			let cval = this.cfgvalue(section_id) || this.default;
 			let enforward = function() {
-				let cval = this.cfgvalue(section_id) || this.default;
-				return (cval == this.enabled) ? true : false;
+				let v = this.cfgvalue(section_id) || this.default;
+				return (v == this.enabled);
 			}.call(this.section.getOption('forward'));
 			let refresh = function() {
-				let cval = this.cfgvalue(section_id) || this.default;
-				return (cval == this.enabled) ? true : false;
+				let v = this.cfgvalue(section_id) || this.default;
+				return (v == this.enabled);
 			}.call(this.section.getOption('refresh'));
 			let cltname = function() {
-				let cval = this.cfgvalue(section_id) || this.default;
-				let i = this.keylist.indexOf(cval);
-				return this.vallist[i];
+				let v = this.cfgvalue(section_id) || this.default;
+				let i = this.keylist.indexOf(v);
+				return i >= 0 ? this.vallist[i] : v;
 			}.call(this.section.getOption('clt_script'));
 			return enforward ? ((cval == '0' && refresh) ? cltname : cval) : _('No');
 		};
@@ -639,15 +661,15 @@ return view.extend({
 		o = s.option(form.DummyValue, '_external_ip', _('External IP'));
 		o.modalonly = false;
 		o.textvalue = function(section_id) {
-			let s = status[section_id];
-			if (s) return s.ip;
+			let st = status[section_id];
+			if (st) return st.ip;
 		};
 
 		o = s.option(form.DummyValue, '_external_port', _('External Port'));
 		o.modalonly = false;
 		o.textvalue = function(section_id) {
-			let s = status[section_id];
-			if (s) return s.port;
+			let st = status[section_id];
+			if (st) return st.port;
 		};
 
 		o = s.taboption('notify', form.Flag, 'notify_enable', _('EnNotify'));
@@ -723,8 +745,8 @@ return view.extend({
 			let fqdn = uci.get(conf, section_id, 'ddns_txt');
 			let cont = uci.get(conf, section_id, 'ddns_txt_content');
 
-			if ( fqdn && cont )
-				return fqdn + '. <TTL> IN TXT　' + cont;
+			if (fqdn && cont)
+				return fqdn + '. <TTL> IN TXT ' + cont;
 		};
 		o.modalonly = true;
 
@@ -737,7 +759,7 @@ return view.extend({
 		o.placeholder = '"port={{port}}; target={{ip}}"';
 		o.default = '"port={{port}}; target={{ip}}"';
 		o.rmempty = false;
-		o.depends({ ddns_txt: "", "!reverse": true })
+		o.depends({ ddns_txt: "", "!reverse": true });
 		o.modalonly = true;
 
 		o = s.taboption('ddns', form.DummyValue, '_ddns_srv_dump', _('SRV Record'));
@@ -750,8 +772,8 @@ return view.extend({
 			let prio = uci.get(conf, section_id, 'ddns_srv_priority');
 			let weig = uci.get(conf, section_id, 'ddns_srv_weight');
 
-			if ( fqdn && serv && prot && targ && prio && weig )
-				return '_' + serv + '._' + prot + '.' + fqdn + '. <TTL> IN SRV　' + prio + ' ' + weig + ' <port> ' + targ + '.';
+			if (fqdn && serv && prot && targ && prio && weig)
+				return '_' + serv + '._' + prot + '.' + fqdn + '. <TTL> IN SRV ' + prio + ' ' + weig + ' <port> ' + targ + '.';
 		};
 		o.modalonly = true;
 
@@ -767,7 +789,7 @@ return view.extend({
 		o.value('easytier');
 		o.default = 'minecraft';
 		o.rmempty = false;
-		o.depends({ ddns_srv: "", "!reverse": true })
+		o.depends({ ddns_srv: "", "!reverse": true });
 		o.modalonly = true;
 
 		o = s.taboption('ddns', form.Value, 'ddns_srv_proto', _('Protocol'), _('Can refer to RFC8552'));
@@ -777,27 +799,27 @@ return view.extend({
 		o.value('wg', _('WireGuard'));
 		o.default = 'tcp';
 		o.rmempty = false;
-		o.depends({ ddns_srv: "", "!reverse": true })
+		o.depends({ ddns_srv: "", "!reverse": true });
 		o.modalonly = true;
 
 		o = s.taboption('ddns', form.Value, 'ddns_srv_target', _('Target'));
 		o.datatype = 'hostname';
 		o.placeholder = 'cdn.example.com';
-		o.depends({ ddns_srv: "", "!reverse": true })
+		o.depends({ ddns_srv: "", "!reverse": true });
 		o.modalonly = true;
 
 		o = s.taboption('ddns', form.Value, 'ddns_srv_priority', _('Priority'));
 		o.datatype = 'range(0, 65535)';
 		o.default = 0;
 		o.rmempty = false;
-		o.depends({ ddns_srv: "", "!reverse": true })
+		o.depends({ ddns_srv: "", "!reverse": true });
 		o.modalonly = true;
 
 		o = s.taboption('ddns', form.Value, 'ddns_srv_weight', _('Weight'));
 		o.datatype = 'range(0, 65535)';
 		o.default = 65535;
 		o.rmempty = false;
-		o.depends({ ddns_srv: "", "!reverse": true })
+		o.depends({ ddns_srv: "", "!reverse": true });
 		o.modalonly = true;
 
 		o = s.taboption('ddns', form.DummyValue, '_ddns_https_dump', _('HTTPS Record'));
@@ -808,8 +830,8 @@ return view.extend({
 			let svcp = uci.get(conf, section_id, 'ddns_https_svcparams');
 			let prio = uci.get(conf, section_id, 'ddns_https_priority');
 
-			if ( fqdn && targ && svcp && prio )
-				return fqdn + '. <TTL> IN HTTPS　' + prio + ' ' + targ + ' ' + svcp;
+			if (fqdn && targ && svcp && prio)
+				return fqdn + '. <TTL> IN HTTPS ' + prio + ' ' + targ + ' ' + svcp;
 		};
 		o.modalonly = true;
 
@@ -823,21 +845,21 @@ return view.extend({
 		o.placeholder = '. or web.example.com';
 		o.default = '.';
 		o.rmempty = false;
-		o.depends({ ddns_https: "", "!reverse": true })
+		o.depends({ ddns_https: "", "!reverse": true });
 		o.modalonly = true;
 
 		o = s.taboption('ddns', form.Value, 'ddns_https_svcparams', _('SvcParams'));
 		o.placeholder = 'alpn="h3,h3-29,h2,http/1.1" ipv4hint= ipv6hint= port=';
 		o.default = 'alpn="h2,http/1.1"';
 		o.rmempty = false;
-		o.depends({ ddns_https: "", "!reverse": true })
+		o.depends({ ddns_https: "", "!reverse": true });
 		o.modalonly = true;
 
 		o = s.taboption('ddns', form.Value, 'ddns_https_priority', _('Priority'));
 		o.datatype = 'range(1, 65535)';
 		o.default = 1;
 		o.rmempty = false;
-		o.depends({ ddns_https: "", "!reverse": true })
+		o.depends({ ddns_https: "", "!reverse": true });
 		o.modalonly = true;
 
 		o = s.taboption('custom', form.Value, 'custom_script', _('Custom Script'));
@@ -849,7 +871,7 @@ return view.extend({
 		o.inputstyle = 'apply';
 		o.onclick = function(ev, section_id) {
 			return fs.exec('/etc/init.d/natmap', ['reload', section_id])
-				.catch((e) => { ui.addNotification(null, E('p', e.message), 'error') });
+				.catch((e) => { ui.addNotification(null, E('p', e.message), 'error'); });
 		};
 		o.editable = true;
 		o.modalonly = false;
