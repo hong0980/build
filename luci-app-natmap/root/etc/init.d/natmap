@@ -147,8 +147,8 @@ validate_section_natmap() {
 		'ddns_https_svcparams:string:alpn="h2,http/1.1"' \
 		'ddns_https_priority:range(1, 65535):1' \
 		'custom_script:file' \
-		'log_stdout:bool:1' \
-		'log_stderr:bool:1'
+		'log_stdout:bool:0' \
+		'log_stderr:bool:0'
 }
 
 # ip_match <hostname>
@@ -182,7 +182,6 @@ fwmark_match() {
 }
 
 natmap_instance() {
-
 	procd_open_instance "$1"
 	procd_set_param command "$PROG" \
 		${interval:+-k "$interval"} \
@@ -190,7 +189,7 @@ natmap_instance() {
 		${stun_server:+-s "$stun_server"} \
 		${http_server:+-h "$http_server"} \
 		${fwmark_value:+-f "$fwmark_value"} \
-		${port:+-b "$([ "$port_pointer" = 1 ] && echo ${port/-/\~} || echo $port)"} \
+		${port:+-b "$([ "$port_pointer" = 1 ] && echo ${port/-/\~} || echo $port)"}
 
 	[ "${family}" = ipv4 ] && procd_append_param command -4
 	[ "${family}" = ipv6 ] && procd_append_param command -6

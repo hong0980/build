@@ -34,6 +34,22 @@ const callGetCongestions = rpc.declare({
 	expect: { '': {} }
 });
 
+const callServiceStatus = rpc.declare({
+    object: 'service',
+    method: 'list',
+    params: ['name'],
+    filter: function (data) {
+        for (const svcName in data) {
+            const svc = data[svcName];
+            if (!svc || !svc.instances) continue;
+            for (const instName in svc.instances) {
+                return !!svc.instances[instName].running;
+            }
+        }
+        return false;
+    }
+});
+
 function getInstances() {
 	return L.resolveDefault(callServiceList(conf), {}).then((res) => {
 		try {
@@ -205,6 +221,7 @@ return view.extend({
 			callGetCongestions().then((res) => { return res.algorithm; }),
 			L.resolveDefault(fs.read(tcp_list), null),
 			L.resolveDefault(fs.read(udp_list), null),
+			callServiceStatus('natmap'),
 			uci.load('firewall'),
 			uci.load('natmap')
 		]);
@@ -212,23 +229,35 @@ return view.extend({
 
 	render(res) {
 		const status = res[0];
-		const wans = res[1];
+		const wans   = res[1];
 		const has_stunclient = res[2] ? res[2].path : null;
 		const nattest_result = res[3] ? res[3].trim() : '';
 		const hosts = res[4];
-		const scripts_client = res[5] ? res[5] : [];
-		const scripts_notify = res[6] ? res[6] : [];
-		const scripts_ddns = res[7] ? res[7] : [];
-		const congestions = res[8] || [];
-		const stun_list_tcp = parseServerList(res[9]);
-		const stun_list_udp = parseServerList(res[10]);
-
+		const scripts_client = res[5];
+		const scripts_notify = res[6];
+		const scripts_ddns   = res[7];
+		const congestions    = res[8] || [];
+		const stun_list_tcp  = parseServerList(res[9]);
+		const stun_list_udp  = parseServerList(res[10]);
+		const running  = res[11];
 		let m, s, o;
 
 		m = new form.Map('natmap', _('NATMap'));
 
+		s = m.section(form.TypedSection);
+		s.render = () =>
+			E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
+				E('b', { style: `color:${running ? 'green' : 'red'}` }, [
+					'NATMap ' + (running ? _('RUNNING') : _('NOT RUNNING')),
+				])
+			]);
+
 		s = m.section(form.TypedSection, 'global');
 		s.anonymous = true;
+
+		o = s.option(form.Flag, 'enable', _('Enable'));
+		o.default = o.disabled;
+		o.rmempty = false;
 
 		o = s.option(form.Button, '_reload', _('Reload'));
 		o.inputtitle = _('Reload');
@@ -238,10 +267,6 @@ return view.extend({
 				.then(() => { window.location = window.location.href.split('#')[0]; })
 				.catch((e) => { ui.addNotification(null, E('p', e.message), 'error'); });
 		};
-
-		o = s.option(form.Flag, 'enable', _('Enable'));
-		o.default = o.disabled;
-		o.rmempty = false;
 
 		o = s.option(form.Value, 'boot_delay', _('Boot delay'),
 			_('Delay in seconds before starting the service.'));
@@ -365,6 +390,21 @@ return view.extend({
 			uci.save(fwcfg);
 		};
 
+		o = s.option(form.Flag, 'log_enable', _('日志记录'));
+		o.default = o.disabled;
+		o.rmempty = false;
+		o.description = _('将服务的标准输出和标准错误重定向到系统日志');
+		o.cfgvalue = function (section_id) {
+			const so = uci.get(conf, section_id, 'log_stdout');
+			const se = uci.get(conf, section_id, 'log_stderr');
+			return (so === '1' || se === '1') ? '1' : '0';
+		};
+		o.write = function (section_id, value) {
+			const v = (value === '1' || value === true) ? '1' : '0';
+			uci.set(conf, section_id, 'log_stdout', v);
+			uci.set(conf, section_id, 'log_stderr', v);
+		};
+
 		o = s.option(form.Button, '_nattest', _('Check NAT Behavior'));
 		o.inputtitle = _('Check');
 		o.inputstyle = 'apply';
@@ -397,7 +437,7 @@ return view.extend({
 			o.cfgvalue = function() {
 				return '<details><summary>' + _('Expand/Collapse result') + '</summary>' + nattest_result + '</details>';
 			};
-		}
+		};
 
 		s = m.section(form.GridSection, 'natmap');
 		s.sortable  = true;

@@ -8,31 +8,43 @@
 . /usr/lib/natmap/common.sh
 
 start() {
-	local retry='--connect-timeout 1 --retry 0'
-	local self_signed='-k'
-	local payload
-	case "$(basename "$0")" in
-		qBittorrent)
-			payload='json={"listen_port":'"${port}"'}';;
-		qBittorrent-announce_port)
-			payload='json={"announce_port":'"${port}"'}';;
-		*)
-			payload='json={"listen_port":'"${port}"'}';;
-	esac
-	local cookie="$($CURL $retry $self_signed -L -i \
-		-H "Referer: ${scheme}://${host}:${web_port}" \
-		-d "username=${username}&password=${password}" \
-		--url ${scheme}://${host}:${web_port}/api/v2/auth/login \
-		| grep -i set-cookie | sed -En 's#^.*\b((SID|QBT_SID_'"${web_port}"')=[^;]+);.*#\1#p')"
-	$CURL $retry $self_signed -L -X POST \
-		-b "$cookie" \
-		-d "$payload" \
-		--url ${scheme}://${host}:${web_port}/api/v2/app/setPreferences
-	$CURL $retry $self_signed -L -I \
-		--cookie "$cookie" \
-		--url ${scheme}://${host}:${web_port}/api/v2/auth/logout
-}
+	[ -n "$port" ] && [ -n "$host" ] && [ -n "$web_port" ] || return 1
 
+	local referer="${scheme:-http}://${host}:${web_port}"
+	local base="${referer}/api/v2"
+	local cookie="/tmp/qb_natmap_$$.cookie"
+	local payload
+
+	case "$(basename "$0")" in
+		qBittorrent-announce_port)
+			payload="{\"announce_port\":${port}}" ;;
+		*)
+			payload="{\"listen_port\":${port}}" ;;
+	esac
+
+	qb_req() {
+		"${CURL:-curl}" -sf --connect-timeout 1 -m 5 -k \
+			-H "Origin: ${referer}" \
+			-H "Referer: ${referer}" \
+			"$@"
+	}
+
+	rm -f "$cookie"
+	if qb_req -c "$cookie" \
+		--data-urlencode "username=${username}" \
+		--data-urlencode "password=${password}" \
+		"${base}/auth/login" >/dev/null 2>&1; then
+		qb_req -b "$cookie" -X POST \
+			--data-urlencode "json=${payload}" \
+			"${base}/app/setPreferences" >/dev/null 2>&1
+		local rc=$?
+		rm -f "$cookie"
+		return $rc
+	fi
+
+	rm -f "$cookie"
+	return 1
+}
 
 # All external parameters required
 ALL_PARAMS="host port scheme web_port username password"
