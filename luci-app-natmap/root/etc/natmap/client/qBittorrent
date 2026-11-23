@@ -38,6 +38,7 @@ start() {
 			--data-urlencode "json=${payload}" \
 			"${base}/app/setPreferences" >/dev/null 2>&1
 		local rc=$?
+		qb_req -b "$cookie" -X POST "${base}/auth/logout" >/dev/null 2>&1
 		rm -f "$cookie"
 		return $rc
 	fi

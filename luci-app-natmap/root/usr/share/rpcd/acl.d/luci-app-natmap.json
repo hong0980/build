@@ -11,7 +11,7 @@
 				"/tmp/natmap-natBehavior": [ "read" ],
 				"/bin/sh": [ "exec" ],
 				"/etc/init.d/natmap reload *": [ "exec" ],
-				"/usr/libexec/natmap/natcheck.sh": [ "exec" ]
+				"/usr/lib/natmap/natcheck.sh": [ "exec" ]
 			},
 			"ubus": {
 				"service": [ "list" ],

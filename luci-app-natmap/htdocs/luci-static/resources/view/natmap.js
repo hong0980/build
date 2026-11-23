@@ -34,48 +34,24 @@ const callGetCongestions = rpc.declare({
 	expect: { '': {} }
 });
 
-const callServiceStatus = rpc.declare({
-    object: 'service',
-    method: 'list',
-    params: ['name'],
-    filter: function (data) {
-        for (const svcName in data) {
-            const svc = data[svcName];
-            if (!svc || !svc.instances) continue;
-            for (const instName in svc.instances) {
-                return !!svc.instances[instName].running;
-            }
-        }
-        return false;
-    }
-});
-
-function getInstances() {
-	return L.resolveDefault(callServiceList(conf), {}).then((res) => {
-		try {
-			return res[conf].instances || {};
-		} catch (e) {}
-		return {};
-	});
-}
-
 function getStatus() {
-	return getInstances().then((instances) => {
-		let promises = [];
-		let status = {};
-		for (let key in instances) {
-			let i = instances[key];
-			if (i.running && i.pid) {
-				let f = '/var/run/natmap/' + i.pid + '.json';
-				((k) => {
-					promises.push(fs.read(f).then((res) => {
-						status[k] = JSON.parse(res);
-					}).catch((e) => {}));
-				})(key);
-			}
-		}
-		return Promise.all(promises).then(() => { return status; });
-	});
+	const status = {};
+	return L.resolveDefault(callServiceList(conf), {})
+		.then(res => res[conf]?.instances ?? {})
+		.then(instances => Promise.all(
+			Object.entries(instances)
+				.filter(([, i]) => i.running && i.pid)
+				.map(([k, i]) =>
+					fs.read(`/var/run/natmap/${i.pid}.json`)
+						.then(r => {
+							status[k] = Object.assign(
+								JSON.parse(r), { running: i.running }
+							);
+						})
+						.catch(() => {})
+				)
+		))
+		.then(() => status);
 }
 
 function transformHostHints(family, hosts, html) {
@@ -168,7 +144,7 @@ const StunListValue = form.ListValue.extend({
 
 				try {
 					const text = await fs.exec_direct('/bin/sh', [ '-c',
-						 "curl -fsSL --connect-timeout 10 --retry 3 --retry-delay 1 '%s' 2>/dev/null || wget -qO- --timeout=10 --tries=3 '%s' 2>/dev/null".format(this.downloadUrl, this.downloadUrl)
+						"curl -fsSL --connect-timeout 10 --retry 3 --retry-delay 1 '%s' 2>/dev/null || wget -qO- --timeout=10 --tries=3 '%s' 2>/dev/null".format(this.downloadUrl, this.downloadUrl)
 					]);
 					if (!text || !text.trim()) throw new Error(_('empty response'));
 					await fs.write(this.listPath, text);
@@ -211,46 +187,36 @@ return view.extend({
 	load() {
 		return Promise.all([
 			getStatus(),
-			network.getWANNetworks(),
-			L.resolveDefault(fs.stat('/usr/bin/stunclient'), null),
-			L.resolveDefault(fs.read(nattest_result_path), null),
 			callHostHints(),
+			network.getWANNetworks(),
+			L.resolveDefault(fs.read(tcp_list), null),
+			L.resolveDefault(fs.read(udp_list), null),
+			L.resolveDefault(fs.read(nattest_result_path), null),
+			L.resolveDefault(fs.stat('/usr/bin/stunclient'), null),
 			L.resolveDefault(fs.list(etc_path + '/client'), []),
 			L.resolveDefault(fs.list(etc_path + '/notify'), []),
 			L.resolveDefault(fs.list(etc_path + '/ddns'), []),
 			callGetCongestions().then((res) => { return res.algorithm; }),
-			L.resolveDefault(fs.read(tcp_list), null),
-			L.resolveDefault(fs.read(udp_list), null),
-			callServiceStatus('natmap'),
 			uci.load('firewall'),
 			uci.load('natmap')
 		]);
 	},
 
 	render(res) {
-		const status = res[0];
-		const wans   = res[1];
-		const has_stunclient = res[2] ? res[2].path : null;
-		const nattest_result = res[3] ? res[3].trim() : '';
-		const hosts = res[4];
-		const scripts_client = res[5];
-		const scripts_notify = res[6];
-		const scripts_ddns   = res[7];
-		const congestions    = res[8] || [];
-		const stun_list_tcp  = parseServerList(res[9]);
-		const stun_list_udp  = parseServerList(res[10]);
-		const running  = res[11];
+		const status = res[0],
+			  hosts  = res[1],
+			  wans   = res[2],
+			  stun_list_tcp  = res[3] ? parseServerList(res[3]) : null,
+			  stun_list_udp  = res[4] ? parseServerList(res[4]) : null,
+			  nattest_result = res[5] ? res[5].trim() : '',
+			  has_stunclient = res[6],
+			  scripts_client = res[7],
+			  scripts_notify = res[8],
+			  scripts_ddns   = res[9],
+			  congestions    = res[10] || [];
 		let m, s, o;
 
 		m = new form.Map('natmap', _('NATMap'));
-
-		s = m.section(form.TypedSection);
-		s.render = () =>
-			E('p', { style: 'display: flex; align-items: center; gap: 10px;' }, [
-				E('b', { style: `color:${running ? 'green' : 'red'}` }, [
-					'NATMap ' + (running ? _('RUNNING') : _('NOT RUNNING')),
-				])
-			]);
 
 		s = m.section(form.TypedSection, 'global');
 		s.anonymous = true;
@@ -423,7 +389,7 @@ return view.extend({
 				return;
 			}
 
-			return fs.exec('/usr/libexec/natmap/natcheck.sh', [
+			return fs.exec('/usr/lib/natmap/natcheck.sh', [
 				udp_stun_host + (udp_stun_host.match(/:\d+$/) ? '' : ':3478'),
 				tcp_stun_host + (tcp_stun_host.match(/:\d+$/) ? '' : ':3478'),
 				test_port, nattest_result_path])
@@ -453,12 +419,15 @@ return view.extend({
 
 		o = s.option(form.Flag, 'enable', _('Enable'));
 		o.default = o.disabled;
+		o.rmempty = false;
 		o.editable = true;
 		o.modalonly = false;
 
 		o = s.taboption('general', form.Value, 'comment', _('Comment'));
+		o.width = '12%';
 
 		o = s.taboption('general', form.ListValue, 'udp_mode', _('Protocol'));
+		o.modalonly = true;
 		o.default = '0';
 		o.value('0', 'TCP');
 		o.value('1', 'UDP');
@@ -469,6 +438,7 @@ return view.extend({
 		};
 
 		o = s.taboption('general', form.ListValue, 'family', _('Restrict to address family'));
+		o.modalonly = true;
 		o.default = 'ipv4';
 		o.value('ipv4', _('IPv4'));
 		o.value('ipv6', _('IPv6'));
@@ -495,6 +465,7 @@ return view.extend({
 		};
 
 		o = s.taboption('general', widgets.DeviceSelect, 'bind_ifname', _('Interface'));
+		o.modalonly = true;
 		o.multiple = false;
 		o.noaliases = true;
 		o.nobridges = true;
@@ -522,7 +493,8 @@ return view.extend({
 		o.datatype = "and(uinteger, min(1))";
 		o.modalonly = true;
 
-		o = s.taboption('general', form.Value, 'stun_cycle', _('STUN check cycle (once every n intervals)'), _('For UDP mode'));
+		o = s.taboption('general', form.Value, 'stun_cycle', _('STUN check cycle (once every n intervals)'),
+			_('For UDP mode'));
 		o.datatype = 'uinteger';
 		o.modalonly = true;
 
@@ -534,12 +506,14 @@ return view.extend({
 		o.datatype = 'or(hostname, hostport)';
 		o.modalonly = true;
 
-		o = s.taboption('general', form.Value, 'fwmark_value', _('Fwmark value'), _('Mark fwmark for STUN/HTTP outbound traffic'));
+		o = s.taboption('general', form.Value, 'fwmark_value', _('Fwmark value'),
+			_('Mark fwmark for STUN/HTTP outbound traffic'));
 		o.modalonly = true;
 
 		o = s.taboption('forward', form.Flag, 'forward', _('Forward mode'));
 		o.default = o.disabled;
 		o.rmempty = false;
+		o.modalonly = true;
 		o.textvalue = function(section_id) {
 			let cval = this.cfgvalue(section_id) || this.default;
 			let mode = function() {
@@ -554,12 +528,14 @@ return view.extend({
 			return (cval == this.enabled) ? mode[0] + (mode[1] === 'dnat' ? loopback : '') : _('No');
 		};
 
-		o = s.taboption('forward', form.ListValue, 'forward_mode', _('Forward method'), _('The DNAT method not support under IPv6'));
+		o = s.taboption('forward', form.ListValue, 'forward_mode', _('Forward method'),
+			_('The DNAT method not support under IPv6'));
 		o.value('dnat', _('Firewall DNAT'));
 		o.value('via', _('Via natmap'));
 		o.default = 'via';
 		o.rmempty = false;
 		o.retain = true;
+		o.width = '20%';
 		o.depends('forward', '1');
 		o.modalonly = true;
 		o.validate = function(section_id, value) {
@@ -578,10 +554,11 @@ return view.extend({
 		o = s.taboption('forward', form.Flag, 'natloopback', _('NAT loopback'));
 		o.default = o.enabled;
 		o.retain = true;
-		o.depends('forward_mode', 'dnat');
 		o.modalonly = true;
+		o.depends('forward_mode', 'dnat');
 
-		o = s.taboption('forward', form.ListValue, 'forward_congestion', _('TCP Congestion control'), _('For TCP mode'));
+		o = s.taboption('forward', form.ListValue, 'forward_congestion', _('TCP Congestion control'),
+			_('For TCP mode'));
 		o.value('', _('Default'));
 		congestions.forEach((res) => {
 			o.value.apply(o, [res]);
@@ -589,7 +566,8 @@ return view.extend({
 		o.depends('forward_mode', 'via');
 		o.modalonly = true;
 
-		o = s.taboption('forward', form.Value, 'forward_timeout', _('Forward timeout'), _('Port forwarding session idle timeout in seconds'));
+		o = s.taboption('forward', form.Value, 'forward_timeout', _('Forward timeout'),
+			_('Port forwarding session idle timeout in seconds'));
 		o.datatype = "and(uinteger, min(1))";
 		o.placeholder = '300000';
 		o.depends('forward_mode', 'via');
@@ -629,7 +607,8 @@ return view.extend({
 			return enforward ? (this.vallist[i] ?? cval) : _('No');
 		};
 
-		o = s.taboption('forward', form.Value, 'forward_port', _('Forward target port'), _('Set 0 will follow Public port'));
+		o = s.taboption('forward', form.Value, 'forward_port', _('Forward target port'),
+			_('Set 0 will follow Public port'));
 		o.datatype = 'port';
 		o.rmempty = false;
 		o.retain = true;
@@ -652,7 +631,8 @@ return view.extend({
 			return enforward ? ((cval == '0' && refresh) ? cltname : cval) : _('No');
 		};
 
-		o = s.taboption('forward', form.Flag, 'refresh', _('Refresh client'), _('%s set 0 will rewrite client listen port').format(_('Forward target port')));
+		o = s.taboption('forward', form.Flag, 'refresh', _('Refresh client'),
+			_('%s set 0 will rewrite client listen port').format(_('Forward target port')));
 		o.default = o.disabled;
 		o.rmempty = false;
 		o.retain = true;

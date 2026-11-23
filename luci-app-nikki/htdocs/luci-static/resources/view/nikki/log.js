@@ -16,11 +16,22 @@ const parseCoreLogLine = (line, dateObj) => {
     return { level, display: `[${t}] [${level.toUpperCase()}]: ${msg}` };
 };
 
+const readLogTail = (path, lines = 300) => {
+    return fs.exec('/usr/bin/tail', ['-n', String(lines), path])
+    .then(function(res) {
+        if (res && res.stdout !== undefined) {
+            return res.code === 0 ? res.stdout : '';
+        }
+        return typeof res === 'string' ? res : '';
+    })
+    .catch(function() { return ''; });
+};
+
 return view.extend({
     load: function () {
         return Promise.all([
-            L.resolveDefault(fs.read_direct(nikki.appLogPath), ''),
-            L.resolveDefault(fs.read_direct(nikki.coreLogPath), ''),
+            L.resolveDefault(readLogTail(nikki.appLogPath), ''),
+            L.resolveDefault(readLogTail(nikki.coreLogPath), ''),
             uci.load('system')
         ]);
     },
@@ -61,6 +72,7 @@ return view.extend({
                     if (withLevelFilter && state.level !== 'all') {
                         items = items.filter((item) => item.level === state.level);
                     }
+                    items = items.slice(-100);
                     if (state.reversed) items = items.slice().reverse();
                     textareaEl.value = items.map((item) => item.display).join('\n');
                 };
@@ -303,8 +315,8 @@ return view.extend({
             if (el) el.style.display = 'none';
             L.Poll.add(L.bind(function () {
                 return Promise.all([
-                    L.resolveDefault(fs.read_direct(nikki.appLogPath), ''),
-                    L.resolveDefault(fs.read_direct(nikki.coreLogPath), ''),
+                    L.resolveDefault(readLogTail(nikki.appLogPath), ''),
+                    L.resolveDefault(readLogTail(nikki.coreLogPath), '')
                 ]).then(function ([app_log, core_log]) {
                     const appEl = m.findElement('id', 'textarea_app_log');
                     if (appEl && appEl._logState) {

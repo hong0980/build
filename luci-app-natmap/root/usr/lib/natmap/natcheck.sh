@@ -16,7 +16,7 @@ port="$1" && shift
 [ "$(echo "$tcpstun" | sed 's|[A-Za-z0-9:.-]||g')" == "" ] || exit 1
 [ "$(echo "$port" | sed 's|[0-9]||g')" == "" ] || exit 1
 
-PROG="/usr/libexec/natmap/natmap-natest"
+PROG="/usr/lib/natmap/natmap-natest"
 if [ -x "$(command -v stunclient)" ]; then ln -s "$(command -v stunclient)" "$PROG" 2>/dev/null; else exit 1; fi
 
 #/etc/init.d/firewall reload >/dev/null 2>&1

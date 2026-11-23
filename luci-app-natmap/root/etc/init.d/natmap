@@ -466,7 +466,7 @@ start_service() {
 	fi
 
 	config_foreach validate_section_global "$GLOBALSECTION" define_global || return $?
-	[ "${GLOBAL_enable:=0}" == "0" ] && return 1
+	[ "${GLOBAL_enable:=0}" == "1" ] || return 1
 
 	if [ -n "$sid" ]; then
 		clear_status_files "$sid"

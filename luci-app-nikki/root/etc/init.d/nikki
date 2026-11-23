@@ -497,14 +497,15 @@ clear_logs() {
 		MB) limit_bytes=$((limit * 1024 * 1024)) ;;
 		GB) limit_bytes=$((limit * 1024 * 1024 * 1024)) ;;
 	esac
+	KEEP_LINES=200
 
-	[ -f "$APP_LOG_PATH" ] && [ $(wc -c < "$APP_LOG_PATH") -ge "$limit_bytes" ] && {
-		> "$APP_LOG_PATH"
+	[ -f "$APP_LOG_PATH" ] && [ $(wc -c < "$APP_LOG_PATH" | tr -d ' ') -ge "$limit_bytes" ] && {
+		tail -n "$KEEP_LINES" "$APP_LOG_PATH" > "${APP_LOG_PATH}.tmp" && mv "${APP_LOG_PATH}.tmp" "$APP_LOG_PATH"
 		log "Log" "App log is cleared due to scheduled clear and exceeding size limits."
 	}
 
-	[ -f "$CORE_LOG_PATH" ] && [ $(wc -c < "$CORE_LOG_PATH") -ge "$limit_bytes" ] && {
-		> "$CORE_LOG_PATH"
+	[ -f "$CORE_LOG_PATH" ] && [ $(wc -c < "$CORE_LOG_PATH" | tr -d ' ') -ge "$limit_bytes" ] && {
+		tail -n "$KEEP_LINES" "$CORE_LOG_PATH" > "${CORE_LOG_PATH}.tmp" && mv "${CORE_LOG_PATH}.tmp" "$CORE_LOG_PATH"
 		log "Log" "Core log is cleared due to scheduled clear and exceeding size limits."
 	}
 }
