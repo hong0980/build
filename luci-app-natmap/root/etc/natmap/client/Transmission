@@ -1,35 +1,36 @@
 #!/bin/sh
-# Copyright (C) 2023 muink https://github.com/muink
+# Copyright (C) 2023-2026 muink https://github.com/muink
 #
-# Client listen port refresh script
-#
-# depends 
+# depends curl jsonfilter
 
 . /etc/natmap/scripts/common.sh
 
 start() {
-	local curl_opts='-sS -L --connect-timeout 3 --max-time 10 --retry 0'
-	scheme="${scheme:-http}"
-	local url="${scheme}://${host}:${web_port}/transmission/rpc"
+	local url="${scheme:-http}://${host}:${web_port}/transmission/rpc"
+	local sid res result
 
-	local sid="$(curl $curl_opts -D - -o /dev/null \
+	sid="$(http_call -D - -o /dev/null \
 		${username:+-u "${username}:${password}"} \
 		--url "$url" \
 		| grep -i '^X-Transmission-Session-Id:' | tr -d '\r' | head -n 1)"
-
 	[ -z "$sid" ] && { echo "Transmission get session-id failed" >&2; return 1; }
 
-	local res="$($CURL $curl_opts -X POST \
-		-H "$sid" ${username:+-u "${username}:${password}"} \
+	res="$(http_call -X POST \
+		-H "$sid" \
+		-H "Content-Type: application/json" \
+		${username:+-u "${username}:${password}"} \
 		-d '{"method":"session-set","arguments":{"peer-port":'"${port}"'}}' \
 		--url "$url")"
 
-	local result="$(echo "$res" | jsonfilter -qe '@.result')"
-	[ "$result" != "success" ] && echo "Transmission set port failed: $res" >&2
+	result="$(printf '%s' "$res" | jsonfilter -qe '@.result')"
+	if [ "$result" = "success" ]; then
+		echo "Transmission set port ${port} ok" >&2
+	else
+		echo "Transmission set port failed: $res" >&2
+		return 1
+	fi
 }
 
-
-# All external parameters required
 ALL_PARAMS="host port scheme web_port username password"
 eval "$(JSON_EXPORT "$1")"; shift
 start "$@"

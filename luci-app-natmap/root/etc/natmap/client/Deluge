@@ -1,42 +1,37 @@
 #!/bin/sh
-# Copyright (C) 2023 muink https://github.com/muink
+# Copyright (C) 2023-2026 muink https://github.com/muink
 #
-# Client listen port refresh script
-#
-# depends jsonfilter
+# depends curl jsonfilter
 
-. /usr/lib/natmap/common.sh
+. /etc/natmap/scripts/common.sh
 
-# http_request <cookie> <data>
-http_request() {
-	$CURL $curl_opts --compressed -L -X POST \
-		-b "$1" -H "Content-Type: application/json" \
-		-d "$2" \
-		--url "${scheme}://${host}:${web_port}/json"
+dg_post() {
+	local cookie="$1" data="$2"; shift 2
+	http_call --compressed -X POST \
+		${cookie:+-b "$cookie"} \
+		-H "Content-Type: application/json" \
+		-d "$data" \
+		--url "${scheme:-http}://${host}:${web_port}/json" \
+		"$@"
 }
 
 start() {
-	local curl_opts='-sS --connect-timeout 3 --max-time 10 --retry 0'
-	local cookie="$($CURL $curl_opts --compressed -L -i \
-		-H "Content-Type: application/json" \
-		-d '{"method": "auth.login", "params": ["'"${password}"'"], "id": 1}' \
-		--url "${scheme}://${host}:${web_port}/json" \
+	local cookie connected
+	cookie="$(dg_post "" '{"method":"auth.login","params":["'"${password}"'"],"id":1}' -i \
 		| sed -n 's/.*\(_session_id=[^;[:space:]]*\).*/\1/p' | head -n 1)"
-
 	[ -z "$cookie" ] && { echo "Deluge login failed" >&2; return 1; }
 
-	local connected="$(http_request "$cookie" '{"method": "web.connected", "params": [], "id": 1}' | jsonfilter -qe '@.result')"
+	connected="$(dg_post "$cookie" '{"method":"web.connected","params":[],"id":2}' | jsonfilter -qe '@.result')"
 	if [ "$connected" = "true" ]; then
-		http_request "$cookie" '{"method": "core.set_config", "params": [{"random_port": false, "listen_ports": ['"${port}"', '"${port}"']}], "id": 1}' >/dev/null
+		dg_post "$cookie" '{"method":"core.set_config","params":[{"random_port":false,"listen_ports":['"${port}"','"${port}"']}],"id":3}' >/dev/null
+		echo "Deluge set port ${port} ok" >&2
 	else
 		echo "Deluge web is not connected to daemon" >&2
 	fi
 
-	http_request "$cookie" '{"method": "auth.delete_session", "params": [], "id": 1}' >/dev/null
+	dg_post "$cookie" '{"method":"auth.delete_session","params":[],"id":4}' >/dev/null
 }
 
-
-# All external parameters required
 ALL_PARAMS="host port scheme web_port username password"
 eval "$(JSON_EXPORT "$1")"; shift
 start "$@"

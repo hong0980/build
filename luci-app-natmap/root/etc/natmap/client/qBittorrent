@@ -1,53 +1,41 @@
 #!/bin/sh
-# Copyright (C) 2023-2025 muink https://github.com/muink
+# Copyright (C) 2023-2026 muink https://github.com/muink
 #
-# Client listen port refresh script
-#
-# depends 
+# depends curl
 
 . /etc/natmap/scripts/common.sh
 
 start() {
-	[ -n "$port" ] && [ -n "$host" ] && [ -n "$web_port" ] || return 1
+	local origin="${scheme:-http}://${host}:${web_port}"
+	local base="${origin}/api/v2"
+	local cookie="/tmp/qb_natmap_$$.cookie" rc=1
 
-	local referer="${scheme:-http}://${host}:${web_port}"
-	local base="${referer}/api/v2"
-	local cookie="/tmp/qb_natmap_$$.cookie"
-	local payload
-
-	case "$(basename "$0")" in
-		qBittorrent-announce_port)
-			payload="{\"announce_port\":${port}}" ;;
-		*)
-			payload="{\"listen_port\":${port}}" ;;
-	esac
-
-	qb_req() {
-		"${CURL:-curl}" -sf --connect-timeout 1 -m 5 -k \
-			-H "Origin: ${referer}" \
-			-H "Referer: ${referer}" \
+	qb_post() {
+		http_call -X POST \
+			-H "Origin: ${origin}" \
+			-H "Referer: ${origin}" \
 			"$@"
 	}
 
 	rm -f "$cookie"
-	if qb_req -c "$cookie" \
+	if qb_post -c "$cookie" \
 		--data-urlencode "username=${username}" \
 		--data-urlencode "password=${password}" \
-		"${base}/auth/login" >/dev/null 2>&1; then
-		qb_req -b "$cookie" -X POST \
-			--data-urlencode "json=${payload}" \
-			"${base}/app/setPreferences" >/dev/null 2>&1
-		local rc=$?
-		qb_req -b "$cookie" -X POST "${base}/auth/logout" >/dev/null 2>&1
-		rm -f "$cookie"
-		return $rc
+		"${base}/auth/login" >/dev/null; then
+		qb_post -b "$cookie" \
+			--data-urlencode "json={\"listen_port\":${port},\"announce_port\":${port}}" \
+			"${base}/app/setPreferences" >/dev/null
+		rc=$?
+		qb_post -b "$cookie" "${base}/auth/logout" >/dev/null
+		[ "$rc" -eq 0 ] && echo "qBittorrent set port ${port} ok" >&2 || echo "qBittorrent set port failed" >&2
+	else
+		echo "qBittorrent login failed" >&2
 	fi
 
 	rm -f "$cookie"
-	return 1
+	return $rc
 }
 
-# All external parameters required
 ALL_PARAMS="host port scheme web_port username password"
 eval "$(JSON_EXPORT "$1")"; shift
 start "$@"

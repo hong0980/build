@@ -18,3 +18,12 @@ INIT_GLOBAL_VAR() {
 		eval "$_key=''"
 	done
 }
+
+# http_call <extra_curl_args...>
+http_call() {
+	"${CURL:-curl}" -sS -L -k \
+		--connect-timeout 3 \
+		--max-time 10 \
+		--retry 0 \
+		"$@"
+}

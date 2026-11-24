@@ -8,8 +8,6 @@ chmod -R +x \
 	/etc/natmap/* \
 	/etc/init.d/natmap 2>/dev/null || true
 
-[ -x "/etc/natmap/client/qBittorrent" ] && ln -sf "/etc/natmap/client/qBittorrent" "/etc/natmap/client/qBittorrent-announce_port"
-
 # uci options migration
 if [ -z "$(grep '^config global$' "$CONF")" ]; then
 	sed -i '1i\\config global' "$CONF"
