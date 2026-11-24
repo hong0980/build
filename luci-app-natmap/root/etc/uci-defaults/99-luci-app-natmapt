@@ -6,7 +6,6 @@ NATMAPSECTION='natmap'
 
 chmod -R +x \
 	/etc/natmap/* \
-	/usr/lib/natmap/* \
 	/etc/init.d/natmap 2>/dev/null || true
 
 [ -x "/etc/natmap/client/qBittorrent" ] && ln -sf "/etc/natmap/client/qBittorrent" "/etc/natmap/client/qBittorrent-announce_port"

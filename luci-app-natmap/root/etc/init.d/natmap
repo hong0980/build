@@ -12,9 +12,8 @@ NAME=natmap
 GLOBALSECTION=global
 NATMAPSECTION=natmap
 PROG=/usr/bin/$NAME
-
 STATUS_PATH=/var/run/natmap
-
+LOG_FILE="/var/log/natmap.log"
 config_load "$NAME"
 
 
@@ -183,7 +182,30 @@ fwmark_match() {
 
 natmap_instance() {
 	procd_open_instance "$1"
-	procd_set_param command "$PROG" \
+	procd_set_param command /bin/sh -c '
+		tag="$1"; log="$2"; shift 2
+		mkdir -p "$(dirname "$log")"
+		fifo="/tmp/natmap_$$.fifo"
+		rm -f "$fifo"
+		mkfifo "$fifo" || exit 1
+		(
+			cnt=0
+			while IFS= read -r line || [ -n "$line" ]; do
+				printf "[%s][%s] %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "$tag" "$line" >> "$log"
+				cnt=$((cnt + 1))
+				if [ "$cnt" -ge 200 ]; then
+					cnt=0
+					if [ "$(wc -c < "$log" 2>/dev/null || echo 0)" -gt 524288 ]; then
+						tail -n 500 "$log" > "${log}.$$.tmp" && mv "${log}.$$.tmp" "$log"
+					fi
+				fi
+			done < "$fifo"
+			rm -f "$fifo"
+		) &
+		exec "$0" "$@" > "$fifo" 2>&1
+	' "$PROG" "$1" "$LOG_FILE"
+
+	procd_append_param command \
 		${interval:+-k "$interval"} \
 		${stun_cycle:+-c "$stun_cycle"} \
 		${stun_server:+-s "$stun_server"} \

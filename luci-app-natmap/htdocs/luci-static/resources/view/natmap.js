@@ -389,7 +389,7 @@ return view.extend({
 				return;
 			}
 
-			return fs.exec('/usr/lib/natmap/natcheck.sh', [
+			return fs.exec('/etc/natmap/scripts/natcheck.sh', [
 				udp_stun_host + (udp_stun_host.match(/:\d+$/) ? '' : ':3478'),
 				tcp_stun_host + (tcp_stun_host.match(/:\d+$/) ? '' : ':3478'),
 				test_port, nattest_result_path])
@@ -674,7 +674,7 @@ return view.extend({
 		o.modalonly = true;
 
 		o = s.taboption('forward', form.Value, 'clt_password', _('Password'));
-		o.password = true;
+		// o.password = true;
 		o.depends('refresh', '1');
 		o.modalonly = true;
 
@@ -700,6 +700,7 @@ return view.extend({
 		o.datatype = 'file';
 		o.rmempty = false;
 		o.modalonly = true;
+		o.depends('notify_enable', '1');
 
 		if (scripts_notify.length)
 			scripts_notify.forEach((script) => {
@@ -714,15 +715,18 @@ return view.extend({
 		o.datatype = 'list(string)';
 		o.placeholder = 'KEY=VAL';
 		o.modalonly = true;
+		o.depends('notify_enable', '1');
 
 		o = s.taboption('notify', form.Value, 'notify_custom_domain', _('Private API Domain'));
 		o.datatype = 'hostname';
 		o.placeholder = 'api.example.com';
 		o.modalonly = true;
+		o.depends('notify_enable', '1');
 
 		o = s.taboption('notify', form.Value, 'notify_text', _('Text content'));
 		o.placeholder = 'NATMap: <comment>: [<protocol>] <inner_ip>:<inner_port> -> <ip>:<port>';
 		o.modalonly = true;
+		o.depends('notify_enable', '1');
 
 		o = s.taboption('ddns', form.Flag, 'ddns_enable', _('EnDDNS'));
 		o.default = o.disabled;
