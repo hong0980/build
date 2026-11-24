@@ -106,7 +106,7 @@ const StunListValue = form.ListValue.extend({
 	downloadUrl: '', listPath: '',
 	renderWidget(section_id, option_index, cfgvalue) {
 		if (cfgvalue != null && cfgvalue !== '' &&
-		    (this.keylist || []).indexOf(cfgvalue) < 0) {
+			(this.keylist || []).indexOf(cfgvalue) < 0) {
 			this.value(cfgvalue, cfgvalue);
 		}
 
@@ -193,7 +193,6 @@ return view.extend({
 			L.resolveDefault(fs.read(udp_list), null),
 			L.resolveDefault(fs.read(nattest_result_path), null),
 			L.resolveDefault(fs.stat('/usr/bin/stunclient'), null),
-			L.resolveDefault(fs.list(etc_path + '/client'), []),
 			L.resolveDefault(fs.list(etc_path + '/notify'), []),
 			L.resolveDefault(fs.list(etc_path + '/ddns'), []),
 			callGetCongestions().then((res) => { return res.algorithm; }),
@@ -210,10 +209,9 @@ return view.extend({
 			  stun_list_udp  = res[4] ? parseServerList(res[4]) : null,
 			  nattest_result = res[5] ? res[5].trim() : '',
 			  has_stunclient = res[6],
-			  scripts_client = res[7],
-			  scripts_notify = res[8],
-			  scripts_ddns   = res[9],
-			  congestions    = res[10] || [];
+			  scripts_notify = res[7],
+			  scripts_ddns   = res[8],
+			  congestions    = res[9] || [];
 		let m, s, o;
 
 		m = new form.Map('natmap', _('NATMap'));
@@ -417,11 +415,11 @@ return view.extend({
 		s.tab('ddns', _('DDNS Scripts'));
 		s.tab('custom', _('Custom Script'));
 
-		o = s.option(form.Flag, 'enable', _('Enable'));
+		o = s.taboption('general', form.Flag, 'enable', _('Enable'));
 		o.default = o.disabled;
 		o.rmempty = false;
 		o.editable = true;
-		o.modalonly = false;
+		// o.modalonly = false;
 
 		o = s.taboption('general', form.Value, 'comment', _('Comment'));
 		o.width = '12%';
@@ -627,7 +625,7 @@ return view.extend({
 				let v = this.cfgvalue(section_id) || this.default;
 				let i = this.keylist.indexOf(v);
 				return i >= 0 ? this.vallist[i] : v;
-			}.call(this.section.getOption('clt_script'));
+			}.call(this.section.getOption('clt_type'));
 			return enforward ? ((cval == '0' && refresh) ? cltname : cval) : _('No');
 		};
 
@@ -639,17 +637,14 @@ return view.extend({
 		o.depends('forward', '1');
 		o.modalonly = true;
 
-		o = s.taboption('forward', form.ListValue, 'clt_script', _('Refresh Scripts'));
-		o.datatype = 'file';
+		o = s.taboption('forward', form.ListValue, 'clt_type', _('Refresh Scripts'));
 		o.rmempty = false;
 		o.retain = true;
-		o.depends('refresh', '1');
 		o.modalonly = true;
-
-		if (scripts_client.length)
-			scripts_client.forEach((script) => {
-				o.value(etc_path + '/client/' + script.name, script.name);
-			});
+		o.depends('refresh', '1');
+		o.value('qBittorrent', 'qBittorrent');
+		o.value('Transmission', 'Transmission');
+		o.value('Deluge', 'Deluge');
 
 		o = s.taboption('forward', form.ListValue, 'clt_scheme', _('URI Scheme'));
 		o.value('http', 'HTTP');
@@ -657,8 +652,8 @@ return view.extend({
 		o.default = 'http';
 		o.rmempty = false;
 		o.retain = true;
-		o.depends('refresh', '1');
 		o.modalonly = true;
+		o.depends('refresh', '1');
 
 		o = s.taboption('forward', form.Value, 'clt_web_port', _('Web UI Port'));
 		o.datatype = "and(port, min(1))";
@@ -670,7 +665,7 @@ return view.extend({
 
 		o = s.taboption('forward', form.Value, 'clt_username', _('Username'));
 		o.retain = true;
-		o.depends('refresh', '1');
+		o.depends({ 'refresh': '1', 'clt_type': /Tr|qB/ });
 		o.modalonly = true;
 
 		o = s.taboption('forward', form.Value, 'clt_password', _('Password'));
@@ -886,8 +881,10 @@ return view.extend({
 		o.depends({ ddns_https: "", "!reverse": true });
 		o.modalonly = true;
 
-		o = s.taboption('custom', form.Value, 'custom_script', _('Custom Script'));
-		o.datatype = 'file';
+		o = s.taboption('custom', form.FileUpload, 'custom_script', _('Custom Script'));
+		o.root_directory = '/etc/natmap/client';
+		o.enable_remove  = false;
+		o.enable_upload  = true;
 		o.modalonly = true;
 
 		o = s.option(form.Button, '_reload');

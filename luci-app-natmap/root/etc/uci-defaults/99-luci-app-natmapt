@@ -4,9 +4,7 @@ NAME='natmap'
 NATMAPSECTION='natmap'
 . /lib/functions/network.sh
 
-chmod -R +x \
-	/etc/natmap/* \
-	/etc/init.d/natmap 2>/dev/null || true
+chmod -R +x /etc/natmap/* /etc/init.d/natmap 2>/dev/null || true
 
 # uci options migration
 if [ -z "$(grep '^config global$' "$CONF")" ]; then

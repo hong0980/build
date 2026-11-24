@@ -41,12 +41,13 @@ fi
 	json_dump > "$STATUS_PATH/$PPID.json"
 )
 
-if [ -n "$REFRESH" ]; then
+if [ -x "$REFRESH" ]; then
 	json_init
 	json_load "$REFRESH_PARAM"
 	json_add_int port "$port"
 	$REFRESH "$(json_dump)"
 fi
+
 if [ -n "$NOTIFY" ]; then
 	_text="$(jsonfilter -qs "$NOTIFY_PARAM" -e '@["text"]')"
 	[ -z "$_text" ] && _text="NATMap: ${COMMENT:+$COMMENT: }[${protocol^^}] $inner_ip:$inner_port -> $ip:$port" \
@@ -82,6 +83,7 @@ if [ -n "$DDNS" ]; then
 fi
 
 [ -n "${CUSTOM_SCRIPT}" ] && {
+	[ -x "$CUSTOM_SCRIPT" ] || chmod +x "$CUSTOM_SCRIPT"
 	export -n CUSTOM_SCRIPT
 	exec "${CUSTOM_SCRIPT}" "$ip" "$port" "$ip4p" "$inner_port" "$protocol" "$inner_ip" "$SECTIONID" "$COMMENT" "$@"
 }

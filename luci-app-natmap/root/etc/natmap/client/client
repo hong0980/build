@@ -1,0 +1,108 @@
+#!/bin/sh
+# Copyright (C) 2023-2026 muink https://github.com/muink
+#
+# Merged client listen port refresh script
+#
+# depends curl jsonfilter
+
+. /etc/natmap/scripts/common.sh
+
+refresh_de() {
+	dg_post() {
+		local cookie="$1" data="$2"; shift 2
+		http_call --compressed -X POST \
+			${cookie:+-b "$cookie"} \
+			-H "Content-Type: application/json" \
+			-d "$data" \
+			--url "${scheme:-http}://${host}:${web_port}/json" \
+			"$@"
+	}
+
+	local cookie connected
+	cookie="$(dg_post "" '{"method":"auth.login","params":["'"${password}"'"],"id":1}' -i \
+		| sed -n 's/.*\(_session_id=[^;[:space:]]*\).*/\1/p' | head -n 1)"
+	[ -z "$cookie" ] && { echo "Deluge login failed" >&2; return 1; }
+
+	connected="$(dg_post "$cookie" '{"method":"web.connected","params":[],"id":2}' | jsonfilter -qe '@.result')"
+	if [ "$connected" = "true" ]; then
+		dg_post "$cookie" '{"method":"core.set_config","params":[{"random_port":false,"listen_ports":['"${port}"','"${port}"']}],"id":3}' >/dev/null
+		echo "Deluge set port ${port} ok" >&2
+	else
+		echo "Deluge web is not connected to daemon" >&2
+	fi
+
+	dg_post "$cookie" '{"method":"auth.delete_session","params":[],"id":4}' >/dev/null
+}
+
+refresh_qb() {
+	local origin="${scheme:-http}://${host}:${web_port}"
+	local base="${origin}/api/v2"
+	local cookie="/tmp/qb_natmap_$$.cookie" rc=1
+
+	qb_post() {
+		http_call -X POST \
+			-H "Origin: ${origin}" \
+			-H "Referer: ${origin}" \
+			"$@"
+	}
+
+	rm -f "$cookie"
+	if qb_post -c "$cookie" \
+		--data-urlencode "username=${username}" \
+		--data-urlencode "password=${password}" \
+		"${base}/auth/login" >/dev/null; then
+		qb_post -b "$cookie" \
+			--data-urlencode "json={\"listen_port\":${port},\"announce_port\":${port}}" \
+			"${base}/app/setPreferences" >/dev/null
+		rc=$?
+		qb_post -b "$cookie" "${base}/auth/logout" >/dev/null
+		[ "$rc" -eq 0 ] && echo "qBittorrent set port ${port} ok" >&2 || echo "qBittorrent set port failed" >&2
+	else
+		echo "qBittorrent login failed" >&2
+	fi
+
+	rm -f "$cookie"
+	return $rc
+}
+
+refresh_tr() {
+	local url="${scheme:-http}://${host}:${web_port}/transmission/rpc"
+	local sid res result
+
+	sid="$(http_call -D - -o /dev/null \
+		${username:+-u "${username}:${password}"} \
+		--url "$url" \
+		| grep -i '^X-Transmission-Session-Id:' | tr -d '\r' | head -n 1)"
+	[ -z "$sid" ] && { echo "Transmission get session-id failed" >&2; return 1; }
+
+	res="$(http_call -X POST \
+		-H "$sid" \
+		-H "Content-Type: application/json" \
+		${username:+-u "${username}:${password}"} \
+		-d '{"method":"session-set","arguments":{"peer-port":'"${port}"'}}' \
+		--url "$url")"
+
+	result="$(printf '%s' "$res" | jsonfilter -qe '@.result')"
+	if [ "$result" = "success" ]; then
+		echo "Transmission set port ${port} ok" >&2
+	else
+		echo "Transmission set port failed: $res" >&2
+		return 1
+	fi
+}
+
+start() {
+	case "$client" in
+		Deluge)       refresh_de ;;
+		qBittorrent)  refresh_qb ;;
+		Transmission) refresh_tr ;;
+		*)
+			echo "Unsupported client: '${client}'" >&2
+			return 1
+			;;
+	esac
+}
+
+ALL_PARAMS="client host port scheme web_port username password"
+eval "$(JSON_EXPORT "$1")"; shift
+start "$@"

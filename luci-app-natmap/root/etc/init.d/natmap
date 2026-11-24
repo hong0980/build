@@ -118,7 +118,7 @@ validate_section_natmap() {
 		'forward_target:or(hostname,ipaddr(1))' \
 		'forward_port:port' \
 		'refresh:bool:0' \
-		'clt_script:file' \
+		'clt_type:string' \
 		'clt_scheme:or("http", "https"):http' \
 		'clt_web_port:and(port, min(1))' \
 		'clt_username:string' \
@@ -233,15 +233,17 @@ natmap_instance() {
 
 	procd_set_param env "SECTIONID=$1"
 	procd_append_param env "COMMENT=$comment"
+
 	if [ "$forward" = 1 ]; then
 		# Rewrite the dest_port(forward port) using a public port
 		[ "$forward_port" = 0 -a "$forward_mode" = "dnat" ] && procd_append_param env "RWFW=1"
 
 		if [ "$refresh" = 1 ]; then
-			procd_append_param env "REFRESH=$clt_script"
+			procd_append_param env "REFRESH=/etc/natmap/client/client.sh"
 			json_init
-			json_add_string scheme "$clt_scheme"
 			json_add_int web_port "$clt_web_port"
+			json_add_string client "$clt_type"
+			json_add_string scheme "$clt_scheme"
 			json_add_string username "$clt_username"
 			json_add_string password "$clt_password"
 			json_add_string host "$forward_target"
@@ -286,7 +288,7 @@ natmap_instance() {
 	fi
 
 	[ -n "${custom_script}" ] && procd_append_param env "CUSTOM_SCRIPT=${custom_script}"
-	procd_append_param command -e /usr/lib/natmap/update.sh
+	procd_append_param command -e /etc/natmap/scripts/update.sh
 
 	procd_set_param respawn
 	procd_set_param stdout "$log_stdout"
@@ -425,7 +427,7 @@ launcher() {
 	fi
 	## refresh
 	if [ "$refresh" = 1 ]; then
-		[ -x "$clt_script" ] || { >&2 echo "$(basename $0): section $1 option clt_script '$clt_script' is empty or non-executable"; let error++; }
+		[ -n "$clt_type" ] || { >&2 echo "$(basename $0): section $1 option clt_script '$clt_script' is empty or non-executable"; let error++; }
 		[ -z "$clt_web_port" ] && err_msg__empty $1 clt_web_port && let error++
 	fi
 	## notify
@@ -443,7 +445,7 @@ launcher() {
 
 	# review
 	[ -n "$NATMAP_DEBUG" ] && {
-		local v ucivv="enable interval stun_cycle stun_server http_server fwmark_value comment udp_mode proto family bind_ifname ifname bind_ip lan_addr port port_pointer forward forward_mode natloopback forward_congestion forward_timeout forward_target forward_port refresh clt_script clt_scheme clt_web_port clt_username clt_password notify_enable notify_script notify_tokens notify_custom_domain notify_text ddns_enable ddns_script ddns_tokens ddns_a ddns_aaaa ddns_txt ddns_txt_content ddns_srv ddns_srv_serv ddns_srv_proto ddns_srv_target ddns_srv_priority ddns_srv_weight ddns_https ddns_https_target ddns_https_svcparams ddns_https_priority custom_script"
+		local v ucivv="enable interval stun_cycle stun_server http_server fwmark_value comment udp_mode proto family bind_ifname ifname bind_ip lan_addr port port_pointer forward forward_mode natloopback forward_congestion forward_timeout forward_target forward_port refresh clt_type clt_scheme clt_web_port clt_username clt_password notify_enable notify_script notify_tokens notify_custom_domain notify_text ddns_enable ddns_script ddns_tokens ddns_a ddns_aaaa ddns_txt ddns_txt_content ddns_srv ddns_srv_serv ddns_srv_proto ddns_srv_target ddns_srv_priority ddns_srv_weight ddns_https ddns_https_target ddns_https_svcparams ddns_https_priority custom_script"
 		for v in $ucivv; do eval "echo $1 $v=\'\$$v\'"; done # ash not support ${!v}
 	}
 	[ "$error" -gt 0 ] && return 1
