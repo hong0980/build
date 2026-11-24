@@ -412,6 +412,7 @@ return view.extend({
 
 		o = s.taboption('general', form.Value, 'comment', _('Comment'));
 		o.width = '12%';
+		o.rmempty = false;
 
 		o = s.taboption('general', form.ListValue, 'udp_mode', _('Protocol'));
 		o.modalonly = true;
@@ -451,7 +452,6 @@ return view.extend({
 				'0.0.0.0': '0.0.0.0/:: (<strong>%s</strong>)'.format(_('This device default Wan'))
 			});
 			opt.addChoices(choices[0], choices[1]);
-
 			return true;
 		};
 
@@ -651,6 +651,7 @@ return view.extend({
 
 		o = s.taboption('forward', form.Value, 'clt_username', _('Username'));
 		o.retain = true;
+		o.rmempty = false;
 		o.depends({ 'refresh': '1', 'clt_type': /Tr|qB/ });
 		o.modalonly = true;
 
@@ -658,6 +659,7 @@ return view.extend({
 		// o.password = true;
 		o.depends('refresh', '1');
 		o.modalonly = true;
+		o.rmempty = false;
 
 		o = s.option(form.DummyValue, '_external_ip', _('External IP'));
 		o.modalonly = false;

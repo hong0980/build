@@ -203,7 +203,7 @@ natmap_instance() {
 			rm -f "$fifo"
 		) &
 		exec "$0" "$@" > "$fifo" 2>&1
-	' "$PROG" "$1" "$LOG_FILE"
+	' "$PROG" "${comment:0:12}" "$LOG_FILE"
 
 	procd_append_param command \
 		${interval:+-k "$interval"} \
@@ -239,7 +239,7 @@ natmap_instance() {
 		[ "$forward_port" = 0 -a "$forward_mode" = "dnat" ] && procd_append_param env "RWFW=1"
 
 		if [ "$refresh" = 1 ]; then
-			procd_append_param env "REFRESH=/etc/natmap/client/client.sh"
+			procd_append_param env "REFRESH=/etc/natmap/client/client"
 			json_init
 			json_add_int web_port "$clt_web_port"
 			json_add_string client "$clt_type"
@@ -504,12 +504,6 @@ start_service() {
 stop_service() {
 	local sid="$1"
 	clear_status_files "$sid"
-}
-
-service_stopped() {
-	sleep 1s # Wait for procd_kill complete
-
-	ps | grep natmap | awk '{print $1}' | xargs kill -9
 }
 
 reload_service() {
