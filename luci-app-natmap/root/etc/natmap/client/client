@@ -8,72 +8,103 @@
 . /etc/natmap/scripts/common.sh
 
 refresh_de() {
+	local base="${scheme:-http}://${host}:${web_port}/json"
+	local cookie connected ids_json
+
 	dg_post() {
-		local cookie="$1" data="$2"; shift 2
+		local c="$1" data="$2"; shift 2
 		http_call --compressed -X POST \
-			${cookie:+-b "$cookie"} \
+			${c:+-b "$c"} \
 			-H "Content-Type: application/json" \
 			-d "$data" \
-			--url "${scheme:-http}://${host}:${web_port}/json" \
+			--url "$base" \
 			"$@"
 	}
 
-	local cookie connected
 	cookie="$(dg_post "" '{"method":"auth.login","params":["'"${password}"'"],"id":1}' -i \
 		| sed -n 's/.*\(_session_id=[^;[:space:]]*\).*/\1/p' | head -n 1)"
-	[ -z "$cookie" ] && { echo "Deluge login failed" >&2; return 1; }
+	[ -z "$cookie" ] && { log "Deluge login failed"; return 1; }
 
-	connected="$(dg_post "$cookie" '{"method":"web.connected","params":[],"id":2}' | jsonfilter -qe '@.result')"
-	if [ "$connected" = "true" ]; then
-		dg_post "$cookie" '{"method":"core.set_config","params":[{"random_port":false,"listen_ports":['"${port}"','"${port}"']}],"id":3}' >/dev/null
-		echo "Deluge set port ${port} ok" >&2
-	else
-		echo "Deluge web is not connected to daemon" >&2
+	connected="$(dg_post "$cookie" '{"method":"web.connected","params":[],"id":2}' | jsonfilter -qe '@.result' 2>/dev/null)"
+	if [ "$connected" != "true" ]; then
+		dg_post "$cookie" '{"method":"auth.delete_session","params":[],"id":9}' >/dev/null
+		log "Deluge web is not connected to daemon"
+		return 1
 	fi
 
-	dg_post "$cookie" '{"method":"auth.delete_session","params":[],"id":4}' >/dev/null
+	dg_post "$cookie" '{"method":"core.set_config","params":[{"random_port":false,"listen_ports":['"${port}"','"${port}"']}],"id":3}' >/dev/null
+	log "Deluge set port ${port} ok"
+
+	ids_json="$(dg_post "$cookie" '{"method":"core.get_session_state","params":[],"id":4}' \
+		| jsonfilter -qe '@.result' 2>/dev/null)"
+	case "$ids_json" in
+		""|"[]"|"null") ;;
+		\[*\])
+			dg_post "$cookie" '{"method":"core.force_reannounce","params":['"${ids_json}"'],"id":5}' >/dev/null
+			log "Deluge reannounce triggered"
+			;;
+	esac
+
+	dg_post "$cookie" '{"method":"auth.delete_session","params":[],"id":9}' >/dev/null
 }
 
 refresh_qb() {
 	local origin="${scheme:-http}://${host}:${web_port}"
-	local base="${origin}/api/v2"
-	local cookie="/tmp/qb_natmap_$$.cookie" rc=1
+	local api="${origin}/api/v2"
+	local cookie="/tmp/qb_natmap.cookie"
+	local code auth_args="" need_logout=0 rc=1
 
-	qb_post() {
-		http_call -X POST \
+	qb_req() {
+		http_call \
 			-H "Origin: ${origin}" \
 			-H "Referer: ${origin}" \
 			"$@"
 	}
 
-	rm -f "$cookie"
-	if qb_post -c "$cookie" \
-		--data-urlencode "username=${username}" \
-		--data-urlencode "password=${password}" \
-		"${base}/auth/login" >/dev/null; then
-		qb_post -b "$cookie" \
-			--data-urlencode "json={\"listen_port\":${port},\"announce_port\":${port}}" \
-			"${base}/app/setPreferences" >/dev/null
-		rc=$?
-		qb_post -b "$cookie" "${base}/auth/logout" >/dev/null
-		[ "$rc" -eq 0 ] && echo "qBittorrent set port ${port} ok" >&2 || echo "qBittorrent set port failed" >&2
-	else
-		echo "qBittorrent login failed" >&2
+	code="$(qb_req -s -o /dev/null -w '%{http_code}' "${api}/app/preferences")"
+	if [ "$code" != "200" ]; then
+		qb_req -X POST -c "$cookie" \
+			--data-urlencode "username=${username}" \
+			--data-urlencode "password=${password}" \
+			"${api}/auth/login" >/dev/null
+
+		if [ -s "$cookie" ] && grep -qE '(^|[[:space:]])(QBT_SID_[0-9]+|SID)[[:space:]]+[^[:space:]]+' "$cookie"; then
+			auth_args="-b $cookie"
+			need_logout=1
+		else
+			log "qBittorrent login failed"
+			rm -f "$cookie"
+			return 1
+		fi
 	fi
 
+	if qb_req -X POST $auth_args \
+		--data-urlencode "json={\"listen_port\":${port}}" \
+		"${api}/app/setPreferences" >/dev/null; then
+		log "qBittorrent set port ${port} ok"
+		qb_req -X POST $auth_args \
+			--data-urlencode "hashes=all" \
+			"${api}/torrents/reannounce" >/dev/null \
+			&& log "qBittorrent reannounce triggered"
+		rc=0
+	else
+		log "qBittorrent set port failed"
+	fi
+
+	[ "$need_logout" -eq 1 ] && qb_req -X POST $auth_args "${api}/auth/logout" >/dev/null
 	rm -f "$cookie"
 	return $rc
 }
 
 refresh_tr() {
+	local sid res result re_res
 	local url="${scheme:-http}://${host}:${web_port}/transmission/rpc"
-	local sid res result
 
 	sid="$(http_call -D - -o /dev/null \
 		${username:+-u "${username}:${password}"} \
 		--url "$url" \
 		| grep -i '^X-Transmission-Session-Id:' | tr -d '\r' | head -n 1)"
-	[ -z "$sid" ] && { echo "Transmission get session-id failed" >&2; return 1; }
+	[ -z "$sid" ] && { log "Transmission get session-id failed"; return 1; }
 
 	res="$(http_call -X POST \
 		-H "$sid" \
@@ -82,12 +113,21 @@ refresh_tr() {
 		-d '{"method":"session-set","arguments":{"peer-port":'"${port}"'}}' \
 		--url "$url")"
 
-	result="$(printf '%s' "$res" | jsonfilter -qe '@.result')"
-	if [ "$result" = "success" ]; then
-		echo "Transmission set port ${port} ok" >&2
-	else
-		echo "Transmission set port failed: $res" >&2
+	result="$(printf '%s' "$res" | jsonfilter -qe '@.result' 2>/dev/null)"
+	if [ "$result" != "success" ]; then
+		log "Transmission set port failed: $res"
 		return 1
+	fi
+	log "Transmission set port ${port} ok"
+
+	re_res="$(http_call -X POST \
+		-H "$sid" \
+		-H "Content-Type: application/json" \
+		${username:+-u "${username}:${password}"} \
+		-d '{"method":"torrent-reannounce"}' \
+		--url "$url")"
+	if [ "$(printf '%s' "$re_res" | jsonfilter -qe '@.result' 2>/dev/null)" = "success" ]; then
+		log "Transmission reannounce triggered"
 	fi
 }
 
@@ -97,7 +137,7 @@ start() {
 		qBittorrent)  refresh_qb ;;
 		Transmission) refresh_tr ;;
 		*)
-			echo "Unsupported client: '${client}'" >&2
+			log "Unsupported client: '${client}'"
 			return 1
 			;;
 	esac

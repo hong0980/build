@@ -27,3 +27,5 @@ http_call() {
 		--retry 0 \
 		"$@"
 }
+
+log() { echo "$*" >&2; }

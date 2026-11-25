@@ -3,11 +3,28 @@
 		"title": "NATMap",
 		"order": 70,
 		"action": {
-			"type": "view",
-			"path": "natmap"
+			"type": "firstchild"
 		},
 		"depends": {
 			"acl": [ "luci-app-natmap" ]
+		}
+	},
+
+	"admin/network/natmap/config": {
+		"title": "Configuration",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "natmap/natmap"
+		}
+	},
+
+	"admin/network/natmap/log": {
+		"title": "Log",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "natmap/log"
 		}
 	}
 }

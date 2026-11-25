@@ -8,6 +8,7 @@
 'require network';
 'require tools.widgets as widgets';
 
+const fw = 'firewall';
 const conf = 'natmap';
 const etc_path = '/etc/natmap';
 const tcp_list_file = etc_path + '/tcp.list';
@@ -188,22 +189,21 @@ return view.extend({
 		return Promise.all([
 			getStatus(),
 			callHostHints(),
-			network.getWANNetworks(),
-			L.resolveDefault(fs.read(tcp_list_file), ''),
-			L.resolveDefault(fs.read(udp_list_file), ''),
-			L.resolveDefault(fs.read(nattest_result_path), ''),
+			fs.trimmed(tcp_list_file),
+			fs.trimmed(udp_list_file),
+			fs.trimmed(nattest_result_path),
 			L.resolveDefault(fs.stat('/usr/bin/stunclient'), null),
 			L.resolveDefault(fs.list(etc_path + '/notify'), []),
 			L.resolveDefault(fs.list(etc_path + '/ddns'), []),
 			callGetCongestions().then((res) => { return res.algorithm; }),
-			uci.load('firewall'),
-			uci.load('natmap')
+			uci.load(fw),
+			uci.load(conf)
 		]);
 	},
 
-	render([status, hosts, wans, tcp_list, udp_list, nattest_result, has_stunclient, scripts_notify, scripts_ddns, congestions]) {
+	render([status, hosts, tcp_list, udp_list, nattest_result, has_stunclient, scripts_notify, scripts_ddns, congestions]) {
 		let m, s, o;
-		m = new form.Map('natmap', _('NATMap'));
+		m = new form.Map(conf, _('NATMap'));
 
 		s = m.section(form.TypedSection, 'global');
 		s.anonymous = true;
@@ -265,82 +265,78 @@ return view.extend({
 		o.default = 5;
 		o.rmempty = false;
 
+		function portHits(port, spec) {
+			let p = Number(port);
+			if (!Number.isInteger(p) || p < 1 || p > 65535) return false;
+			return String(spec || '').trim().split(/\s+/).some(function(part) {
+				let m = part.match(/^(\d+)(?:-(\d+))?$/);
+				if (!m) return false;
+				let a = +m[1], b = +(m[2] || m[1]);
+				return p >= Math.min(a, b) && p <= Math.max(a, b);
+			});
+		}
+
+		function ruleConflicts(sid, portField, port) {
+			if (uci.get(fw, sid, 'enabled') === '0') return false;
+			let proto = String(uci.get(fw, sid, 'proto') || 'all').toLowerCase();
+			if (proto !== 'all' && proto !== 'any' &&
+			    !proto.split(/\s+/).some(function(t) { return t === 'tcp' || t === 'udp'; }))
+				return false;
+			let src = uci.get(fw, sid, 'src') || '';
+			if (src !== 'wan' && src !== '*') return false;
+			return portHits(port, uci.get(fw, sid, portField));
+		}
+
+		function upsertNatTestRule(port) {
+			let fields = {
+				name: nattest_fw_rulename,
+				src: 'wan', proto: 'tcp udp',
+				dest_port: port, target: 'ACCEPT'
+			};
+
+			let target = null;
+			uci.sections(fw, 'rule', function(sec, sid) {
+				if (uci.get(fw, sid, 'name') !== nattest_fw_rulename) return;
+				if (target === null) {
+					target = sid;
+					for (let k in fields) uci.set(fw, sid, k, fields[k]);
+				} else {
+					uci.remove(fw, sid);
+				}
+			});
+
+			if (target === null && (target = uci.add(fw, 'rule')))
+				for (let k in fields) uci.set(fw, target, k, fields[k]);
+			return target;
+		}
+
 		o = s.option(form.Value, 'test_port', _('NATBehavior-Test port open on'),
-			_('Please check <a href="%s"><b>Firewall Rules</b></a> to avoid port conflicts.</br>')
+			_('Please check <a href="%s"><b>Firewall Rules</b></a> to avoid port conflicts.<br />')
 				.format(L.url('admin', 'network', 'firewall'))
-			+ _('luci check may not detect all conflicts.'));
-		o.datatype = "and(port, min(1))";
-		o.placeholder = 3445;
+			+ _('LuCI check may not detect all conflicts.'));
+		o.datatype = 'and(port, min(1))';
+		o.placeholder = 6777;
 		o.rmempty = false;
 		o.validate = function(section_id, value) {
-			let fwcfg = 'firewall';
-			let fw_forwards = uci.sections(fwcfg, 'redirect');
-			let fw_rules = uci.sections(fwcfg, 'rule');
+			let conflict = false;
+			uci.sections(fw, 'redirect', function(sec, sid) {
+				if (ruleConflicts(sid, 'src_dport', value)) conflict = true;
+			});
+			if (conflict) return _('This port is already used');
 
-			for (let i = 0; i < fw_forwards.length; i++) {
-				let sid = fw_forwards[i]['.name'];
-				if (value == uci.get(fwcfg, sid, 'src_dport'))
-					return _('This port is already used');
-			}
-
-			for (let i = 0; i < fw_rules.length; i++) {
-				let sid = fw_rules[i]['.name'];
-				if (uci.get(fwcfg, sid, 'name') == nattest_fw_rulename)
-					continue;
-				if ((uci.get(fwcfg, sid, 'dest') || '') == '') {
-					if (value == uci.get(fwcfg, sid, 'dest_port'))
-						return _('This port is already used');
-				}
-			}
-
+			uci.sections(fw, 'rule', function(sec, sid) {
+				if (uci.get(fw, sid, 'name') === nattest_fw_rulename) return;
+				if ((uci.get(fw, sid, 'dest') || '') !== '') return;
+				if (ruleConflicts(sid, 'dest_port', value)) conflict = true;
+			});
+			if (conflict) return _('This port is already used');
 			return true;
 		};
+
 		o.write = function(section_id, value) {
-			uci.set(conf, section_id, 'test_port', value);
-
-			let found = false;
-			let fwcfg = 'firewall';
-			let rules = uci.sections(fwcfg, 'rule');
-			for (let i = 0; i < rules.length; i++) {
-				let sid = rules[i]['.name'];
-				if (uci.get(fwcfg, sid, 'name') == nattest_fw_rulename) {
-					found = sid;
-					break;
-				}
-			}
-
-			let wan_zone = 'wan';
-			if (Array.isArray(wans) && wans.length > 0) {
-				let zones = uci.sections(fwcfg, 'zone');
-				for (let i = 0; i < zones.length; i++) {
-					let sid = zones[i]['.name'];
-					if (uci.get(fwcfg, sid, 'masq') == 1) {
-						wan_zone = uci.get(fwcfg, sid, 'name');
-						break;
-					}
-				}
-			} else {
-				for (let i = 0; i < rules.length; i++) {
-					let sid = rules[i]['.name'];
-					if (uci.get(fwcfg, sid, 'src')) {
-						wan_zone = uci.get(fwcfg, sid, 'src');
-						break;
-					}
-				}
-			}
-
-			if (found) {
-				if (value != uci.get(fwcfg, found, 'dest_port'))
-					uci.set(fwcfg, found, 'dest_port', value);
-			} else {
-				let sid = uci.add(fwcfg, 'rule');
-				uci.set(fwcfg, sid, 'name', nattest_fw_rulename);
-				uci.set(fwcfg, sid, 'src', wan_zone);
-				uci.set(fwcfg, sid, 'dest_port', value);
-				uci.set(fwcfg, sid, 'target', 'ACCEPT');
-			}
-
-			uci.save(fwcfg);
+			if (uci.get(conf, section_id, 'test_port') !== value)
+				uci.set(conf, section_id, 'test_port', value);
+			upsertNatTestRule(value);
 		};
 
 		o = s.option(form.Flag, 'log_enable', _('日志记录'));
@@ -362,12 +358,12 @@ return view.extend({
 		o.inputtitle = _('Check');
 		o.inputstyle = 'apply';
 		if (!has_stunclient) {
+			o.readonly = true;
 			o.description = _('To check NAT Behavior you need to install <a href="%s"><b>stuntman-client</b></a> first')
 				.format('https://github.com/muink/openwrt-stuntman');
-			o.readonly = true;
 		}
 		o.onclick = function() {
-			let test_port = uci.get_first(conf, 'global', 'test_port') || '';
+			let test_port     = uci.get_first(conf, 'global', 'test_port')    || '';
 			let udp_stun_host = uci.get_first(conf, 'global', 'def_udp_stun') || '';
 			let tcp_stun_host = uci.get_first(conf, 'global', 'def_tcp_stun') || '';
 
@@ -392,7 +388,7 @@ return view.extend({
 			};
 		};
 
-		s = m.section(form.GridSection, 'natmap');
+		s = m.section(form.GridSection, conf);
 		s.sortable  = true;
 		s.addremove = true;
 		s.anonymous = true;

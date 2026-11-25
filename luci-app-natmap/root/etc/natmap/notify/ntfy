@@ -5,7 +5,7 @@
 #
 # depends 
 
-. /usr/lib/natmap/common.sh
+. /etc/natmap/scripts/common.sh
 . /usr/share/libubox/jshn.sh
 
 # http_request <data>
