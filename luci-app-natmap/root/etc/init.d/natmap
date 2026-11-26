@@ -183,27 +183,22 @@ fwmark_match() {
 natmap_instance() {
 	procd_open_instance "$1"
 	procd_set_param command /bin/sh -c '
-		tag="$1"; log="$2"; shift 2
-		mkdir -p "$(dirname "$log")"
-		fifo="/tmp/natmap_$$.fifo"
-		rm -f "$fifo"
-		mkfifo "$fifo" || exit 1
+		log="'"$LOG_FILE"'"; mkdir -p "$(dirname "$log")";
+		fifo="/tmp/natmap_$$.fifo"; rm -f "$fifo"; mkfifo "$fifo" || exit 1
 		(
 			cnt=0
 			while IFS= read -r line || [ -n "$line" ]; do
-				printf "[%s][%s] %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "$tag" "$line" >> "$log"
+				printf "[%s][%s] %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "'"${comment:0:12}"'" "$line" >> "$log"
 				cnt=$((cnt + 1))
 				if [ "$cnt" -ge 200 ]; then
 					cnt=0
-					if [ "$(wc -c < "$log" 2>/dev/null || echo 0)" -gt 524288 ]; then
-						tail -n 500 "$log" > "${log}.$$.tmp" && mv "${log}.$$.tmp" "$log"
-					fi
+					[ "$(wc -c < "$log" 2>/dev/null || echo 0)" -gt 524288 ] && tail -n 500 "$log" > "${log}.$$.tmp" && mv "${log}.$$.tmp" "$log"
 				fi
 			done < "$fifo"
 			rm -f "$fifo"
 		) &
 		exec "$0" "$@" > "$fifo" 2>&1
-	' "$PROG" "${comment:0:12}" "$LOG_FILE"
+	' "$PROG"
 
 	procd_append_param command \
 		${interval:+-k "$interval"} \

@@ -225,42 +225,42 @@ return view.extend({
 			_('Delay in seconds before starting the service.'));
 		o.datatype = 'uinteger';
 
-		o = s.option(StunListValue, 'def_tcp_stun', _('Default ') + _('TCP STUN ') + _('Server'),
+		o = s.option(StunListValue, 'def_tcp_stun', _('Default TCP STUN server'),
 			_('Available server <a href="%s" target="_blank">references</a>')
-				.format(_('https://github.com/muink/rfc5780-stun-server/blob/master/valid_hosts_rfc5780_tcp.txt')));
+				.format('https://github.com/muink/rfc5780-stun-server/blob/master/valid_hosts_rfc5780_tcp.txt'));
 		o.rmempty = false;
 		o.downloadUrl = 'https://raw.githubusercontent.com/muink/rfc5780-stun-server/master/valid_hosts_rfc5780_tcp.txt';
 		o.listPath = tcp_list_file;
 		parseList(tcp_list).forEach((srv) => srv && o.value(srv));
 
-		o = s.option(StunListValue, 'def_udp_stun', _('Default ') + _('UDP STUN ') + _('Server'),
+		o = s.option(StunListValue, 'def_udp_stun', _('Default UDP STUN server'),
 			_('Available server <a href="%s" target="_blank">references</a>')
-				.format(_('https://github.com/muink/rfc5780-stun-server/blob/master/valid_hosts_rfc5780.txt')));
+				.format('https://github.com/muink/rfc5780-stun-server/blob/master/valid_hosts_rfc5780.txt'));
 		o.rmempty = false;
 		o.downloadUrl = 'https://raw.githubusercontent.com/muink/rfc5780-stun-server/master/valid_hosts_rfc5780.txt';
 		o.listPath = udp_list_file;
 		parseList(udp_list).forEach((srv) => srv && o.value(srv));
 
-		o = s.option(form.Value, 'def_http_server', _('Default ') + _('HTTP keep-alive ') + _('Server'));
+		o = s.option(form.Value, 'def_http_server', _('Default HTTP keep-alive server'));
 		o.datatype = 'or(hostname, hostport)';
 		o.value('qq.com');
 		o.value('163.com');
 		o.value('baidu.com');
 		o.rmempty = false;
 
-		o = s.option(form.Value, 'def_fwmark_value', _('Default ') + _('Fwmark value'));
+		o = s.option(form.Value, 'def_fwmark_value', _('Default fwmark value'));
 
-		o = s.option(form.Value, 'def_tcp_interval', _('Default ') + _('TCP ') + _('keep-alive interval (seconds)'));
+		o = s.option(form.Value, 'def_tcp_interval', _('Default TCP keep-alive interval (seconds)'));
 		o.datatype = "and(uinteger, min(1))";
 		o.default = 30;
 		o.rmempty = false;
 
-		o = s.option(form.Value, 'def_udp_interval', _('Default ') + _('UDP ') + _('keep-alive interval (seconds)'));
+		o = s.option(form.Value, 'def_udp_interval', _('Default UDP keep-alive interval (seconds)'));
 		o.datatype = "and(uinteger, min(1))";
 		o.default = 15;
 		o.rmempty = false;
 
-		o = s.option(form.Value, 'def_udp_stun_cycle', _('Default ') + _('UDP ') + _('STUN check cycle (once every n intervals)'));
+		o = s.option(form.Value, 'def_udp_stun_cycle', _('Default UDP STUN check cycle (once every n intervals)'));
 		o.datatype = 'uinteger';
 		o.default = 5;
 		o.rmempty = false;
@@ -339,10 +339,10 @@ return view.extend({
 			upsertNatTestRule(value);
 		};
 
-		o = s.option(form.Flag, 'log_enable', _('日志记录'));
+		o = s.option(form.Flag, 'log_enable', _('Enable logging'));
 		o.default = o.disabled;
 		o.rmempty = false;
-		o.description = _('将服务的标准输出和标准错误重定向到系统日志');
+		o.description = _('Redirect service standard output and standard error to system log');
 		o.cfgvalue = function (section_id) {
 			const so = uci.get(conf, section_id, 'log_stdout');
 			const se = uci.get(conf, section_id, 'log_stderr');
@@ -459,7 +459,7 @@ return view.extend({
 		o.nocreate = false;
 
 		o = s.taboption('general', form.Value, 'port', _('Bind port'),
-			_('Note: After using <code>portrange</code>, the public ports will be opened in rotation</br>') +
+			_('Note: After using <code>portrange</code>, the public ports will be opened in rotation<br />') +
 			_('If you enable <b>Notify Scripts</b>, you will be bombarded with messages'));
 		o.datatype = "or(port, portrange)";
 		o.rmempty = false;
@@ -732,13 +732,13 @@ return view.extend({
 		o.modalonly = true;
 		o.depends({ ddns_enable: '1' });
 
-		o = s.taboption('ddns', form.Value, 'ddns_a', _('A Record ') + _('FQDN'));
+		o = s.taboption('ddns', form.Value, 'ddns_a', _('A Record FQDN'));
 		o.datatype = 'hostname';
 		o.placeholder = 'www.example.com';
 		o.depends({ ddns_enable: '1', family: 'ipv4' });
 		o.modalonly = true;
 
-		o = s.taboption('ddns', form.Value, 'ddns_aaaa', _('AAAA Record ') + _('FQDN'));
+		o = s.taboption('ddns', form.Value, 'ddns_aaaa', _('AAAA Record FQDN'));
 		o.datatype = 'hostname';
 		o.placeholder = 'ipv6.example.com';
 		o.depends({ ddns_enable: '1', family: 'ipv6' });
