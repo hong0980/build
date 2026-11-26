@@ -6,18 +6,18 @@
 # Github: https://github.com/muink/luci-app-natmap
 #
 # Args: <udp stun server:port> <tcp stun server:port> <localport> [output]
+PROG="$(command -v stunclient)"
+[ -x "$PROG" ] || exit 1
 [ "$#" -ge 3 ] || exit 1
-udpstun="$1" && shift
-tcpstun="$1" && shift
-port="$1" && shift
-[ -n "$1" ] && output="$1"
+
+udpstun="$1"
+tcpstun="$2"
+port="$3"
+[ -n "$4" ] && output="$4"
 
 [ "$(echo "$udpstun" | sed 's|[A-Za-z0-9:.-]||g')" == "" ] || exit 1
 [ "$(echo "$tcpstun" | sed 's|[A-Za-z0-9:.-]||g')" == "" ] || exit 1
 [ "$(echo "$port" | sed 's|[0-9]||g')" == "" ] || exit 1
-
-PROG="/etc/natmap/scripts/natmap-natest"
-if [ -x "$(command -v stunclient)" ]; then ln -s "$(command -v stunclient)" "$PROG" 2>/dev/null; else exit 1; fi
 
 #/etc/init.d/firewall reload >/dev/null 2>&1
 

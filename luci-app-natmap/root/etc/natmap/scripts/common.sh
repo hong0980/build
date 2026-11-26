@@ -3,8 +3,6 @@
 #
 # depends curl jsonfilter
 
-CURL="$(command -v natmap-curl)"
-
 # JSON_EXPORT <json>
 JSON_EXPORT() {
 	for k in $ALL_PARAMS; do
@@ -24,7 +22,7 @@ http_call() {
 	curl -sS -L -k \
 		--connect-timeout 3 \
 		--max-time 10 \
-		--retry 0 \
+		--retry 5 \
 		"$@"
 }
 

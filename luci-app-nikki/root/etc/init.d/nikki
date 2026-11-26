@@ -4,27 +4,19 @@ START=99
 STOP=10
 USE_PROCD=1
 . "$IPKG_INSTROOT/etc/nikki/scripts/include.sh"
+config_load nikki
 
 extra_command 'clear_logs' 'Clear logs if size exceeds the limit'
 extra_command 'update_subscription' 'Update subscription by section id'
 
-boot() {
-	config_load nikki
-	local enabled start_delay
-	config_get_bool enabled config "enabled" 0
-	config_get  start_delay config "start_delay" 0
-	if [ "$enabled" = 1 -a "$start_delay" -gt 0 ]; then
-		log "App" "Start after %s seconds." "$start_delay"
-		sleep "$start_delay"
-	fi
-	start
-}
-
 start_service() {
-	config_load nikki
-	local core enabled temp_config="$(mktemp)"
+	local enabled
 	config_get_bool enabled config enabled 0
 	[ "$enabled" = 1 ] || return
+
+	local core start_delay temp_config="$(mktemp)"
+	config_get start_delay config start_delay 0
+	sleep "$start_delay"
 
 	config_get core config core 'meta'
 	set -- "${RUN_DIR}/core/${core}-mihomo"
@@ -305,7 +297,6 @@ start_service() {
 service_started() {
 	[ -f "$STARTED_FLAG_PATH" ] || return
 
-	config_load nikki
 	local proxy_enabled
 	config_get_bool proxy_enabled proxy "enabled" 0
 	if [ "$proxy_enabled" = 0 ]; then
@@ -439,7 +430,6 @@ service_triggers() {
 }
 
 cleanup() {
-	config_load nikki
 	local log_clear_at_stop dummy_device tun_route_table tproxy_route_table
 	config_get_bool log_clear_at_stop log clear_at_stop 0
 	config_get dummy_device       routing dummy_device       "nikki-dummy"
@@ -487,7 +477,6 @@ cleanup() {
 }
 
 clear_logs() {
-	config_load nikki
 	local limit limit_unit limit_bytes=0
 	config_get limit      log limit 1
 	config_get limit_unit log limit_unit "MB"

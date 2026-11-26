@@ -339,20 +339,20 @@ return view.extend({
 			upsertNatTestRule(value);
 		};
 
-		o = s.option(form.Flag, 'log_enable', _('Enable logging'));
-		o.default = o.disabled;
-		o.rmempty = false;
-		o.description = _('Redirect service standard output and standard error to system log');
-		o.cfgvalue = function (section_id) {
-			const so = uci.get(conf, section_id, 'log_stdout');
-			const se = uci.get(conf, section_id, 'log_stderr');
-			return (so === '1' || se === '1') ? '1' : '0';
-		};
-		o.write = function (section_id, value) {
-			const v = (value === '1' || value === true) ? '1' : '0';
-			uci.set(conf, section_id, 'log_stdout', v);
-			uci.set(conf, section_id, 'log_stderr', v);
-		};
+		// o = s.option(form.Flag, 'log_enable', _('Enable logging'));
+		// o.default = o.disabled;
+		// o.rmempty = false;
+		// o.description = _('Redirect service standard output and standard error to system log');
+		// o.cfgvalue = function (section_id) {
+		// 	const so = uci.get(conf, section_id, 'log_stdout');
+		// 	const se = uci.get(conf, section_id, 'log_stderr');
+		// 	return (so === '1' || se === '1') ? '1' : '0';
+		// };
+		// o.write = function (section_id, value) {
+		// 	const v = (value === '1' || value === true) ? '1' : '0';
+		// 	uci.set(conf, section_id, 'log_stdout', v);
+		// 	uci.set(conf, section_id, 'log_stderr', v);
+		// };
 
 		o = s.option(form.Button, '_nattest', _('Check NAT Behavior'));
 		o.inputtitle = _('Check');

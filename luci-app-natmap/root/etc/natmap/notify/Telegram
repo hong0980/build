@@ -8,17 +8,11 @@
 . /etc/natmap/scripts/common.sh
 
 start() {
-	local retry='--connect-timeout 3 --retry 5'
-	
-	# 如果 CUESTOM_PROXY 不为空，则添加 -x 参数
-	local proxy_param=${CUESTOM_PROXY:+-x $CUESTOM_PROXY}
-
-	$CURL $retry -L -o /dev/null -X POST $proxy_param \
+	http_call -X POST ${CUESTOM_PROXY:+-x $CUESTOM_PROXY} \
 		-H 'Content-Type: application/json' \
 		-d '{"chat_id":"'"${CHAT_ID}"'","text":"'"${text}"'","parse_mode":"HTML","disable_notification":"false"}' \
 		--url "https://${custom_domain:-api.telegram.org}/bot${TOKEN}/sendMessage"
 }
-
 
 # All external parameters required
 ALL_PARAMS="custom_domain text tokens"

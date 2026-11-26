@@ -8,17 +8,7 @@
 . /etc/natmap/scripts/common.sh
 . /usr/share/libubox/jshn.sh
 
-# http_request <data>
-http_request() {
-	local data="$1"
-	$CURL $retry -L -o /dev/null -X POST \
-		-H 'Content-Type: application/json' \
-		-d "$data" \
-		--url https://${custom_domain:-ntfy.sh}/
-}
-
 start() {
-	local retry='--connect-timeout 3 --retry 5'
 	json_init
 	json_add_string topic "${TOPIC}"
 	json_add_string message "${text}"
@@ -42,9 +32,11 @@ start() {
 			json_close_object
 		json_close_array
 	}
-	http_request "$(json_dump)"
+	http_call -X POST \
+		-H 'Content-Type: application/json' \
+		-d "$(json_dump)" \
+		--url https://${custom_domain:-ntfy.sh}/
 }
-
 
 # All external parameters required
 ALL_PARAMS="custom_domain text tokens"

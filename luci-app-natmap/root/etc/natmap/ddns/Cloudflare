@@ -15,7 +15,7 @@ http_request() {
 	local method
 	[ -z "${id}" ] && method=POST || method=PUT # or PATCH
 
-	$CURL $retry -L -o /dev/null -X ${method} \
+	http_call -X ${method} \
 		--url "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records/${id}" \
 		-H "Authorization: Bearer ${TOKEN}" \
 		-H 'Content-Type: application/json' \
@@ -23,16 +23,15 @@ http_request() {
 }
 
 start() {
-	local retry='--connect-timeout 3 --retry 5'
-	#$CURL $retry -L -X GET \
+	#http_call -X GET \
 	#	--url "https://api.cloudflare.com/client/v4/user/tokens/verify" \
 	#	-H "Authorization: Bearer ${TOKEN}" \
 	#	-H "Content-Type:application/json" | jq
-	#$CURL $retry -L -X GET \
+	#http_call -X GET \
 	#	--url "https://api.cloudflare.com/client/v4/zones" \
 	#	-H "Authorization: Bearer ${TOKEN}" \
 	#	-H "Content-Type:application/json" | jq
-	local records="$($CURL $retry -L -X GET \
+	local records="$(http_call -X GET \
 		--url "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
 		-H "Authorization: Bearer ${TOKEN}" \
 		-H 'Content-Type: application/json')"
@@ -93,7 +92,6 @@ start() {
 		http_request "$(json_dump)" "$(jsonfilter -s "$the_record" -qe '@.id')"
 	fi
 }
-
 
 # All external parameters required
 ALL_PARAMS="hostype host txt txt_content srv srv_serv srv_proto srv_target srv_priority srv_weight ip port https https_target https_svcparams https_priority tokens"
