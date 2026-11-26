@@ -15,12 +15,10 @@ LUCI_DESCRIPTION:=TCP/UDP port mapping for full cone NAT
 PKG_LICENSE:=Apache-2.0
 PKG_MAINTAINER:=Anya Lin <hukk1996@gmail.com>, Richard Yu <yurichard3839@gmail.com>
 
-define Build/Prepare/luci-app-natmap
+define Build/Prepare/Default
 	chmod 0755 $(PKG_BUILD_DIR)/root/etc/init.d/natmap
-	[ -d $(PKG_BUILD_DIR)/root/etc/natmap ] && \
-		chmod -R +X $(PKG_BUILD_DIR)/root/etc/natmap || true
+	chmod -R +x $(PKG_BUILD_DIR)/root/etc/natmap || true
 endef
-
 include $(TOPDIR)/feeds/luci/luci.mk
 
 # call BuildPackage - OpenWrt buildroot signature

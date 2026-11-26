@@ -577,15 +577,15 @@ return view.extend({
 				o.value(val, labels[val]);
 		})(transformHostHints(null, hosts, false)[1]);
 
-		o.textvalue = function(section_id) {
-			let cval = this.cfgvalue(section_id);
-			let i = this.keylist.indexOf(cval);
-			let enforward = function() {
-				let v = this.cfgvalue(section_id) || this.default;
-				return (v == this.enabled);
-			}.call(this.section.getOption('forward'));
-			return enforward ? (this.vallist[i] ?? cval) : _('No');
-		};
+		// o.textvalue = function(section_id) {
+		// 	let cval = this.cfgvalue(section_id);
+		// 	let i = this.keylist.indexOf(cval);
+		// 	let enforward = function() {
+		// 		let v = this.cfgvalue(section_id) || this.default;
+		// 		return (v == this.enabled);
+		// 	}.call(this.section.getOption('forward'));
+		// 	return enforward ? (this.vallist[i] ?? cval) : _('No');
+		// };
 
 		o = s.taboption('forward', form.Value, 'forward_port', _('Forward target port'),
 			_('Set 0 will follow Public port'));

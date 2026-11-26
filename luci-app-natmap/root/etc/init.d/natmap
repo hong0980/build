@@ -6,16 +6,10 @@ START=97
 STOP=90
 USE_PROCD=1
 
-# natmap
 [ -x "$(command -v  nft)" ] && FW='fw4' || FW='fw3'
-NAME=natmap
-GLOBALSECTION=global
-NATMAPSECTION=natmap
-PROG=/usr/bin/$NAME
 STATUS_PATH=/var/run/natmap
 LOG_FILE="/var/log/natmap.log"
-config_load "$NAME"
-
+config_load natmap
 
 # define global var: DEF_WAN DEF_WAN6 NIC_* NIC6_*
 define_nic() {
@@ -84,7 +78,7 @@ define_global() {
 }
 
 validate_section_global() {
-	uci_load_validate "$NAME" "$GLOBALSECTION" "$1" "$2" \
+	uci_load_validate natmap global "$1" "$2" \
 		'enable:bool:0' \
 		'def_tcp_stun:string' \
 		'def_udp_stun:string' \
@@ -97,7 +91,7 @@ validate_section_global() {
 }
 
 validate_section_natmap() {
-	uci_load_validate "$NAME" "$NATMAPSECTION" "$1" "$2" \
+	uci_load_validate natmap natmap "$1" "$2" \
 		'enable:bool:0' \
 		'interval:and(uinteger, min(1))' \
 		'stun_cycle:uinteger' \
@@ -198,7 +192,7 @@ natmap_instance() {
 			rm -f "$fifo"
 		) &
 		exec "$0" "$@" > "$fifo" 2>&1
-	' "$PROG"
+	' /usr/bin/natmap
 
 	procd_append_param command \
 		${interval:+-k "$interval"} \
@@ -210,7 +204,7 @@ natmap_instance() {
 
 	[ "${family}" = ipv4 ] && procd_append_param command -4
 	[ "${family}" = ipv6 ] && procd_append_param command -6
-	[ "${udp_mode}" = 1 ] && procd_append_param command -u
+	[ "${udp_mode}" = 1 ]  && procd_append_param command -u
 
 	procd_set_param netdev "br-lan"
 	[ -n "${bind_ifname}" ] && {
@@ -218,7 +212,7 @@ natmap_instance() {
 		procd_append_param netdev "$bind_ifname"
 	} || {
 		local ifname
-		network_get_device ifname "$DEF_WAN" && procd_append_param netdev "$ifname"
+		network_get_device ifname "$DEF_WAN"  && procd_append_param netdev "$ifname"
 		network_get_device ifname "$DEF_WAN6" && procd_append_param netdev "$ifname"
 	}
 
@@ -226,37 +220,32 @@ natmap_instance() {
 		procd_append_param command ${forward_congestion:+-C "$forward_congestion"} ${forward_timeout:+-T "$forward_timeout"} -t "$forward_target" -p "$forward_port"
 	fi
 
-	procd_set_param env "SECTIONID=$1"
-	procd_append_param env "COMMENT=$comment"
+	procd_set_param env "SECTIONID=$1" "COMMENT=$comment"
 
 	if [ "$forward" = 1 ]; then
 		# Rewrite the dest_port(forward port) using a public port
 		[ "$forward_port" = 0 -a "$forward_mode" = "dnat" ] && procd_append_param env "RWFW=1"
 
 		if [ "$refresh" = 1 ]; then
-			procd_append_param env "REFRESH=/etc/natmap/client/client"
 			json_init
-			json_add_int web_port "$clt_web_port"
-			json_add_string client "$clt_type"
+			json_add_int    web_port "$clt_web_port"
 			json_add_string scheme "$clt_scheme"
+			json_add_string host "$forward_target"
 			json_add_string username "$clt_username"
 			json_add_string password "$clt_password"
-			json_add_string host "$forward_target"
-			procd_append_param env "REFRESH_PARAM=$(json_dump)"
+			procd_append_param env "CLIENT=$clt_type" "REFRESH_PARAM=$(json_dump)"
 		fi
 	fi
 
 	if [ "$notify_enable" = 1 ]; then
-		procd_append_param env "NOTIFY=$notify_script"
 		json_init
 		json_add_string custom_domain "$notify_custom_domain"
 		json_add_string text "$notify_text"
 		json_add_string tokens "$notify_tokens"
-		procd_append_param env "NOTIFY_PARAM=$(json_dump)"
+		procd_append_param env "NOTIFY=$notify_script" "NOTIFY_PARAM=$(json_dump)"
 	fi
 
 	if [ "$ddns_enable" = 1 ]; then
-		procd_append_param env "DDNS=$ddns_script"
 		json_init
 		json_add_string tokens "$ddns_tokens"
 		[ "$family" = ipv4 ] && json_add_string hostype "A" && json_add_string host "$ddns_a"
@@ -279,13 +268,13 @@ natmap_instance() {
 			json_add_string https_svcparams "$ddns_https_svcparams"
 			json_add_int https_priority "$ddns_https_priority"
 		}
-		procd_append_param env "DDNS_PARAM=$(json_dump)"
+		procd_append_param env "DDNS=$ddns_script" "DDNS_PARAM=$(json_dump)"
 	fi
 
 	[ -n "${custom_script}" ] && procd_append_param env "CUSTOM_SCRIPT=${custom_script}"
 	procd_append_param command -e /etc/natmap/scripts/update.sh
 
-	procd_set_param respawn
+	procd_set_param respawn 300 5 5
 	procd_set_param stdout "$log_stdout"
 	procd_set_param stderr "$log_stderr"
 
@@ -332,7 +321,6 @@ natmap_instance() {
 
 clear_status_files() {
 	local f sid="$1"
-
 	mkdir -p "${STATUS_PATH}" 2>/dev/null
 	pushd "${STATUS_PATH}" >/dev/null
 	if [ -n "$sid" ]; then
@@ -444,16 +432,15 @@ launcher() {
 		for v in $ucivv; do eval "echo $1 $v=\'\$$v\'"; done # ash not support ${!v}
 	}
 	[ "$error" -gt 0 ] && return 1
-
 	natmap_instance "$1"
 }
 
 service_triggers() {
-	procd_add_reload_trigger "$NAME" 'network'
+	procd_add_reload_trigger natmap 'network'
 
 	local interfaces
 
-	config_foreach load_interfaces $NATMAPSECTION
+	config_foreach load_interfaces natmap
 	[ -n "$interfaces" ] && {
 		for n in $interfaces; do
 			procd_add_reload_interface_trigger $n
@@ -479,12 +466,12 @@ start_service() {
 
 	if [ -z "$DEF_WAN$DEF_WAN6" ]; then
 		>&2 echo "$(basename $0): default WAN not detected. service startup will be delayed."
-		sleep $(uci -q get $NAME.@$GLOBALSECTION[0].boot_delay || echo 0)
+		sleep $(uci -q get natmap.@global[0].boot_delay || echo 0)
 		network_flush_cache
 		define_nic
 	fi
 
-	config_foreach validate_section_global "$GLOBALSECTION" define_global || return $?
+	config_foreach validate_section_global global define_global || return $?
 	[ "${GLOBAL_enable:=0}" == "1" ] || return 1
 
 	if [ -n "$sid" ]; then
@@ -492,7 +479,7 @@ start_service() {
 		validate_section_natmap "$sid" launcher
 	else
 		clear_status_files
-		config_foreach validate_section_natmap "$NATMAPSECTION" launcher
+		config_foreach validate_section_natmap natmap launcher
 	fi
 }
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Copyright (C) 2023 muink https://github.com/muink
 #
 # depends curl jsonfilter

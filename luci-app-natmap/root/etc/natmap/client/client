@@ -132,7 +132,7 @@ refresh_tr() {
 }
 
 start() {
-	case "$client" in
+	case "$CLIENT" in
 		Deluge)       refresh_de ;;
 		qBittorrent)  refresh_qb ;;
 		Transmission) refresh_tr ;;
@@ -143,6 +143,6 @@ start() {
 	esac
 }
 
-ALL_PARAMS="client host port scheme web_port username password"
+ALL_PARAMS="host port scheme web_port username password"
 eval "$(JSON_EXPORT "$1")"; shift
 start "$@"

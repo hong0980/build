@@ -30,22 +30,22 @@ if [ -n "$RWFW" -a "$($INITD info|jsonfilter -qe "@['$(basename $INITD)'].instan
 fi
 (
 	json_init
+	json_add_int    port "$port"
+	json_add_int    inner_port "$inner_port"
+	json_add_string ip "$ip"
+	json_add_string ip4p "$ip4p"
 	json_add_string sid "$SECTIONID"
 	json_add_string comment "$COMMENT"
-	json_add_string ip "$ip"
-	json_add_int port "$port"
-	json_add_string ip4p "$ip4p"
-	json_add_int inner_port "$inner_port"
 	json_add_string protocol "$protocol"
 	json_add_string inner_ip "$inner_ip"
 	json_dump > "$STATUS_PATH/$PPID.json"
 )
 
-if [ -x "$REFRESH" ]; then
+if [ -n "$CLIENT" ]; then
 	json_init
 	json_load "$REFRESH_PARAM"
 	json_add_int port "$port"
-	$REFRESH "$(json_dump)"
+	/etc/natmap/client/client "$(json_dump)"
 fi
 
 if [ -n "$NOTIFY" ]; then
