@@ -204,8 +204,11 @@ return view.extend({
 	render([status, hosts, tcp_list, udp_list, nattest_result, has_stunclient, scripts_notify, scripts_ddns, congestions]) {
 		let m, s, o;
 		m = new form.Map(conf, _('NATMap'));
+		m.description =	_('TCP/UDP port mapping for full cone NAT (NAT-1). See <a href="%s" target="_blank">NATMap project</a> for details.'
+		.format('https://github.com/muink/openwrt-natmapt'));
+        m.tabbed = true;
 
-		s = m.section(form.TypedSection, 'global');
+		s = m.section(form.TypedSection, 'global', _('Global Settings'));
 		s.anonymous = true;
 
 		o = s.option(form.Flag, 'enable', _('Enable'));
@@ -388,7 +391,7 @@ return view.extend({
 			};
 		};
 
-		s = m.section(form.GridSection, conf);
+		s = m.section(form.GridSection, 'natmap', _('Service settings'));
 		s.sortable  = true;
 		s.addremove = true;
 		s.anonymous = true;
@@ -476,25 +479,36 @@ return view.extend({
 		o.depends({ port: /^[1-9]\d*-[1-9]\d*$/ });
 		o.modalonly = true;
 
+		o = s.taboption('general', form.Flag, 'cus_enable', _('Custom server configuration'));
+		o.default = o.disabled;
+		o.write = function(section_id, formvalue) { return; }
+		o.load = function(section_id) { return; }
+		o.modalonly = true;
+
 		o = s.taboption('general', form.Value, 'interval', _('Keep-alive interval'));
 		o.datatype = "and(uinteger, min(1))";
+		o.depends('cus_enable', '1');
 		o.modalonly = true;
 
 		o = s.taboption('general', form.Value, 'stun_cycle', _('STUN check cycle (once every n intervals)'),
 			_('For UDP mode'));
 		o.datatype = 'uinteger';
+		o.depends('cus_enable', '1');
 		o.modalonly = true;
 
 		o = s.taboption('general', form.Value, 'stun_server', _('STUN server'));
 		o.datatype = 'or(hostname, hostport)';
+		o.depends('cus_enable', '1');
 		o.modalonly = true;
 
 		o = s.taboption('general', form.Value, 'http_server', _('HTTP server'), _('For TCP mode'));
 		o.datatype = 'or(hostname, hostport)';
+		o.depends('cus_enable', '1');
 		o.modalonly = true;
 
 		o = s.taboption('general', form.Value, 'fwmark_value', _('Fwmark value'),
 			_('Mark fwmark for STUN/HTTP outbound traffic'));
+		o.depends('cus_enable', '1');
 		o.modalonly = true;
 
 		o = s.taboption('forward', form.Flag, 'forward', _('Forward mode'));
@@ -616,10 +630,10 @@ return view.extend({
 		o.default = o.disabled;
 		o.rmempty = false;
 		o.retain = true;
-		o.depends('forward', '1');
+		o.depends({ 'forward': '1', 'forward_port': '0' });
 		o.modalonly = true;
 
-		o = s.taboption('forward', form.ListValue, 'clt_type', _('Refresh Scripts'));
+		o = s.taboption('forward', form.ListValue, 'clt_type', _('managed client'));
 		o.rmempty = false;
 		o.retain = true;
 		o.modalonly = true;
@@ -627,6 +641,10 @@ return view.extend({
 		o.value('qBittorrent', 'qBittorrent');
 		o.value('Transmission', 'Transmission');
 		o.value('Deluge', 'Deluge');
+		o.onchange = function (ev, section_id, value) {
+			const lEl = this.section.getUIElement(section_id, 'comment');
+			if (lEl) lEl.setValue(value);
+		};
 
 		o = s.taboption('forward', form.ListValue, 'clt_scheme', _('URI Scheme'));
 		o.value('http', 'HTTP');
@@ -715,6 +733,7 @@ return view.extend({
 		o.datatype = 'file';
 		o.rmempty = false;
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_enable: '1' });
 		if (scripts_ddns.length){
 			scripts_ddns.forEach((script) => {
@@ -730,6 +749,7 @@ return view.extend({
 		o.datatype = 'list(string)';
 		o.placeholder = 'KEY=VAL';
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_enable: '1' });
 
 		o = s.taboption('ddns', form.Value, 'ddns_a', _('A Record FQDN'));
@@ -737,12 +757,14 @@ return view.extend({
 		o.placeholder = 'www.example.com';
 		o.depends({ ddns_enable: '1', family: 'ipv4' });
 		o.modalonly = true;
+		o.retain = true;
 
 		o = s.taboption('ddns', form.Value, 'ddns_aaaa', _('AAAA Record FQDN'));
 		o.datatype = 'hostname';
 		o.placeholder = 'ipv6.example.com';
 		o.depends({ ddns_enable: '1', family: 'ipv6' });
 		o.modalonly = true;
+		o.retain = true;
 
 		o = s.taboption('ddns', form.DummyValue, '_ddns_txt_dump', _('TXT Record'));
 		o.rawhtml = false;
@@ -754,12 +776,14 @@ return view.extend({
 			return [];
 		};
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_enable: '1', ddns_txt: /.+/, ddns_txt_content: /.+/ });
 
 		o = s.taboption('ddns', form.Value, 'ddns_txt', _('FQDN'));
 		o.datatype = 'hostname';
 		o.placeholder = 'txt.example.com';
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_enable: '1' });
 
 		o = s.taboption('ddns', form.Value, 'ddns_txt_content', _('Content'));
@@ -768,6 +792,7 @@ return view.extend({
 		o.rmempty = false;
 		o.depends({ ddns_txt: /.+/, ddns_enable: '1' });
 		o.modalonly = true;
+		o.retain = true;
 
 		o = s.taboption('ddns', form.DummyValue, '_ddns_srv_dump', _('SRV Record'));
 		o.rawhtml = false;
@@ -788,11 +813,13 @@ return view.extend({
 			ddns_enable: '1', ddns_srv: /.+/, ddns_srv_serv: /.+/, ddns_srv_proto: /.+/,
 			ddns_srv_target: /.+/, ddns_srv_priority: /.+/, ddns_srv_weight: /.+/
 		});
+		o.retain = true;
 
 		o = s.taboption('ddns', form.Value, 'ddns_srv', _('FQDN'));
 		o.datatype = 'hostname';
 		o.placeholder = 'mc.example.com';
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_enable: '1' });
 
 		o = s.taboption('ddns', form.Value, 'ddns_srv_serv', _('Service'), _('Can refer to RFC8552'));
@@ -803,6 +830,7 @@ return view.extend({
 		o.default = 'minecraft';
 		o.rmempty = false;
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_srv: /.+/, ddns_enable: '1' });
 
 		o = s.taboption('ddns', form.Value, 'ddns_srv_proto', _('Protocol'), _('Can refer to RFC8552'));
@@ -813,12 +841,14 @@ return view.extend({
 		o.default = 'tcp';
 		o.rmempty = false;
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_srv: /.+/, ddns_enable: '1' });
 
 		o = s.taboption('ddns', form.Value, 'ddns_srv_target', _('Target'));
 		o.datatype = 'hostname';
 		o.placeholder = 'cdn.example.com';
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_srv: /.+/, ddns_enable: '1' });
 
 		o = s.taboption('ddns', form.Value, 'ddns_srv_priority', _('Priority'));
@@ -826,6 +856,7 @@ return view.extend({
 		o.default = 0;
 		o.rmempty = false;
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_srv: /.+/, ddns_enable: '1' });
 
 		o = s.taboption('ddns', form.Value, 'ddns_srv_weight', _('Weight'));
@@ -833,6 +864,7 @@ return view.extend({
 		o.default = 65535;
 		o.rmempty = false;
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_srv: /.+/, ddns_enable: '1' });
 
 		o = s.taboption('ddns', form.DummyValue, '_ddns_https_dump', _('HTTPS Record'));
@@ -848,6 +880,7 @@ return view.extend({
 			return [];
 		};
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({
 			ddns_enable: '1', ddns_https: /.+/, ddns_https_target: /.+/,
 			ddns_https_svcparams: /.+/, ddns_https_priority: /.+/
@@ -857,6 +890,7 @@ return view.extend({
 		o.datatype = 'hostname';
 		o.placeholder = 'www.example.com';
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_enable: '1' });
 
 		o = s.taboption('ddns', form.Value, 'ddns_https_target', _('Target'));
@@ -865,6 +899,7 @@ return view.extend({
 		o.default = '.';
 		o.rmempty = false;
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_https: /.+/, ddns_enable: '1' });
 
 		o = s.taboption('ddns', form.Value, 'ddns_https_svcparams', _('SvcParams'));
@@ -872,6 +907,7 @@ return view.extend({
 		o.default = 'alpn="h2,http/1.1"';
 		o.rmempty = false;
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_https: /.+/, ddns_enable: '1' });
 
 		o = s.taboption('ddns', form.Value, 'ddns_https_priority', _('Priority'));
@@ -879,6 +915,7 @@ return view.extend({
 		o.default = 1;
 		o.rmempty = false;
 		o.modalonly = true;
+		o.retain = true;
 		o.depends({ ddns_https: /.+/, ddns_enable: '1' });
 
 		o = s.taboption('custom', form.FileUpload, 'custom_script', _('Custom Script'));

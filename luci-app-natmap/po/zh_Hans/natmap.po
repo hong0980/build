@@ -347,8 +347,8 @@ msgid ""
 msgstr "将服务的标准输出和标准错误重定向到系统日志"
 
 #: htdocs/luci-static/resources/view/natmap.js
-msgid "Refresh Scripts"
-msgstr "客户端刷新脚本"
+msgid "managed client"
+msgstr "管理的客户端"
 
 #: htdocs/luci-static/resources/view/natmap.js
 msgid "Refresh client"
@@ -496,9 +496,21 @@ msgstr "WireGuard"
 msgid "empty response"
 msgstr "响应为空"
 
-#: htdocs/luci-static/resources/view/natmap.js
-msgid "⭮"
-msgstr "⭮"
+msgid "Custom server configuration"
+msgstr "自定义服务器配置"
 
 msgid "no data"
 msgstr "暂无数据"
+
+msgid ""
+"TCP/UDP port mapping for full cone NAT (NAT-1). See <a href=\"%s\" "
+"target=\"_blank\">NATMap project</a> for details."
+msgstr ""
+"全锥形 NAT（NAT-1）的 TCP/UDP 端口映射。详见 <a href=\"%s\" "
+"target=\"_blank\">NATMap 项目</a>。"
+
+msgid "Global Settings"
+msgstr "全局设置"
+
+msgid "Service settings"
+msgstr "服务设置"

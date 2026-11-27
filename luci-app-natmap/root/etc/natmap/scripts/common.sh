@@ -27,3 +27,6 @@ http_call() {
 }
 
 log() { echo "$*" >&2; }
+
+# nft -c -a list chain inet fw4 dstnat_lan
+# nft -c -a list chain inet fw4 srcnat_lan
