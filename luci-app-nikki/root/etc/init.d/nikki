@@ -9,15 +9,17 @@ config_load nikki
 extra_command 'clear_logs' 'Clear logs if size exceeds the limit'
 extra_command 'update_subscription' 'Update subscription by section id'
 
+boot() {
+	sleep "$(uci -q get nikki.config.start_delay || echo 0)"
+	start
+}
+
 start_service() {
 	local enabled
 	config_get_bool enabled config enabled 0
 	[ "$enabled" = 1 ] || return
 
-	local core start_delay temp_config="$(mktemp)"
-	config_get start_delay config start_delay 0
-	sleep "$start_delay"
-
+	local core temp_config="$(mktemp)"
 	config_get core config core 'meta'
 	set -- "${RUN_DIR}/core/${core}-mihomo"
 	[ -x "$1" ] || set -- '/usr/bin/mihomo'
