@@ -1,20 +1,62 @@
 #!/usr/bin/env python3
-import os, re, subprocess, hashlib, random
+import hashlib, os, random,subprocess
 from deluge.configmanager import ConfigManager, set_config_dir
 
-def str_to_bool(value):
-    s = str(value).strip().lower()
-    if s not in {'1', '0', 'true', 'false'}:
+UCI_KEYS = [
+    "profile_dir",
+    "password",
+    "geoip_db_location",
+    "download_location",
+    "move_completed_path",
+    "torrentfiles_location",
+    "add_paused",
+    "move_completed",
+    "sequential_download",
+    "pre_allocate_storage",
+    "prioritize_first_last_pieces",
+    "cache_size",
+    "cache_expiry",
+    "max_upload_speed",
+    "max_download_speed",
+    "max_active_downloading",
+    "max_active_limit",
+    "max_active_seeding",
+    "max_connections_global",
+    "max_upload_slots_global",
+    "language",
+    "port",
+    "session_timeout",
+    "https",
+    "show_session_speed",
+]
+
+def str_to_bool(value, default=False):
+    if isinstance(value, bool):
         return value
-    return s in {'1', 'true'}
+    if value is None:
+        return default
+    s = str(value).strip().lower()
+    if s in {"1", "true", "yes", "on"}:
+        return True
+    if s in {"0", "false", "no", "off"}:
+        return False
+    return default
 
-def sha1_hash(password, salt):
-    return hashlib.sha1(salt.encode() + password.encode()).hexdigest()
+def to_int(value, default):
+    if value is None or str(value).strip() == "":
+        return default
+    try:
+        return int(str(value).strip())
+    except ValueError:
+        return default
 
-def generate_salt(length=40):
-    return ''.join(random.choices('abcdef0123456789', k=length))
+def sha1_hash(password: str, salt: str) -> str:
+    return hashlib.sha1((salt + password).encode("utf-8")).hexdigest()
 
-def update_config(cfg, updates):
+def generate_salt(length: int = 40) -> str:
+    return "".join(random.choices("abcdef0123456789", k=length))
+
+def update_config(cfg, updates: dict) -> bool:
     changed = False
     for key, value in updates.items():
         if value is not None and cfg.get(key) != value:
@@ -22,73 +64,81 @@ def update_config(cfg, updates):
             changed = True
     return changed
 
-def get_uci_config():
-    result = subprocess.run(
-        ["uci", "show", "deluge"],
-        capture_output=True,
-        text=True
-    )
+def get_uci_config() -> dict:
     config = {}
-    for line in result.stdout.splitlines():
-        match = re.match(r".*main\.([^=]+)='(.*)'$", line)
-        if match:
-            config[match.group(1)] = match.group(2)
+    for key in UCI_KEYS:
+        res = subprocess.run(
+            ["uci", "-q", "get", f"deluge.main.{key}"],
+            capture_output=True,
+            text=True,
+        )
+        if res.returncode == 0:
+            config[key] = res.stdout.rstrip("\r\n")
     return config
 
-def initialize_web_config(config_dir):
-    if not os.path.exists(os.path.join(config_dir, "web.conf")):
+def ensure_web_config(config_dir: str):
+    web_conf_path = os.path.join(config_dir, "web.conf")
+    if not os.path.exists(web_conf_path):
         from deluge.ui.web.server import DelugeWeb
+
         web = DelugeWeb()
         web.daemon = False
         web.start()
         web.shutdown()
 
 def main():
-    uci_config = get_uci_config()
-    config_dir = os.path.normpath(uci_config.get("profile_dir", "/etc/deluge"))
+    uci = get_uci_config()
+    config_dir = os.path.normpath(uci.get("profile_dir") or "/etc/deluge")
+    os.makedirs(config_dir, exist_ok=True)
     set_config_dir(config_dir)
-    initialize_web_config(config_dir)
+    ensure_web_config(config_dir)
 
-    web_config = ConfigManager("web.conf")
     core_config = ConfigManager("core.conf")
-
+    web_config = ConfigManager("web.conf")
     salt = web_config.get("pwd_salt") or generate_salt()
-    hashed_password = sha1_hash(uci_config["password"], salt) if uci_config.get("password") else None
+    raw_password = uci.get("password")
+    hashed_password = sha1_hash(raw_password, salt) if raw_password else None
 
-    core_changed = update_config(core_config, {
-        "send_info": False, #发送匿名统计
-        "new_release_check": False, #自动报告新版本/定期检查更新
-        "geoip_db_location": uci_config.get("geoip_db_location", ""),
-        "download_location": uci_config.get("download_location", ""),
-        "move_completed_path": uci_config.get("move_completed_path", ""),
-        "torrentfiles_location": uci_config.get("torrentfiles_location", ""),
+    core_changed = update_config(
+        core_config,
+        {
+            "send_info": False,
+            "new_release_check": False,
+            "geoip_db_location": uci.get("geoip_db_location", ""),
+            "download_location": uci.get("download_location", ""),
+            "move_completed_path": uci.get("move_completed_path", ""),
+            "torrentfiles_location": uci.get("torrentfiles_location", ""),
+            "add_paused": str_to_bool(uci.get("add_paused"), False),
+            "move_completed": str_to_bool(uci.get("move_completed"), False),
+            "sequential_download": str_to_bool(uci.get("sequential_download"), False),
+            "pre_allocate_storage": str_to_bool(uci.get("pre_allocate_storage"), False),
+            "prioritize_first_last_pieces": str_to_bool(
+                uci.get("prioritize_first_last_pieces"), False
+            ),
+            "cache_size": to_int(uci.get("cache_size"), 16384),
+            "cache_expiry": to_int(uci.get("cache_expiry"), 60),
+            "max_upload_speed": to_int(uci.get("max_upload_speed"), -1),
+            "max_download_speed": to_int(uci.get("max_download_speed"), -1),
+            "max_active_downloading": to_int(uci.get("max_active_downloading"), 3),
+            "max_active_limit": to_int(uci.get("max_active_limit"), -1),
+            "max_active_seeding": to_int(uci.get("max_active_seeding"), -1),
+            "max_connections_global": to_int(uci.get("max_connections_global"), 200),
+            "max_upload_slots_global": to_int(uci.get("max_upload_slots_global"), -1),
+        },
+    )
 
-        "add_paused": str_to_bool(uci_config.get("add_paused", False)),
-        "move_completed": str_to_bool(uci_config.get("move_completed", False)),
-        "sequential_download": str_to_bool(uci_config.get("sequential_download", False)),
-        "pre_allocate_storage": str_to_bool(uci_config.get("pre_allocate_storage", False)),
-        "prioritize_first_last_pieces": str_to_bool(uci_config.get("prioritize_first_last_pieces", False)),
-
-        "cache_size": int(uci_config.get("cache_size", 16384)),
-        "cache_expiry": int(uci_config.get("cache_expiry", 60)),
-        "max_upload_speed": int(uci_config.get("max_upload_speed", -1)),
-        "max_download_speed": int(uci_config.get("max_download_speed", -1)),
-        "max_active_downloading": int(uci_config.get("max_active_downloading", 3)),
-        "max_active_limit": int(uci_config.get("max_active_limit", -1)),
-        "max_active_seeding": int(uci_config.get("max_active_seeding", -1)),
-        "max_connections_global": int(uci_config.get("max_connections_global", 200)),
-        "max_upload_slots_global": int(uci_config.get("max_upload_slots_global", -1)),
-    })
-
-    web_changed = update_config(web_config, {
-        "pwd_salt": salt,
-        "pwd_sha1": hashed_password,
-        "language": uci_config.get("language", "en_GB"),
-        "port": int(uci_config.get("port", 8112)),
-        "session_timeout": int(uci_config.get("session_timeout", 3600)),
-        "https": str_to_bool(uci_config.get("https", False)),
-        "show_session_speed": str_to_bool(uci_config.get("show_session_speed", True)),
-    })
+    web_changed = update_config(
+        web_config,
+        {
+            "pwd_salt": salt,
+            "pwd_sha1": hashed_password,
+            "language": uci.get("language") or "en_GB",
+            "port": to_int(uci.get("port"), 8112),
+            "session_timeout": to_int(uci.get("session_timeout"), 3600),
+            "https": str_to_bool(uci.get("https"), False),
+            "show_session_speed": str_to_bool(uci.get("show_session_speed"), True),
+        },
+    )
 
     if core_changed:
         core_config.save()

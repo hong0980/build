@@ -11,9 +11,14 @@ STATUS_PATH="/var/run/natmap"
 LOG_FILE="/var/log/natmap.log"
 config_load natmap
 
+boot() {
+	sleep "$(uci -q get natmap.@global[0].boot_delay || echo 0)"
+	start
+}
+
 # define global var: DEF_WAN DEF_WAN6 NIC_* NIC6_*
 define_nic() {
-	local max_wait="${1:-0}" step="${2:-2}" waited=0
+	local max_wait="${1:-20}" step="${2:-2}" waited=0
 	local dev dev_path ipv4_sub ipv6_sub addr
 	local best_ipv6 fallback_ula fallback_ll var_name
 
@@ -74,9 +79,9 @@ err_msg__empty() {
 define_global() {
 	[ "$2" = "0" ] || { >&2 echo "$(basename "$0"): section $1 validation failed"; return 1; }
 	local error=0
-	local v ucivv="enable def_tcp_stun def_udp_stun def_http_server def_fwmark_value def_tcp_interval def_udp_interval def_udp_stun_cycle boot_delay"
+	local v ucivv="enable def_tcp_stun def_udp_stun def_http_server def_fwmark_value def_tcp_interval def_udp_interval def_udp_stun_cycle"
 	for v in $ucivv; do
-		if [ -z "$(config_get "$1" "$v")" ] && [ "$v" != "def_fwmark_value" ]; then
+		if [ -z "$(config_get "$1" "$v")" -a "$v" != "def_fwmark_value" ]; then
 			err_msg__empty "$1" "$v"
 			let error++
 		fi
@@ -91,7 +96,6 @@ validate_section_global() {
 		'enable:bool:0' \
 		'def_tcp_stun:string' \
 		'def_udp_stun:string' \
-		'boot_delay:uinteger:0' \
 		'def_http_server:string' \
 		'def_fwmark_value:string' \
 		'def_tcp_interval:and(uinteger, min(1)):30' \
@@ -149,9 +153,7 @@ validate_section_natmap() {
 		'ddns_https_target:or(".", hostname):.' \
 		'ddns_https_svcparams:string:alpn="h2,http/1.1"' \
 		'ddns_https_priority:range(1, 65535):1' \
-		'custom_script:file' \
-		'log_stdout:bool:0' \
-		'log_stderr:bool:0'
+		'custom_script:file'
 }
 
 hostname_match() {
@@ -186,7 +188,7 @@ natmap_instance() {
 		(
 			cnt=0
 			while IFS= read -r line || [ -n "$line" ]; do
-				printf "[%s][%s] %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "'"${comment:0:12}"'" "$line" >> "$log"
+				printf "[%s][%-12s] %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "'"${comment:0:12}"'" "$line" >> "$log"
 				cnt=$((cnt + 1))
 				if [ "$cnt" -ge 200 ]; then
 					cnt=0
@@ -220,7 +222,7 @@ natmap_instance() {
 		network_get_device ifname "$DEF_WAN6" && procd_append_param netdev "$ifname"
 	fi
 
-	if [ "$forward" = 1 ] && [ "$forward_mode" = "via" ] && [ -n "$forward_target" ]; then
+	if [ "$forward" = 1 -a "$forward_mode" = "via" -a -n "$forward_target" ]; then
 		procd_append_param command -t "$forward_target" -p "$forward_port" \
 			${forward_congestion:+-C "$forward_congestion"} \
 			${forward_timeout:+-T "$forward_timeout"}
@@ -229,7 +231,7 @@ natmap_instance() {
 	procd_set_param env "SECTIONID=$1" "COMMENT=$comment"
 
 	if [ "$forward" = 1 ]; then
-		[ "$forward_port" = 0 ] && [ "$forward_mode" = "dnat" ] && procd_append_param env "RWFW=1"
+		[ "$forward_port" = 0 -a "$forward_mode" = "dnat" ] && procd_append_param env "RWFW=1"
 		if [ "$refresh" = 1 ]; then
 			json_init
 			json_add_int    web_port "$clt_web_port"
@@ -279,12 +281,10 @@ natmap_instance() {
 	procd_append_param command -e /etc/natmap/scripts/update.sh
 
 	procd_set_param respawn 300 5 5
-	procd_set_param stdout "$log_stdout"
-	procd_set_param stderr "$log_stderr"
 
 	procd_open_data
 	json_add_array firewall
-	if [ "$forward" = 1 ] && [ "$forward_mode" = "dnat" ]; then
+	if [ "$forward" = 1 -a "$forward_mode" = "dnat" ]; then
 		json_add_object ''
 		json_add_string type redirect
 		json_add_string target DNAT
@@ -302,7 +302,7 @@ natmap_instance() {
 		fi
 		json_add_boolean reflection "$natloopback"
 		json_close_object
-	elif { [ "$forward" = 1 ] && [ "$forward_mode" = "via" ]; } || [ "$forward" = 0 ]; then
+	elif { [ "$forward" = 1 -a "$forward_mode" = "via" ]; } || [ "$forward" = 0 ]; then
 		json_add_object ''
 		json_add_string type rule
 		json_add_string target ACCEPT
@@ -392,21 +392,21 @@ launcher() {
 		let error++
 	fi
 
-	if [ -n "$fwmark_value" ] && [ -z "$(fwmark_match "$fwmark_value")" ]; then
+	if [ -n "$fwmark_value" -a -z "$(fwmark_match "$fwmark_value")" ]; then
 		>&2 echo "$(basename "$0"): section $1 option fwmark_value '$fwmark_value' is invalid"
 		let error++
 	fi
 
 	## forward
 	if [ "$forward" = 1 ]; then
-		if [ "$forward_mode" = "dnat" ] && [ "$family" = "ipv6" ]; then
+		if [ "$forward_mode" = "dnat" -a "$family" = "ipv6" ]; then
 			>&2 echo "$(basename "$0"): section $1 option forward_mode 'dnat' not support under IPv6"
 			let error++
 		fi
 		[ "$forward_mode" != "dnat" ] && natloopback=0
 
 		if [ -n "$forward_target" ]; then
-			if [ -n "$(hostname_match "$forward_target")" ] && [ -z "$(ip_match ipv4 "$forward_target")" ]; then
+			if [ -n "$(hostname_match "$forward_target")" -a -z "$(ip_match ipv4 "$forward_target")" ]; then
 				if [ "$forward_mode" = "dnat" ]; then
 					>&2 echo "$(basename "$0"): section $1 option forward_target '$forward_target', hostname not support under DNAT mode"
 					let error++
@@ -439,15 +439,6 @@ launcher() {
 	elif [ "$forward" = 0 ]; then
 		natloopback=0
 		unset forward_target forward_port
-	fi
-
-	## refresh
-	if [ "$refresh" = 1 ]; then
-		[ -n "$clt_type" ] || { >&2 echo "$(basename "$0"): section $1 option clt_type is empty"; let error++; }
-		if [ -z "$clt_web_port" ]; then
-			err_msg__empty "$1" clt_web_port
-			let error++
-		fi
 	fi
 
 	## notify
@@ -511,8 +502,8 @@ start_service() {
 	config_foreach validate_section_global global define_global || return $?
 	[ "${GLOBAL_enable:=0}" = "1" ] || return 0
 
-	if ! define_nic "${GLOBAL_boot_delay:-0}" 2; then
-		>&2 echo "$(basename "$0"): default WAN not detected after ${GLOBAL_boot_delay}s, continuing with current interfaces."
+	if ! define_nic 30 2; then
+		>&2 echo "$(basename $0): default WAN not detected. service startup will be delayed."
 	fi
 
 	if [ -n "$sid" ]; then

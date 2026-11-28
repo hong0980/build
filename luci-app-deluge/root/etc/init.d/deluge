@@ -9,12 +9,14 @@ log_msg() {
 }
 
 get_config() {
-    for val in $@; do
+    local val
+    for val in "$@"; do
         config_get "$val" main "$val"
     done
 }
 
 create_directory() {
+    local dir
     for dir in "$@"; do
         [ -n "$dir" -a ! -d "$dir" ] && mkdir -p "$dir" 2>/dev/null
     done
@@ -28,70 +30,70 @@ ensure_pkg_resources() {
     [ -n "$site_dir" ] || { log_msg "cannot locate site-packages, skipping pkg_resources shim"; return 1; }
     [ -f "$site_dir/pkg_resources.py" ] && return 0
 
-	cat > "$site_dir/pkg_resources.py" <<-EOF
-		import configparser,email,importlib,os,re,sys,zipfile
-		__all__=['Environment','working_set']
+    cat > "$site_dir/pkg_resources.py" <<-'EOF'
+		import configparser, email, importlib, os, re, sys, zipfile
+		__all__ = ['Environment', 'working_set']
 		def _vk(v):
-		    return tuple(int(m.group()) if(m:=re.match(r'\d+',c))else 0 for c in re.split(r'[.\-_]',v or '0'))
+		    return tuple(int(m.group()) if (m := re.match(r'\d+', c)) else 0 for c in re.split(r'[.\-_]', v or '0'))
 		class _D:
-		    __slots__=('project_name','version','location','_md','_z')
-		    def __init__(s,n,v,l,m,z):s.project_name,s.version,s.location,s._md,s._z=n,v,l,m,z
+		    __slots__ = ('project_name', 'version', 'location', '_md', '_z')
+		    def __init__(s, n, v, l, m, z): s.project_name, s.version, s.location, s._md, s._z = n, v, l, m, z
 		    def activate(s):
-		        if s.location not in sys.path:sys.path.insert(0,s.location);importlib.invalidate_caches()
-		    def get_metadata(s,n):
+		        if s.location not in sys.path: sys.path.insert(0, s.location); importlib.invalidate_caches()
+		    def get_metadata(s, n):
 		        if s._z:
-		            with zipfile.ZipFile(s.location) as z:return z.read(f'EGG-INFO/{n}').decode('utf-8','replace')
-		        with open(os.path.join(s._md,n),encoding='utf-8') as f:return f.read()
+		            with zipfile.ZipFile(s.location) as z: return z.read(f'EGG-INFO/{n}').decode('utf-8', 'replace')
+		        with open(os.path.join(s._md, n), encoding='utf-8') as f: return f.read()
 		    def _ep(s):
-		        c=configparser.ConfigParser()
-		        try:c.read_string(s.get_metadata('entry_points.txt'))
-		        except Exception:pass
+		        c = configparser.ConfigParser()
+		        try: c.read_string(s.get_metadata('entry_points.txt'))
+		        except Exception: pass
 		        return c
-		    def get_entry_map(s,g):
-		        c=s._ep();return dict(c[g]) if g in c else {}
-		    def load_entry_point(s,g,n):
-		        m,_,a=s._ep()[g][n].partition(':');s.activate()
-		        o=__import__(m.strip(),fromlist=['__name__'])
-		        for x in filter(None,a.strip().split('.')):o=getattr(o,x)
+		    def get_entry_map(s, g):
+		        c = s._ep(); return dict(c[g]) if g in c else {}
+		    def load_entry_point(s, g, n):
+		        m, _, a = s._ep()[g][n].partition(':'); s.activate()
+		        o = __import__(m.strip(), fromlist=['__name__'])
+		        for x in filter(None, a.strip().split('.')): o = getattr(o, x)
 		        return o
 		class Environment:
-		    def __init__(s,search_path=None,platform=None,python=None):
-		        s._d={}
-		        if search_path:s.scan(search_path)
-		    def scan(s,paths):
+		    def __init__(s, search_path=None, platform=None, python=None):
+		        s._d = {}
+		        if search_path: s.scan(search_path)
+		    def scan(s, paths):
 		        for p in paths or []:
-		            if not p or not os.path.isdir(p):continue
-		            try:ents=sorted(os.listdir(p))
-		            except OSError:continue
+		            if not p or not os.path.isdir(p): continue
+		            try: ents = sorted(os.listdir(p))
+		            except OSError: continue
 		            for e in ents:
-		                f=os.path.join(p,e);d=None
-		                if e.endswith('.egg') and os.path.isfile(f) and zipfile.is_zipfile(f):d=s._zegg(f)
-		                elif e.endswith('.egg') and os.path.isdir(f):d=s._degg(f)
-		                elif e.endswith('.egg-info') and os.path.isdir(f):d=s._einfo(p,f)
-		                if d and d.project_name:s._d.setdefault(d.project_name.lower(),[]).append(d)
-		        for l in s._d.values():l.sort(key=lambda d:_vk(d.version),reverse=True)
+		                f = os.path.join(p, e); d = None
+		                if e.endswith('.egg') and os.path.isfile(f) and zipfile.is_zipfile(f): d = s._zegg(f)
+		                elif e.endswith('.egg') and os.path.isdir(f): d = s._degg(f)
+		                elif e.endswith('.egg-info') and os.path.isdir(f): d = s._einfo(p, f)
+		                if d and d.project_name: s._d.setdefault(d.project_name.lower(), []).append(d)
+		        for l in s._d.values(): l.sort(key=lambda d: _vk(d.version), reverse=True)
 		    @staticmethod
 		    def _pi(t):
-		        m=email.message_from_string(t);return m.get('Name',''),m.get('Version','')
-		    def _zegg(s,f):
+		        m = email.message_from_string(t); return m.get('Name', ''), m.get('Version', '')
+		    def _zegg(s, f):
 		        try:
-		            with zipfile.ZipFile(f) as z:t=z.read('EGG-INFO/PKG-INFO').decode('utf-8','replace')
-		        except Exception:return None
-		        n,v=s._pi(t);return _D(n,v,f,None,True)
-		    def _degg(s,f):
-		        md=os.path.join(f,'EGG-INFO');pi=os.path.join(md,'PKG-INFO')
-		        if not os.path.isfile(pi):return None
-		        n,v=s._pi(open(pi,encoding='utf-8').read());return _D(n,v,f,md,False)
-		    def _einfo(s,parent,f):
-		        pi=os.path.join(f,'PKG-INFO')
-		        if not os.path.isfile(pi):return None
-		        n,v=s._pi(open(pi,encoding='utf-8').read());return _D(n,v,parent,f,False)
-		    def __iter__(s):return iter(s._d)
-		    def __getitem__(s,n):return s._d.get((n or '').lower(),[])
+		            with zipfile.ZipFile(f) as z: t = z.read('EGG-INFO/PKG-INFO').decode('utf-8', 'replace')
+		        except Exception: return None
+		        n, v = s._pi(t); return _D(n, v, f, None, True)
+		    def _degg(s, f):
+		        md = os.path.join(f, 'EGG-INFO'); pi = os.path.join(md, 'PKG-INFO')
+		        if not os.path.isfile(pi): return None
+		        n, v = s._pi(open(pi, encoding='utf-8').read()); return _D(n, v, f, md, False)
+		    def _einfo(s, parent, f):
+		        pi = os.path.join(f, 'PKG-INFO')
+		        if not os.path.isfile(pi): return None
+		        n, v = s._pi(open(pi, encoding='utf-8').read()); return _D(n, v, parent, f, False)
+		    def __iter__(s): return iter(s._d)
+		    def __getitem__(s, n): return s._d.get((n or '').lower(), [])
 		class _WS:
-		    def add_entry(s,d):
-		        if d and d not in sys.path:sys.path.append(d)
-		working_set=_WS()
+		    def add_entry(s, d):
+		        if d and d not in sys.path: sys.path.append(d)
+		working_set = _WS()
 	EOF
     log_msg "deployed pkg_resources compat shim to $site_dir (setuptools >= 82 detected)"
 }
@@ -100,7 +102,8 @@ set_ownership() {
     [ -z "$user" ] && return 0
     id "$user" >/dev/null 2>&1 || return 1
 
-    for path in "$log_file" "$log_dir" "$profile_dir" "$download_location" "$move_completed_path" "$torrentfiles_location"; do
+    local path
+    for path in "$profile_dir" "$log_dir" "$log_file"; do
         [ -z "$path" ] && continue
         if [ -d "$path" ]; then
             chown -R "$user:" "$path"
@@ -110,10 +113,17 @@ set_ownership() {
             chmod 640 "$path"
         fi
     done
+
+    for path in "$download_location" "$move_completed_path" "$torrentfiles_location"; do
+        [ -z "$path" ] && continue
+        [ -d "$path" ] && chown "$user:" "$path"
+    done
 }
 
 start_service() {
     config_load deluge
+
+    local enabled
     config_get_bool enabled main enabled 0
     [ "$enabled" -eq 0 ] && return 1
 
@@ -122,63 +132,48 @@ start_service() {
     get_config port user log_dir log_level profile_dir enable_logging \
                download_location move_completed_path torrentfiles_location
 
-    create_directory "$profile_dir" "$download_location"
+    profile_dir="${profile_dir:-/etc/deluge}"
+    create_directory "$profile_dir" "$download_location" "$move_completed_path" "$torrentfiles_location"
 
     local log_param log_file
-    local port_param=${port:+"-p $port"}
     if [ "$enable_logging" -eq 1 ]; then
         create_directory "$log_dir"
         log_file="${log_dir:-$profile_dir}/deluge.log"
         touch "$log_file"
-        log_param="-l $log_file ${log_level:+"-L $log_level"}"
+        log_param="-l $log_file ${log_level:+-L $log_level}"
     fi
 
-    set_ownership
     ensure_pkg_resources
     /usr/bin/python3 /usr/libexec/update_deluge
+    set_ownership
 
     procd_open_instance 'deluged'
     procd_set_param command /usr/bin/deluged -d -c "$profile_dir" $log_param
     procd_set_param env PYTHONWARNINGS="ignore::UserWarning:deluge.pluginmanagerbase"
     [ -n "$user" ] && procd_set_param user "$user"
     procd_set_param respawn 300 5 5
-    procd_set_param stdout 1
+    procd_set_param reload_signal HUP
     procd_set_param stderr 1
-    procd_set_param file /etc/config/deluge
-    procd_set_param stop_signal 2
-    procd_set_param term_timeout 15
     procd_close_instance
 
     procd_open_instance 'deluge-web'
-    procd_set_param command /usr/bin/deluge-web -d -c "$profile_dir" $log_param $port_param
+    procd_set_param command /usr/bin/deluge-web -d -c "$profile_dir" $log_param ${port:+-p "$port"}
     procd_set_param env PYTHONWARNINGS="ignore::UserWarning:deluge.pluginmanagerbase"
     [ -n "$user" ] && procd_set_param user "$user"
-    procd_set_param respawn
-    procd_set_param stdout 1
+    procd_set_param respawn 300 5 5
     procd_set_param stderr 1
-    procd_set_param file /etc/config/deluge
-    procd_set_param stop_signal 2
-    procd_set_param term_timeout 15
     procd_close_instance
-
     (
         sleep 5
+        local proc
         for proc in deluged deluge-web; do
-            pgrep -x "$proc" >/dev/null \
-                && log_msg "$proc is running" \
-                || log_msg "$proc failed to start"
+            if pidof "$proc" >/dev/null 2>&1; then
+                log_msg "$proc is running"
+            else
+                log_msg "$proc failed to start"
+            fi
         done
     ) &
-}
-
-service_stopped() {
-    local instance="$1"
-    log_msg "$instance stopped"
-}
-
-reload_service() {
-    stop
-    start
 }
 
 service_triggers() {

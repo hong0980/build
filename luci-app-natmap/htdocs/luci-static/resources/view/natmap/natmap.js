@@ -204,9 +204,9 @@ return view.extend({
 	render([status, hosts, tcp_list, udp_list, nattest_result, has_stunclient, scripts_notify, scripts_ddns, congestions]) {
 		let m, s, o;
 		m = new form.Map(conf, _('NATMap'));
-		m.description =	_('TCP/UDP port mapping for full cone NAT (NAT-1). See <a href="%s" target="_blank">NATMap project</a> for details.'
-		.format('https://github.com/muink/openwrt-natmapt'));
-        m.tabbed = true;
+		m.description =	_('TCP/UDP port mapping for full cone NAT (NAT-1). See <a href="%s" target="_blank">NATMap project</a> for details.')
+		.format('https://github.com/muink/luci-app-natmapt');
+		m.tabbed = true;
 
 		s = m.section(form.TypedSection, 'global', _('Global Settings'));
 		s.anonymous = true;
@@ -283,7 +283,7 @@ return view.extend({
 			if (uci.get(fw, sid, 'enabled') === '0') return false;
 			let proto = String(uci.get(fw, sid, 'proto') || 'all').toLowerCase();
 			if (proto !== 'all' && proto !== 'any' &&
-			    !proto.split(/\s+/).some(function(t) { return t === 'tcp' || t === 'udp'; }))
+				!proto.split(/\s+/).some(function(t) { return t === 'tcp' || t === 'udp'; }))
 				return false;
 			let src = uci.get(fw, sid, 'src') || '';
 			if (src !== 'wan' && src !== '*') return false;
@@ -341,21 +341,6 @@ return view.extend({
 				uci.set(conf, section_id, 'test_port', value);
 			upsertNatTestRule(value);
 		};
-
-		// o = s.option(form.Flag, 'log_enable', _('Enable logging'));
-		// o.default = o.disabled;
-		// o.rmempty = false;
-		// o.description = _('Redirect service standard output and standard error to system log');
-		// o.cfgvalue = function (section_id) {
-		// 	const so = uci.get(conf, section_id, 'log_stdout');
-		// 	const se = uci.get(conf, section_id, 'log_stderr');
-		// 	return (so === '1' || se === '1') ? '1' : '0';
-		// };
-		// o.write = function (section_id, value) {
-		// 	const v = (value === '1' || value === true) ? '1' : '0';
-		// 	uci.set(conf, section_id, 'log_stdout', v);
-		// 	uci.set(conf, section_id, 'log_stderr', v);
-		// };
 
 		o = s.option(form.Button, '_nattest', _('Check NAT Behavior'));
 		o.inputtitle = _('Check');
